@@ -1,19 +1,30 @@
 /**
  * Service Worker — Nexus PWA
  *
- * Versión minimalista: lo justo para que Nexus sea instalable como app y, más
- * adelante, pueda recibir notificaciones push (alertas de trading). Sin caché
- * offline por ahora; lo agregamos si hace falta.
+ * Lo justo para que Nexus sea instalable como app y reciba notificaciones push.
+ * IMPORTANTE: NO interceptamos fetch ni cacheamos assets (network-passthrough),
+ * así la PWA siempre toma la versión recién desplegada sin servir nada viejo.
+ * Si en el futuro se agrega caché offline, debe ser network-first y versionada.
  */
 
-const VERSION = 'nexus-v1';
+const VERSION = 'nexus-v2';
 
 self.addEventListener('install', () => {
-  self.skipWaiting();
+  self.skipWaiting();   // el SW nuevo toma el control de inmediato
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    // Limpieza defensiva: borra cualquier Cache Storage de versiones anteriores.
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
+});
+
+// Permite forzar la actualización del SW desde la página (postMessage 'skipWaiting').
+self.addEventListener('message', (event) => {
+  if (event.data === 'skipWaiting') self.skipWaiting();
 });
 
 // ── Notificaciones push (preparado para las alertas a futuro) ──────────────

@@ -59,7 +59,8 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # --- Núcleo --------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def landing():
-    return HTMLResponse(hub.render_landing())
+    return HTMLResponse(hub.render_landing(),
+                        headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 @app.get("/health")
@@ -193,7 +194,12 @@ def module_static(slug: str, relpath: str):
 
     ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
     with open(full, "rb") as fh:
-        return Response(content=fh.read(), media_type=ctype)
+        # HTML/JS/CSS de los módulos: no-cache para que el navegador (y la PWA del
+        # iPhone) siempre revalide y tome la versión nueva apenas se despliega.
+        headers = {}
+        if full.endswith((".html", ".js", ".css", ".webmanifest")):
+            headers["Cache-Control"] = "no-cache, must-revalidate"
+        return Response(content=fh.read(), media_type=ctype, headers=headers)
 
 
 # Favicon mínimo en SVG (un nodo morado) para que el navegador no de 404.
