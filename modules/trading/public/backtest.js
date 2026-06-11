@@ -18,6 +18,34 @@
         '<p class="bt-note">Todavía no hay resultados. Corre <code>python3 -m modules.trading.run_backtest</code>.</p>';
     });
 
+  // Experimento de mejoras por capas (sección aparte; se oculta si no existe).
+  fetch("api/poi_layers")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => { if (d) renderLayers(d); })
+    .catch(() => {});
+
+  function renderLayers(d) {
+    ["layers-h", "layers-note", "layers-verdict", "layers-wrap"].forEach((id) => ($(id).hidden = false));
+    $("layers-note").innerHTML =
+      `Sobre la estrategia POI (la #1, break-even). ${d.pairs.length} pares × ${d.base_tfs.join("/")} · ` +
+      `ablación de cada capa y combinaciones. Umbral: ${d.robustness_rule}.`;
+    const v = d.verdict;
+    $("layers-verdict").className = "verdict " + (v.any_robust ? "ok" : "warn");
+    $("layers-verdict").innerHTML =
+      `<div class="v-tag">${v.any_robust ? "✅ Alguna capa logra edge robusto" : "⚠️ Ninguna capa logra edge robusto"}</div>
+       <p>${v.text}</p>`;
+    const baseOOS = d.base.out_sample.expectancy_R;
+    table($("layers"),
+      ["Variante", "Capa", "IS exp", "OOS exp", "OOS PF", "OOS n", "WFO", "vs base", "Robusta"],
+      d.variants.map((x) => {
+        const delta = +(x.out_sample.expectancy_R - baseOOS).toFixed(3);
+        return [x.name, x.layer, rc(x.in_sample.expectancy_R), rc(x.out_sample.expectancy_R),
+          pfc(x.out_sample.profit_factor), sampleCell(x.out_sample.trades), rc(x.wfo.expectancy_R),
+          rc(delta), x.robust ? '<span class="up">✅ sí</span>' : (x.confident ? '<span class="muted">no</span>' : '<span class="down">⚠ pocos</span>')];
+      }),
+      d.variants.map((x, i) => (x.robust ? i : -1)).filter((i) => i >= 0));
+  }
+
   function render(d) {
     $("generated").textContent = "generado " + new Date(d.generated_at_ms).toLocaleDateString("es");
 

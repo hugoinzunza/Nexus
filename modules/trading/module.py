@@ -24,6 +24,7 @@ from . import cryptocom
 from . import smc_live
 
 _BACKTEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtest_results.json")
+_POI_LAYERS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poi_layers_results.json")
 _HTF_FOR_POI = ["1D", "4h", "1h"]   # temporalidades donde se detectan POIs
 
 
@@ -325,6 +326,12 @@ class TradingModule(NexusModule):
                 return self._json_error(404, "todavía no hay resultados de backtest; corre "
                                              "python3 -m modules.trading.run_backtest")
             with open(_BACKTEST_PATH, "rb") as fh:
+                return (200, "application/json; charset=utf-8", fh.read())
+        if subpath == "poi_layers":
+            if not os.path.isfile(_POI_LAYERS_PATH):
+                return self._json_error(404, "todavía no hay experimento de capas; corre "
+                                             "python3 -m modules.trading.run_poi_lab")
+            with open(_POI_LAYERS_PATH, "rb") as fh:
                 return (200, "application/json; charset=utf-8", fh.read())
         return None
 
