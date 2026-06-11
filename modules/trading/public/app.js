@@ -26,6 +26,73 @@
   const CANDLE_REFRESH_MS = 6000; // cada cuánto refrescamos las velas del par
   const SMC_REFRESH_MS = 20000;   // cada cuánto recalculamos el análisis SMC
 
+  // --- Primitive custom de Lightweight Charts para las cajas SMC -----
+  // Lightweight Charts no trae rectángulos; lo resolvemos con un series
+  // primitive que dibuja en el canvas usando priceToCoordinate / timeToCoordinate,
+  // así las cajas (premium/discount, FVG, POIs) quedan alineadas al hacer zoom/paneo.
+  class SMCRenderer {
+    constructor(src) { this._src = src; }
+    draw(target) {
+      const src = this._src;
+      const data = src._data;
+      if (!data || !src._series) return;
+      const series = src._series;
+      const ts = src._chart.timeScale();
+      const py = (p) => series.priceToCoordinate(p);
+      target.useMediaCoordinateSpace((scope) => {
+        const ctx = scope.context;
+        const W = scope.mediaSize.width, H = scope.mediaSize.height;
+        // Premium (arriba del EQ) y discount (abajo).
+        if (data.range && data.range.eq) {
+          const yEq = py(data.range.eq);
+          if (yEq != null) {
+            ctx.fillStyle = "rgba(234,57,67,0.05)"; ctx.fillRect(0, 0, W, yEq);
+            ctx.fillStyle = "rgba(22,199,132,0.05)"; ctx.fillRect(0, yEq, W, H - yEq);
+          }
+        }
+        // FVGs sin rellenar: desde su tiempo hacia la derecha.
+        (data.fvgs || []).filter((f) => !f.filled).forEach((f) => {
+          const y1 = py(f.hi), y2 = py(f.lo); if (y1 == null || y2 == null) return;
+          let x = ts.timeToCoordinate(Math.floor(f.t / 1000)); if (x == null) x = 0;
+          x = Math.max(0, x);
+          ctx.fillStyle = f.bullish ? "rgba(108,92,231,0.13)" : "rgba(245,166,35,0.13)";
+          ctx.fillRect(x, Math.min(y1, y2), W - x, Math.abs(y2 - y1));
+        });
+        // Cajas de POI (ancho completo). Verde = descuento/long, rojo = premium/short.
+        ctx.font = "10px -apple-system, sans-serif"; ctx.textBaseline = "top";
+        (data.pois || []).forEach((poi) => {
+          const y1 = py(poi.hi), y2 = py(poi.lo); if (y1 == null || y2 == null) return;
+          const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
+          const long = poi.dir === "long";
+          const base = long ? "22,199,132" : "234,57,67";
+          ctx.fillStyle = `rgba(${base},${poi.valid ? 0.13 : 0.05})`;
+          ctx.fillRect(0, top, W, h);
+          ctx.strokeStyle = `rgba(${base},${poi.valid ? 0.7 : 0.3})`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash(poi.valid ? [] : [3, 3]);
+          ctx.strokeRect(0.5, top + 0.5, W - 1, h);
+          ctx.setLineDash([]);
+          ctx.fillStyle = long ? "#16c784" : "#ea3943";
+          ctx.fillText(`POI ${poi.tf} ${poi.valid ? "✓" : "✕"}`, 5, top + 2);
+        });
+      });
+    }
+  }
+  class SMCPaneView {
+    constructor(src) { this._src = src; this._renderer = new SMCRenderer(src); }
+    update() {}
+    renderer() { return this._renderer; }
+    zOrder() { return "bottom"; }   // detrás de las velas
+  }
+  class SMCPrimitive {
+    constructor() { this._data = null; this._views = [new SMCPaneView(this)]; }
+    attached(p) { this._series = p.series; this._chart = p.chart; this._requestUpdate = p.requestUpdate; }
+    detached() { this._series = null; this._chart = null; }
+    setData(d) { this._data = d; if (this._requestUpdate) this._requestUpdate(); }
+    updateAllViews() { this._views.forEach((v) => v.update()); }
+    paneViews() { return this._views; }
+  }
+
   // --- Formateo ------------------------------------------------------
   function fmtPrice(n) {
     if (n >= 1000) return n.toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -56,25 +123,60 @@
     const node = tpl.content.firstElementChild.cloneNode(true);
     node.querySelector(".ic-symbol").textContent = label || symbol;
     container.appendChild(node);
-    const canvas = node.querySelector(".chart");
-    // Cada par recuerda su propia temporalidad y sus velas (estado en el front).
-    const card = { node, canvas, lastPrice: null, timeframe: DEFAULT_TF, candles: [], smc: null };
+    const chartEl = node.querySelector(".chart");
+    const card = { node, chartEl, lastPrice: null, timeframe: DEFAULT_TF,
+                   candles: [], bars: [], smc: null, priceLines: [], fitted: false };
     cards[symbol] = card;
 
+    createChart(card);
     buildTimeframeSelector(symbol, card);
+    setupExpand(card);
     loadCandles(symbol, card); // primera carga
     loadSMC(symbol, card);     // análisis SMC en vivo
-    // Refrescos periódicos.
     card.refreshTimer = setInterval(() => loadCandles(symbol, card), CANDLE_REFRESH_MS);
     card.smcTimer = setInterval(() => loadSMC(symbol, card), SMC_REFRESH_MS);
-
     return card;
   }
 
-  function redraw(card) { drawChart(card.canvas, chartData(card), card.smc); }
+  // --- Gráfico interactivo (TradingView Lightweight Charts) ----------
+  function createChart(card) {
+    if (!window.LightweightCharts) return;
+    const LC = window.LightweightCharts;
+    const chart = LC.createChart(card.chartEl, {
+      autoSize: true,
+      layout: { background: { color: "transparent" }, textColor: "#8b93a7",
+                fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif" },
+      grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
+      crosshair: { mode: LC.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: "#262b38" },
+      timeScale: { borderColor: "#262b38", timeVisible: true, secondsVisible: false },
+      localization: { locale: "es" },
+    });
+    const series = chart.addSeries(LC.CandlestickSeries, {
+      upColor: "#16c784", downColor: "#ea3943", borderVisible: false,
+      wickUpColor: "#16c784", wickDownColor: "#ea3943",
+      priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+    });
+    const prim = new SMCPrimitive();
+    series.attachPrimitive(prim);
+    card.chart = chart;
+    card.series = series;
+    card.smcPrim = prim;
+  }
 
-  // Pide el análisis SMC en vivo (estructura, premium/discount, FVG y POIs de
-  // 1D/4h/1h) y actualiza el gráfico y el panel "POIs activos".
+  // Actualiza la última vela con el precio en vivo del SSE.
+  function liveUpdate(card) {
+    if (!card.series || !card.bars.length || card.lastPrice == null) return;
+    const last = card.bars[card.bars.length - 1];
+    card.series.update({
+      time: last.time, open: last.open,
+      high: Math.max(last.high, card.lastPrice),
+      low: Math.min(last.low, card.lastPrice),
+      close: card.lastPrice,
+    });
+  }
+
+  // Pide el análisis SMC en vivo y lo proyecta como price lines + primitive.
   async function loadSMC(symbol, card) {
     const tf = card.timeframe;
     try {
@@ -83,9 +185,32 @@
       const j = await r.json();
       if (card.timeframe !== tf) return;
       card.smc = j;
-      redraw(card);
+      applySMC(card);
       renderSMCPanel(card);
     } catch (err) { /* mantenemos el análisis previo */ }
+  }
+
+  function applySMC(card) {
+    if (!card.series || !window.LightweightCharts) return;
+    const LC = window.LightweightCharts;
+    // Niveles de liquidez y equilibrio como price lines (se alinean solas).
+    card.priceLines.forEach((pl) => card.series.removePriceLine(pl));
+    card.priceLines = [];
+    const addLine = (price, color, title) => {
+      if (!price) return;
+      card.priceLines.push(card.series.createPriceLine({
+        price, color, lineWidth: 1, lineStyle: LC.LineStyle.Dashed,
+        axisLabelVisible: true, title,
+      }));
+    };
+    const rng = card.smc && card.smc.range;
+    if (rng) {
+      addLine(rng.strong_high, "#ea3943", "Strong High");
+      addLine(rng.weak_low, "#16c784", "Weak Low");
+      addLine(rng.eq, "#a29bfe", "EQ 50%");
+    }
+    // Cajas (premium/discount, FVG, POIs) vía primitive custom.
+    card.smcPrim.setData(card.smc);
   }
 
   // --- Selector de temporalidad --------------------------------------
@@ -107,44 +232,52 @@
           b.classList.toggle("active", on);
           b.setAttribute("aria-pressed", on ? "true" : "false");
         });
-        card.smc = null; // el SMC depende de la TF seleccionada (estructura/FVG)
-        loadCandles(symbol, card); // recarga con la nueva resolución
+        card.smc = null;      // el SMC depende de la TF seleccionada (estructura/FVG)
+        card.fitted = false;  // reajustamos la vista a la nueva resolución
+        loadCandles(symbol, card);
         loadSMC(symbol, card);
       });
       sel.appendChild(btn);
     });
   }
 
-  // Pide al backend las velas del par en la temporalidad activa y redibuja.
+  // --- Expandir / colapsar el gráfico (pantalla completa) ------------
+  function setupExpand(card) {
+    const wrap = card.node.querySelector(".chart-wrap");
+    const btn = card.node.querySelector(".chart-expand");
+    if (!btn || !wrap) return;
+    btn.addEventListener("click", () => {
+      const open = wrap.classList.toggle("expanded");
+      document.body.classList.toggle("chart-open", open);
+      btn.textContent = open ? "✕" : "⤢";
+      btn.title = open ? "Cerrar" : "Expandir";
+      // autoSize redimensiona solo; forzamos un reflow del rango por las dudas.
+      setTimeout(() => { if (card.chart) card.chart.timeScale().scrollToRealTime(); }, 60);
+    });
+  }
+
+  // Pide al backend las velas del par y las carga en el gráfico.
   async function loadCandles(symbol, card) {
     const tf = card.timeframe;
     try {
       const r = await fetch(`api/candles?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}`);
       if (!r.ok) return;
       const j = await r.json();
-      if (card.timeframe !== tf) return; // el usuario cambió mientras tanto
-      if (Array.isArray(j.candles)) {
-        card.candles = j.candles;
-        redraw(card);
-      }
+      if (card.timeframe !== tf || !Array.isArray(j.candles) || !card.series) return;
+      card.candles = j.candles;
+      card.bars = j.candles.map((c) => ({
+        time: Math.floor(c.t / 1000), open: c.o, high: c.h, low: c.l, close: c.c,
+      }));
+      // Preservamos el zoom/paneo del usuario en los refrescos; solo reencuadramos
+      // en la primera carga o al cambiar de temporalidad.
+      const range = card.chart.timeScale().getVisibleLogicalRange();
+      card.series.setData(card.bars);
+      if (card.fitted && range) card.chart.timeScale().setVisibleLogicalRange(range);
+      else { card.chart.timeScale().fitContent(); card.fitted = true; }
+      liveUpdate(card);
     } catch (err) {
       /* dejamos las velas que ya teníamos */
     }
-  }
-
-  // Combina las velas cargadas con el precio en vivo: la última vela y la línea
-  // de precio se mueven con cada tick del SSE, sin esperar el próximo refresco.
-  function chartData(card) {
-    const cs = card.candles;
-    if (!cs || !cs.length) return [];
-    if (card.lastPrice == null) return cs;
-    const out = cs.slice();
-    const last = Object.assign({}, out[out.length - 1]);
-    last.c = card.lastPrice;
-    last.h = Math.max(last.h, card.lastPrice);
-    last.l = Math.min(last.l, card.lastPrice);
-    out[out.length - 1] = last;
-    return out;
   }
 
   // --- Render principal ----------------------------------------------
@@ -160,13 +293,11 @@
     Object.keys(insts).forEach((symbol) => {
       const d = insts[symbol];
       const card = getCard(symbol, d.label);
-      renderTicker(card, d.ticker);
+      renderTicker(card, d.ticker);  // fija card.lastPrice
       renderStats(card, d.ticker);
       renderBook(card, d.book, d.ticker);
       renderSignals(card, d.signals || {});
-      // El gráfico usa las velas de la temporalidad elegida (api/candles), con
-      // el precio en vivo del SSE sobre la última vela, más el overlay SMC.
-      redraw(card);
+      liveUpdate(card);              // mueve la última vela con el precio en vivo
     });
   }
 
@@ -261,143 +392,6 @@
     imbEl.className = "v sig-imb " + (imb > 0 ? "up" : imb < 0 ? "down" : "");
   }
 
-  // --- Gráfico de velas (canvas, sin librerías) ----------------------
-  function drawChart(canvas, candles, smc) {
-    const dpr = window.devicePixelRatio || 1;
-    const cssW = canvas.clientWidth || 600;
-    const cssH = canvas.clientHeight || 240;
-    if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
-      canvas.width = cssW * dpr;
-      canvas.height = cssH * dpr;
-    }
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, cssW, cssH);
-    if (!candles.length) return;
-
-    // Mostramos las últimas N velas que entren cómodas.
-    const padR = 58, padL = 8, padT = 10, padB = 18;
-    const plotW = cssW - padR - padL;
-    const plotH = cssH - padT - padB;
-
-    const maxBars = Math.min(candles.length, Math.floor(plotW / 6));
-    const data = candles.slice(-maxBars);
-
-    let hi = -Infinity, lo = Infinity;
-    data.forEach((c) => { hi = Math.max(hi, c.h); lo = Math.min(lo, c.l); });
-    if (hi === lo) { hi += 1; lo -= 1; }
-    const pad = (hi - lo) * 0.08;
-    hi += pad; lo -= pad;
-
-    const x = (i) => padL + (i + 0.5) * (plotW / data.length);
-    const y = (p) => padT + (1 - (p - lo) / (hi - lo)) * plotH;
-
-    // Rejilla + etiquetas de precio
-    ctx.font = "10px -apple-system, sans-serif";
-    ctx.textBaseline = "middle";
-    ctx.strokeStyle = "rgba(255,255,255,0.05)";
-    ctx.fillStyle = "#8b93a7";
-    const gridN = 4;
-    for (let g = 0; g <= gridN; g++) {
-      const p = lo + (hi - lo) * (g / gridN);
-      const yy = y(p);
-      ctx.beginPath();
-      ctx.moveTo(padL, yy); ctx.lineTo(padL + plotW, yy); ctx.stroke();
-      ctx.fillText(fmtPrice(p), padL + plotW + 6, yy);
-    }
-
-    // --- Overlay SMC (contexto, detrás de las velas) ------------------
-    if (smc) drawSMC(ctx, smc, { padL, padT, plotW, plotH, y, hi, lo });
-
-    // Velas
-    const cw = Math.max(1.5, (plotW / data.length) * 0.62);
-    data.forEach((c, i) => {
-      const up = c.c >= c.o;
-      const col = up ? "#16c784" : "#ea3943";
-      const cx = x(i);
-      ctx.strokeStyle = col;
-      ctx.fillStyle = col;
-      // mecha
-      ctx.beginPath();
-      ctx.moveTo(cx, y(c.h)); ctx.lineTo(cx, y(c.l)); ctx.stroke();
-      // cuerpo
-      const yo = y(c.o), yc = y(c.c);
-      const top = Math.min(yo, yc);
-      const h = Math.max(1, Math.abs(yc - yo));
-      ctx.fillRect(cx - cw / 2, top, cw, h);
-    });
-
-    // Línea del precio actual
-    const lastC = data[data.length - 1].c;
-    const yL = y(lastC);
-    ctx.strokeStyle = "rgba(162,155,254,0.7)";
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(padL, yL); ctx.lineTo(padL + plotW, yL); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#a29bfe";
-    ctx.fillRect(padL + plotW, yL - 8, padR - 6, 16);
-    ctx.fillStyle = "#0f1117";
-    ctx.fillText(fmtPrice(lastC), padL + plotW + 4, yL);
-  }
-
-  // --- Overlay SMC sobre el gráfico ----------------------------------
-  function drawSMC(ctx, smc, d) {
-    const { padL, padT, plotW, plotH, y } = d;
-    const top = padT, bot = padT + plotH, right = padL + plotW;
-    const clamp = (v) => Math.max(top, Math.min(bot, v));
-    ctx.font = "9px -apple-system, sans-serif";
-    ctx.textBaseline = "alphabetic";
-
-    // Premium / discount + equilibrio 50%.
-    const rng = smc.range;
-    if (rng && rng.eq) {
-      const yEq = y(rng.eq);
-      if (yEq > top && yEq < bot) {
-        ctx.fillStyle = "rgba(234,57,67,0.05)"; ctx.fillRect(padL, top, plotW, yEq - top);     // premium
-        ctx.fillStyle = "rgba(22,199,132,0.05)"; ctx.fillRect(padL, yEq, plotW, bot - yEq);     // discount
-        ctx.strokeStyle = "rgba(162,155,254,0.55)"; ctx.setLineDash([2, 3]);
-        ctx.beginPath(); ctx.moveTo(padL, yEq); ctx.lineTo(right, yEq); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle = "#a29bfe"; ctx.fillText("EQ 50%", padL + 3, yEq - 3);
-      }
-      // Liquidez: Strong High / Weak Low.
-      [["strong_high", "Strong High · Liquidez", "#ea3943"],
-       ["weak_low", "Weak Low · Liquidez", "#16c784"]].forEach(([k, lbl, col]) => {
-        const p = rng[k]; if (!p) return;
-        const yy = y(p); if (yy <= top || yy >= bot) return;
-        ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.setLineDash([5, 4]);
-        ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(right, yy); ctx.stroke();
-        ctx.setLineDash([]); ctx.globalAlpha = 1;
-        ctx.fillStyle = col; ctx.fillText(lbl, padL + 3, yy - 3);
-      });
-    }
-
-    // FVGs sin rellenar (imbalances) — bandas tenues.
-    (smc.fvgs || []).filter((f) => !f.filled).forEach((f) => {
-      const a = clamp(y(f.hi)), b = clamp(y(f.lo));
-      if (Math.abs(b - a) < 0.5) return;
-      ctx.fillStyle = f.bullish ? "rgba(108,92,231,0.12)" : "rgba(245,166,35,0.12)";
-      ctx.fillRect(right - plotW * 0.35, Math.min(a, b), plotW * 0.35, Math.abs(b - a));
-    });
-
-    // Cajas de POI (order blocks). Verde = descuento/long, rojo = premium/short.
-    (smc.pois || []).forEach((poi) => {
-      const a = y(poi.hi), b = y(poi.lo);
-      const t = Math.min(a, b), bt = Math.max(a, b);
-      if (bt < top || t > bot) return; // fuera de vista
-      const ct = clamp(t), cb = clamp(bt);
-      const long = poi.dir === "long";
-      const base = long ? "22,199,132" : "234,57,67";
-      ctx.fillStyle = `rgba(${base},${poi.valid ? 0.14 : 0.05})`;
-      ctx.fillRect(padL, ct, plotW, cb - ct);
-      ctx.strokeStyle = `rgba(${base},${poi.valid ? 0.7 : 0.3})`;
-      ctx.setLineDash(poi.valid ? [] : [3, 3]);
-      ctx.strokeRect(padL, ct, plotW, cb - ct);
-      ctx.setLineDash([]);
-      ctx.fillStyle = long ? "#16c784" : "#ea3943";
-      ctx.fillText(`POI ${poi.tf} ${poi.valid ? "✓" : "✕"}`, padL + 4, ct + 9);
-    });
-  }
-
   // --- Panel "POIs activos" ------------------------------------------
   function renderSMCPanel(card) {
     const el = card.node.querySelector(".smc-list");
@@ -421,9 +415,8 @@
     }).join("");
   }
 
-  // Redibuja los gráficos al cambiar el tamaño de la ventana.
+  // El gráfico (Lightweight Charts) se redimensiona solo con autoSize.
   let lastState = null;
-  window.addEventListener("resize", () => { if (lastState) render(lastState); });
 
   // --- Conexión: SSE con respaldo a polling --------------------------
   function connectSSE() {

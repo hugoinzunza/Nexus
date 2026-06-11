@@ -75,12 +75,26 @@ body {
 }
 @media (max-width: 760px) { .ic-body { grid-template-columns: 1fr; } }
 
-.chart-wrap { background: var(--panel2); border-radius: 12px; padding: 8px; }
-.chart { width: 100%; height: 240px; display: block; }
+.chart-wrap { background: var(--panel2); border-radius: 12px; padding: 8px;
+  position: relative; display: flex; flex-direction: column; }
+.chart { width: 100%; height: 340px; display: block; flex: 1 1 auto; min-height: 200px; }
+.chart-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.chart-expand { flex: 0 0 auto; cursor: pointer; background: transparent; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 8px; min-width: 36px; min-height: 36px;
+  font-size: 16px; line-height: 1; font-family: inherit; }
+.chart-expand:hover { color: var(--text); border-color: var(--accent); }
+
+/* Pantalla completa del gráfico */
+.chart-wrap.expanded { position: fixed; inset: 0; z-index: 60; border-radius: 0;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px))
+           calc(8px + env(safe-area-inset-bottom, 0px)) calc(8px + env(safe-area-inset-left, 0px));
+  background: var(--bg); }
+.chart-wrap.expanded .chart { height: auto; }
+body.chart-open { overflow: hidden; }
 
 /* Selector de temporalidad del gráfico */
 .tf-selector {
-  display: flex; gap: 6px; margin-bottom: 8px; padding-bottom: 2px;
+  display: flex; gap: 6px; flex: 1 1 auto; min-width: 0;
   overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
 }
 .tf-selector::-webkit-scrollbar { display: none; }

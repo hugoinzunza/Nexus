@@ -12,6 +12,8 @@
   <meta name="apple-mobile-web-app-title" content="Nexus">
   <link rel="stylesheet" href="styles.css">
   <script src="/static/pwa.js" defer></script>
+  <!-- TradingView Lightweight Charts (Apache-2.0), bundleada localmente. -->
+  <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -61,8 +63,11 @@
 
       <div class="ic-body">
         <div class="chart-wrap">
-          <div class="tf-selector" role="group" aria-label="Temporalidad del gráfico"></div>
-          <canvas class="chart"></canvas>
+          <div class="chart-controls">
+            <div class="tf-selector" role="group" aria-label="Temporalidad del gráfico"></div>
+            <button class="chart-expand" type="button" aria-label="Expandir gráfico" title="Expandir">⤢</button>
+          </div>
+          <div class="chart"></div>
         </div>
         <div class="book">
           <div class="book-title">Libro de órdenes</div>
