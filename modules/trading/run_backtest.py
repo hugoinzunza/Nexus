@@ -32,15 +32,41 @@ from modules.trading.backtest import metrics, equity_curve
 from modules.trading.strategies import STRATEGIES, describe
 
 PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT"]
-TIMEFRAMES = ["1h", "4h"]
-HTF = {"1h": "4h", "4h": "1d"}
+DATA_DIR = os.path.join(ROOT, "data")
+
+# Timeframe superior inmediato (para la estructura SMC) y la lista de TF superiores
+# para la confluencia multi-temporalidad (estrategia B). Todo con velas YA cerradas.
+HTF = {"15m": "1h", "1h": "4h", "4h": "1d"}
+HTF_OF = {"15m": ["1h", "4h"], "1h": ["4h", "1d"], "4h": ["1d"]}
+
+
+def _have_tf(tf):
+    return all(os.path.isfile(os.path.join(DATA_DIR, f"klines_{s}_{tf}.json")) for s in PAIRS)
+
+
+# 1h y 4h sí o sí (donde opera Hugo); 15m solo si la data está descargada.
+TIMEFRAMES = (["15m"] if _have_tf("15m") else []) + ["1h", "4h"]
+ALL_TFS = sorted(set(TIMEFRAMES) | {h for t in TIMEFRAMES for h in HTF_OF[t]})
+
 YEARS = 4.0
 IS_FRACTION = 0.70
 MIN_TRADES_OPT = 40
 MIN_OOS_TRADES = 30          # umbral de muestra para confiar
 MIN_OOS_PF = 1.1             # umbral de robustez
-DATA_DIR = os.path.join(ROOT, "data")
 RESULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtest_results.json")
+
+
+def _json_safe(obj):
+    """Reemplaza Infinity / -Infinity / NaN por None de forma recursiva para que
+    el JSON sea válido y el navegador pueda parsearlo (JSON.parse no acepta inf)."""
+    import math
+    if isinstance(obj, float):
+        return None if (math.isinf(obj) or math.isnan(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(v) for v in obj]
+    return obj
 
 
 def log(m):
@@ -70,17 +96,25 @@ def pick_best(by_cfg, lo, hi, min_trades=MIN_TRADES_OPT):
 
 
 def main():
-    # 1) Cargar data y estructura HTF.
-    series, htf_dir, coverage = {}, {}, []
+    # 1) Cargar TODOS los timeframes (base + superiores) y precomputar HTF.
+    allseries = {}
+    for sym in PAIRS:
+        for tf in ALL_TFS:
+            allseries[(sym, tf)] = binance.fetch_klines(sym, tf, years=YEARS, data_dir=DATA_DIR, log=log)
+
+    series, htf_dir, htf_series, coverage = {}, {}, {}, []
     for sym in PAIRS:
         for tf in TIMEFRAMES:
-            c = binance.fetch_klines(sym, tf, years=YEARS, data_dir=DATA_DIR, log=log)
+            c = allseries[(sym, tf)]
             series[(sym, tf)] = c
             coverage.append({"symbol": sym, "timeframe": tf, "bars": len(c),
                              "from": gmt(c[0]["t"]), "to": gmt(c[-1]["t"])})
-            hc = binance.fetch_klines(sym, HTF[tf], years=YEARS, data_dir=DATA_DIR, log=log)
+            # Estructura del TF superior inmediato (para SMC), con velas ya cerradas.
+            hc = allseries[(sym, HTF[tf])]
             hd = smc.structure_direction(hc, lookback=2)
             htf_dir[(sym, tf)] = smc.map_htf_direction(c, hc, hd, binance.INTERVAL_MS[HTF[tf]])
+            # Series de los TF superiores (para la confluencia MTF de la estrategia B).
+            htf_series[(sym, tf)] = {h: allseries[(sym, h)] for h in HTF_OF[tf]}
 
     t0 = min(series[(s, t)][0]["t"] for s in PAIRS for t in TIMEFRAMES)
     t1 = max(series[(s, t)][-1]["t"] for s in PAIRS for t in TIMEFRAMES)
@@ -101,7 +135,8 @@ def main():
         per_ds = {}  # (sym,tf) -> {ci: trades}
         for sym in PAIRS:
             for tf in TIMEFRAMES:
-                ctx = {"symbol": sym, "timeframe": tf, "htf_dir": htf_dir[(sym, tf)]}
+                ctx = {"symbol": sym, "timeframe": tf, "htf_dir": htf_dir[(sym, tf)],
+                       "htf": htf_series[(sym, tf)]}
                 ds = {}
                 for ci, params in enumerate(grid):
                     tr = strat["run"](series[(sym, tf)], params, ctx)
@@ -198,7 +233,9 @@ def main():
         "verdict": verdict,
     }
     with open(RESULTS_PATH, "w", encoding="utf-8") as fh:
-        json.dump(results, fh, ensure_ascii=False)
+        # allow_nan=False + saneo: Infinity/NaN no son JSON válido para el navegador
+        # (JSON.parse falla). Convertimos a null; el frontend ya lo muestra como "∞".
+        json.dump(_json_safe(results), fh, ensure_ascii=False, allow_nan=False)
 
     _print(results)
     log(f"\n💾 Guardado en {RESULTS_PATH}\n   Vista web: /m/trading/backtest")

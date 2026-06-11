@@ -81,6 +81,51 @@ def bollinger(closes: List[float], period: int = 20, k: float = 2.0):
     return mid, up, lo, bw
 
 
+def rolling_min(values: List[float], period: int) -> List[Optional[float]]:
+    """Mínimo de los últimos `period` valores INCLUYENDO el actual (como
+    lowest() de Pine). O(n) con deque monótona."""
+    from collections import deque
+    n = len(values)
+    out: List[Optional[float]] = [None] * n
+    dq = deque()
+    for i in range(n):
+        while dq and values[dq[-1]] >= values[i]:
+            dq.pop()
+        dq.append(i)
+        while dq[0] <= i - period:
+            dq.popleft()
+        if i >= period - 1:
+            out[i] = values[dq[0]]
+    return out
+
+
+def rolling_max(values: List[float], period: int) -> List[Optional[float]]:
+    """Máximo de los últimos `period` valores incluyendo el actual (highest())."""
+    from collections import deque
+    n = len(values)
+    out: List[Optional[float]] = [None] * n
+    dq = deque()
+    for i in range(n):
+        while dq and values[dq[-1]] <= values[i]:
+            dq.pop()
+        dq.append(i)
+        while dq[0] <= i - period:
+            dq.popleft()
+        if i >= period - 1:
+            out[i] = values[dq[0]]
+    return out
+
+
+def macd(closes: List[float], fast: int = 12, slow: int = 26, signal: int = 9):
+    """MACD: devuelve (línea_macd, línea_señal, histograma)."""
+    ef = ema(closes, fast)
+    es = ema(closes, slow)
+    line = [ef[i] - es[i] for i in range(len(closes))]
+    sig = ema(line, signal)
+    hist = [line[i] - sig[i] for i in range(len(closes))]
+    return line, sig, hist
+
+
 def donchian(candles: List[dict], period: int):
     """Canal de Donchian: máximo de los `period` máximos PREVIOS y mínimo de los
     mínimos previos (excluye la vela actual, para detectar ruptura sin lookahead).

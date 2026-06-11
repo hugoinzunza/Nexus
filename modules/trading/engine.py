@@ -24,7 +24,12 @@ SLIPPAGE = 0.0002     # 0.02% por fill
 
 def simulate(candles: List[dict], signals: List[Tuple], symbol: str, timeframe: str,
              strategy: str, max_hold: int = 96, min_stop_frac: float = 0.0015,
-             commission: float = COMMISSION, slippage: float = SLIPPAGE) -> List[dict]:
+             commission: float = COMMISSION, slippage: float = SLIPPAGE,
+             exit_at=None, allow_immediate_reentry: bool = False) -> List[dict]:
+    """Simula las señales. `exit_at` (set opcional de índices) cierra la posición
+    al cierre de esa vela (p.ej. señal opuesta), con prioridad para stop/TP si
+    caen en la misma vela (conservador). `allow_immediate_reentry` permite que una
+    señal en la misma vela del cierre por señal abra la siguiente operación."""
     n = len(candles)
     trades: List[dict] = []
     occupied_until = -1
@@ -60,6 +65,9 @@ def simulate(candles: List[dict], signals: List[Tuple], symbol: str, timeframe: 
                 if c["h"] >= tp:
                     outcome, exit_level, exit_idx = "win", tp, m
                     break
+            if exit_at is not None and m in exit_at:  # señal opuesta → cierre
+                outcome, exit_level, exit_idx = "signal", c["c"], m
+                break
 
         if short:
             entry_fill = entry * (1 - slippage)
@@ -81,5 +89,7 @@ def simulate(candles: List[dict], signals: List[Tuple], symbol: str, timeframe: 
             "outcome": outcome, "R": round(r_mult, 4),
             "session": session_of(candles[e]["t"]),
         })
-        occupied_until = exit_idx
+        # Tras un cierre por señal, opcionalmente permitimos reentrar en la misma
+        # vela (la nueva entrada es en la apertura siguiente, sin solape real).
+        occupied_until = (exit_idx - 1) if (allow_immediate_reentry and outcome == "signal") else exit_idx
     return trades
