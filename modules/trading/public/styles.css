@@ -125,3 +125,42 @@ body {
 .bar.center .bar-fill { left: 50%; width: 0; background: var(--accent2); }
 
 .foot { text-align: center; color: var(--muted); font-size: 12.5px; padding: 20px; }
+.foot code, .disclaimer code, .bt-note code { color: var(--accent2); }
+
+/* ---- Vista de backtest ---- */
+.bt { max-width: 1100px; margin: 18px auto; padding: 0 24px; }
+.bt-h { font-size: 16px; margin: 26px 0 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--line); color: var(--text); }
+.bt-note { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 8px 0; }
+.bt-note b { color: var(--text); }
+
+.bt-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.bt-chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 10px; font-size: 12.5px; color: var(--muted); }
+.bt-chip b { color: var(--text); }
+.bt-cov { flex-basis: 100%; color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+.metric-grid { display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.metric { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.m-k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.m-v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.m-v.up, td .up, span.up { color: var(--green); }
+.m-v.down, td .down, span.down { color: var(--red); }
+
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px;
+  font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 12px; text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+thead th { color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .5px; background: var(--panel2); position: sticky; top: 0; }
+tbody tr { border-top: 1px solid var(--line); }
+tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
+
+@media (max-width: 760px) {
+  .bt { padding: 0 14px; }
+  .m-v { font-size: 19px; }
+}

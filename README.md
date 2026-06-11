@@ -163,6 +163,29 @@ Dashboard web que muestra, para cada instrumento (por defecto **BTC/USDT** y
 El backend consulta el mercado cada par de segundos y empuja las novedades al
 navegador por **SSE** (Server-Sent Events), así el panel se actualiza solo.
 
+### Backtest de estrategia (SMC)
+
+Hay un motor de estrategia mecánica basada en Smart Money Concepts y su backtest
+sobre datos históricos reales de Binance (klines públicas):
+
+- **Estrategia:** barrido de liquidez → cambio de carácter (CHoCH/BOS) → entrada
+  en el FVG u order block del impulso. Stop más allá del barrido, take-profit por
+  múltiplos de R. Todo parametrizable en [`modules/trading/backtest.py`](modules/trading/backtest.py).
+- **Honestidad:** incluye comisiones (0.05%/lado) y slippage (0.02%); reporta win
+  rate, expectativa en R, profit factor, drawdown y rachas, con desglose por par,
+  timeframe, sesión y dirección, más una tabla de sensibilidad a los parámetros
+  (para no sobreajustar). El rendimiento pasado no garantiza el futuro.
+- **Correr el backtest** (baja el histórico a `data/`, que está en `.gitignore`, y
+  regenera `modules/trading/backtest_results.json`):
+
+  ```bash
+  .venv/bin/python -m modules.trading.run_backtest
+  ```
+
+- **Vista web:** http://127.0.0.1:8800/m/trading/backtest (mobile-first): métricas,
+  curva de equity en R y todas las tablas. Lee el JSON ya calculado, así funciona
+  también en Railway sin recalcular.
+
 ### Configuración
 
 Todo se ajusta en [`config/nexus.json`](config/nexus.json):

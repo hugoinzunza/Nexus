@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1117">
+  <title>Nexus · Backtest SMC</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Nexus">
+  <link rel="stylesheet" href="styles.css">
+  <script src="/static/pwa.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="/m/trading/">← Trading</a>
+    <h1>Backtest · Estrategia SMC</h1>
+    <div class="status"><span id="generated">—</span></div>
+  </header>
+
+  <p class="disclaimer">
+    Estrategia mecánica (barrido de liquidez → cambio de carácter → entrada en FVG/order block).
+    Resultados sobre datos históricos reales de Binance, <strong>con comisiones y slippage</strong>.
+    Son números de backtest, no una promesa: el rendimiento pasado no garantiza el futuro.
+    No es una recomendación de inversión.
+  </p>
+
+  <main class="bt">
+    <section class="bt-meta" id="meta"></section>
+
+    <h2 class="bt-h">Resumen (todos los pares y temporalidades)</h2>
+    <section class="metric-grid" id="headline"></section>
+
+    <h2 class="bt-h">Curva de equity (R acumulado)</h2>
+    <div class="chart-wrap"><canvas id="equity" class="chart"></canvas></div>
+
+    <h2 class="bt-h">Por par y temporalidad</h2>
+    <div class="table-wrap"><table id="by-pair"></table></div>
+
+    <h2 class="bt-h">Sensibilidad a los parámetros</h2>
+    <p class="bt-note">Objetivo en múltiplos de R y filtro de tendencia. Sirve para ver
+      cuánto dependen los resultados de los parámetros (y no sobreajustar).</p>
+    <div class="table-wrap"><table id="sensitivity"></table></div>
+
+    <h2 class="bt-h">Por sesión</h2>
+    <div class="table-wrap"><table id="by-session"></table></div>
+
+    <h2 class="bt-h">Por dirección</h2>
+    <div class="table-wrap"><table id="by-direction"></table></div>
+
+    <p class="bt-note" id="reading"></p>
+  </main>
+
+  <footer class="foot">
+    Datos: klines públicas de Binance · estrategia y backtest en <code>modules/trading/</code> ·
+    regenerar con <code>python3 -m modules.trading.run_backtest</code>
+  </footer>
+
+  <script src="backtest.js"></script>
+</body>
+</html>

@@ -164,6 +164,9 @@ def module_static(slug: str, relpath: str):
     full = os.path.join(public, safe)
     if not os.path.abspath(full).startswith(os.path.abspath(public)):
         return JSONResponse({"error": "ruta no permitida"}, status_code=403)
+    # URLs limpias: /m/trading/backtest → backtest.html si no existe el exacto.
+    if not os.path.isfile(full) and os.path.isfile(full + ".html"):
+        full = full + ".html"
     if not os.path.isfile(full):
         return JSONResponse({"error": "archivo no encontrado", "path": relpath}, status_code=404)
 

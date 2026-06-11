@@ -15,11 +15,14 @@ Importante: NO ejecuta operaciones. Es un observador.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 
 from core.module_base import NexusModule
 from . import cryptocom
+
+_BACKTEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtest_results.json")
 
 
 class TradingModule(NexusModule):
@@ -217,6 +220,12 @@ class TradingModule(NexusModule):
                 "candles": candles,
             }, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)
+        if subpath == "backtest":
+            if not os.path.isfile(_BACKTEST_PATH):
+                return self._json_error(404, "todavía no hay resultados de backtest; corre "
+                                             "python3 -m modules.trading.run_backtest")
+            with open(_BACKTEST_PATH, "rb") as fh:
+                return (200, "application/json; charset=utf-8", fh.read())
         return None
 
     @staticmethod
