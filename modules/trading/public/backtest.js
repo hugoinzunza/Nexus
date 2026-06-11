@@ -1,13 +1,14 @@
-/* Vista de backtest SMC (Fase 1.5). Lee /m/trading/api/backtest (JSON
- * precalculado) y muestra la validación in-sample vs out-of-sample, el
- * walk-forward y el veredicto honesto. Mobile-first. */
+/* Vista del laboratorio de estrategias (Fase 2). Lee /m/trading/api/backtest
+ * (JSON precalculado) y muestra el ranking por out-of-sample, el veredicto
+ * honesto y los detalles. Mobile-first. */
 (function () {
   "use strict";
 
   const $ = (id) => document.getElementById(id);
   const pf = (v) => (v === null || v === Infinity || v === "Infinity" ? "∞" : v);
   const rcol = (v) => (v > 0 ? "up" : v < 0 ? "down" : "");
-  const trendName = { none: "Ninguno", ema: "EMA", structure: "Estructura HTF" };
+  const rc = (v) => `<span class="${rcol(v)}">${v}</span>`;
+  const pfc = (v) => `<span class="${v >= 1 ? "up" : "down"}">${pf(v)}</span>`;
 
   fetch("api/backtest")
     .then((r) => { if (!r.ok) throw new Error("sin resultados"); return r.json(); })
@@ -20,89 +21,69 @@
   function render(d) {
     $("generated").textContent = "generado " + new Date(d.generated_at_ms).toLocaleDateString("es");
 
-    // Veredicto.
     const v = d.verdict;
-    $("verdict").className = "verdict " + (v.robust ? "ok" : "warn");
+    $("verdict").className = "verdict " + (v.any_robust ? "ok" : "warn");
     $("verdict").innerHTML =
-      `<div class="v-tag">${v.robust ? "✅ Edge robusto fuera de muestra" : "⚠️ Edge NO robusto fuera de muestra"}</div>
+      `<div class="v-tag">${v.any_robust ? "✅ Hay edge robusto fuera de muestra" : "⚠️ Sin edge robusto fuera de muestra"}</div>
        <p>${v.text}</p>`;
 
-    // Meta.
     const c = d.costs;
-    const cov = d.data.map((x) => `${x.symbol} ${x.timeframe}: ${x.bars} velas`).join(" · ");
     $("meta").innerHTML = `
-      <div class="bt-chip">Grilla probada: <b>${d.grid_size}</b> configs</div>
+      <div class="bt-chip"><b>${d.ranking.length}</b> estrategias · <b>${d.pairs.length}</b> pares ·
+        <b>${d.timeframes.join("/")}</b></div>
       <div class="bt-chip">Corte: in-sample hasta <b>${d.split.is_until}</b> · OOS desde ahí</div>
       <div class="bt-chip">Comisión <b>${(c.commission_per_side * 100).toFixed(3)}%</b>/lado ·
         slippage <b>${(c.slippage * 100).toFixed(3)}%</b></div>
-      <div class="bt-cov">${cov} · ${d.data[0].from} → ${d.data[0].to}</div>`;
+      <div class="bt-cov">${d.data.length} datasets · ${d.data[0].from} → ${d.data[0].to}</div>`;
 
-    // Mejor config: IN vs OUT vs FULL.
-    const b = d.best_overall;
-    $("best-label").innerHTML = `<strong>Config:</strong> ${b.label}`;
-    metricCompare($("inout"), [
-      ["", "In-sample", "Out-of-sample", "Full"],
-      ["Trades", b.in_sample.trades, b.out_sample.trades, b.full.trades],
-      ["Win rate", b.in_sample.win_rate + "%", b.out_sample.win_rate + "%", b.full.win_rate + "%"],
-      ["Expectativa (R)", rc(b.in_sample.expectancy_R), rc(b.out_sample.expectancy_R), rc(b.full.expectancy_R)],
-      ["Profit factor", pfc(b.in_sample.profit_factor), pfc(b.out_sample.profit_factor), pfc(b.full.profit_factor)],
-      ["Max drawdown (R)", b.in_sample.max_drawdown_R, b.out_sample.max_drawdown_R, b.full.max_drawdown_R],
-      ["Total R", rc(b.in_sample.total_R), rc(b.out_sample.total_R), rc(b.full.total_R)],
-    ]);
+    $("rule").innerHTML = `<strong>Umbral de robustez:</strong> ${d.robustness_rule.rule}.`;
 
-    window._btEquity = d.equity_oos;
-    drawEquity($("equity"), d.equity_oos);
+    // Ranking.
+    table($("ranking"),
+      ["#", "Estrategia", "Familia", "IS exp", "OOS exp", "OOS PF", "OOS n", "WFO exp", "Robusta"],
+      d.ranking.map((s, i) => [
+        i + 1, s.name, s.family,
+        rc(s.in_sample.expectancy_R), rc(s.out_sample.expectancy_R),
+        pfc(s.out_sample.profit_factor), sampleCell(s.out_sample.trades),
+        rc(s.wfo_oos.expectancy_R), badge(s),
+      ]), d.ranking.map((s, i) => (s.robust ? i : -1)).filter((i) => i >= 0));
 
-    // Walk-forward.
-    const wfoRows = d.walkforward.folds.map((f) => [
-      `${f.test_from}→${f.test_to}`, f.label.replace(/·/g, "·"),
-      f.out_sample.trades, f.out_sample.win_rate + "%",
-      rc(f.out_sample.expectancy_R), pfc(f.out_sample.profit_factor), rc(f.out_sample.total_R),
-    ]);
-    const agg = d.walkforward.oos_aggregate;
-    wfoRows.push(["OOS agregado", "—", agg.trades, agg.win_rate + "%",
-      rc(agg.expectancy_R), pfc(agg.profit_factor), rc(agg.total_R)]);
-    table($("wfo"), ["Ventana OOS", "Config", "Trades", "Win%", "Exp.R", "PF", "Total R"], wfoRows, [wfoRows.length - 1]);
+    // Equity de la top.
+    if (d.ranking.length) {
+      const top = d.ranking[0];
+      $("equity-label").innerHTML =
+        `<strong>${top.name}</strong> · ${top.label} · ${d.equity_best.length} trades OOS`;
+    }
+    window._btEquity = d.equity_best;
+    drawEquity($("equity"), d.equity_best);
 
-    // Tendencia.
-    table($("trend"),
-      ["Filtro", "Muestra", "Trades", "Win%", "Exp.R", "PF", "Total R"],
-      d.trend_comparison.flatMap((t) => [
-        [trendName[t.mode], "Full", t.full.trades, t.full.win_rate + "%",
-          rc(t.full.expectancy_R), pfc(t.full.profit_factor), rc(t.full.total_R)],
-        ["", "OOS", t.out_sample.trades, t.out_sample.win_rate + "%",
-          rc(t.out_sample.expectancy_R), pfc(t.out_sample.profit_factor), rc(t.out_sample.total_R)],
+    // Detalle por estrategia.
+    table($("detail"),
+      ["Estrategia", "Mejor config", "Muestra", "Trades", "Win%", "Exp.R", "PF", "DD(R)"],
+      d.ranking.flatMap((s) => [
+        [s.name, s.label, "IS", s.in_sample.trades, s.in_sample.win_rate + "%",
+          rc(s.in_sample.expectancy_R), pfc(s.in_sample.profit_factor), s.in_sample.max_drawdown_R],
+        ["", "", "OOS", s.out_sample.trades, s.out_sample.win_rate + "%",
+          rc(s.out_sample.expectancy_R), pfc(s.out_sample.profit_factor), s.out_sample.max_drawdown_R],
       ]));
 
-    // Ablación.
-    $("ablation-base").innerHTML = `<strong>Base:</strong> ${d.ablation.base.label}`;
-    const ab = d.ablation;
-    const abRows = [["Base", ab.base.metrics.trades, ab.base.metrics.win_rate + "%",
-      rc(ab.base.metrics.expectancy_R), pfc(ab.base.metrics.profit_factor), rc(ab.base.metrics.total_R)]];
-    ab.steps.forEach((s) => abRows.push([s.name, s.metrics.trades, s.metrics.win_rate + "%",
-      rc(s.metrics.expectancy_R), pfc(s.metrics.profit_factor), rc(s.metrics.total_R)]));
-    table($("ablation"), ["Variante", "Trades", "Win%", "Exp.R", "PF", "Total R"], abRows, [0]);
-
-    // Por par/timeframe.
-    table($("per-dataset"),
-      ["Par/TF", "Muestra", "Config", "Trades", "Win%", "Exp.R", "PF", "Total R"],
-      d.per_dataset.flatMap((x) => [
-        [`${x.symbol} ${x.timeframe}`, "IS", x.label, x.in_sample.trades, x.in_sample.win_rate + "%",
-          rc(x.in_sample.expectancy_R), pfc(x.in_sample.profit_factor), rc(x.in_sample.total_R)],
-        ["", "OOS", "", x.out_sample.trades, x.out_sample.win_rate + "%",
-          rc(x.out_sample.expectancy_R), pfc(x.out_sample.profit_factor), rc(x.out_sample.total_R)],
+    // Mejores combos.
+    table($("combos"),
+      ["Estrategia", "Par/TF", "Config", "OOS exp", "OOS PF", "OOS n"],
+      d.best_combos.map((b) => [
+        b.strategy, `${b.symbol} ${b.timeframe}`, b.label,
+        rc(b.out_sample.expectancy_R), pfc(b.out_sample.profit_factor),
+        sampleCell(b.out_sample.trades),
       ]));
   }
 
-  // Celda coloreada por signo (R).
-  function rc(v) { return `<span class="${rcol(v)}">${v}</span>`; }
-  function pfc(v) { const n = pf(v); return `<span class="${v >= 1 ? "up" : "down"}">${n}</span>`; }
-
-  function metricCompare(el, rows) {
-    const head = "<thead><tr>" + rows[0].map((h) => `<th>${h}</th>`).join("") + "</tr></thead>";
-    const body = "<tbody>" + rows.slice(1).map((r) =>
-      "<tr>" + r.map((c, i) => `<td>${i === 0 ? "<b>" + c + "</b>" : c}</td>`).join("") + "</tr>").join("") + "</tbody>";
-    el.innerHTML = head + body;
+  function badge(s) {
+    if (s.robust) return '<span class="up">✅ sí</span>';
+    if (!s.confident) return '<span class="down">⚠ pocos</span>';
+    return '<span class="muted">no</span>';
+  }
+  function sampleCell(n) {
+    return n >= 30 ? `${n}` : `<span class="down">${n} ⚠</span>`;
   }
 
   function table(el, headers, rows, highlight) {
@@ -125,7 +106,7 @@
     ctx.clearRect(0, 0, cssW, cssH);
     if (!points || !points.length) {
       ctx.fillStyle = "#8b93a7"; ctx.font = "13px -apple-system, sans-serif";
-      ctx.fillText("Sin trades fuera de muestra para esta config.", 12, cssH / 2);
+      ctx.fillText("Sin trades fuera de muestra.", 12, cssH / 2);
       return;
     }
     const padL = 8, padR = 52, padT = 12, padB = 18;

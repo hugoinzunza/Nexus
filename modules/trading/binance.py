@@ -74,8 +74,11 @@ def fetch_klines(symbol: str, interval: str, years: float = 3.0,
         if first_t <= want_start and fresh and not force:
             return [v for v in cached if v["t"] >= want_start]
 
-    # Punto de arranque de la descarga: si hay caché fresca, seguimos desde el final.
-    if cached and (now_ms - cached[-1]["t"]) < 30 * 86_400_000 and not force:
+    # Punto de arranque: si la caché es fresca Y ya llega hasta atrás de lo pedido,
+    # solo completamos lo nuevo. Si pedimos MÁS historia de la cacheada, rebajamos
+    # todo desde el inicio pedido (backfill).
+    if (cached and (now_ms - cached[-1]["t"]) < 30 * 86_400_000
+            and cached[0]["t"] <= want_start and not force):
         start = cached[-1]["t"] + step
         out = list(cached)
         seen = {v["t"] for v in cached}

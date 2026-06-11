@@ -148,6 +148,7 @@ body {
 .m-v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .m-v.up, td .up, span.up { color: var(--green); }
 .m-v.down, td .down, span.down { color: var(--red); }
+td .muted, span.muted { color: var(--muted); }
 
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch;
   border: 1px solid var(--line); border-radius: 12px; }

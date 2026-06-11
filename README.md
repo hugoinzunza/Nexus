@@ -163,35 +163,43 @@ Dashboard web que muestra, para cada instrumento (por defecto **BTC/USDT** y
 El backend consulta el mercado cada par de segundos y empuja las novedades al
 navegador por **SSE** (Server-Sent Events), así el panel se actualiza solo.
 
-### Backtest de estrategia (SMC)
+### Laboratorio de estrategias (Fase 2)
 
-Hay un motor de estrategia mecánica basada en Smart Money Concepts y su backtest
-sobre datos históricos reales de Binance (klines públicas):
+Hay un **framework que prueba sistemáticamente varias familias de estrategias**
+mecánicas sobre 7 pares líquidos (BTC, ETH, SOL, BNB, XRP, ADA, DOGE) en 1h y 4h,
+con 4 años de histórico real de Binance, y deja pasar solo lo que tenga edge
+robusto fuera de muestra:
 
-- **Estrategia:** barrido de liquidez → cambio de carácter (CHoCH/BOS) → entrada
-  en el FVG u order block del impulso. Stop más allá del barrido, take-profit por
-  múltiplos de R. Filtros de calidad parametrizables (tendencia por estructura del
-  timeframe superior o por EMA, displacement por ATR, premium/discount, tamaño
-  mínimo del FVG, sesión). Todo en [`modules/trading/backtest.py`](modules/trading/backtest.py).
-- **Validación honesta:** incluye comisiones (0.05%/lado) y slippage (0.02%); y
-  sobre todo separa **in-sample vs out-of-sample** (optimiza en el 70% antiguo,
-  testea en el 30% reciente) más un **walk-forward** anclado, para no autoengañarse
-  con sobreajuste. Reporta win rate, expectativa en R, profit factor, drawdown y
-  rachas. El rendimiento pasado no garantiza el futuro.
-- **Resultado actual (honesto):** la estrategia base no tiene ventaja robusta
-  fuera de muestra (la mejor config in-sample, +0.26R, cae a −0.24R out-of-sample;
-  walk-forward −0.24R). El único foco que aguanta es BTCUSDT 4h con filtro EMA,
-  pero con muestra chica. La vista web lo explica con su veredicto.
-- **Correr el backtest** (baja el histórico a `data/`, que está en `.gitignore`, y
-  regenera `modules/trading/backtest_results.json`):
+- **Familias** (en [`modules/trading/strategies.py`](modules/trading/strategies.py)):
+  ruptura Donchian, cruce de medias (EMA), reversión RSI en rango, reversión
+  Bollinger, ruptura de volatilidad (squeeze) y SMC. Sumar una estrategia nueva es
+  agregar una entrada a `STRATEGIES`.
+- **Validación honesta:** cada estrategia se optimiza solo en in-sample (70%), se
+  testea en out-of-sample (30%) y se valida con walk-forward anclado, con
+  comisiones (0.05%/lado) y slippage (0.02%). El ranking ordena por OOS, no por
+  in-sample. Se marca como no confiable la muestra OOS chica (<30 trades).
+- **Umbral de robustez exigente:** rentable en in-sample **y** out-of-sample, PF
+  OOS ≥ 1.1, ≥30 trades OOS y walk-forward positivo.
+- **Resultado actual (honesto):** **ninguna** estrategia supera el umbral sobre
+  este universo. La de mejor OOS (SMC) es positiva fuera de muestra pero negativa
+  in-sample y con walk-forward ≈0: probable régimen del período reciente, no un
+  edge estable. La vista web muestra el ranking y el veredicto.
+- **Correr el laboratorio** (regenera `modules/trading/backtest_results.json`):
 
   ```bash
   .venv/bin/python -m modules.trading.run_backtest
   ```
 
-- **Vista web:** http://127.0.0.1:8800/m/trading/backtest (mobile-first): métricas,
-  curva de equity en R y todas las tablas. Lee el JSON ya calculado, así funciona
-  también en Railway sin recalcular.
+- **Vista web:** http://127.0.0.1:8800/m/trading/backtest (mobile-first): veredicto,
+  ranking por OOS, curva de equity y tablas. Lee el JSON ya calculado
+  (`backtest_results.json`, commiteado), así funciona también en Railway sin recalcular.
+
+> El motor SMC con sus filtros de calidad (tendencia por estructura del timeframe
+> superior o EMA, displacement por ATR, premium/discount, tamaño mínimo del FVG,
+> sesión) y la validación in/out vive en
+> [`modules/trading/backtest.py`](modules/trading/backtest.py) y `smc.py`; el motor
+> genérico por señales en `engine.py` y los indicadores en `indicators.py`. La data
+> cruda se cachea en `data/` (en `.gitignore`).
 
 ### Configuración
 
