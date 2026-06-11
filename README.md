@@ -8,9 +8,12 @@ Como el Mac mini no tiene pantalla, Nexus está pensado **mobile-first**: lo abr
 desde el iPhone, el iPad o el MacBook, y puedes instalarlo como app (PWA) a
 pantalla completa.
 
-Hoy arranca con dos áreas:
+Hoy arranca con estas áreas:
 
-- **📈 Trading** — co-piloto de mercado de cripto en vivo (¡ya funcional!).
+- **📈 Trading** — co-piloto de mercado de cripto en vivo + laboratorio de
+  estrategias con backtest honesto (¡ya funcional!).
+- **📒 Diario** — estadísticas de tu trading real en Binance (Futuros y Spot),
+  **solo lectura** (¡ya funcional!).
 - **🎵 Música** — reservado, placeholder por ahora.
 
 > ⚠️ **Solo lectura.** Nexus observa los mercados y muestra información. **No
@@ -201,7 +204,35 @@ robusto fuera de muestra:
 > genérico por señales en `engine.py` y los indicadores en `indicators.py`. La data
 > cruda se cachea en `data/` (en `.gitignore`).
 
-### Configuración
+## 📒 Módulo Diario (Binance, solo lectura)
+
+Panel de estadísticas de tu trading real en Binance. **Solo lectura**: hace
+únicamente consultas firmadas (HMAC-SHA256) de lectura; **nunca** crea ni cancela
+órdenes, ni transfiere ni retira.
+
+- **Futuros USDⓈ-M:** PnL realizado neto de comisiones y funding (reconstruye
+  trades cerrados desde `/fapi/v1/income`), posiciones abiertas y balance.
+- **Spot:** holdings valorizados con el precio actual.
+- **Estadísticas:** PnL neto, win rate, profit factor, ganancia/pérdida promedio,
+  mejor/peor trade, rachas, curva de equity y desgloses **por par, sesión, día de
+  la semana y hora** (para ver tus mejores y peores horarios).
+
+**Credenciales (las pones tú, nunca quedan en el código):**
+
+| Variable | Para qué |
+|---|---|
+| `BINANCE_API_KEY` | API key de Binance, **de solo lectura**. |
+| `BINANCE_API_SECRET` | Secret de esa API key. |
+| `BINANCE_LOOKBACK_DAYS` | Opcional: días de historial a traer (por defecto 365). |
+
+> 🔒 **Seguridad:** crea la API key con permisos de **solo lectura** (sin trading
+> ni retiro) y, si puedes, restríngela por IP. Nexus lee las claves desde el
+> entorno; no las guarda, no las loguea y no las commitea. Sin claves, el panel
+> muestra una pantalla "Conecta tu Binance" y no se rompe.
+
+Vista: **http://127.0.0.1:8800/m/journal/** (o `…/m/journal/` en tu dominio de Railway).
+
+## ⚙️ Configuración
 
 Todo se ajusta en [`config/nexus.json`](config/nexus.json):
 

@@ -16,6 +16,11 @@
         { "name": "ETH_USDT", "label": "ETH/USDT" }
       ]
     },
+    "journal": {
+      "enabled": true,
+      "lookback_days": 365,
+      "cache_ttl_seconds": 180
+    },
     "music": {
       "enabled": true
     }

@@ -1,0 +1,69 @@
+/* Diario · Binance — tema oscuro, mobile-first, sin frameworks. */
+:root {
+  --bg: #0f1117; --panel: #171a23; --panel2: #1d2130; --line: #262b38;
+  --text: #e6e9f0; --muted: #8b93a7; --accent: #6c5ce7; --accent2: #a29bfe;
+  --green: #16c784; --red: #ea3943; --amber: #f5a623;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--text); }
+.topbar { display: flex; align-items: center; gap: 14px; padding: 16px 20px;
+  border-bottom: 1px solid var(--line); position: sticky; top: 0;
+  background: rgba(15,17,23,.92); backdrop-filter: blur(8px); z-index: 5; }
+.back { color: var(--accent2); text-decoration: none; font-weight: 700; }
+.topbar h1 { font-size: 17px; margin: 0; flex: 1; }
+.status { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); }
+.dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.dot.bad { background: var(--red); }
+.disclaimer { max-width: 1000px; margin: 14px auto 0; padding: 0 20px; color: var(--muted); font-size: 12.5px; }
+
+.card { max-width: 720px; margin: 20px auto; padding: 22px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 16px; }
+.card h2 { margin: 0 0 10px; font-size: 19px; }
+.card p { color: var(--text); line-height: 1.55; font-size: 14px; }
+.connect .envs { list-style: none; padding: 0; margin: 14px 0; display: flex; flex-direction: column; gap: 8px; }
+.connect .envs li { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.connect code, .tip, .foot code, .bt-note code, .disclaimer code { color: var(--accent2); }
+.connect .tip { background: rgba(245,166,35,.08); border: 1px solid rgba(245,166,35,.3);
+  border-radius: 10px; padding: 12px 14px; font-size: 13px; }
+.card.err { border-color: rgba(234,57,67,.4); background: rgba(234,57,67,.06); }
+.muted { color: var(--muted); }
+
+.bt { max-width: 1000px; margin: 16px auto; padding: 0 20px; }
+.bt-h { font-size: 15px; margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.bt-note { color: var(--muted); font-size: 13px; margin: 6px 0; }
+.bt-note b, .bt-note strong { color: var(--text); }
+
+.seg-tabs { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.tf-btn { cursor: pointer; background: transparent; color: var(--muted); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; font-family: inherit; }
+.tf-btn:hover { color: var(--text); border-color: var(--accent); }
+
+.metric-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.metric { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.m-k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.m-v { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.m-v.up, td .up, span.up { color: var(--green); }
+.m-v.down, td .down, span.down { color: var(--red); }
+
+.chart-wrap { background: var(--panel2); border-radius: 12px; padding: 8px; }
+.chart { width: 100%; height: 240px; display: block; }
+.chart.hours { height: 160px; }
+
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 12px; text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+thead th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; background: var(--panel2); }
+tbody tr { border-top: 1px solid var(--line); }
+tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
+
+.foot { text-align: center; color: var(--muted); font-size: 12.5px; padding: 22px; }
+
+@media (max-width: 760px) {
+  .bt { padding: 0 14px; }
+  .m-v { font-size: 18px; }
+  th, td { padding: 8px 9px; }
+}

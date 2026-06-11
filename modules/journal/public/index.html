@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1117">
+  <title>Nexus · Diario</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Nexus">
+  <link rel="stylesheet" href="styles.css">
+  <script src="/static/pwa.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="/">◆ Nexus</a>
+    <h1>Diario · Binance</h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="status-text">cargando…</span></div>
+  </header>
+
+  <p class="disclaimer">
+    Solo lectura de tu cuenta de Binance (Futuros USDⓈ-M y Spot). No ejecuta ni
+    modifica operaciones: únicamente consulta tu historial y balances.
+  </p>
+
+  <!-- Estado: sin credenciales -->
+  <section id="connect" class="card connect" hidden>
+    <h2>Conecta tu Binance</h2>
+    <p>Para ver tus estadísticas, define estas variables de entorno (en Railway o
+       en el Mac mini). Nexus nunca las guarda en el código ni las muestra.</p>
+    <ul class="envs">
+      <li><code>BINANCE_API_KEY</code></li>
+      <li><code>BINANCE_API_SECRET</code></li>
+      <li><code>BINANCE_LOOKBACK_DAYS</code> <span class="muted">(opcional, por defecto 365)</span></li>
+    </ul>
+    <p class="tip">
+      <strong>Importante por seguridad:</strong> crea una API key de
+      <strong>solo lectura</strong> (sin permisos de trading ni de retiro) y, si
+      puedes, restríngela por IP. Nexus solo necesita permisos de lectura.
+    </p>
+    <p class="muted">Una vez configuradas, recarga esta página.</p>
+  </section>
+
+  <!-- Estado: error -->
+  <section id="error" class="card err" hidden>
+    <h2>No se pudo leer la cuenta</h2>
+    <p id="error-msg"></p>
+    <p class="muted">Revisa que la API key sea válida, de solo lectura, y con permisos
+       de Futuros/Spot según corresponda.</p>
+  </section>
+
+  <!-- Panel -->
+  <main id="panel" class="bt" hidden>
+    <div class="seg-tabs">
+      <span class="muted" id="updated"></span>
+      <button class="tf-btn" id="refresh">↻ actualizar</button>
+    </div>
+
+    <h2 class="bt-h">Resumen · Futuros USDⓈ-M</h2>
+    <section class="metric-grid" id="summary"></section>
+
+    <h2 class="bt-h">Curva de equity (PnL acumulado, USDT)</h2>
+    <div class="chart-wrap"><canvas id="equity" class="chart"></canvas></div>
+
+    <h2 class="bt-h">Posiciones abiertas</h2>
+    <div class="table-wrap"><table id="positions"></table></div>
+
+    <h2 class="bt-h">Spot · holdings</h2>
+    <p class="bt-note" id="spot-total"></p>
+    <div class="table-wrap"><table id="spot"></table></div>
+
+    <h2 class="bt-h">Por par</h2>
+    <div class="table-wrap"><table id="by-pair"></table></div>
+
+    <h2 class="bt-h">Por sesión</h2>
+    <div class="table-wrap"><table id="by-session"></table></div>
+
+    <h2 class="bt-h">Por día de la semana</h2>
+    <div class="table-wrap"><table id="by-weekday"></table></div>
+
+    <h2 class="bt-h">Por hora (UTC) — tus mejores y peores horarios</h2>
+    <div class="chart-wrap"><canvas id="hours" class="chart hours"></canvas></div>
+  </main>
+
+  <footer class="foot">
+    Datos: API privada de Binance (solo lectura) · módulo <code>journal</code>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
