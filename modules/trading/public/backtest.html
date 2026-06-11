@@ -16,41 +16,43 @@
 <body>
   <header class="topbar">
     <a class="back" href="/m/trading/">← Trading</a>
-    <h1>Backtest · Estrategia SMC</h1>
+    <h1>Backtest SMC · Fase 1.5</h1>
     <div class="status"><span id="generated">—</span></div>
   </header>
 
   <p class="disclaimer">
-    Estrategia mecánica (barrido de liquidez → cambio de carácter → entrada en FVG/order block).
-    Resultados sobre datos históricos reales de Binance, <strong>con comisiones y slippage</strong>.
-    Son números de backtest, no una promesa: el rendimiento pasado no garantiza el futuro.
-    No es una recomendación de inversión.
+    Estrategia mecánica (barrido de liquidez → cambio de carácter → entrada en FVG/order block)
+    con filtros de calidad. Validación honesta <strong>in-sample vs out-of-sample</strong> y
+    walk-forward, sobre datos reales de Binance, <strong>con comisiones y slippage</strong>.
+    El rendimiento pasado no garantiza el futuro. No es una recomendación de inversión.
   </p>
 
   <main class="bt">
+    <section id="verdict" class="verdict"></section>
     <section class="bt-meta" id="meta"></section>
 
-    <h2 class="bt-h">Resumen (todos los pares y temporalidades)</h2>
-    <section class="metric-grid" id="headline"></section>
+    <h2 class="bt-h">Mejor configuración (optimizada solo en in-sample)</h2>
+    <p class="bt-note" id="best-label"></p>
+    <div class="table-wrap"><table id="inout"></table></div>
 
-    <h2 class="bt-h">Curva de equity (R acumulado)</h2>
+    <h2 class="bt-h">Curva de equity fuera de muestra (R acumulado)</h2>
+    <p class="bt-note">Esta es la curva honesta: trades posteriores al corte de optimización.</p>
     <div class="chart-wrap"><canvas id="equity" class="chart"></canvas></div>
 
-    <h2 class="bt-h">Por par y temporalidad</h2>
-    <div class="table-wrap"><table id="by-pair"></table></div>
+    <h2 class="bt-h">Walk-forward (folds anclados, re-optimizado por ventana)</h2>
+    <div class="table-wrap"><table id="wfo"></table></div>
 
-    <h2 class="bt-h">Sensibilidad a los parámetros</h2>
-    <p class="bt-note">Objetivo en múltiplos de R y filtro de tendencia. Sirve para ver
-      cuánto dependen los resultados de los parámetros (y no sobreajustar).</p>
-    <div class="table-wrap"><table id="sensitivity"></table></div>
+    <h2 class="bt-h">Filtro de tendencia: estructura vs EMA vs ninguno</h2>
+    <p class="bt-note">Mismo objetivo (3R), sin otros filtros. «Full» es toda la muestra;
+      «OOS» es solo fuera de muestra.</p>
+    <div class="table-wrap"><table id="trend"></table></div>
 
-    <h2 class="bt-h">Por sesión</h2>
-    <div class="table-wrap"><table id="by-session"></table></div>
+    <h2 class="bt-h">Ablación: impacto de cada filtro</h2>
+    <p class="bt-note" id="ablation-base"></p>
+    <div class="table-wrap"><table id="ablation"></table></div>
 
-    <h2 class="bt-h">Por dirección</h2>
-    <div class="table-wrap"><table id="by-direction"></table></div>
-
-    <p class="bt-note" id="reading"></p>
+    <h2 class="bt-h">Por par y temporalidad (in-sample vs out-of-sample)</h2>
+    <div class="table-wrap"><table id="per-dataset"></table></div>
   </main>
 
   <footer class="foot">

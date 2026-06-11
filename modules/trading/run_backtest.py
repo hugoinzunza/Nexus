@@ -1,186 +1,385 @@
-"""CLI de backtest de la estrategia SMC.
+"""CLI de backtest SMC — Fase 1.5: filtros de calidad + validación fuera de muestra.
 
-Baja (o lee de caché) el histórico de Binance, corre la estrategia sobre cada
-par/timeframe con varias configuraciones (objetivos R y filtro de tendencia),
-imprime un reporte honesto y guarda los resultados en
-`modules/trading/backtest_results.json` para que la vista web /m/trading/backtest
-los muestre (ese JSON SÍ se commitea, así Railway lo sirve sin recalcular).
+Qué hace:
+  1. Baja (o lee de caché) histórico de Binance: pares en 1h y 4h, más el
+     timeframe SUPERIOR (4h para 1h, 1d para 4h) para la estructura de tendencia.
+  2. Corre una grilla de configuraciones (objetivo R × filtro de tendencia ×
+     displacement × premium/discount × sesión) sobre cada par/timeframe.
+  3. Divide la data en IN-SAMPLE (70% antiguo) y OUT-OF-SAMPLE (30% reciente):
+       - optimiza la config SOLO en in-sample,
+       - reporta esa misma config en in-sample y en out-of-sample por separado.
+  4. Walk-forward anclado (3 folds): re-optimiza por ventana y agrega el OOS.
+  5. Ablación: mide el impacto de cada filtro uno por uno.
+  6. Compara filtro de tendencia por ESTRUCTURA vs EMA vs ninguno.
 
-Uso:
-    python3 -m modules.trading.run_backtest          # 3 años, pares por defecto
-    python3 -m modules.trading.run_backtest --years 2
+Guarda todo en `backtest_results.json` (commiteado) y lo imprime. Honesto: si el
+edge no sobrevive fuera de muestra, el veredicto lo dice. Comisiones (0.05%/lado)
+y slippage (0.02%) incluidos.
 
-Honestidad: no se "tunea" para maximizar. Se fija una config primaria a priori
-(2R, sin filtro) y se muestra la sensibilidad a los parámetros, con comisiones
-(0.05%/lado) y slippage (0.02%) incluidos.
+Uso:  python3 -m modules.trading.run_backtest
 """
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
 import time
-from dataclasses import asdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from modules.trading import binance, backtest
+from modules.trading import binance, smc, backtest
 from modules.trading.backtest import Params, metrics, breakdown, equity_curve
 
 PAIRS = ["BTCUSDT", "ETHUSDT"]
 TIMEFRAMES = ["1h", "4h"]
-RR_VARIANTS = [1.5, 2.0, 3.0]
-TREND_VARIANTS = [False, True]
+HTF = {"1h": "4h", "4h": "1d"}        # timeframe superior para la estructura
+YEARS = 3.0
+IS_FRACTION = 0.70                     # 70% in-sample / 30% out-of-sample
+MIN_TRADES_OPT = 40                    # mínimo de trades para considerar una config
 
-PRIMARY_RR = 2.0
-PRIMARY_TREND = False
+# Grilla de optimización (acotada a propósito, para no sobreajustar).
+RR_GRID = [2.0, 3.0]
+TREND_GRID = ["none", "ema", "structure"]
+DISP_GRID = [False, True]
+PD_GRID = [False, True]
+SESS_GRID = [None, ["Londres"]]
 
 RESULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtest_results.json")
 
 
-def log(msg):
-    print(msg, flush=True)
+def log(m):
+    print(m, flush=True)
 
 
-def _fmt_gmt(ms):
+def gmt(ms):
     return time.strftime("%Y-%m-%d", time.gmtime(ms / 1000))
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--years", type=float, default=3.0)
-    ap.add_argument("--data-dir", default=os.path.join(ROOT, "data"))
-    args = ap.parse_args()
+def cfg_key(c):
+    return (c["rr"], c["trend"], c["disp"], c["pd"],
+            tuple(c["sess"]) if c["sess"] else None)
 
-    # 1) Cargar data (de caché si existe).
-    series = {}
-    coverage = []
+
+def make_params(c):
+    return Params(rr=c["rr"], trend_filter_mode=c["trend"],
+                  use_displacement=c["disp"], use_premium_discount=c["pd"],
+                  session_filter=c["sess"])
+
+
+def cfg_label(c):
+    parts = [f"{c['rr']}R", {"none": "sin tendencia", "ema": "EMA",
+                              "structure": "estructura"}[c["trend"]]]
+    if c["disp"]:
+        parts.append("displacement")
+    if c["pd"]:
+        parts.append("premium/discount")
+    if c["sess"]:
+        parts.append("sesión " + "/".join(c["sess"]))
+    return " · ".join(parts)
+
+
+def build_grid():
+    grid = []
+    for rr in RR_GRID:
+        for trend in TREND_GRID:
+            for disp in DISP_GRID:
+                for pd in PD_GRID:
+                    for sess in SESS_GRID:
+                        grid.append({"rr": rr, "trend": trend, "disp": disp,
+                                     "pd": pd, "sess": sess})
+    return grid
+
+
+def window(trades, lo, hi):
+    return [t for t in trades if lo <= t["entry_time"] < hi]
+
+
+def pick_best(combined, lo, hi, grid, min_trades=MIN_TRADES_OPT):
+    """Elige la config con mayor expectativa en la ventana [lo,hi), exigiendo un
+    mínimo de trades. Si ninguna lo cumple, relaja el mínimo."""
+    best = None
+    for thresh in (min_trades, 20, 1):
+        cand = []
+        for c in grid:
+            tr = window(combined[cfg_key(c)], lo, hi)
+            m = metrics(tr)
+            if m["trades"] >= thresh:
+                cand.append((c, m))
+        if cand:
+            cand.sort(key=lambda x: (x[1]["expectancy_R"], x[1]["total_R"]), reverse=True)
+            best = cand[0]
+            break
+    return best  # (config, metrics_in_window) o None
+
+
+def main():
+    # 1) Cargar data LTF y HTF.
+    series, htf_dir, coverage = {}, {}, []
     for sym in PAIRS:
         for tf in TIMEFRAMES:
-            candles = binance.fetch_klines(sym, tf, years=args.years,
-                                           data_dir=args.data_dir, log=log)
+            candles = binance.fetch_klines(sym, tf, years=YEARS, data_dir=os.path.join(ROOT, "data"), log=log)
             series[(sym, tf)] = candles
-            coverage.append({
-                "symbol": sym, "timeframe": tf, "bars": len(candles),
-                "from": _fmt_gmt(candles[0]["t"]) if candles else None,
-                "to": _fmt_gmt(candles[-1]["t"]) if candles else None,
-            })
+            coverage.append({"symbol": sym, "timeframe": tf, "bars": len(candles),
+                             "from": gmt(candles[0]["t"]), "to": gmt(candles[-1]["t"])})
+            htf_tf = HTF[tf]
+            htf_c = binance.fetch_klines(sym, htf_tf, years=YEARS + 0.3, data_dir=os.path.join(ROOT, "data"), log=log)
+            hdir_full = smc.structure_direction(htf_c, lookback=2)
+            htf_dir[(sym, tf)] = smc.map_htf_direction(
+                candles, htf_c, hdir_full, binance.INTERVAL_MS[htf_tf])
 
-    # 2) Correr todas las variantes (rr x filtro de tendencia).
-    #    trades_by[(rr, trend)] = lista combinada de todos los pares/timeframes
-    #    trades_pt[(rr, trend, sym, tf)] = lista de ese par/timeframe
-    trades_by = {}
-    trades_pt = {}
-    for trend in TREND_VARIANTS:
-        for rr in RR_VARIANTS:
-            combined = []
-            for sym in PAIRS:
-                for tf in TIMEFRAMES:
-                    p = Params(rr=rr, use_trend_filter=trend)
-                    tr = backtest.run(series[(sym, tf)], sym, tf, p)
-                    trades_pt[(rr, trend, sym, tf)] = tr
-                    combined.extend(tr)
-            trades_by[(rr, trend)] = combined
+    grid = build_grid()
+    log(f"\nCorriendo grilla de {len(grid)} configs sobre {len(series)} datasets…")
 
-    primary = trades_by[(PRIMARY_RR, PRIMARY_TREND)]
+    # 2) Correr cada config sobre cada dataset (una sola vez, full).
+    cache = {}  # (sym,tf) -> {cfg_key: trades}
+    for sym in PAIRS:
+        for tf in TIMEFRAMES:
+            ds = {}
+            for c in grid:
+                tr = backtest.run(series[(sym, tf)], sym, tf, make_params(c), htf_dir[(sym, tf)])
+                ds[cfg_key(c)] = tr
+            cache[(sym, tf)] = ds
+        log(f"  {sym} listo")
 
-    # 3) Armar el JSON de resultados.
-    sample_params = asdict(Params(rr=PRIMARY_RR, use_trend_filter=PRIMARY_TREND))
-    results = {
-        "generated_at_ms": int(time.time() * 1000),
-        "config": {
-            "pairs": PAIRS, "timeframes": TIMEFRAMES,
-            "primary_rr": PRIMARY_RR, "primary_trend_filter": PRIMARY_TREND,
-            "params": sample_params,
-        },
-        "costs": {"commission_per_side": sample_params["commission"],
-                  "slippage": sample_params["slippage"]},
-        "data": coverage,
-        "headline": metrics(primary),
-        "by_pair_tf": [
-            {"symbol": sym, "timeframe": tf,
-             **metrics(trades_pt[(PRIMARY_RR, PRIMARY_TREND, sym, tf)])}
-            for sym in PAIRS for tf in TIMEFRAMES
-        ],
-        "by_session": breakdown(primary, "session"),
-        "by_direction": breakdown(primary, "direction"),
-        "sensitivity": [
-            {"rr": rr, "trend_filter": trend, **metrics(trades_by[(rr, trend)])}
-            for trend in TREND_VARIANTS for rr in RR_VARIANTS
-        ],
-        "equity": equity_curve(primary),
+    # Combinado por config (todos los pares/timeframes).
+    combined = {}
+    for c in grid:
+        k = cfg_key(c)
+        allt = []
+        for sym in PAIRS:
+            for tf in TIMEFRAMES:
+                allt.extend(cache[(sym, tf)][k])
+        combined[k] = allt
+
+    # Línea de tiempo global y corte IS/OOS.
+    t0 = min(series[(s, t)][0]["t"] for s in PAIRS for t in TIMEFRAMES)
+    t1 = max(series[(s, t)][-1]["t"] for s in PAIRS for t in TIMEFRAMES)
+    split = t0 + int(IS_FRACTION * (t1 - t0))
+
+    # 3) Mejor config global: optimizada SOLO en in-sample.
+    best_c, best_is_m = pick_best(combined, t0, split, grid)
+    best_trades = combined[cfg_key(best_c)]
+    is_trades = window(best_trades, t0, split)
+    oos_trades = window(best_trades, split, t1 + 1)
+
+    best_overall = {
+        "config": best_c, "label": cfg_label(best_c),
+        "in_sample": metrics(is_trades),
+        "out_sample": metrics(oos_trades),
+        "full": metrics(best_trades),
     }
 
+    # 4) Walk-forward anclado (3 folds OOS).
+    span = t1 - t0
+    qs = [t0 + int(span * f) for f in (0.25, 0.5, 0.75)] + [t1 + 1]
+    folds = []
+    wfo_oos, wfo_is = [], []
+    for i in range(3):
+        train_lo, train_hi = t0, qs[i]
+        test_lo, test_hi = qs[i], qs[i + 1]
+        picked = pick_best(combined, train_lo, train_hi, grid)
+        if not picked:
+            continue
+        pc, pis = picked
+        ptr = combined[cfg_key(pc)]
+        otr = window(ptr, test_lo, test_hi)
+        folds.append({
+            "train_from": gmt(train_lo), "train_to": gmt(train_hi),
+            "test_from": gmt(test_lo), "test_to": gmt(test_hi),
+            "config": pc, "label": cfg_label(pc),
+            "in_sample": pis, "out_sample": metrics(otr),
+        })
+        wfo_oos.extend(otr)
+        wfo_is.extend(window(ptr, train_lo, train_hi))
+    walkforward = {"folds": folds, "oos_aggregate": metrics(wfo_oos),
+                   "is_aggregate": metrics(wfo_is)}
+
+    # 5) Comparación de filtro de tendencia (rr=3, sin otros filtros), full y OOS.
+    trend_comparison = []
+    for trend in TREND_GRID:
+        c = {"rr": 3.0, "trend": trend, "disp": False, "pd": False, "sess": None}
+        tr = combined[cfg_key(c)]
+        trend_comparison.append({
+            "mode": trend, "full": metrics(tr),
+            "out_sample": metrics(window(tr, split, t1 + 1)),
+        })
+
+    # 6) Ablación: desde una base (3R + tendencia por estructura) sumamos un filtro
+    #    a la vez y medimos el impacto en full sample.
+    base = {"rr": 3.0, "trend": "structure", "disp": False, "pd": False, "sess": None}
+    ablation = {"base": {"label": cfg_label(base), "metrics": metrics(combined[cfg_key(base)])},
+                "steps": []}
+    toggles = [
+        ("+ displacement", {**base, "disp": True}),
+        ("+ premium/discount", {**base, "pd": True}),
+        ("+ sesión Londres", {**base, "sess": ["Londres"]}),
+    ]
+    for name, c in toggles:
+        ablation["steps"].append({"name": name, "label": cfg_label(c),
+                                  "metrics": metrics(combined[cfg_key(c)])})
+    # Filtro de tamaño de FVG (no está en la grilla): corrida aparte.
+    p_minfvg = make_params(base)
+    p_minfvg.use_min_fvg = True
+    mf = []
+    for sym in PAIRS:
+        for tf in TIMEFRAMES:
+            mf.extend(backtest.run(series[(sym, tf)], sym, tf, p_minfvg, htf_dir[(sym, tf)]))
+    ablation["steps"].append({"name": "+ tamaño mín. FVG", "label": cfg_label(base) + " · FVG≥0.25·ATR",
+                              "metrics": metrics(mf)})
+
+    # 7) Por par/timeframe con holdout (config óptima de cada uno en su in-sample).
+    per_dataset = []
+    for sym in PAIRS:
+        for tf in TIMEFRAMES:
+            ds_comb = {cfg_key(c): cache[(sym, tf)][cfg_key(c)] for c in grid}
+            picked = pick_best(ds_comb, t0, split, grid, min_trades=20)
+            if not picked:
+                continue
+            pc, pis = picked
+            tr = ds_comb[cfg_key(pc)]
+            per_dataset.append({
+                "symbol": sym, "timeframe": tf,
+                "config": pc, "label": cfg_label(pc),
+                "in_sample": pis, "out_sample": metrics(window(tr, split, t1 + 1)),
+            })
+
+    # 8) Veredicto honesto (se apoya sobre todo en el walk-forward, que tiene más
+    #    muestra OOS que el holdout simple).
+    oos = best_overall["out_sample"]
+    wfo = walkforward["oos_aggregate"]
+    robust = (wfo["trades"] >= 40 and wfo["expectancy_R"] > 0 and wfo["profit_factor"] >= 1.0
+              and oos["expectancy_R"] > 0)
+    verdict = {
+        "robust": robust,
+        "text": _verdict_text(best_overall, walkforward, per_dataset),
+    }
+
+    results = {
+        "generated_at_ms": int(time.time() * 1000),
+        "phase": "1.5",
+        "costs": {"commission_per_side": 0.0005, "slippage": 0.0002},
+        "data": coverage,
+        "split": {"is_fraction": IS_FRACTION, "is_until": gmt(split), "oos_from": gmt(split)},
+        "grid_size": len(grid),
+        "best_overall": best_overall,
+        "walkforward": walkforward,
+        "trend_comparison": trend_comparison,
+        "ablation": ablation,
+        "per_dataset": per_dataset,
+        "by_session_best": breakdown(best_trades, "session"),
+        "equity_oos": equity_curve(oos_trades),
+        "equity_full": equity_curve(best_trades),
+        "verdict": verdict,
+    }
     with open(RESULTS_PATH, "w", encoding="utf-8") as fh:
         json.dump(results, fh, ensure_ascii=False)
 
-    _print_report(results)
-    log(f"\n💾 Resultados guardados en {RESULTS_PATH}")
-    log("   Vista web: /m/trading/backtest")
+    _print(results)
+    log(f"\n💾 Guardado en {RESULTS_PATH}\n   Vista web: /m/trading/backtest")
 
 
-def _print_report(r):
-    line = "─" * 64
-    log("\n" + line)
-    log("  BACKTEST · Estrategia SMC (barrido + CHoCH + FVG/OB)")
-    log(line)
-    log(f"  Config primaria: {r['config']['primary_rr']}R, "
-        f"filtro tendencia {'ON' if r['config']['primary_trend_filter'] else 'OFF'}")
-    log(f"  Costos: comisión {r['costs']['commission_per_side']*100:.3f}%/lado, "
-        f"slippage {r['costs']['slippage']*100:.3f}%")
-    log("  Data:")
-    for d in r["data"]:
-        log(f"    {d['symbol']:<8} {d['timeframe']:<3} {d['bars']:>6} velas  "
-            f"{d['from']} → {d['to']}")
+def _verdict_text(best, wfo, per_dataset):
+    oos = best["out_sample"]
+    is_ = best["in_sample"]
+    wo = wfo["oos_aggregate"]
 
-    h = r["headline"]
-    log("\n  ── RESUMEN (todos los pares/timeframes, config primaria) ──")
-    _print_metrics(h)
+    # Punto relativamente sólido: algún par/timeframe que aguante OOS con muestra decente.
+    bright = [d for d in per_dataset
+              if d["out_sample"]["trades"] >= 10 and d["out_sample"]["expectancy_R"] > 0.1
+              and d["out_sample"]["profit_factor"] >= 1.2]
+    bright_txt = ""
+    if bright:
+        b = max(bright, key=lambda d: d["out_sample"]["trades"])
+        bo = b["out_sample"]
+        bright_txt = (f" El único foco que aguanta fuera de muestra es {b['symbol']} "
+                      f"{b['timeframe']} ({b['label']}): {bo['expectancy_R']}R, "
+                      f"PF {bo['profit_factor']} en {bo['trades']} trades — prometedor, "
+                      "pero con muestra chica.")
 
-    log("\n  ── POR PAR / TIMEFRAME ──")
-    log(f"    {'par':<9}{'tf':<4}{'trades':>7}{'win%':>7}{'exp.R':>8}"
-        f"{'PF':>7}{'maxDD':>8}{'totalR':>8}")
-    for row in r["by_pair_tf"]:
-        log(f"    {row['symbol']:<9}{row['timeframe']:<4}{row['trades']:>7}"
-            f"{row['win_rate']:>7}{row['expectancy_R']:>8}"
-            f"{_pf(row['profit_factor']):>7}{row['max_drawdown_R']:>8}{row['total_R']:>8}")
+    if oos["expectancy_R"] > 0 and oos["profit_factor"] >= 1.0 and wo["expectancy_R"] > 0:
+        return (f"El edge SOBREVIVE fuera de muestra, aunque modesto: expectativa "
+                f"in-sample {is_['expectancy_R']}R vs out-of-sample {oos['expectancy_R']}R "
+                f"(PF {oos['profit_factor']}); walk-forward agregado {wo['expectancy_R']}R en "
+                f"{wo['trades']} trades. Señal real pero margen chico y sensible a costos." + bright_txt)
 
-    log("\n  ── POR SESIÓN (config primaria) ──")
-    log(f"    {'sesión':<9}{'trades':>7}{'win%':>7}{'exp.R':>8}{'PF':>7}{'totalR':>8}")
-    for sess, m in sorted(r["by_session"].items(), key=lambda x: -x[1]["trades"]):
-        log(f"    {sess:<9}{m['trades']:>7}{m['win_rate']:>7}{m['expectancy_R']:>8}"
-            f"{_pf(m['profit_factor']):>7}{m['total_R']:>8}")
-
-    log("\n  ── POR DIRECCIÓN ──")
-    for d, m in r["by_direction"].items():
-        log(f"    {d:<7} trades={m['trades']:<5} win={m['win_rate']}%  "
-            f"exp={m['expectancy_R']}R  PF={_pf(m['profit_factor'])}  totalR={m['total_R']}")
-
-    log("\n  ── SENSIBILIDAD A PARÁMETROS (resumen agregado) ──")
-    log(f"    {'objetivo':<10}{'tend.':<7}{'trades':>7}{'win%':>7}{'exp.R':>8}"
-        f"{'PF':>7}{'maxDD':>8}{'totalR':>8}")
-    for s in r["sensitivity"]:
-        log(f"    {str(s['rr'])+'R':<10}{'ON' if s['trend_filter'] else 'OFF':<7}"
-            f"{s['trades']:>7}{s['win_rate']:>7}{s['expectancy_R']:>8}"
-            f"{_pf(s['profit_factor']):>7}{s['max_drawdown_R']:>8}{s['total_R']:>8}")
-    log("─" * 64)
-
-
-def _print_metrics(m):
-    log(f"    Trades: {m['trades']}   Ganados: {m['wins']}   Perdidos: {m['losses']}"
-        f"   Time-stops: {m['timeouts']}")
-    log(f"    Win rate: {m['win_rate']}%   Expectativa: {m['expectancy_R']}R/trade")
-    log(f"    R prom. ganador: +{m['avg_win_R']}   R prom. perdedor: {m['avg_loss_R']}")
-    log(f"    Profit factor: {_pf(m['profit_factor'])}   "
-        f"Max drawdown: {m['max_drawdown_R']}R   Racha máx. pérdidas: {m['max_losing_streak']}")
-    log(f"    R total acumulado: {m['total_R']}R")
+    return (f"El edge NO es robusto fuera de muestra. La mejor config in-sample "
+            f"({is_['expectancy_R']}R, PF {best['in_sample']['profit_factor']}) cae a "
+            f"{oos['expectancy_R']}R (PF {oos['profit_factor']}) en out-of-sample: sobreajuste. "
+            f"El walk-forward lo confirma: {wo['expectancy_R']}R en {wo['trades']} trades OOS "
+            f"(PF {wo['profit_factor']}). Conclusión honesta: la estrategia, tal cual, NO tiene "
+            "ventaja demostrable después de costos; no se justifica operarla con dinero real." + bright_txt)
 
 
 def _pf(v):
     return "∞" if v == float("inf") else v
+
+
+def _row(m):
+    return (f"trades={m['trades']:<5} win={m['win_rate']}%  exp={m['expectancy_R']}R  "
+            f"PF={_pf(m['profit_factor'])}  DD={m['max_drawdown_R']}R  totalR={m['total_R']}")
+
+
+def _print(r):
+    line = "─" * 70
+    log("\n" + line)
+    log("  BACKTEST SMC · Fase 1.5 (filtros de calidad + validación fuera de muestra)")
+    log(line)
+    log(f"  Costos: comisión 0.05%/lado, slippage 0.02% · grilla {r['grid_size']} configs")
+    for d in r["data"]:
+        log(f"    {d['symbol']:<8} {d['timeframe']:<3} {d['bars']:>6} velas  {d['from']} → {d['to']}")
+    log(f"  Corte: in-sample hasta {r['split']['is_until']} · out-of-sample desde ahí")
+
+    b = r["best_overall"]
+    log(f"\n  ★ MEJOR CONFIG (optimizada solo en in-sample): {b['label']}")
+    log(f"      IN-SAMPLE : {_row(b['in_sample'])}")
+    log(f"      OUT-SAMPLE: {_row(b['out_sample'])}")
+    log(f"      FULL      : {_row(b['full'])}")
+
+    w = r["walkforward"]
+    log("\n  WALK-FORWARD (3 folds anclados, config re-optimizada por ventana):")
+    for f in w["folds"]:
+        log(f"    test {f['test_from']}→{f['test_to']}  [{f['label']}]")
+        log(f"        IS : {_row(f['in_sample'])}")
+        log(f"        OOS: {_row(f['out_sample'])}")
+    log(f"    OOS AGREGADO: {_row(w['oos_aggregate'])}")
+
+    log("\n  FILTRO DE TENDENCIA (3R, sin otros filtros):")
+    for t in r["trend_comparison"]:
+        name = {"none": "ninguno", "ema": "EMA", "structure": "estructura HTF"}[t["mode"]]
+        log(f"    {name:<16} full: {_row(t['full'])}")
+        log(f"    {'':<16} OOS : {_row(t['out_sample'])}")
+
+    log("\n  ABLACIÓN (impacto de cada filtro, full sample):")
+    log(f"    base = {r['ablation']['base']['label']}")
+    log(f"      {_row(r['ablation']['base']['metrics'])}")
+    for s in r["ablation"]["steps"]:
+        log(f"    {s['name']:<22} {_row(s['metrics'])}")
+
+    log("\n  POR PAR/TIMEFRAME (config óptima de cada uno en su in-sample):")
+    for d in r["per_dataset"]:
+        log(f"    {d['symbol']} {d['timeframe']}  [{d['label']}]")
+        log(f"        IN : {_row(d['in_sample'])}")
+        log(f"        OOS: {_row(d['out_sample'])}")
+
+    log("\n  VEREDICTO:")
+    log(f"    {'✅ EDGE ROBUSTO' if r['verdict']['robust'] else '⚠️  EDGE NO ROBUSTO'}")
+    for chunk in _wrap(r["verdict"]["text"], 66):
+        log(f"    {chunk}")
+    log(line)
+
+
+def _wrap(text, width):
+    words, lines, cur = text.split(), [], ""
+    for w in words:
+        if len(cur) + len(w) + 1 > width:
+            lines.append(cur); cur = w
+        else:
+            cur = (cur + " " + w).strip()
+    if cur:
+        lines.append(cur)
+    return lines
 
 
 if __name__ == "__main__":

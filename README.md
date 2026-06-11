@@ -170,11 +170,18 @@ sobre datos históricos reales de Binance (klines públicas):
 
 - **Estrategia:** barrido de liquidez → cambio de carácter (CHoCH/BOS) → entrada
   en el FVG u order block del impulso. Stop más allá del barrido, take-profit por
-  múltiplos de R. Todo parametrizable en [`modules/trading/backtest.py`](modules/trading/backtest.py).
-- **Honestidad:** incluye comisiones (0.05%/lado) y slippage (0.02%); reporta win
-  rate, expectativa en R, profit factor, drawdown y rachas, con desglose por par,
-  timeframe, sesión y dirección, más una tabla de sensibilidad a los parámetros
-  (para no sobreajustar). El rendimiento pasado no garantiza el futuro.
+  múltiplos de R. Filtros de calidad parametrizables (tendencia por estructura del
+  timeframe superior o por EMA, displacement por ATR, premium/discount, tamaño
+  mínimo del FVG, sesión). Todo en [`modules/trading/backtest.py`](modules/trading/backtest.py).
+- **Validación honesta:** incluye comisiones (0.05%/lado) y slippage (0.02%); y
+  sobre todo separa **in-sample vs out-of-sample** (optimiza en el 70% antiguo,
+  testea en el 30% reciente) más un **walk-forward** anclado, para no autoengañarse
+  con sobreajuste. Reporta win rate, expectativa en R, profit factor, drawdown y
+  rachas. El rendimiento pasado no garantiza el futuro.
+- **Resultado actual (honesto):** la estrategia base no tiene ventaja robusta
+  fuera de muestra (la mejor config in-sample, +0.26R, cae a −0.24R out-of-sample;
+  walk-forward −0.24R). El único foco que aguanta es BTCUSDT 4h con filtro EMA,
+  pero con muestra chica. La vista web lo explica con su veredicto.
 - **Correr el backtest** (baja el histórico a `data/`, que está en `.gitignore`, y
   regenera `modules/trading/backtest_results.json`):
 

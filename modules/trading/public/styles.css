@@ -160,7 +160,20 @@ thead th { color: var(--muted); font-size: 11px; text-transform: uppercase;
 tbody tr { border-top: 1px solid var(--line); }
 tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
 
+.verdict { border-radius: 14px; padding: 16px 18px; margin: 6px 0 14px;
+  border: 1px solid var(--line); }
+.verdict.ok { background: rgba(22,199,132,0.08); border-color: rgba(22,199,132,0.35); }
+.verdict.warn { background: rgba(245,166,35,0.08); border-color: rgba(245,166,35,0.35); }
+.verdict .v-tag { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+.verdict.ok .v-tag { color: var(--green); }
+.verdict.warn .v-tag { color: var(--amber); }
+.verdict p { margin: 0; color: var(--text); font-size: 13.5px; line-height: 1.55; }
+
+tbody tr.hl { background: rgba(108,92,231,0.12); }
+tbody tr.hl td { font-weight: 600; }
+
 @media (max-width: 760px) {
   .bt { padding: 0 14px; }
   .m-v { font-size: 19px; }
+  th, td { padding: 8px 9px; }
 }

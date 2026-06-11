@@ -108,3 +108,77 @@ def ema(values: List[float], period: int) -> List[float]:
     for v in values[1:]:
         out.append(v * k + out[-1] * (1 - k))
     return out
+
+
+# --- ATR (rango medio verdadero) ----------------------------------------
+def atr(candles: List[dict], period: int = 14) -> List[float]:
+    """ATR simple (media móvil del true range). Devuelve un valor por vela."""
+    n = len(candles)
+    out = [0.0] * n
+    if n == 0:
+        return out
+    trs = [candles[0]["h"] - candles[0]["l"]]
+    for i in range(1, n):
+        pc = candles[i - 1]["c"]
+        c = candles[i]
+        trs.append(max(c["h"] - c["l"], abs(c["h"] - pc), abs(c["l"] - pc)))
+    s = 0.0
+    for i in range(n):
+        s += trs[i]
+        if i >= period:
+            s -= trs[i - period]
+            out[i] = s / period
+        else:
+            out[i] = s / (i + 1)
+    return out
+
+
+# --- Dirección por estructura de mercado (HH/HL vs LH/LL) ----------------
+def structure_direction(candles: List[dict], lookback: int = 2) -> List[int]:
+    """Tendencia según la estructura: +1 alcista (máximos y mínimos crecientes),
+    -1 bajista (decrecientes), persistiendo el último régimen hasta que cambie.
+
+    Usa solo swings YA confirmados en cada vela (confirm_idx), sin mirar el futuro.
+    Devuelve un entero (-1/0/+1) por vela.
+    """
+    n = len(candles)
+    out = [0] * n
+    highs, lows = swing_points(candles, lookback)
+    # Ordenamos por el momento en que se confirman.
+    hi_evt = sorted(highs, key=lambda p: p["confirm_idx"])
+    lo_evt = sorted(lows, key=lambda p: p["confirm_idx"])
+    ph = pl = 0
+    seen_highs, seen_lows = [], []
+    cur = 0
+    for i in range(n):
+        while ph < len(hi_evt) and hi_evt[ph]["confirm_idx"] <= i:
+            seen_highs.append(hi_evt[ph]["price"]); ph += 1
+        while pl < len(lo_evt) and lo_evt[pl]["confirm_idx"] <= i:
+            seen_lows.append(lo_evt[pl]["price"]); pl += 1
+        if len(seen_highs) >= 2 and len(seen_lows) >= 2:
+            hh = seen_highs[-1] > seen_highs[-2]
+            hl = seen_lows[-1] > seen_lows[-2]
+            lh = seen_highs[-1] < seen_highs[-2]
+            ll = seen_lows[-1] < seen_lows[-2]
+            if hh and hl:
+                cur = 1
+            elif lh and ll:
+                cur = -1
+            # si es mixto (rango), conservamos el último régimen claro
+        out[i] = cur
+    return out
+
+
+def map_htf_direction(ltf_candles: List[dict], htf_candles: List[dict],
+                      htf_dir: List[int], htf_interval_ms: int) -> List[int]:
+    """Proyecta la dirección de estructura del timeframe SUPERIOR sobre cada vela
+    del timeframe inferior, usando solo velas HTF YA cerradas (sin lookahead)."""
+    out = [0] * len(ltf_candles)
+    jj = 0
+    for i, c in enumerate(ltf_candles):
+        tl = c["t"]
+        while jj < len(htf_candles) and htf_candles[jj]["t"] + htf_interval_ms <= tl:
+            jj += 1
+        idx = jj - 1
+        out[i] = htf_dir[idx] if idx >= 0 else 0
+    return out
