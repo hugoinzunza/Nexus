@@ -113,8 +113,9 @@ _LANDING_TEMPLATE = """<!doctype html>
             --muted:#8b93a7; --accent:#6c5ce7; --accent2:#a29bfe; }
     * { box-sizing: border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-           background:var(--bg); color:var(--text); min-height:100vh;
-           min-height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+           background:var(--bg); color:var(--text); min-height:100vh; min-height:100dvh;
+           padding:constant(safe-area-inset-top) constant(safe-area-inset-right) constant(safe-area-inset-bottom) constant(safe-area-inset-left);
+           padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
     header { padding:48px 24px 16px; text-align:center; }
     .logo { font-size:42px; font-weight:800; letter-spacing:-1px;
             background:linear-gradient(90deg,var(--accent2),var(--accent));

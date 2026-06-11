@@ -7,10 +7,18 @@
 * { box-sizing: border-box; }
 body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg); color: var(--text); }
-.topbar { display: flex; align-items: center; gap: 14px; padding: 16px 20px;
+.topbar { display: flex; align-items: center; gap: 14px;
+  padding: 16px 20px;
+  /* Safe area de iOS (notch / Dynamic Island) para la PWA en pantalla completa. */
+  padding-top: calc(16px + constant(safe-area-inset-top));
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-right: calc(20px + env(safe-area-inset-right, 0px));
+  padding-left: calc(20px + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--line); position: sticky; top: 0;
-  background: rgba(15,17,23,.92); backdrop-filter: blur(8px); z-index: 5; }
-.back { color: var(--accent2); text-decoration: none; font-weight: 700; }
+  background: rgba(15,17,23,.92); backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px); z-index: 5; }
+.back { color: var(--accent2); text-decoration: none; font-weight: 700;
+  display: inline-flex; align-items: center; min-height: 44px; }
 .topbar h1 { font-size: 17px; margin: 0; flex: 1; }
 .status { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); }
@@ -64,7 +72,10 @@ thead th { color: var(--muted); font-size: 11px; text-transform: uppercase; lett
 tbody tr { border-top: 1px solid var(--line); }
 tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
 
-.foot { text-align: center; color: var(--muted); font-size: 12.5px; padding: 22px; }
+.foot { text-align: center; color: var(--muted); font-size: 12.5px; padding: 22px;
+  padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
+/* La barra superior de acciones (botón "actualizar") con buena área táctil. */
+.seg-tabs .tf-btn { min-height: 40px; }
 
 @media (max-width: 760px) {
   .bt { padding: 0 14px; }

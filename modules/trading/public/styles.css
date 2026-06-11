@@ -21,11 +21,19 @@ body {
 }
 .topbar {
   display: flex; align-items: center; gap: 16px;
-  padding: 16px 24px; border-bottom: 1px solid var(--line);
+  padding: 16px 24px;
+  /* Safe area de iOS (notch / Dynamic Island) para la PWA en pantalla completa.
+     constant() es el fallback viejo; env() lo pisa donde está soportado. */
+  padding-top: calc(16px + constant(safe-area-inset-top));
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-right: calc(24px + env(safe-area-inset-right, 0px));
+  padding-left: calc(24px + env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--line);
   position: sticky; top: 0; background: rgba(15,17,23,.92);
-  backdrop-filter: blur(8px); z-index: 5;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 5;
 }
-.back { color: var(--accent2); text-decoration: none; font-weight: 700; }
+.back { color: var(--accent2); text-decoration: none; font-weight: 700;
+  display: inline-flex; align-items: center; min-height: 44px; }
 .topbar h1 { font-size: 18px; margin: 0; flex: 1; }
 .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); }
@@ -124,7 +132,8 @@ body {
 .bar.center { background: linear-gradient(90deg, rgba(234,57,67,.25), #11141d 50%, rgba(22,199,132,.25)); }
 .bar.center .bar-fill { left: 50%; width: 0; background: var(--accent2); }
 
-.foot { text-align: center; color: var(--muted); font-size: 12.5px; padding: 20px; }
+.foot { text-align: center; color: var(--muted); font-size: 12.5px; padding: 20px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 .foot code, .disclaimer code, .bt-note code { color: var(--accent2); }
 
 /* ---- Vista de backtest ---- */
