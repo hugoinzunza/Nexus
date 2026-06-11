@@ -34,37 +34,67 @@
     constructor(src) { this._src = src; }
     draw(target) {
       const src = this._src;
-      const data = src._data;
-      if (!data || !src._series) return;
+      const D = src._data;
+      if (!D || !src._series) return;
+      const smc = D.smc;
+      const show = D.show || {};
       const series = src._series;
       const ts = src._chart.timeScale();
       const py = (p) => series.priceToCoordinate(p);
+      const tx = (tms) => ts.timeToCoordinate(Math.floor(tms / 1000));
       target.useMediaCoordinateSpace((scope) => {
         const ctx = scope.context;
         const W = scope.mediaSize.width, H = scope.mediaSize.height;
-        // Premium (arriba del EQ) y discount (abajo).
-        if (data.range && data.range.eq) {
-          const yEq = py(data.range.eq);
+
+        // --- Capa LuxAlgo: cinta de tendencia (EMA 21/55), detrás de todo ---
+        if (show.ribbon && D.ribbon && D.ribbon.length) {
+          const pts = D.ribbon;
+          for (let i = 1; i < pts.length; i++) {
+            const a = pts[i - 1], b = pts[i];
+            if (a.f == null || a.s == null || b.f == null || b.s == null) continue;
+            const xa = ts.timeToCoordinate(a.t), xb = ts.timeToCoordinate(b.t);
+            if (xa == null || xb == null) continue;
+            const yaf = py(a.f), yas = py(a.s), ybf = py(b.f), ybs = py(b.s);
+            if (yaf == null || yas == null || ybf == null || ybs == null) continue;
+            const bull = (a.f + b.f) >= (a.s + b.s);
+            ctx.fillStyle = bull ? "rgba(22,199,132,0.10)" : "rgba(234,57,67,0.10)";
+            ctx.beginPath(); ctx.moveTo(xa, yaf); ctx.lineTo(xb, ybf);
+            ctx.lineTo(xb, ybs); ctx.lineTo(xa, yas); ctx.closePath(); ctx.fill();
+          }
+          const drawEma = (key, color) => {
+            ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath(); let on = false;
+            for (const p of pts) {
+              const x = ts.timeToCoordinate(p.t), y = py(p[key]);
+              if (x == null || y == null) { on = false; continue; }
+              if (!on) { ctx.moveTo(x, y); on = true; } else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+          };
+          drawEma("f", "rgba(162,155,254,0.55)");
+          drawEma("s", "rgba(139,147,167,0.5)");
+        }
+
+        if (!smc) return;
+        // --- Overlay SMC (siempre): premium/discount, FVG, POIs ---
+        if (smc.range && smc.range.eq) {
+          const yEq = py(smc.range.eq);
           if (yEq != null) {
             ctx.fillStyle = "rgba(234,57,67,0.05)"; ctx.fillRect(0, 0, W, yEq);
             ctx.fillStyle = "rgba(22,199,132,0.05)"; ctx.fillRect(0, yEq, W, H - yEq);
           }
         }
-        // FVGs sin rellenar: desde su tiempo hacia la derecha, con etiqueta.
         ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "top";
-        (data.fvgs || []).filter((f) => !f.filled).forEach((f) => {
+        (smc.fvgs || []).filter((f) => !f.filled).forEach((f) => {
           const y1 = py(f.hi), y2 = py(f.lo); if (y1 == null || y2 == null) return;
-          let x = ts.timeToCoordinate(Math.floor(f.t / 1000)); if (x == null) x = 0;
-          x = Math.max(0, x);
+          let x = tx(f.t); if (x == null) x = 0; x = Math.max(0, x);
           const top = Math.min(y1, y2);
           ctx.fillStyle = f.bullish ? "rgba(108,92,231,0.13)" : "rgba(245,166,35,0.13)";
           ctx.fillRect(x, top, W - x, Math.abs(y2 - y1));
           ctx.fillStyle = f.bullish ? "#a29bfe" : "#f5a623";
           ctx.fillText(f.bullish ? "FVG↑" : "FVG↓", x + 3, top + 1);
         });
-        // Cajas de POI (ancho completo). Verde = descuento/long, rojo = premium/short.
         ctx.font = "10px -apple-system, sans-serif"; ctx.textBaseline = "top";
-        (data.pois || []).forEach((poi) => {
+        (smc.pois || []).forEach((poi) => {
           const y1 = py(poi.hi), y2 = py(poi.lo); if (y1 == null || y2 == null) return;
           const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
           const long = poi.dir === "long";
@@ -72,13 +102,48 @@
           ctx.fillStyle = `rgba(${base},${poi.valid ? 0.13 : 0.05})`;
           ctx.fillRect(0, top, W, h);
           ctx.strokeStyle = `rgba(${base},${poi.valid ? 0.7 : 0.3})`;
-          ctx.lineWidth = 1;
-          ctx.setLineDash(poi.valid ? [] : [3, 3]);
-          ctx.strokeRect(0.5, top + 0.5, W - 1, h);
-          ctx.setLineDash([]);
+          ctx.lineWidth = 1; ctx.setLineDash(poi.valid ? [] : [3, 3]);
+          ctx.strokeRect(0.5, top + 0.5, W - 1, h); ctx.setLineDash([]);
           ctx.fillStyle = long ? "#16c784" : "#ea3943";
           ctx.fillText(`POI ${poi.tf} ${poi.valid ? "✓" : "✕"}`, 5, top + 2);
         });
+
+        // --- Capa LuxAlgo: niveles Weak/Strong con % ---
+        if (show.levels && smc.levels) {
+          ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "middle";
+          smc.levels.forEach((lv) => {
+            const y = py(lv.price); if (y == null) return;
+            const high = lv.type === "high";
+            const col = high ? "#ea3943" : "#16c784";
+            ctx.strokeStyle = col; ctx.globalAlpha = lv.kind === "weak" ? 0.55 : 0.3;
+            ctx.setLineDash([1, 4]); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            ctx.setLineDash([]); ctx.globalAlpha = 1;
+            ctx.fillStyle = col;
+            const txt = `${lv.label}${lv.pct != null ? " " + lv.pct + "%" : ""}`;
+            ctx.fillText(txt, 4, y + (high ? -6 : 6));
+          });
+        }
+
+        // --- Capa LuxAlgo: proyección TP/SL (escenario, NO señal) ---
+        if (show.tpsl && smc.tpsl) {
+          const t = smc.tpsl;
+          ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "middle";
+          const line = (price, color, label) => {
+            if (price == null) return;
+            const y = py(price); if (y == null) return;
+            ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); ctx.setLineDash([]);
+            ctx.fillStyle = color;
+            const tw = ctx.measureText(label).width;
+            ctx.fillText(label, W - tw - 6, y - 5);
+          };
+          line(t.sl, "#ea3943", "SL");
+          line(t.tp1, "rgba(22,199,132,0.8)", "TP1 (1R)");
+          line(t.tp2, "rgba(22,199,132,0.9)", "TP2 (2R)");
+          line(t.tp3, "#16c784", "TP3 (3R)");
+          line(t.liq, "#a29bfe", "Liquidez");
+        }
       });
     }
   }
@@ -100,10 +165,17 @@
   // --- Indicadores (Vol / RSI / ADX) ---------------------------------
   // Estado global (mismo para todos los pares), recordado en localStorage.
   const IND_KEY = "nexus_trading_ind";
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: false };
   let indState = (() => {
-    try { return Object.assign({ vol: true, rsi: false, adx: false }, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
-    catch (e) { return { vol: true, rsi: false, adx: false }; }
+    try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
+    catch (e) { return Object.assign({}, IND_DEFAULTS); }
   })();
+  function emaArr(values, period) {
+    const k = 2 / (period + 1), out = [];
+    for (let i = 0; i < values.length; i++) out.push(i === 0 ? values[0] : values[i] * k + out[i - 1] * (1 - k));
+    return out;
+  }
+  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl }; }
   function saveIndState() { try { localStorage.setItem(IND_KEY, JSON.stringify(indState)); } catch (e) {} }
 
   function rsiCalc(closes, p) {
@@ -226,29 +298,38 @@
   }
 
   // Botones de toggle por tarjeta; el estado es global y se aplica a todos.
+  // Indicadores en panes (recrean series) y capas Lux (solo redibujan el primitive).
+  const TOGGLE_GROUPS = {
+    ".ind-toggles": [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]],
+    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"]],
+  };
+  const PANE_INDICATORS = new Set(["vol", "rsi", "adx"]);
+
   function buildToggles(card) {
-    const box = card.node.querySelector(".ind-toggles");
-    if (!box) return;
-    box.innerHTML = "";
-    [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]].forEach(([k, label]) => {
-      const b = document.createElement("button");
-      b.className = "tf-btn ind-btn" + (indState[k] ? " active" : "");
-      b.textContent = label;
-      b.dataset.ind = k;
-      b.addEventListener("click", () => {
-        indState[k] = !indState[k];
-        saveIndState();
-        Object.values(cards).forEach((c) => buildIndicators(c));
-        refreshToggleUI();
+    Object.entries(TOGGLE_GROUPS).forEach(([sel, items]) => {
+      const box = card.node.querySelector(sel);
+      if (!box) return;
+      box.innerHTML = "";
+      items.forEach(([k, label]) => {
+        const b = document.createElement("button");
+        b.className = "tf-btn ind-btn" + (indState[k] ? " active" : "");
+        b.textContent = label;
+        b.dataset.ind = k;
+        b.addEventListener("click", () => {
+          indState[k] = !indState[k];
+          saveIndState();
+          if (PANE_INDICATORS.has(k)) Object.values(cards).forEach((c) => buildIndicators(c));
+          else Object.values(cards).forEach((c) => { computeRibbon(c); pushPrim(c); });
+          refreshToggleUI();
+        });
+        box.appendChild(b);
       });
-      box.appendChild(b);
     });
   }
   function refreshToggleUI() {
     Object.values(cards).forEach((c) => {
       c.node.querySelectorAll(".ind-btn").forEach((b) => {
-        const on = !!indState[b.dataset.ind];
-        b.classList.toggle("active", on);
+        b.classList.toggle("active", !!indState[b.dataset.ind]);
       });
     });
   }
@@ -338,6 +419,7 @@
       close: card.lastPrice,
     });
     updateIndicatorsLast(card);
+    if (indState.ribbon) { computeRibbon(card); pushPrim(card); }
   }
 
   // Pide el análisis SMC en vivo y lo proyecta como price lines + primitive.
@@ -373,8 +455,22 @@
       addLine(rng.weak_low, "#16c784", "Weak Low");
       addLine(rng.eq, "#a29bfe", "EQ 50%");
     }
-    // Cajas (premium/discount, FVG, POIs) vía primitive custom.
-    card.smcPrim.setData(card.smc);
+    pushPrim(card);
+  }
+
+  // Recalcula la cinta de tendencia (EMA 21/55) desde las velas, con el precio en vivo.
+  function computeRibbon(card) {
+    const cs = card.candles || [];
+    if (!cs.length) { card.ribbon = []; return; }
+    const closes = cs.map((c) => c.c);
+    if (card.lastPrice != null) closes[closes.length - 1] = card.lastPrice;
+    const f = emaArr(closes, 21), s = emaArr(closes, 55);
+    card.ribbon = cs.map((c, i) => ({ t: Math.floor(c.t / 1000), f: f[i], s: s[i] }));
+  }
+
+  // Empuja al primitive todo lo que dibuja: overlay SMC + cinta + niveles + TP/SL.
+  function pushPrim(card) {
+    if (card.smcPrim) card.smcPrim.setData({ smc: card.smc, ribbon: card.ribbon || [], show: luxShow() });
   }
 
   // --- Selector de temporalidad --------------------------------------
@@ -445,6 +541,8 @@
       if (card.fitted && range) card.chart.timeScale().setVisibleLogicalRange(range);
       else { card.chart.timeScale().fitContent(); card.fitted = true; }
       setIndicatorData(card);
+      computeRibbon(card);
+      pushPrim(card);
       liveUpdate(card);
     } catch (err) {
       /* dejamos las velas que ya teníamos */

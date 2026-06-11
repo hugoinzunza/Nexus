@@ -107,6 +107,61 @@ def _pois_for_tf(candles, tf, last_price) -> List[Dict]:
     return out
 
 
+def _levels(sel_candles, rng, n) -> List[Dict]:
+    """Etiqueta los swings recientes como Weak/Strong y su % en el dealing range.
+    Weak = liquidez AÚN no barrida (probable objetivo). Strong = ya barrida/defendida.
+    % = posición del nivel dentro del rango (0% = Weak Low, 100% = Strong High)."""
+    sh, sl = smc.swing_points(sel_candles, 3)
+    rlo = rng["weak_low"] if rng else None
+    rhi = rng["strong_high"] if rng else None
+    valid_range = rlo is not None and rhi is not None and rhi > rlo
+
+    def pct(p):
+        if not valid_range:
+            return None
+        return round(max(0.0, min(100.0, (p - rlo) / (rhi - rlo) * 100)), 0)
+
+    out = []
+    for s in sorted(sh, key=lambda x: x["confirm_idx"])[-4:]:
+        price, idx = s["price"], s["idx"]
+        swept = any(sel_candles[k]["h"] > price for k in range(idx + 1, n))
+        out.append({"type": "high", "price": round(price, 2), "t": sel_candles[idx]["t"],
+                    "kind": "strong" if swept else "weak",
+                    "label": ("Strong" if swept else "Weak") + " High", "pct": pct(price)})
+    for s in sorted(sl, key=lambda x: x["confirm_idx"])[-4:]:
+        price, idx = s["price"], s["idx"]
+        swept = any(sel_candles[k]["l"] < price for k in range(idx + 1, n))
+        out.append({"type": "low", "price": round(price, 2), "t": sel_candles[idx]["t"],
+                    "kind": "strong" if swept else "weak",
+                    "label": ("Strong" if swept else "Weak") + " Low", "pct": pct(price)})
+    return out
+
+
+def _tpsl(pois, levels, last_price) -> Dict:
+    """Proyección de escenario (NO señal) para el POI válido más cercano al precio:
+    SL más allá del barrido/OB y TP por múltiplos R + siguiente liquidez opuesta."""
+    valids = [p for p in pois if p["valid"]]
+    if not valids:
+        return None
+    poi = min(valids, key=lambda p: abs(p["dist_pct"]))
+    entry = round((poi["lo"] + poi["hi"]) / 2, 2)
+    sl = round(poi["stop"], 6)
+    risk = abs(entry - sl)
+    if risk <= 0:
+        return None
+    long = poi["dir"] == "long"
+    sgn = 1 if long else -1
+    tp = [round(entry + sgn * m * risk, 2) for m in (1, 2, 3)]
+    if long:
+        ups = [l["price"] for l in levels if l["type"] == "high" and l["price"] > entry]
+        liq = round(min(ups), 2) if ups else None
+    else:
+        dns = [l["price"] for l in levels if l["type"] == "low" and l["price"] < entry]
+        liq = round(max(dns), 2) if dns else None
+    return {"dir": poi["dir"], "tf": poi["tf"], "entry": entry, "sl": round(sl, 2),
+            "tp1": tp[0], "tp2": tp[1], "tp3": tp[2], "liq": liq}
+
+
 def active_pois(htf_map: Dict[str, list], last_price: float) -> List[Dict]:
     """POIs válidos (sin mitigar) de 1D/4h/1h. Versión liviana para las alertas."""
     out = []
@@ -140,4 +195,7 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
     mitig.sort(key=lambda p: -p["t_conf"])
     result["pois"] = valids[:12] + mitig[:6]
     result["active_pois"] = valids[:12]   # para el panel "POIs activos"
+    # Capas estilo LuxAlgo (aditivas): niveles Weak/Strong con % y proyección TP/SL.
+    result["levels"] = _levels(sel_candles, result["range"], len(sel_candles)) if sel_candles else []
+    result["tpsl"] = _tpsl(valids, result["levels"], last_price)
     return result

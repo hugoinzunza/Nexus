@@ -79,15 +79,13 @@ body {
   position: relative; display: flex; flex-direction: column; }
 .chart { width: 100%; height: 340px; display: block; flex: 1 1 auto; min-height: 200px; }
 .chart-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-.ind-toggles { display: flex; gap: 4px; flex: 0 0 auto; padding-left: 8px;
+.ind-toggles, .lux-toggles { display: flex; gap: 4px; flex: 0 0 auto; padding-left: 8px;
   border-left: 1px solid var(--line); }
 .chart-expand { margin-left: auto; }
-@media (max-width: 760px) {
-  .tf-selector { flex: 1 1 100%; }   /* TF en su propia fila; toggles abajo */
-  .ind-toggles { padding-left: 0; border-left: none; }
-}
 .ind-btn { padding: 5px 9px; font-size: 11.5px; }
 .ind-btn.active { background: rgba(162,155,254,.16); border-color: var(--accent2); color: var(--accent2); }
+/* Las capas SMC+ (Lux) usan el verde de acento para distinguirse de los indicadores. */
+.lux-toggles .ind-btn.active { background: rgba(22,199,132,.14); border-color: var(--green); color: var(--green); }
 .chart-expand { flex: 0 0 auto; cursor: pointer; background: transparent; color: var(--muted);
   border: 1px solid var(--line); border-radius: 8px; min-width: 36px; min-height: 36px;
   font-size: 16px; line-height: 1; font-family: inherit; }
@@ -244,4 +242,7 @@ tbody tr.hl td { font-weight: 600; }
   .bt { padding: 0 14px; }
   .m-v { font-size: 19px; }
   th, td { padding: 8px 9px; }
+  /* En móvil: el selector de TF ocupa su fila y los toggles bajan a la siguiente. */
+  .tf-selector { flex: 1 1 100%; }
+  .ind-toggles { padding-left: 0; border-left: none; }
 }
