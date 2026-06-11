@@ -50,13 +50,17 @@
             ctx.fillStyle = "rgba(22,199,132,0.05)"; ctx.fillRect(0, yEq, W, H - yEq);
           }
         }
-        // FVGs sin rellenar: desde su tiempo hacia la derecha.
+        // FVGs sin rellenar: desde su tiempo hacia la derecha, con etiqueta.
+        ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "top";
         (data.fvgs || []).filter((f) => !f.filled).forEach((f) => {
           const y1 = py(f.hi), y2 = py(f.lo); if (y1 == null || y2 == null) return;
           let x = ts.timeToCoordinate(Math.floor(f.t / 1000)); if (x == null) x = 0;
           x = Math.max(0, x);
+          const top = Math.min(y1, y2);
           ctx.fillStyle = f.bullish ? "rgba(108,92,231,0.13)" : "rgba(245,166,35,0.13)";
-          ctx.fillRect(x, Math.min(y1, y2), W - x, Math.abs(y2 - y1));
+          ctx.fillRect(x, top, W - x, Math.abs(y2 - y1));
+          ctx.fillStyle = f.bullish ? "#a29bfe" : "#f5a623";
+          ctx.fillText(f.bullish ? "FVG↑" : "FVG↓", x + 3, top + 1);
         });
         // Cajas de POI (ancho completo). Verde = descuento/long, rojo = premium/short.
         ctx.font = "10px -apple-system, sans-serif"; ctx.textBaseline = "top";
@@ -91,6 +95,162 @@
     setData(d) { this._data = d; if (this._requestUpdate) this._requestUpdate(); }
     updateAllViews() { this._views.forEach((v) => v.update()); }
     paneViews() { return this._views; }
+  }
+
+  // --- Indicadores (Vol / RSI / ADX) ---------------------------------
+  // Estado global (mismo para todos los pares), recordado en localStorage.
+  const IND_KEY = "nexus_trading_ind";
+  let indState = (() => {
+    try { return Object.assign({ vol: true, rsi: false, adx: false }, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
+    catch (e) { return { vol: true, rsi: false, adx: false }; }
+  })();
+  function saveIndState() { try { localStorage.setItem(IND_KEY, JSON.stringify(indState)); } catch (e) {} }
+
+  function rsiCalc(closes, p) {
+    const n = closes.length, out = new Array(n).fill(null);
+    if (n <= p) return out;
+    let g = 0, l = 0;
+    for (let i = 1; i <= p; i++) { const d = closes[i] - closes[i - 1]; if (d >= 0) g += d; else l -= d; }
+    let ag = g / p, al = l / p;
+    out[p] = 100 - 100 / (1 + (al === 0 ? 1e9 : ag / al));
+    for (let i = p + 1; i < n; i++) {
+      const d = closes[i] - closes[i - 1];
+      ag = (ag * (p - 1) + (d > 0 ? d : 0)) / p;
+      al = (al * (p - 1) + (d < 0 ? -d : 0)) / p;
+      out[i] = 100 - 100 / (1 + (al === 0 ? 1e9 : ag / al));
+    }
+    return out;
+  }
+
+  function adxCalc(h, l, c, p) {
+    const n = h.length, out = new Array(n).fill(null);
+    if (n < 2 * p + 1) return out;
+    const tr = [0], pdm = [0], ndm = [0];
+    for (let i = 1; i < n; i++) {
+      const up = h[i] - h[i - 1], dn = l[i - 1] - l[i];
+      pdm.push(up > dn && up > 0 ? up : 0);
+      ndm.push(dn > up && dn > 0 ? dn : 0);
+      tr.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])));
+    }
+    let atr = 0, sp = 0, sn = 0;
+    for (let i = 1; i <= p; i++) { atr += tr[i]; sp += pdm[i]; sn += ndm[i]; }
+    const dx = new Array(n).fill(null);
+    for (let i = p + 1; i < n; i++) {
+      atr = atr - atr / p + tr[i]; sp = sp - sp / p + pdm[i]; sn = sn - sn / p + ndm[i];
+      const pdi = atr ? 100 * sp / atr : 0, ndi = atr ? 100 * sn / atr : 0, sum = pdi + ndi;
+      dx[i] = sum ? 100 * Math.abs(pdi - ndi) / sum : 0;
+    }
+    let adxv = null, cnt = 0, acc = 0;
+    for (let i = p + 1; i < n; i++) {
+      if (dx[i] == null) continue;
+      if (adxv == null) { acc += dx[i]; cnt++; if (cnt === p) { adxv = acc / p; out[i] = adxv; } }
+      else { adxv = (adxv * (p - 1) + dx[i]) / p; out[i] = adxv; }
+    }
+    return out;
+  }
+
+  // (Re)crea las series de indicadores de una tarjeta según indState.
+  function buildIndicators(card) {
+    if (!card.chart || !window.LightweightCharts) return;
+    const LC = window.LightweightCharts;
+    card.ind = card.ind || {};
+    ["vol", "rsi", "adx"].forEach((k) => {
+      if (card.ind[k]) { try { card.chart.removeSeries(card.ind[k]); } catch (e) {} card.ind[k] = null; }
+    });
+    if (indState.vol) {
+      const v = card.chart.addSeries(LC.HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "vol" }, 0);
+      v.priceScale().applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
+      card.ind.vol = v;
+    }
+    let pane = 1;
+    if (indState.rsi) {
+      const r = card.chart.addSeries(LC.LineSeries, { color: "#a29bfe", lineWidth: 1, priceLineVisible: false,
+        priceFormat: { type: "price", precision: 1, minMove: 0.1 } }, pane);
+      [[70, "rgba(234,57,67,0.45)"], [30, "rgba(22,199,132,0.45)"], [50, "rgba(139,147,167,0.3)"]].forEach(
+        ([pr, co]) => r.createPriceLine({ price: pr, color: co, lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true }));
+      card.ind.rsi = r; pane++;
+    }
+    if (indState.adx) {
+      const a = card.chart.addSeries(LC.LineSeries, { color: "#f5a623", lineWidth: 1, priceLineVisible: false,
+        priceFormat: { type: "price", precision: 1, minMove: 0.1 } }, pane);
+      a.createPriceLine({ price: 25, color: "rgba(139,147,167,0.4)", lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true });
+      card.ind.adx = a; pane++;
+    }
+    const panes = card.chart.panes();
+    for (let i = 1; i < panes.length; i++) { try { panes[i].setHeight(card.expanded ? 130 : 84); } catch (e) {} }
+    setIndicatorData(card);
+  }
+
+  function _ohlc(card) {
+    const cs = card.candles || [];
+    const closes = cs.map((c) => c.c), highs = cs.map((c) => c.h), lows = cs.map((c) => c.l);
+    if (card.lastPrice != null && cs.length) {
+      const i = cs.length - 1;
+      closes[i] = card.lastPrice;
+      highs[i] = Math.max(highs[i], card.lastPrice);
+      lows[i] = Math.min(lows[i], card.lastPrice);
+    }
+    return { cs, closes, highs, lows };
+  }
+
+  function setIndicatorData(card) {
+    if (!card.ind) return;
+    const { cs, closes, highs, lows } = _ohlc(card);
+    if (!cs.length) return;
+    const ts = (c) => Math.floor(c.t / 1000);
+    if (card.ind.vol) {
+      card.ind.vol.setData(cs.map((c, i) => ({ time: ts(c), value: c.v,
+        color: (i === cs.length - 1 ? card.lastPrice ?? c.c : c.c) >= c.o ? "rgba(22,199,132,0.5)" : "rgba(234,57,67,0.5)" })));
+    }
+    if (card.ind.rsi) {
+      const r = rsiCalc(closes, 14);
+      card.ind.rsi.setData(cs.map((c, i) => (r[i] == null ? null : { time: ts(c), value: r[i] })).filter(Boolean));
+    }
+    if (card.ind.adx) {
+      const a = adxCalc(highs, lows, closes, 14);
+      card.ind.adx.setData(cs.map((c, i) => (a[i] == null ? null : { time: ts(c), value: a[i] })).filter(Boolean));
+    }
+  }
+
+  function updateIndicatorsLast(card) {
+    if (!card.ind || card.lastPrice == null) return;
+    const { cs, closes, highs, lows } = _ohlc(card);
+    if (!cs.length) return;
+    const t = Math.floor(cs[cs.length - 1].t / 1000);
+    if (card.ind.vol) {
+      const c = cs[cs.length - 1];
+      card.ind.vol.update({ time: t, value: c.v, color: card.lastPrice >= c.o ? "rgba(22,199,132,0.5)" : "rgba(234,57,67,0.5)" });
+    }
+    if (card.ind.rsi) { const r = rsiCalc(closes, 14); const v = r[r.length - 1]; if (v != null) card.ind.rsi.update({ time: t, value: v }); }
+    if (card.ind.adx) { const a = adxCalc(highs, lows, closes, 14); const v = a[a.length - 1]; if (v != null) card.ind.adx.update({ time: t, value: v }); }
+  }
+
+  // Botones de toggle por tarjeta; el estado es global y se aplica a todos.
+  function buildToggles(card) {
+    const box = card.node.querySelector(".ind-toggles");
+    if (!box) return;
+    box.innerHTML = "";
+    [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]].forEach(([k, label]) => {
+      const b = document.createElement("button");
+      b.className = "tf-btn ind-btn" + (indState[k] ? " active" : "");
+      b.textContent = label;
+      b.dataset.ind = k;
+      b.addEventListener("click", () => {
+        indState[k] = !indState[k];
+        saveIndState();
+        Object.values(cards).forEach((c) => buildIndicators(c));
+        refreshToggleUI();
+      });
+      box.appendChild(b);
+    });
+  }
+  function refreshToggleUI() {
+    Object.values(cards).forEach((c) => {
+      c.node.querySelectorAll(".ind-btn").forEach((b) => {
+        const on = !!indState[b.dataset.ind];
+        b.classList.toggle("active", on);
+      });
+    });
   }
 
   // --- Formateo ------------------------------------------------------
@@ -129,6 +289,9 @@
     cards[symbol] = card;
 
     createChart(card);
+    card.ind = {};
+    buildToggles(card);
+    buildIndicators(card);     // indicadores según el estado guardado
     buildTimeframeSelector(symbol, card);
     setupExpand(card);
     loadCandles(symbol, card); // primera carga
@@ -174,6 +337,7 @@
       low: Math.min(last.low, card.lastPrice),
       close: card.lastPrice,
     });
+    updateIndicatorsLast(card);
   }
 
   // Pide el análisis SMC en vivo y lo proyecta como price lines + primitive.
@@ -248,11 +412,17 @@
     if (!btn || !wrap) return;
     btn.addEventListener("click", () => {
       const open = wrap.classList.toggle("expanded");
+      card.expanded = open;
       document.body.classList.toggle("chart-open", open);
       btn.textContent = open ? "✕" : "⤢";
       btn.title = open ? "Cerrar" : "Expandir";
-      // autoSize redimensiona solo; forzamos un reflow del rango por las dudas.
-      setTimeout(() => { if (card.chart) card.chart.timeScale().scrollToRealTime(); }, 60);
+      // autoSize redimensiona solo; ajustamos el alto de los subpanes y reencuadramos.
+      setTimeout(() => {
+        if (!card.chart) return;
+        const panes = card.chart.panes();
+        for (let i = 1; i < panes.length; i++) { try { panes[i].setHeight(open ? 130 : 84); } catch (e) {} }
+        card.chart.timeScale().scrollToRealTime();
+      }, 60);
     });
   }
 
@@ -274,6 +444,7 @@
       card.series.setData(card.bars);
       if (card.fitted && range) card.chart.timeScale().setVisibleLogicalRange(range);
       else { card.chart.timeScale().fitContent(); card.fitted = true; }
+      setIndicatorData(card);
       liveUpdate(card);
     } catch (err) {
       /* dejamos las velas que ya teníamos */
