@@ -85,7 +85,8 @@
     if (sp.ok) {
       $("spot-total").innerHTML = `<strong>Valor total aprox:</strong> ${usd(sp.total_value)} USDT`;
       table($("spot"), ["Activo", "Cantidad", "Valor aprox (USDT)"],
-        (sp.holdings || []).length ? sp.holdings.map((h) => [h.asset,
+        (sp.holdings || []).length ? sp.holdings.map((h) => [
+          h.asset + (h.earn ? ' <span class="muted">· Earn</span>' : ""),
           h.qty.toLocaleString("es", { maximumFractionDigits: 8 }),
           h.value == null ? "—" : h.value.toLocaleString("es", { maximumFractionDigits: 2 })])
           : [["Sin holdings", "", ""]]);

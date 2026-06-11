@@ -161,6 +161,14 @@ def _futures_balance():
     return usdt
 
 
+def _price_value(base: str, qty: float, prices: dict):
+    """Valor aproximado en USDT de `qty` del activo `base` (None si no hay precio)."""
+    if base in STABLES:
+        return qty
+    p = prices.get(base + "USDT") or prices.get(base + "FDUSD") or prices.get(base + "BUSD")
+    return qty * p if p else None
+
+
 def _spot_holdings():
     acct = bc.spot_account()
     prices = bc.all_prices()
@@ -171,14 +179,20 @@ def _spot_holdings():
         if qty <= 0:
             continue
         asset = bal.get("asset")
-        if asset in STABLES:
-            value = qty
-        else:
-            p = prices.get(asset + "USDT") or prices.get(asset + "FDUSD") or prices.get(asset + "BUSD")
-            value = qty * p if p else None
+        # Primero intentamos valorizar el activo tal cual (evita falsos positivos
+        # como LDO, que es un token real). Si no hay precio y tiene prefijo "LD",
+        # es una posición de Binance Earn (Flexible Savings): el subyacente es el
+        # nombre sin "LD" (LDSOL → SOL, LDUSDT → USDT).
+        base, earn = asset, False
+        value = _price_value(asset, qty, prices)
+        if value is None and asset.startswith("LD") and len(asset) > 2:
+            cand = asset[2:]
+            v2 = _price_value(cand, qty, prices)
+            if v2 is not None:
+                base, earn, value = cand, True, v2
         if value is not None and value < 1:
             continue
-        holdings.append({"asset": asset, "qty": qty,
+        holdings.append({"asset": base, "earn": earn, "qty": qty,
                          "value": round(value, 2) if value is not None else None})
         total += value or 0
     holdings.sort(key=lambda x: (x["value"] is None, -(x["value"] or 0)))
