@@ -5,10 +5,13 @@ __pycache__/
 .venv/
 venv/
 
-# Configuración local con datos sensibles (claves de API a futuro, etc.)
+# Configuración local con datos sensibles (claves de API, tokens, etc.)
 config/local.json
 *.local.json
 .env
+*.env
+!*.env.example
+deploy/collector.env
 
 # Sistema operativo
 .DS_Store

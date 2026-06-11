@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Colector del Diario: lee Binance desde el Mac mini (IP de Chile) y envía
+         el resultado a Railway. Corre cada 5 minutos. SOLO LECTURA de Binance. -->
+    <key>Label</key>
+    <string>com.hugo.nexus-collector</string>
+
+    <!-- AJUSTA las rutas si clonaste Nexus en otra carpeta. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/hugh/Nexus/.venv/bin/python</string>
+        <string>-m</string>
+        <string>modules.journal.collector</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/hugh/Nexus</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+        <!-- El colector también lee deploy/collector.env o ~/.nexus/binance.env. -->
+        <key>NEXUS_COLLECTOR_ENV</key>
+        <string>/Users/hugh/Nexus/deploy/collector.env</string>
+    </dict>
+
+    <!-- Corre al cargar y luego cada 300 s (5 min). -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <!-- Logs del colector. -->
+    <key>StandardOutPath</key>
+    <string>/Users/hugh/Nexus/logs/collector.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/hugh/Nexus/logs/collector.err.log</string>
+</dict>
+</plist>

@@ -139,6 +139,27 @@ def module_api(slug: str, subpath: str, request: Request):
                         status_code=404)
 
 
+@app.post("/m/{slug}/api/{subpath:path}")
+async def module_api_post(slug: str, subpath: str, request: Request):
+    module = hub.modules_by_slug.get(slug)
+    if module is None:
+        return JSONResponse({"error": f"módulo '{slug}' no encontrado"}, status_code=404)
+
+    raw = await request.body()
+    try:
+        data = __import__("json").loads(raw) if raw else None
+    except Exception:  # noqa: BLE001
+        data = None
+    headers = {k.lower(): v for k, v in request.headers.items()}
+
+    result = module.api_post(subpath, data, headers)
+    if result is not None:
+        status, ctype, body = result
+        return Response(content=body, status_code=status, media_type=ctype)
+    return JSONResponse({"error": "endpoint de API no encontrado", "subpath": subpath},
+                        status_code=404)
+
+
 @app.get("/m/{slug}")
 def module_root_redirect(slug: str):
     # /m/trading → /m/trading/ (para que los enlaces relativos del módulo funcionen).

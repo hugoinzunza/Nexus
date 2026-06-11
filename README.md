@@ -204,11 +204,17 @@ robusto fuera de muestra:
 > genérico por señales en `engine.py` y los indicadores en `indicators.py`. La data
 > cruda se cachea en `data/` (en `.gitignore`).
 
-## 📒 Módulo Diario (Binance, solo lectura)
+## 📒 Módulo Diario (Binance, solo lectura · arquitectura híbrida)
 
 Panel de estadísticas de tu trading real en Binance. **Solo lectura**: hace
 únicamente consultas firmadas (HMAC-SHA256) de lectura; **nunca** crea ni cancela
 órdenes, ni transfiere ni retira.
+
+> **Por qué híbrido:** Binance bloquea los servidores de Railway por ubicación
+> (HTTP 451). Por eso un **colector corre en el Mac mini** (IP de Chile), lee
+> Binance y **envía** el resultado a Railway, que solo lo guarda y lo muestra. La
+> web de Railway **no** consulta Binance. Setup del colector:
+> [`deploy/COLECTOR_MACMINI.md`](deploy/COLECTOR_MACMINI.md).
 
 - **Futuros USDⓈ-M:** PnL realizado neto de comisiones y funding (reconstruye
   trades cerrados desde `/fapi/v1/income`), posiciones abiertas y balance.
@@ -217,13 +223,15 @@ Panel de estadísticas de tu trading real en Binance. **Solo lectura**: hace
   mejor/peor trade, rachas, curva de equity y desgloses **por par, sesión, día de
   la semana y hora** (para ver tus mejores y peores horarios).
 
-**Credenciales (las pones tú, nunca quedan en el código):**
+**Variables de entorno:**
 
-| Variable | Para qué |
-|---|---|
-| `BINANCE_API_KEY` | API key de Binance, **de solo lectura**. |
-| `BINANCE_API_SECRET` | Secret de esa API key. |
-| `BINANCE_LOOKBACK_DAYS` | Opcional: días de historial a traer (por defecto 365). |
+| Dónde | Variable | Para qué |
+|---|---|---|
+| Mac mini (`deploy/collector.env`) | `BINANCE_API_KEY` / `BINANCE_API_SECRET` | Leer Binance (solo lectura). |
+| Mac mini (`deploy/collector.env`) | `NEXUS_INGEST_URL` | Endpoint de ingesta de Railway (`…/m/journal/api/ingest`). |
+| Mac mini (`deploy/collector.env`) | `NEXUS_INGEST_TOKEN` | Token compartido con Railway. |
+| Mac mini (`deploy/collector.env`) | `BINANCE_LOOKBACK_DAYS` | Opcional: días de historial (por defecto 365). |
+| **Railway** | `NEXUS_INGEST_TOKEN` | **Mismo token**; autentica la ingesta. (Railway ya **no** necesita las keys de Binance.) |
 
 **🔒 Permisos de la API key (en Binance):**
 

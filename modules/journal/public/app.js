@@ -13,29 +13,36 @@
 
   function setStatus(txt, dot) { $("status-text").textContent = txt; if (dot) setDot(dot); }
 
+  function ageStr(sec) {
+    if (sec == null) return "—";
+    if (sec < 90) return "hace " + Math.round(sec) + " s";
+    if (sec < 5400) return "hace " + Math.round(sec / 60) + " min";
+    return "hace " + (sec / 3600).toFixed(1) + " h";
+  }
+
   function load(force) {
     setStatus("cargando…");
     fetch("api/status").then((r) => r.json()).then((st) => {
-      if (!st.configured) {
-        $("connect").hidden = false; $("panel").hidden = true; $("error").hidden = true;
-        setStatus("sin conectar", "bad");
+      if (!st.has_data) {
+        $("waiting").hidden = false; $("panel").hidden = true;
+        setStatus("esperando colector", "bad");
+        $("waiting-detail").textContent = st.ingest_ready
+          ? "La ingesta está lista en el servidor; falta que el colector del Mac mini envíe el primer dato."
+          : "Falta configurar NEXUS_INGEST_TOKEN en Railway para habilitar la ingesta.";
         return;
       }
-      fetch("api/stats" + (force ? "?refresh=1" : "")).then((r) => r.json()).then(render);
+      fetch("api/stats").then((r) => r.json()).then(render);
     }).catch(() => setStatus("error de red", "bad"));
   }
 
   function render(d) {
-    if (!d.configured) { $("connect").hidden = false; $("panel").hidden = true; setStatus("sin conectar", "bad"); return; }
-    if (d.error) {
-      $("error").hidden = false; $("error-msg").textContent = d.error;
-      $("panel").hidden = true; setStatus("error", "bad"); return;
-    }
+    if (!d.has_data) { $("waiting").hidden = false; $("panel").hidden = true; setStatus("esperando colector", "bad"); return; }
     lastData = d;
-    $("connect").hidden = true; $("error").hidden = true; $("panel").hidden = false;
-    setStatus("conectado", "ok");
-    $("updated").textContent = "actualizado " + new Date(d.generated_at_ms).toLocaleTimeString("es") +
-      " · " + d.lookback_days + " días";
+    $("waiting").hidden = true; $("panel").hidden = false;
+    const stale = d.age_seconds != null && d.age_seconds > 1200; // >20 min
+    setStatus(stale ? "desactualizado" : "al día", stale ? "" : "ok");
+    $("updated").textContent = "actualizado " + ageStr(d.age_seconds) +
+      " · " + (d.lookback_days || 365) + " días";
 
     const fut = d.futures || {};
     if (fut.ok) {

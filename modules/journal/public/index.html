@@ -21,46 +21,20 @@
   </header>
 
   <p class="disclaimer">
-    Solo lectura de tu cuenta de Binance (Futuros USDⓈ-M y Spot). No ejecuta ni
-    modifica operaciones: únicamente consulta tu historial y balances.
+    Solo lectura de tu cuenta de Binance (Futuros USDⓈ-M y Spot). Los datos los lee
+    un colector que corre en el Mac mini (IP de Chile) y se envían acá; esta web no
+    consulta Binance directamente. No ejecuta ni modifica operaciones.
   </p>
 
-  <!-- Estado: sin credenciales -->
-  <section id="connect" class="card connect" hidden>
-    <h2>Conecta tu Binance</h2>
-    <p>Para ver tus estadísticas, define estas variables de entorno (en Railway o
-       en el Mac mini). Nexus nunca las guarda en el código ni las muestra.</p>
-    <ul class="envs">
-      <li><code>BINANCE_API_KEY</code></li>
-      <li><code>BINANCE_API_SECRET</code></li>
-      <li><code>BINANCE_LOOKBACK_DAYS</code> <span class="muted">(opcional, por defecto 365)</span></li>
-    </ul>
-    <div class="tip">
-      <strong>Permisos de la API key (importante):</strong>
-      <ul class="perms">
-        <li><span class="ok">✅ Enable Reading</span> — viene activado por defecto;
-          cubre los balances y la cuenta de <strong>Spot</strong>.</li>
-        <li><span class="ok">✅ Enable Futures</span> — necesario para leer
-          <strong>Futuros USDⓈ-M</strong> (PnL, posiciones, balance). En Binance no
-          existe un "solo lectura" separado para futuros: se habilita Futures.
-          Nexus igual <strong>nunca</strong> envía órdenes, solo lee.</li>
-        <li><span class="bad">⛔ Enable Withdrawals</span> — déjalo
-          <strong>siempre desactivado</strong>. Nexus no lo necesita.</li>
-      </ul>
-      Si puedes, restringe la key por IP. Sin <em>Enable Futures</em>, el panel de
-      futuros mostrará un error de permisos (el de Spot igual funcionará).
-    </div>
-    <p class="muted">Una vez configuradas, recarga esta página.</p>
-  </section>
-
-  <!-- Estado: error -->
-  <section id="error" class="card err" hidden>
-    <h2>No se pudo leer la cuenta</h2>
-    <p id="error-msg"></p>
-    <p class="muted">Revisa que la API key sea válida y con los permisos correctos:
-       <strong>Enable Reading</strong> (para Spot) y <strong>Enable Futures</strong>
-       (para Futuros USDⓈ-M). Si la restringiste por IP, confirma que incluye la IP
-       del servidor.</p>
+  <!-- Estado: esperando datos del colector -->
+  <section id="waiting" class="card connect" hidden>
+    <h2>Esperando datos del colector</h2>
+    <p>El Diario muestra los datos que envía el <strong>colector del Mac mini</strong>.
+       Binance bloquea los servidores de Railway por ubicación, así que la lectura
+       se hace desde tu Mac mini (IP de Chile) y se ingiere acá.</p>
+    <p>Todavía no llegó ningún envío. Cuando el colector corra (cada ~5 min vía
+       launchd), tus estadísticas aparecerán aquí.</p>
+    <p class="muted" id="waiting-detail"></p>
   </section>
 
   <!-- Panel -->
