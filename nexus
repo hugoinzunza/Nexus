@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Lanzador de Nexus. Arranca el hub con un solo comando: ./nexus
+#
+# No necesita instalar nada: usa el Python 3 del sistema y solo su librería
+# estándar. Pensado para correr 24/7 en el Mac mini.
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+PYTHON="${PYTHON:-python3}"
+
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+  echo "❌ No se encontró '$PYTHON'. Instalá Python 3 o definí la variable PYTHON." >&2
+  exit 1
+fi
+
+exec "$PYTHON" -m core.hub

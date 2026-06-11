@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Configuración local con datos sensibles (claves de API a futuro, etc.)
+config/local.json
+*.local.json
+.env
+
+# Sistema operativo
+.DS_Store
+
+# Logs
+*.log
+logs/

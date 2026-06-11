@@ -1,0 +1,21 @@
+{
+  "host": "127.0.0.1",
+  "port": 8800,
+  "modules": {
+    "trading": {
+      "enabled": true,
+      "poll_interval_seconds": 2,
+      "candle_refresh_every": 6,
+      "book_depth": 12,
+      "candle_timeframe": "1m",
+      "candle_count": 200,
+      "instruments": [
+        { "name": "BTC_USDT", "label": "BTC/USDT" },
+        { "name": "ETH_USDT", "label": "ETH/USDT" }
+      ]
+    },
+    "music": {
+      "enabled": true
+    }
+  }
+}

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nexus · Trading</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="/">◆ Nexus</a>
+    <h1>Co-piloto de Trading</h1>
+    <div class="status" id="status">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">conectando…</span>
+    </div>
+  </header>
+
+  <p class="disclaimer">
+    Solo lectura de datos de mercado (Crypto.com Exchange). No ejecuta operaciones ni mueve fondos.
+  </p>
+
+  <main id="instruments" class="instruments">
+    <!-- Las tarjetas de cada instrumento se generan dinámicamente -->
+  </main>
+
+  <footer class="foot">
+    Datos: API pública de Crypto.com Exchange · actualización en vivo vía SSE ·
+    <span id="last-update">—</span>
+  </footer>
+
+  <!-- Plantilla de tarjeta de instrumento (se clona por cada par) -->
+  <template id="card-tpl">
+    <section class="instrument-card">
+      <div class="ic-header">
+        <div class="ic-title">
+          <h2 class="ic-symbol"></h2>
+          <span class="ic-change"></span>
+        </div>
+        <div class="ic-price"></div>
+      </div>
+
+      <div class="ic-stats">
+        <div class="stat"><span class="k">Máx 24h</span><span class="v ic-high"></span></div>
+        <div class="stat"><span class="k">Mín 24h</span><span class="v ic-low"></span></div>
+        <div class="stat"><span class="k">Bid</span><span class="v ic-bid"></span></div>
+        <div class="stat"><span class="k">Ask</span><span class="v ic-ask"></span></div>
+        <div class="stat"><span class="k">Vol 24h</span><span class="v ic-vol"></span></div>
+      </div>
+
+      <div class="ic-body">
+        <div class="chart-wrap">
+          <canvas class="chart"></canvas>
+        </div>
+        <div class="book">
+          <div class="book-title">Libro de órdenes</div>
+          <div class="book-cols">
+            <div class="book-side asks"></div>
+            <div class="book-spread"></div>
+            <div class="book-side bids"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="signals">
+        <div class="sig"><span class="k">Rango 24h</span><div class="bar"><i class="bar-fill range"></i></div><span class="v sig-range"></span></div>
+        <div class="sig"><span class="k">Momentum 15m</span><span class="v sig-mom"></span></div>
+        <div class="sig"><span class="k">Spread</span><span class="v sig-spread"></span></div>
+        <div class="sig"><span class="k">Presión libro</span><div class="bar center"><i class="bar-fill imb"></i></div><span class="v sig-imb"></span></div>
+      </div>
+    </section>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
