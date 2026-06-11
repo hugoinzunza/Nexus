@@ -113,8 +113,15 @@ def _pois_for_tf(candles, tf, last_price) -> List[Dict]:
     return out
 
 
+# Cuántos niveles Weak/Strong recientes mostrar por lado (de la TF seleccionada).
+# Pocos y RECIENTES para no saturar: los swings viejos/lejanos parecen de otra TF.
+LEVELS_PER_SIDE = 2
+
+
 def _levels(sel_candles, rng, n) -> List[Dict]:
-    """Etiqueta los swings recientes como Weak/Strong y su % en el dealing range.
+    """Etiqueta los swings RECIENTES de la temporalidad seleccionada como Weak/Strong
+    y su % en el dealing range. Solo los más recientes (locales) por lado, para que
+    no aparezcan extremos viejos que parecen de otras temporalidades.
     Weak = liquidez AÚN no barrida (probable objetivo). Strong = ya barrida/defendida.
     % = posición del nivel dentro del rango (0% = Weak Low, 100% = Strong High)."""
     sh, sl = smc.swing_points(sel_candles, RANGE_PIV)
@@ -128,13 +135,13 @@ def _levels(sel_candles, rng, n) -> List[Dict]:
         return round(max(0.0, min(100.0, (p - rlo) / (rhi - rlo) * 100)), 0)
 
     out = []
-    for s in sorted(sh, key=lambda x: x["confirm_idx"])[-4:]:
+    for s in sorted(sh, key=lambda x: x["confirm_idx"])[-LEVELS_PER_SIDE:]:
         price, idx = s["price"], s["idx"]
         swept = any(sel_candles[k]["h"] > price for k in range(idx + 1, n))
         out.append({"type": "high", "price": round(price, 2), "t": sel_candles[idx]["t"],
                     "kind": "strong" if swept else "weak",
                     "label": ("Strong" if swept else "Weak") + " High", "pct": pct(price)})
-    for s in sorted(sl, key=lambda x: x["confirm_idx"])[-4:]:
+    for s in sorted(sl, key=lambda x: x["confirm_idx"])[-LEVELS_PER_SIDE:]:
         price, idx = s["price"], s["idx"]
         swept = any(sel_candles[k]["l"] < price for k in range(idx + 1, n))
         out.append({"type": "low", "price": round(price, 2), "t": sel_candles[idx]["t"],
