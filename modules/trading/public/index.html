@@ -18,6 +18,7 @@
     <a class="back" href="/">◆ Nexus</a>
     <h1>Co-piloto de Trading</h1>
     <a class="back bt-link" href="/m/trading/backtest">Backtest SMC →</a>
+    <button class="alert-btn" id="alert-btn" type="button">🔔 Alertas SMC</button>
     <div class="status" id="status">
       <span class="dot" id="status-dot"></span>
       <span id="status-text">conectando…</span>
@@ -26,6 +27,8 @@
 
   <p class="disclaimer">
     Solo lectura de datos de mercado (Crypto.com Exchange). No ejecuta operaciones ni mueve fondos.
+    El indicador SMC marca <strong>zonas de interés</strong> (estructura, premium/discount,
+    FVG y POIs de 1D/4h/1h) como contexto — <strong>no son recomendaciones de compra/venta</strong>.
   </p>
 
   <main id="instruments" class="instruments">
@@ -76,6 +79,17 @@
         <div class="sig"><span class="k">Momentum 15m</span><span class="v sig-mom"></span></div>
         <div class="sig"><span class="k">Spread</span><span class="v sig-spread"></span></div>
         <div class="sig"><span class="k">Presión libro</span><div class="bar center"><i class="bar-fill imb"></i></div><span class="v sig-imb"></span></div>
+      </div>
+
+      <div class="smc-panel">
+        <div class="smc-head">
+          <span class="smc-title">POIs activos · SMC multi-TF</span>
+          <span class="smc-legend">
+            <i class="lg discount"></i> descuento
+            <i class="lg premium"></i> premium
+          </span>
+        </div>
+        <div class="smc-list">Analizando…</div>
       </div>
     </section>
   </template>

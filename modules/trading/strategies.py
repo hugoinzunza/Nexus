@@ -213,16 +213,24 @@ POI_TFS = ("1h", "4h", "1d")
 
 
 def _detect_pois(candles, piv, disp):
-    """Detecta POIs válidos en estas velas. Cada POI: {dir, lo, hi, stop, t_conf}
-    con t_conf = ms de CIERRE de la vela que lo confirma (anti-repintado)."""
+    """Versión cacheada (para el backtest, que reusa las mismas listas de velas).
+    NO usar en vivo: la caché por id() crecería sin límite con velas nuevas."""
     key = (id(candles), piv, disp)
     cached = _POI_CACHE.get(key)
     if cached is not None:
         return cached
+    pois = detect_pois(candles, piv, disp)
+    _POI_CACHE[key] = pois
+    return pois
+
+
+def detect_pois(candles, piv, disp):
+    """Detecta POIs válidos (sin caché). Cada POI: {dir, lo, hi, stop, t_conf, idx, ob}
+    con t_conf = ms de CIERRE de la vela que lo confirma (anti-repintado), `idx` la
+    vela del FVG y `ob` la del order block (para calcular mitigación en vivo)."""
     n = len(candles)
     pois = []
     if n < 60:
-        _POI_CACHE[key] = pois
         return pois
     closes, highs, lows, _ = _ohlcv(candles)
     opens = [c["o"] for c in candles]
@@ -249,7 +257,8 @@ def _detect_pois(candles, piv, disp):
                     eq = (sh_p + sl_p) / 2
                     if highs[ob] <= eq:   # OB en descuento
                         pois.append({"dir": "long", "lo": lows[ob], "hi": highs[ob],
-                                     "stop": lo_win, "t_conf": candles[i]["t"] + interval})
+                                     "stop": lo_win, "t_conf": candles[i]["t"] + interval,
+                                     "idx": i, "ob": ob})
         # POI SHORT: FVG bajista en i (high[i] < low[i-2]) con displacement bajista.
         if highs[i] < lows[i - 2] and closes[i - 1] < opens[i - 1] \
                 and abs(closes[i - 1] - opens[i - 1]) >= disp * a:
@@ -263,9 +272,9 @@ def _detect_pois(candles, piv, disp):
                     eq = (sh_p + sl_p) / 2
                     if lows[ob] >= eq:   # OB en premium
                         pois.append({"dir": "short", "lo": lows[ob], "hi": highs[ob],
-                                     "stop": hi_win, "t_conf": candles[i]["t"] + interval})
+                                     "stop": hi_win, "t_conf": candles[i]["t"] + interval,
+                                     "idx": i, "ob": ob})
     pois.sort(key=lambda x: x["t_conf"])
-    _POI_CACHE[key] = pois
     return pois
 
 

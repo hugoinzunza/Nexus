@@ -21,8 +21,10 @@ import time
 
 from core.module_base import NexusModule
 from . import cryptocom
+from . import smc_live
 
 _BACKTEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtest_results.json")
+_HTF_FOR_POI = ["1D", "4h", "1h"]   # temporalidades donde se detectan POIs
 
 
 class TradingModule(NexusModule):
@@ -56,6 +58,15 @@ class TradingModule(NexusModule):
         # cada cambio de temporalidad o con varios dispositivos abiertos a la vez.
         self._chart_cache = {}
         self._chart_lock = threading.Lock()
+
+        # Indicador SMC en vivo: análisis cacheado, zonas de POI activas (para las
+        # alertas) y estado de "precio dentro" para no spamear (una alerta por toque).
+        self._smc_cache = {}        # (instrumento, tf) → {"analysis", "ts"}
+        self._smc_lock = threading.Lock()
+        self._poi_zones = {}        # instrumento → lista de POIs válidos (para alertas)
+        self._poi_inside = {}       # instrumento → set de claves de POI con el precio dentro
+        self.smc_refresh_every = int(cfg.get("smc_refresh_every", 15))  # cada ~30s
+        self.smc_alerts = bool(cfg.get("smc_alerts", True))
 
         # Estado compartido. Se reemplaza por referencia (atómico bajo el GIL),
         # así las lecturas desde otros hilos siempre ven una foto consistente.
@@ -121,8 +132,82 @@ class TradingModule(NexusModule):
                 "error": error,
                 "instruments": instruments_state,
             }
+
+            # Indicador SMC + alertas: recalculamos las zonas de POI cada N ticks
+            # (la detección sobre velas HTF es más pesada) y chequeamos toques
+            # cada tick con el precio en vivo.
+            for inst in self.instruments:
+                name = inst["name"]
+                st = instruments_state.get(name)
+                if not st:
+                    continue
+                last = (st.get("ticker") or {}).get("last")
+                if not last:
+                    continue
+                if tick % self.smc_refresh_every == 0 or name not in self._poi_zones:
+                    try:
+                        self._poi_zones[name] = smc_live.active_pois(self._htf_candles(name), last)
+                    except Exception as exc:  # noqa: BLE001
+                        self.context.log(f"smc: no se pudieron calcular POIs de {name}: {exc}")
+                self._check_alerts(name, inst.get("label", name), last)
+
             tick += 1
             self._stop.wait(self.poll_interval)
+
+    # --- SMC en vivo + alertas -----------------------------------------
+    def _htf_candles(self, instrument: str) -> dict:
+        """Velas recientes de las temporalidades de detección de POIs (cacheadas)."""
+        return {tf: self._candles_cached(instrument, tf) for tf in _HTF_FOR_POI}
+
+    def _smc_analysis(self, instrument: str, sel_tf: str) -> dict:
+        key = (instrument, sel_tf)
+        now = time.time()
+        with self._smc_lock:
+            entry = self._smc_cache.get(key)
+            if entry and now - entry["ts"] < 25:
+                return entry["analysis"]
+        sel = self._candles_cached(instrument, sel_tf)
+        htf = self._htf_candles(instrument)
+        last = sel[-1]["c"] if sel else 0.0
+        analysis = smc_live.analyze(sel, htf, last, sel_tf)
+        with self._smc_lock:
+            self._smc_cache[key] = {"analysis": analysis, "ts": now}
+        return analysis
+
+    def _check_alerts(self, name: str, label: str, last: float) -> None:
+        """Alerta (web push) cuando el precio ENTRA a un POI válido sin mitigar.
+        Una alerta por POI por toque: se rearma cuando el precio sale de la zona."""
+        zones = self._poi_zones.get(name) or []
+        inside_now = set()
+        for poi in zones:
+            if poi["lo"] <= last <= poi["hi"]:
+                inside_now.add(self._poi_key(poi))
+        prev = self._poi_inside.get(name, set())
+        newly = inside_now - prev
+        self._poi_inside[name] = inside_now
+        if not (self.smc_alerts and newly):
+            return
+        # Importamos push de forma perezosa para no acoplar el módulo al core.
+        try:
+            from core import push
+        except Exception:  # noqa: BLE001
+            return
+        if not push.configurado():
+            return
+        for poi in zones:
+            if self._poi_key(poi) in newly:
+                zona = "descuento" if poi["discount"] else "premium"
+                base = label.split("/")[0]
+                push.notificar(
+                    title=f"{base} · POI {poi['tf']}",
+                    body=f"{base} tocando POI {poi['tf']} en {zona} (zona de interés, no es señal).",
+                    url="/m/trading/",
+                    tag=f"poi-{name}-{self._poi_key(poi)}",
+                )
+
+    @staticmethod
+    def _poi_key(poi: dict) -> str:
+        return f"{poi['tf']}:{poi['dir']}:{round(poi['lo'], 2)}:{round(poi['hi'], 2)}"
 
     # --- Inteligencia (semilla) ---------------------------------------
     def _compute_signals(self, ticker: dict, book: dict, candles: list) -> dict:
@@ -219,6 +304,21 @@ class TradingModule(NexusModule):
                 "timeframe": timeframe,
                 "candles": candles,
             }, ensure_ascii=False).encode("utf-8")
+            return (200, "application/json; charset=utf-8", body)
+        if subpath == "smc":
+            instrument = query.get("instrument", "")
+            timeframe = query.get("timeframe", self.ui_default_timeframe)
+            known = {i["name"] for i in self.instruments}
+            if instrument not in known:
+                return self._json_error(400, "instrumento no permitido")
+            if timeframe not in self.ui_timeframes:
+                return self._json_error(400, "temporalidad no válida")
+            try:
+                analysis = self._smc_analysis(instrument, timeframe)
+            except Exception as exc:  # noqa: BLE001
+                return self._json_error(502, f"no se pudo analizar SMC: {exc}")
+            body = json.dumps({"instrument": instrument, **analysis},
+                              ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)
         if subpath == "backtest":
             if not os.path.isfile(_BACKTEST_PATH):

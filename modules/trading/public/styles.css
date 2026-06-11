@@ -132,6 +132,41 @@ body {
 .bar.center { background: linear-gradient(90deg, rgba(234,57,67,.25), #11141d 50%, rgba(22,199,132,.25)); }
 .bar.center .bar-fill { left: 50%; width: 0; background: var(--accent2); }
 
+/* Botón de alertas SMC en la barra superior */
+.alert-btn { cursor: pointer; background: transparent; color: var(--accent2);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px;
+  font-size: 12.5px; font-weight: 600; font-family: inherit; min-height: 36px;
+  white-space: nowrap; transition: background .12s, border-color .12s; }
+.alert-btn:hover { border-color: var(--accent); color: var(--text); }
+.alert-btn.on { background: rgba(22,199,132,.14); border-color: var(--green); color: var(--green); }
+.alert-btn:disabled { opacity: .6; cursor: default; }
+
+/* Panel "POIs activos" del indicador SMC */
+.smc-panel { margin-top: 16px; background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 14px; }
+.smc-head { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.smc-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.smc-legend { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.smc-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+  vertical-align: -1px; margin-right: 3px; }
+.smc-legend .lg.discount { background: rgba(22,199,132,.5); border: 1px solid var(--green); }
+.smc-legend .lg.premium { background: rgba(234,57,67,.5); border: 1px solid var(--red); }
+.smc-list { display: flex; flex-direction: column; gap: 6px; }
+.smc-empty { color: var(--muted); font-size: 13px; }
+.smc-poi { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 12.5px; font-variant-numeric: tabular-nums; padding: 6px 8px;
+  border-radius: 8px; border-left: 3px solid var(--line); background: rgba(255,255,255,.02); }
+.smc-poi.discount { border-left-color: var(--green); }
+.smc-poi.premium { border-left-color: var(--red); }
+.smc-tf { font-weight: 700; }
+.smc-poi.discount .smc-tf { color: var(--green); }
+.smc-poi.premium .smc-tf { color: var(--red); }
+.smc-range { color: var(--text); }
+.smc-zone { color: var(--muted); }
+.smc-dist { margin-left: auto; color: var(--muted); }
+.smc-here { color: var(--amber); font-weight: 600; }
+
 .foot { text-align: center; color: var(--muted); font-size: 12.5px; padding: 20px;
   padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 .foot code, .disclaimer code, .bt-note code { color: var(--accent2); }

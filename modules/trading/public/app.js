@@ -24,6 +24,7 @@
   let TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1D"];
   let DEFAULT_TF = "15m";
   const CANDLE_REFRESH_MS = 6000; // cada cuánto refrescamos las velas del par
+  const SMC_REFRESH_MS = 20000;   // cada cuánto recalculamos el análisis SMC
 
   // --- Formateo ------------------------------------------------------
   function fmtPrice(n) {
@@ -57,15 +58,34 @@
     container.appendChild(node);
     const canvas = node.querySelector(".chart");
     // Cada par recuerda su propia temporalidad y sus velas (estado en el front).
-    const card = { node, canvas, lastPrice: null, timeframe: DEFAULT_TF, candles: [] };
+    const card = { node, canvas, lastPrice: null, timeframe: DEFAULT_TF, candles: [], smc: null };
     cards[symbol] = card;
 
     buildTimeframeSelector(symbol, card);
     loadCandles(symbol, card); // primera carga
-    // Refresco periódico de las velas de la temporalidad activa.
+    loadSMC(symbol, card);     // análisis SMC en vivo
+    // Refrescos periódicos.
     card.refreshTimer = setInterval(() => loadCandles(symbol, card), CANDLE_REFRESH_MS);
+    card.smcTimer = setInterval(() => loadSMC(symbol, card), SMC_REFRESH_MS);
 
     return card;
+  }
+
+  function redraw(card) { drawChart(card.canvas, chartData(card), card.smc); }
+
+  // Pide el análisis SMC en vivo (estructura, premium/discount, FVG y POIs de
+  // 1D/4h/1h) y actualiza el gráfico y el panel "POIs activos".
+  async function loadSMC(symbol, card) {
+    const tf = card.timeframe;
+    try {
+      const r = await fetch(`api/smc?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}`);
+      if (!r.ok) return;
+      const j = await r.json();
+      if (card.timeframe !== tf) return;
+      card.smc = j;
+      redraw(card);
+      renderSMCPanel(card);
+    } catch (err) { /* mantenemos el análisis previo */ }
   }
 
   // --- Selector de temporalidad --------------------------------------
@@ -87,7 +107,9 @@
           b.classList.toggle("active", on);
           b.setAttribute("aria-pressed", on ? "true" : "false");
         });
+        card.smc = null; // el SMC depende de la TF seleccionada (estructura/FVG)
         loadCandles(symbol, card); // recarga con la nueva resolución
+        loadSMC(symbol, card);
       });
       sel.appendChild(btn);
     });
@@ -103,7 +125,7 @@
       if (card.timeframe !== tf) return; // el usuario cambió mientras tanto
       if (Array.isArray(j.candles)) {
         card.candles = j.candles;
-        drawChart(card.canvas, chartData(card));
+        redraw(card);
       }
     } catch (err) {
       /* dejamos las velas que ya teníamos */
@@ -143,8 +165,8 @@
       renderBook(card, d.book, d.ticker);
       renderSignals(card, d.signals || {});
       // El gráfico usa las velas de la temporalidad elegida (api/candles), con
-      // el precio en vivo del SSE sobre la última vela.
-      drawChart(card.canvas, chartData(card));
+      // el precio en vivo del SSE sobre la última vela, más el overlay SMC.
+      redraw(card);
     });
   }
 
@@ -240,7 +262,7 @@
   }
 
   // --- Gráfico de velas (canvas, sin librerías) ----------------------
-  function drawChart(canvas, candles) {
+  function drawChart(canvas, candles, smc) {
     const dpr = window.devicePixelRatio || 1;
     const cssW = canvas.clientWidth || 600;
     const cssH = canvas.clientHeight || 240;
@@ -284,6 +306,9 @@
       ctx.fillText(fmtPrice(p), padL + plotW + 6, yy);
     }
 
+    // --- Overlay SMC (contexto, detrás de las velas) ------------------
+    if (smc) drawSMC(ctx, smc, { padL, padT, plotW, plotH, y, hi, lo });
+
     // Velas
     const cw = Math.max(1.5, (plotW / data.length) * 0.62);
     data.forEach((c, i) => {
@@ -313,6 +338,87 @@
     ctx.fillRect(padL + plotW, yL - 8, padR - 6, 16);
     ctx.fillStyle = "#0f1117";
     ctx.fillText(fmtPrice(lastC), padL + plotW + 4, yL);
+  }
+
+  // --- Overlay SMC sobre el gráfico ----------------------------------
+  function drawSMC(ctx, smc, d) {
+    const { padL, padT, plotW, plotH, y } = d;
+    const top = padT, bot = padT + plotH, right = padL + plotW;
+    const clamp = (v) => Math.max(top, Math.min(bot, v));
+    ctx.font = "9px -apple-system, sans-serif";
+    ctx.textBaseline = "alphabetic";
+
+    // Premium / discount + equilibrio 50%.
+    const rng = smc.range;
+    if (rng && rng.eq) {
+      const yEq = y(rng.eq);
+      if (yEq > top && yEq < bot) {
+        ctx.fillStyle = "rgba(234,57,67,0.05)"; ctx.fillRect(padL, top, plotW, yEq - top);     // premium
+        ctx.fillStyle = "rgba(22,199,132,0.05)"; ctx.fillRect(padL, yEq, plotW, bot - yEq);     // discount
+        ctx.strokeStyle = "rgba(162,155,254,0.55)"; ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(padL, yEq); ctx.lineTo(right, yEq); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = "#a29bfe"; ctx.fillText("EQ 50%", padL + 3, yEq - 3);
+      }
+      // Liquidez: Strong High / Weak Low.
+      [["strong_high", "Strong High · Liquidez", "#ea3943"],
+       ["weak_low", "Weak Low · Liquidez", "#16c784"]].forEach(([k, lbl, col]) => {
+        const p = rng[k]; if (!p) return;
+        const yy = y(p); if (yy <= top || yy >= bot) return;
+        ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.setLineDash([5, 4]);
+        ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(right, yy); ctx.stroke();
+        ctx.setLineDash([]); ctx.globalAlpha = 1;
+        ctx.fillStyle = col; ctx.fillText(lbl, padL + 3, yy - 3);
+      });
+    }
+
+    // FVGs sin rellenar (imbalances) — bandas tenues.
+    (smc.fvgs || []).filter((f) => !f.filled).forEach((f) => {
+      const a = clamp(y(f.hi)), b = clamp(y(f.lo));
+      if (Math.abs(b - a) < 0.5) return;
+      ctx.fillStyle = f.bullish ? "rgba(108,92,231,0.12)" : "rgba(245,166,35,0.12)";
+      ctx.fillRect(right - plotW * 0.35, Math.min(a, b), plotW * 0.35, Math.abs(b - a));
+    });
+
+    // Cajas de POI (order blocks). Verde = descuento/long, rojo = premium/short.
+    (smc.pois || []).forEach((poi) => {
+      const a = y(poi.hi), b = y(poi.lo);
+      const t = Math.min(a, b), bt = Math.max(a, b);
+      if (bt < top || t > bot) return; // fuera de vista
+      const ct = clamp(t), cb = clamp(bt);
+      const long = poi.dir === "long";
+      const base = long ? "22,199,132" : "234,57,67";
+      ctx.fillStyle = `rgba(${base},${poi.valid ? 0.14 : 0.05})`;
+      ctx.fillRect(padL, ct, plotW, cb - ct);
+      ctx.strokeStyle = `rgba(${base},${poi.valid ? 0.7 : 0.3})`;
+      ctx.setLineDash(poi.valid ? [] : [3, 3]);
+      ctx.strokeRect(padL, ct, plotW, cb - ct);
+      ctx.setLineDash([]);
+      ctx.fillStyle = long ? "#16c784" : "#ea3943";
+      ctx.fillText(`POI ${poi.tf} ${poi.valid ? "✓" : "✕"}`, padL + 4, ct + 9);
+    });
+  }
+
+  // --- Panel "POIs activos" ------------------------------------------
+  function renderSMCPanel(card) {
+    const el = card.node.querySelector(".smc-list");
+    if (!el) return;
+    const pois = (card.smc && card.smc.active_pois) || [];
+    if (!pois.length) {
+      el.innerHTML = '<div class="smc-empty">Sin POIs válidos cerca del precio ahora.</div>';
+      return;
+    }
+    el.innerHTML = pois.map((p) => {
+      const zona = p.discount ? "descuento" : "premium";
+      const cls = p.discount ? "discount" : "premium";
+      const dist = (p.dist_pct > 0 ? "+" : "") + p.dist_pct + "%";
+      const here = p.in_zone ? '<span class="smc-here">● en zona</span>' : "";
+      return `<div class="smc-poi ${cls}">
+        <span class="smc-tf">POI ${p.tf}</span>
+        <span class="smc-range">${fmtPrice(p.lo)}–${fmtPrice(p.hi)}</span>
+        <span class="smc-zone">${zona}</span>
+        <span class="smc-dist">${dist}</span>${here}
+      </div>`;
+    }).join("");
   }
 
   // Redibuja los gráficos al cambiar el tamaño de la ventana.
@@ -360,6 +466,28 @@
       pollOnce();
       setInterval(pollOnce, 3000);
     }
+    setupAlerts();
+  }
+
+  // --- Alertas push (reusa el web push ya cableado) ------------------
+  function setupAlerts() {
+    const btn = document.getElementById("alert-btn");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      if (!window.NexusPush) { btn.textContent = "🔕 Push no soportado"; return; }
+      btn.disabled = true;
+      btn.textContent = "Activando…";
+      try {
+        await window.NexusPush.activar();
+        btn.classList.add("on");
+        btn.textContent = "🔔 Alertas activas";
+      } catch (err) {
+        btn.textContent = "🔕 " + (err && err.message ? err.message : "no se pudo activar");
+        setTimeout(() => { btn.textContent = "🔔 Alertas SMC"; btn.disabled = false; }, 4000);
+        return;
+      }
+      btn.disabled = false;
+    });
   }
 
   init();
