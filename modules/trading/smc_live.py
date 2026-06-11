@@ -20,9 +20,13 @@ from typing import Dict, List
 from . import smc
 from . import strategies
 
-PIV = 2
+PIV = 2          # pivote fino para detectar FVG / order blocks (POIs)
 DISP = 1.0
-POI_TFS = ["1D", "4h", "1h"]   # temporalidades de detección de POIs (Crypto.com)
+# Pivote para el DEALING RANGE (Strong High / Weak Low) y los niveles Weak/Strong:
+# más grande → swings mayores, alineado con el indicador de Bitcoin Traders Academy
+# que Hugo ve en BTCUSDT.P 15m (lookback 10, calibrado contra sus niveles).
+RANGE_PIV = 10
+POI_TFS = ["1D", "4h", "1h"]   # temporalidades de detección de POIs
 
 
 def _last_confirmed(points, n):
@@ -38,19 +42,21 @@ def _last_confirmed(points, n):
 
 
 def _range(candles) -> Dict:
-    """Dealing range = swing alto (Strong High) y swing bajo (Weak Low) recientes,
-    con equilibrio al 50%."""
-    n = len(candles)
-    sh, sl = smc.swing_points(candles, 3)
-    hi = _last_confirmed(sh, n)
-    lo = _last_confirmed(sl, n)
-    if not hi or not lo:
+    """Dealing range = el swing alto MÁS ALTO (Strong High) y el swing bajo MÁS BAJO
+    (Weak Low) de la ventana visible, con equilibrio al 50%. Esto bracketa la
+    estructura mayor, igual que el indicador de Bitcoin Traders Academy (no el
+    último swing pequeño). Calibrado contra BTCUSDT.P 15m con RANGE_PIV=10 y
+    candle_count≈400 → Strong High/Weak Low cercanos a los que ve Hugo."""
+    sh, sl = smc.swing_points(candles, RANGE_PIV)
+    if not sh or not sl:
         # Respaldo: extremos de las últimas velas.
         window = candles[-60:]
         h = max(c["h"] for c in window)
         l = min(c["l"] for c in window)
         return {"strong_high": h, "weak_low": l, "eq": (h + l) / 2,
                 "strong_high_t": window[-1]["t"], "weak_low_t": window[0]["t"]}
+    hi = max(sh, key=lambda x: x["price"])
+    lo = min(sl, key=lambda x: x["price"])
     return {"strong_high": hi["price"], "weak_low": lo["price"],
             "eq": (hi["price"] + lo["price"]) / 2,
             "strong_high_t": candles[hi["idx"]]["t"],
@@ -111,7 +117,7 @@ def _levels(sel_candles, rng, n) -> List[Dict]:
     """Etiqueta los swings recientes como Weak/Strong y su % en el dealing range.
     Weak = liquidez AÚN no barrida (probable objetivo). Strong = ya barrida/defendida.
     % = posición del nivel dentro del rango (0% = Weak Low, 100% = Strong High)."""
-    sh, sl = smc.swing_points(sel_candles, 3)
+    sh, sl = smc.swing_points(sel_candles, RANGE_PIV)
     rlo = rng["weak_low"] if rng else None
     rhi = rng["strong_high"] if rng else None
     valid_range = rlo is not None and rhi is not None and rhi > rlo

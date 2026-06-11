@@ -21,6 +21,7 @@ import time
 
 from core.module_base import NexusModule
 from . import cryptocom
+from . import binance
 from . import smc_live
 
 _BACKTEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtest_results.json")
@@ -38,14 +39,15 @@ class TradingModule(NexusModule):
         super().__init__(context)
         cfg = self.config
         self.instruments = cfg.get("instruments", [
-            {"name": "BTC_USDT", "label": "BTC/USDT"},
-            {"name": "ETH_USDT", "label": "ETH/USDT"},
+            {"name": "BTC_USDT", "label": "BTC/USDT", "binance": "BTCUSDT", "market": "futures"},
+            {"name": "ETH_USDT", "label": "ETH/USDT", "binance": "ETHUSDT", "market": "futures"},
         ])
+        self._inst_by_name = {i["name"]: i for i in self.instruments}
         self.poll_interval = int(cfg.get("poll_interval_seconds", 2))
         self.candle_refresh_every = int(cfg.get("candle_refresh_every", 6))
         self.book_depth = int(cfg.get("book_depth", 12))
         self.candle_timeframe = cfg.get("candle_timeframe", "1m")
-        self.candle_count = int(cfg.get("candle_count", 200))
+        self.candle_count = int(cfg.get("candle_count", 400))
 
         # Temporalidades que ofrece el selector del gráfico. Son los valores que
         # acepta el parámetro `timeframe` de la API de candlestick de Crypto.com
@@ -268,8 +270,16 @@ class TradingModule(NexusModule):
             entry = self._chart_cache.get(key)
             if entry and now - entry["ts"] < self._chart_ttl(timeframe):
                 return entry["candles"]
-        # Fuera del lock: la llamada de red puede tardar.
-        candles = cryptocom.get_candles(instrument, timeframe, self.candle_count)
+        # Fuente de velas/estructura: Binance si el instrumento lo configura (para
+        # que el gráfico y los swings coincidan con lo que Hugo ve en BTCUSDT.P),
+        # si no Crypto.com. El ticker/orderbook siguen viniendo de Crypto.com.
+        inst = self._inst_by_name.get(instrument, {})
+        if inst.get("binance"):
+            candles = binance.recent_klines(inst["binance"], timeframe,
+                                            limit=self.candle_count,
+                                            market=inst.get("market", "futures"))
+        else:
+            candles = cryptocom.get_candles(instrument, timeframe, self.candle_count)
         with self._chart_lock:
             self._chart_cache[key] = {"candles": candles, "ts": now}
         return candles

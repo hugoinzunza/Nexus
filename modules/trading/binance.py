@@ -17,8 +17,31 @@ import urllib.error
 import urllib.request
 
 BASE_URL = "https://api.binance.com/api/v3/klines"
+FUTURES_URL = "https://fapi.binance.com/fapi/v1/klines"  # perpetuo USDⓈ-M (BTCUSDT.P)
 TIMEOUT = 20
 MAX_LIMIT = 1000  # tope de Binance por petición
+
+# Mapeo de la temporalidad de la UI al intervalo de Binance (Binance usa "1d").
+UI_TO_BINANCE = {"1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m",
+                 "1h": "1h", "2h": "2h", "4h": "4h", "6h": "6h", "12h": "12h",
+                 "1D": "1d", "1d": "1d", "1W": "1w", "1M": "1M"}
+
+
+def recent_klines(symbol: str, ui_timeframe: str, limit: int = 300, market: str = "futures") -> list:
+    """Velas recientes de Binance (sin caché, para el gráfico/estructura en vivo).
+
+    market="futures" usa el perpetuo USDⓈ-M (fapi, lo que Hugo ve como BTCUSDT.P);
+    "spot" usa api/v3. Devuelve [{t,o,h,l,c,v}] (t en ms, más antigua → más reciente).
+    """
+    interval = UI_TO_BINANCE.get(ui_timeframe, ui_timeframe)
+    base = FUTURES_URL if market == "futures" else BASE_URL
+    url = f"{base}?symbol={symbol}&interval={interval}&limit={min(limit, MAX_LIMIT)}"
+    rows = _http_get_json(url)
+    out = []
+    for r in rows:
+        out.append({"t": int(r[0]), "o": float(r[1]), "h": float(r[2]),
+                    "l": float(r[3]), "c": float(r[4]), "v": float(r[5])})
+    return out
 
 # Milisegundos por vela según el intervalo (para paginar y validar).
 INTERVAL_MS = {
