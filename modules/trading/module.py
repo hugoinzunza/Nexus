@@ -43,6 +43,7 @@ class TradingModule(NexusModule):
             {"name": "ETH_USDT", "label": "ETH/USDT", "binance": "ETHUSDT", "market": "futures"},
         ])
         self._inst_by_name = {i["name"]: i for i in self.instruments}
+        self._binance_blocked_until = 0.0   # geo-block de Binance (HTTP 451) recordado
         self.poll_interval = int(cfg.get("poll_interval_seconds", 2))
         self.candle_refresh_every = int(cfg.get("candle_refresh_every", 6))
         self.book_depth = int(cfg.get("book_depth", 12))
@@ -271,14 +272,22 @@ class TradingModule(NexusModule):
             if entry and now - entry["ts"] < self._chart_ttl(timeframe):
                 return entry["candles"]
         # Fuente de velas/estructura: Binance si el instrumento lo configura (para
-        # que el gráfico y los swings coincidan con lo que Hugo ve en BTCUSDT.P),
-        # si no Crypto.com. El ticker/orderbook siguen viniendo de Crypto.com.
+        # que el gráfico y los swings coincidan con lo que Hugo ve en BTCUSDT.P).
+        # Pero Binance bloquea por geo a Railway (HTTP 451); si falla, caemos a
+        # Crypto.com y recordamos el bloqueo 5 min para no reintentar en cada carga.
+        # El ticker/orderbook siempre vienen de Crypto.com.
         inst = self._inst_by_name.get(instrument, {})
-        if inst.get("binance"):
-            candles = binance.recent_klines(inst["binance"], timeframe,
-                                            limit=self.candle_count,
-                                            market=inst.get("market", "futures"))
-        else:
+        candles = None
+        if inst.get("binance") and time.time() > self._binance_blocked_until:
+            try:
+                candles = binance.recent_klines(inst["binance"], timeframe,
+                                                limit=self.candle_count,
+                                                market=inst.get("market", "futures"))
+            except Exception as exc:  # noqa: BLE001 - geo-block u otra falla de red
+                self._binance_blocked_until = time.time() + 300
+                self.context.log(f"trading: Binance no disponible ({type(exc).__name__}), "
+                                 "uso Crypto.com 5 min")
+        if candles is None:
             candles = cryptocom.get_candles(instrument, timeframe, self.candle_count)
         with self._chart_lock:
             self._chart_cache[key] = {"candles": candles, "ts": now}

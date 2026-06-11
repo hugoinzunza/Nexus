@@ -32,11 +32,16 @@ def recent_klines(symbol: str, ui_timeframe: str, limit: int = 300, market: str 
 
     market="futures" usa el perpetuo USDⓈ-M (fapi, lo que Hugo ve como BTCUSDT.P);
     "spot" usa api/v3. Devuelve [{t,o,h,l,c,v}] (t en ms, más antigua → más reciente).
+
+    Una sola petición, SIN reintentos: si falla (p.ej. HTTP 451 geo-block desde
+    Railway), levanta enseguida para caer rápido a otra fuente.
     """
     interval = UI_TO_BINANCE.get(ui_timeframe, ui_timeframe)
     base = FUTURES_URL if market == "futures" else BASE_URL
     url = f"{base}?symbol={symbol}&interval={interval}&limit={min(limit, MAX_LIMIT)}"
-    rows = _http_get_json(url)
+    req = urllib.request.Request(url, headers={"User-Agent": "Nexus-live/1.0"})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        rows = json.load(resp)
     out = []
     for r in rows:
         out.append({"t": int(r[0]), "o": float(r[1]), "h": float(r[2]),
