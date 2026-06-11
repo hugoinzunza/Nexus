@@ -1,0 +1,7 @@
+# Núcleo web de Nexus — FastAPI + uvicorn (alineado con apps/proteq-hub de ClaudeOS).
+# El módulo de trading usa solo la librería estándar (urllib) para Crypto.com,
+# así que aquí va únicamente lo del núcleo HTTP y el web push (alertas a futuro).
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+# Web push (las alertas se implementan más adelante; dejamos el patrón listo).
+pywebpush==1.14.1

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Identificador del servicio. Debe coincidir con el nombre del archivo. -->
+    <key>Label</key>
+    <string>com.hugo.nexus</string>
+
+    <!--
+      Comando a ejecutar: uvicorn dentro del venv del proyecto.
+      AJUSTA las rutas si clonaste Nexus en otra carpeta.
+    -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/hugh/Nexus/.venv/bin/uvicorn</string>
+        <string>core.app:app</string>
+        <string>--host</string>
+        <string>0.0.0.0</string>
+        <string>--port</string>
+        <string>8800</string>
+    </array>
+
+    <!-- Carpeta del proyecto (para que encuentre core/, modules/, config/). -->
+    <key>WorkingDirectory</key>
+    <string>/Users/hugh/Nexus</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>8800</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Arranca al iniciar sesión y se mantiene vivo 24/7. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Si se cae, espera 10s antes de reintentar (evita bucles rápidos). -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Logs (revisa estos archivos si algo falla). -->
+    <key>StandardOutPath</key>
+    <string>/Users/hugh/Nexus/logs/nexus.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/hugh/Nexus/logs/nexus.err.log</string>
+</dict>
+</plist>

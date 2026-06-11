@@ -1,0 +1,15 @@
+# Build de Railway con Nixpacks (sin Dockerfile).
+# Nexus no necesita Chromium ni WeasyPrint: solo Python + las libs de
+# requirements.txt (FastAPI, uvicorn, pywebpush). Mucho más liviano que el ERP.
+
+[phases.setup]
+nixPkgs = ["python311", "gcc", "libffi"]
+
+[phases.install]
+cmds = [
+  "python -m venv /opt/venv",
+  "source /opt/venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt"
+]
+
+[start]
+cmd = "uvicorn core.app:app --host 0.0.0.0 --port $PORT"

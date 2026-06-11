@@ -1,28 +1,30 @@
-"""Punto de entrada de Nexus.
+"""El hub de Nexus: ciclo de vida de los módulos y estado del sistema.
 
-Carga la configuración, descubre y arranca los módulos, levanta el servidor
-HTTP y muestra la página de inicio (el "hub") que lista todos los módulos.
+Antes esta clase también levantaba un servidor HTTP propio (http.server). Ahora
+el servidor es FastAPI + uvicorn (ver `core/app.py`); el hub se ocupa solo de:
 
-Se ejecuta con:  python3 -m core.hub   (o usando el script ./nexus)
+  - cargar la configuración,
+  - descubrir, arrancar y detener los módulos,
+  - exponer el estado de salud,
+  - renderizar la página de inicio (el "landing" con las tarjetas).
+
+El núcleo sigue siendo chico y estable; la funcionalidad vive en `modules/`.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import signal
 import sys
-import time
 from datetime import datetime
 
 # Aseguramos que la raíz del proyecto esté en sys.path para poder importar
-# `core` y `modules` sin importar desde dónde se ejecute.
+# `core` y `modules` sin importar desde dónde se ejecute uvicorn.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from core.module_loader import load_modules
-from core.server import NexusHTTPServer, NexusRequestHandler
 
 
 def log(message: str) -> None:
@@ -33,8 +35,7 @@ def log(message: str) -> None:
 class Hub:
     def __init__(self, config: dict):
         self.config = config
-        self.host = config.get("host", "127.0.0.1")
-        self.port = int(config.get("port", 8800))
+        self.port = int(os.environ.get("PORT", config.get("port", 8800)))
         self.modules = []
         self.modules_by_slug = {}
         self.started_at = datetime.now()
@@ -52,37 +53,19 @@ class Hub:
             except Exception as exc:  # noqa: BLE001
                 log(f"⚠️  el módulo '{module.slug}' falló al arrancar: {exc}")
 
+        log("─" * 52)
+        log(f"🌐 Nexus listo · {len(self.modules)} módulo(s) cargado(s)")
+        for m in self.modules:
+            log(f"   {m.icon}  {m.title:<16} → /m/{m.slug}/")
+        log("─" * 52)
+
     def shutdown(self) -> None:
         for module in self.modules:
             try:
                 module.stop()
             except Exception:  # noqa: BLE001
                 pass
-
-    # ------------------------------------------------------------------
-    def serve_forever(self) -> None:
-        httpd = NexusHTTPServer((self.host, self.port), NexusRequestHandler, self)
-
-        def handle_signal(signum, frame):  # noqa: ARG001
-            log("apagando Nexus…")
-            self.shutdown()
-            httpd.shutdown()
-
-        signal.signal(signal.SIGINT, handle_signal)
-        signal.signal(signal.SIGTERM, handle_signal)
-
-        url = f"http://{self.host}:{self.port}/"
-        log("─" * 52)
-        log(f"🌐 Nexus disponible en:  {url}")
-        for m in self.modules:
-            log(f"   {m.icon}  {m.title:<16} → {url}m/{m.slug}/")
-        log("─" * 52)
-        log("Presioná Ctrl+C para detener.")
-        try:
-            httpd.serve_forever()
-        finally:
-            httpd.server_close()
-            log("Nexus detenido. ¡Hasta la próxima!")
+        log("Nexus detenido. ¡Hasta la próxima!")
 
     # ------------------------------------------------------------------
     def health(self) -> dict:
@@ -115,14 +98,23 @@ _LANDING_TEMPLATE = """<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1117">
+  <meta name="description" content="Nexus · el hub personal de Hugo">
   <title>Nexus · Hub personal</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Nexus">
   <style>
     :root { --bg:#0f1117; --panel:#171a23; --line:#262b38; --text:#e6e9f0;
             --muted:#8b93a7; --accent:#6c5ce7; --accent2:#a29bfe; }
     * { box-sizing: border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-           background:var(--bg); color:var(--text); min-height:100vh; }
+           background:var(--bg); color:var(--text); min-height:100vh;
+           min-height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
     header { padding:48px 24px 16px; text-align:center; }
     .logo { font-size:42px; font-weight:800; letter-spacing:-1px;
             background:linear-gradient(90deg,var(--accent2),var(--accent));
@@ -152,8 +144,9 @@ _LANDING_TEMPLATE = """<!doctype html>
     {{CARDS}}
   </main>
   <footer>
-    Núcleo modular · agregá módulos en <code>modules/</code> · API de salud en <code>/health</code>
+    Núcleo modular · agrega módulos en <code>modules/</code> · API de salud en <code>/health</code>
   </footer>
+  <script src="/static/pwa.js" defer></script>
 </body>
 </html>"""
 
@@ -162,14 +155,3 @@ def load_config() -> dict:
     config_path = os.path.join(ROOT, "config", "nexus.json")
     with open(config_path, "r", encoding="utf-8") as fh:
         return json.load(fh)
-
-
-def main() -> None:
-    config = load_config()
-    hub = Hub(config)
-    hub.boot()
-    hub.serve_forever()
-
-
-if __name__ == "__main__":
-    main()

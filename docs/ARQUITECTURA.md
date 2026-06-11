@@ -2,20 +2,23 @@
 
 Nexus se divide en dos partes:
 
-- **El núcleo (`core/`)**: pequeño y estable. Sabe cargar módulos, enrutar
-  peticiones HTTP, servir archivos estáticos y manejar streams SSE. No conoce
-  nada sobre trading ni música.
+- **El núcleo (`core/`)**: pequeño y estable. Es una app **FastAPI** (servida
+  por **uvicorn**) que sabe cargar módulos, enrutar peticiones HTTP, servir
+  archivos estáticos y manejar streams SSE. No conoce nada sobre trading ni
+  música.
 - **Los módulos (`modules/`)**: cada uno es una funcionalidad enchufable.
   El núcleo los descubre, los arranca y los expone en `/m/<slug>/`.
 
 ## Flujo de arranque
 
-1. `./nexus` ejecuta `python3 -m core.hub`.
-2. `core/hub.py` lee `config/nexus.json`.
+1. `./nexus` (o `uvicorn core.app:app`) levanta el servidor FastAPI.
+2. En el evento de arranque (lifespan), `core/app.py` crea el `Hub`, que lee
+   `config/nexus.json`.
 3. `core/module_loader.py` recorre `config.modules` y, por cada módulo
    habilitado, importa `modules/<slug>/module.py` y llama a `get_module(context)`.
 4. El hub llama a `start()` en cada módulo (lanzan sus hilos de fondo).
-5. `core/server.py` levanta el servidor HTTP y empieza a atender.
+5. `core/app.py` enruta las peticiones: `/`, `/health`, los recursos de la PWA
+   y `/m/<slug>/...` hacia cada módulo (estáticos, API y SSE).
 
 ## El contrato de un módulo
 

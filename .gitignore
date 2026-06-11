@@ -16,3 +16,6 @@ config/local.json
 # Logs
 *.log
 logs/
+
+# Datos en runtime (suscripciones push, etc.)
+data/

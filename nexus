@@ -1,17 +1,27 @@
 #!/usr/bin/env bash
-# Lanzador de Nexus. Arranca el hub con un solo comando: ./nexus
+# Lanzador de Nexus para desarrollo local: ./nexus
 #
-# No necesita instalar nada: usa el Python 3 del sistema y solo su librería
-# estándar. Pensado para correr 24/7 en el Mac mini.
+# Levanta el núcleo FastAPI con uvicorn. Usa el venv (.venv) si existe; si no,
+# cae al python del sistema (asumiendo que instalaste las dependencias con
+# `pip install -r requirements.txt`).
+#
+# Pensado para correr 24/7 en el Mac mini (ver deploy/ para el autostart launchd).
 
 set -euo pipefail
 cd "$(dirname "$0")"
 
-PYTHON="${PYTHON:-python3}"
+PORT="${PORT:-8800}"
 
-if ! command -v "$PYTHON" >/dev/null 2>&1; then
-  echo "❌ No se encontró '$PYTHON'. Instalá Python 3 o definí la variable PYTHON." >&2
+# Preferimos el intérprete del venv si está disponible.
+if [ -x ".venv/bin/uvicorn" ]; then
+  exec .venv/bin/uvicorn core.app:app --host 0.0.0.0 --port "$PORT" --reload
+fi
+
+PYTHON="${PYTHON:-python3}"
+if ! "$PYTHON" -c "import uvicorn" >/dev/null 2>&1; then
+  echo "❌ Falta uvicorn/FastAPI. Crea el entorno e instala las dependencias:" >&2
+  echo "     python3 -m venv .venv && .venv/bin/pip install -r requirements.txt" >&2
   exit 1
 fi
 
-exec "$PYTHON" -m core.hub
+exec "$PYTHON" -m uvicorn core.app:app --host 0.0.0.0 --port "$PORT" --reload
