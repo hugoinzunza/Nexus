@@ -37,7 +37,7 @@ DATA_DIR = os.path.join(ROOT, "data")
 # Timeframe superior inmediato (para la estructura SMC) y la lista de TF superiores
 # para la confluencia multi-temporalidad (estrategia B). Todo con velas YA cerradas.
 HTF = {"15m": "1h", "1h": "4h", "4h": "1d"}
-HTF_OF = {"15m": ["1h", "4h"], "1h": ["4h", "1d"], "4h": ["1d"]}
+HTF_OF = {"15m": ["1h", "4h", "1d"], "1h": ["4h", "1d"], "4h": ["1d"]}
 
 
 def _have_tf(tf):

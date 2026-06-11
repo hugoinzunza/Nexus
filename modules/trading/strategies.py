@@ -195,6 +195,153 @@ def _ctx_runner(signal_fn, key):
     return run
 
 
+# --- SMC POI multi-TF (réplica de la LÓGICA inferida de un indicador de pago) --
+# REGLAS (deducidas de capturas, no es el código propietario):
+#   POI LONG válido = order block alcista (última vela bajista antes del impulso) que:
+#     1) viene de un BARRIDO de liquidez (toma un weak low previo),
+#     2) el impulso de salida deja un FVG con DISPLACEMENT (cuerpo > X·ATR),
+#     3) está en DESCUENTO (bajo el equilibrio 50% del dealing range),
+#     4) sigue SIN MITIGAR (el precio no volvió a tocarlo).
+#   POI SHORT simétrico en premium.
+# Multi-TF: se detectan POIs en 1D/4h/1h y la ENTRADA se gatilla en la TF base
+# (15m = scalp, 1h = swing) cuando el precio entra a un POI ya confirmado de una
+# TF superior (vela HTF YA CERRADA → t_conf = apertura + intervalo). Entrada en la
+# apertura de la vela siguiente. Opcional: confirmación de CHoCH en la TF de entrada.
+_POI_CACHE = {}
+_TRIG_CACHE = {}
+POI_TFS = ("1h", "4h", "1d")
+
+
+def _detect_pois(candles, piv, disp):
+    """Detecta POIs válidos en estas velas. Cada POI: {dir, lo, hi, stop, t_conf}
+    con t_conf = ms de CIERRE de la vela que lo confirma (anti-repintado)."""
+    key = (id(candles), piv, disp)
+    cached = _POI_CACHE.get(key)
+    if cached is not None:
+        return cached
+    n = len(candles)
+    pois = []
+    if n < 60:
+        _POI_CACHE[key] = pois
+        return pois
+    closes, highs, lows, _ = _ohlcv(candles)
+    opens = [c["o"] for c in candles]
+    atr = smc.atr(candles, ATR_LEN)
+    sh, sl = smc.swing_points(candles, piv)
+    last_sl = _recent_prices(sl, n)
+    last_sh = _recent_prices(sh, n)
+    interval = candles[1]["t"] - candles[0]["t"] if n > 1 else 0
+
+    for i in range(4, n):
+        a = atr[i - 1] or 0
+        if a <= 0:
+            continue
+        # POI LONG: FVG alcista en i (low[i] > high[i-2]) con displacement alcista.
+        if lows[i] > highs[i - 2] and closes[i - 1] > opens[i - 1] \
+                and abs(closes[i - 1] - opens[i - 1]) >= disp * a:
+            ob = next((k for k in range(i - 1, max(i - 6, -1), -1)
+                       if closes[k] < opens[k]), None)
+            if ob is not None and ob - 2 >= 0:
+                lo_win = min(lows[ob - 2:ob + 1])
+                ref = last_sl[ob - 2]
+                sh_p, sl_p = last_sh[i], last_sl[i]
+                if ref is not None and lo_win < ref and sh_p is not None and sl_p is not None:
+                    eq = (sh_p + sl_p) / 2
+                    if highs[ob] <= eq:   # OB en descuento
+                        pois.append({"dir": "long", "lo": lows[ob], "hi": highs[ob],
+                                     "stop": lo_win, "t_conf": candles[i]["t"] + interval})
+        # POI SHORT: FVG bajista en i (high[i] < low[i-2]) con displacement bajista.
+        if highs[i] < lows[i - 2] and closes[i - 1] < opens[i - 1] \
+                and abs(closes[i - 1] - opens[i - 1]) >= disp * a:
+            ob = next((k for k in range(i - 1, max(i - 6, -1), -1)
+                       if closes[k] > opens[k]), None)
+            if ob is not None and ob - 2 >= 0:
+                hi_win = max(highs[ob - 2:ob + 1])
+                ref = last_sh[ob - 2]
+                sh_p, sl_p = last_sh[i], last_sl[i]
+                if ref is not None and hi_win > ref and sh_p is not None and sl_p is not None:
+                    eq = (sh_p + sl_p) / 2
+                    if lows[ob] >= eq:   # OB en premium
+                        pois.append({"dir": "short", "lo": lows[ob], "hi": highs[ob],
+                                     "stop": hi_win, "t_conf": candles[i]["t"] + interval})
+    pois.sort(key=lambda x: x["t_conf"])
+    _POI_CACHE[key] = pois
+    return pois
+
+
+def _poi_triggers(candles, pois, confirm, piv, disp, max_age_ms):
+    """Recorre las velas base y devuelve disparos (j, dir, stop) al entrar a un POI
+    no mitigado. Cachea por (velas, confirm, piv, disp) porque rr no cambia los disparos."""
+    key = (id(candles), confirm, piv, disp, max_age_ms)
+    cached = _TRIG_CACHE.get(key)
+    if cached is not None:
+        return cached
+    n = len(candles)
+    closes, highs, lows, _ = _ohlcv(candles)
+    last_sh = last_sl = None
+    if confirm:
+        sh, sl = smc.swing_points(candles, piv)
+        last_sh, last_sl = _recent_prices(sh, n), _recent_prices(sl, n)
+    trig = []
+    pi = 0
+    active = []
+    for j in range(n - 1):
+        tj = candles[j]["t"]
+        while pi < len(pois) and pois[pi]["t_conf"] <= tj:
+            active.append(dict(pois[pi], used=False))
+            pi += 1
+        if not active:
+            continue
+        kept = []
+        for poi in active:
+            if poi["used"] or tj - poi["t_conf"] > max_age_ms:
+                continue
+            if poi["dir"] == "long" and lows[j] < poi["stop"]:
+                continue   # invalidado: rompió el stop sin entrar
+            if poi["dir"] == "short" and highs[j] > poi["stop"]:
+                continue
+            kept.append(poi)
+        active = kept[-40:]
+        for poi in active:
+            if poi["dir"] == "long" and lows[j] <= poi["hi"] and highs[j] >= poi["lo"]:
+                if confirm and (last_sh[j] is None or closes[j] <= last_sh[j]):
+                    continue   # exige CHoCH alcista (cierre rompe swing high)
+                trig.append((j, "long", poi["stop"]))
+                poi["used"] = True
+            elif poi["dir"] == "short" and highs[j] >= poi["lo"] and lows[j] <= poi["hi"]:
+                if confirm and (last_sl[j] is None or closes[j] >= last_sl[j]):
+                    continue
+                trig.append((j, "short", poi["stop"]))
+                poi["used"] = True
+    _TRIG_CACHE[key] = trig
+    return trig
+
+
+def _smc_poi_run(candles, params, ctx):
+    piv = params.get("piv", 2)
+    disp = params.get("disp_atr", 1.0)
+    confirm = params.get("confirm", False)
+    rr = params["rr"]
+    buf = params.get("stop_buffer", 0.0005)
+    max_age = params.get("poi_max_age_days", 30) * 86_400_000
+
+    # Fuentes de POI: TFs superiores + la base si es 1h/4h/1d.
+    sources = dict(ctx.get("htf") or {})
+    if ctx["timeframe"] in POI_TFS:
+        sources[ctx["timeframe"]] = candles
+    pois = []
+    for hc in sources.values():
+        pois.extend(_detect_pois(hc, piv, disp))
+    pois.sort(key=lambda x: x["t_conf"])
+
+    trig = _poi_triggers(candles, pois, confirm, piv, disp, max_age)
+    sig = []
+    for (j, d, stop) in trig:
+        stop = stop * (1 - buf) if d == "long" else stop * (1 + buf)
+        sig.append((j, d, stop, rr))
+    return engine.simulate(candles, sig, ctx["symbol"], ctx["timeframe"], "smc_poi_mtf")
+
+
 # ---------------------------------------------------------------------------
 # Momentum / tendencia
 # ---------------------------------------------------------------------------
@@ -376,6 +523,12 @@ STRATEGIES = [
         "grid": [{"piv": 5}, {"piv": 10}],
         "run": _signal_runner(_liq_grab_signals, "liq_grab"),
     },
+    {
+        "key": "smc_poi_mtf", "name": "SMC POI multi-TF (indicador de pago, replicado)", "family": "SMC",
+        "grid": [{"rr": 2.0, "confirm": False}, {"rr": 3.0, "confirm": False},
+                 {"rr": 2.0, "confirm": True}, {"rr": 3.0, "confirm": True}],
+        "run": _smc_poi_run,
+    },
 ]
 
 
@@ -403,4 +556,7 @@ def describe(key, params) -> str:
         return f"EMA 53/200 + MACD>0 + vol·1.5 + divergencia (lb {params['div_lb']})"
     if key == "liq_grab":
         return f"Barrido de pivote (sens {params['piv']}) · salida ATR"
+    if key == "smc_poi_mtf":
+        return (f"POI multi-TF (1D/4h/1h) · {params['rr']}R · "
+                f"{'con' if params.get('confirm') else 'sin'} confirmación CHoCH")
     return str(params)
