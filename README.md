@@ -225,10 +225,19 @@ Panel de estadísticas de tu trading real en Binance. **Solo lectura**: hace
 | `BINANCE_API_SECRET` | Secret de esa API key. |
 | `BINANCE_LOOKBACK_DAYS` | Opcional: días de historial a traer (por defecto 365). |
 
-> 🔒 **Seguridad:** crea la API key con permisos de **solo lectura** (sin trading
-> ni retiro) y, si puedes, restríngela por IP. Nexus lee las claves desde el
-> entorno; no las guarda, no las loguea y no las commitea. Sin claves, el panel
-> muestra una pantalla "Conecta tu Binance" y no se rompe.
+**🔒 Permisos de la API key (en Binance):**
+
+- ✅ **Enable Reading** — viene activado por defecto; cubre los balances y la
+  cuenta de **Spot**.
+- ✅ **Enable Futures** — necesario para leer **Futuros USDⓈ-M** (PnL, posiciones,
+  balance). En Binance **no existe un "solo lectura" separado para futuros**: se
+  habilita Futures. Nexus igual **nunca** envía órdenes, solo lee.
+- ⛔ **Enable Withdrawals** — déjalo **siempre desactivado**.
+
+Si puedes, restringe la key por IP. Nexus lee las claves desde el entorno; no las
+guarda, no las loguea y no las commitea. Sin claves, el panel muestra una pantalla
+"Conecta tu Binance" y no se rompe. Sin *Enable Futures*, el panel de futuros
+muestra un error de permisos pero el de Spot sigue funcionando.
 
 Vista: **http://127.0.0.1:8800/m/journal/** (o `…/m/journal/` en tu dominio de Railway).
 

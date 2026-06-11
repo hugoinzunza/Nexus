@@ -69,7 +69,8 @@
       tbl("by-weekday", ["Día", "Trades", "Win%", "PnL"], fut.by_weekday);
       drawHours($("hours"), fut.by_hour);
     } else {
-      $("summary").innerHTML = `<p class="bt-note">Futuros no disponibles: ${fut.error || "sin datos"}.</p>`;
+      $("summary").innerHTML =
+        `<p class="bt-note">Futuros no disponibles: ${fut.error || "sin datos"}.${hint(fut.error)}</p>`;
     }
 
     // Spot.
@@ -82,9 +83,24 @@
           h.value == null ? "—" : h.value.toLocaleString("es", { maximumFractionDigits: 2 })])
           : [["Sin holdings", "", ""]]);
     } else {
-      $("spot-total").innerHTML = `<span class="bt-note">Spot no disponible: ${sp.error || "sin datos"}.</span>`;
+      $("spot-total").innerHTML =
+        `<span class="bt-note">Spot no disponible: ${sp.error || "sin datos"}.${hint(sp.error)}</span>`;
       $("spot").innerHTML = "";
     }
+  }
+
+  // Pista accionable según el error de Binance.
+  function hint(err) {
+    const e = (err || "").toLowerCase();
+    if (e.includes("-2015") || e.includes("permission") || e.includes("invalid api")) {
+      return " <strong>Pista:</strong> suele ser permisos o IP. Para Futuros necesitas " +
+        "<strong>Enable Futures</strong>; para Spot, <strong>Enable Reading</strong>. " +
+        "Si la key está restringida por IP, agrega la IP del servidor.";
+    }
+    if (e.includes("-1021") || e.includes("timestamp") || e.includes("recvwindow")) {
+      return " <strong>Pista:</strong> el reloj del servidor está desfasado respecto a Binance.";
+    }
+    return "";
   }
 
   function card(k, v, cls) {

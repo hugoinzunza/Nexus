@@ -35,11 +35,21 @@
       <li><code>BINANCE_API_SECRET</code></li>
       <li><code>BINANCE_LOOKBACK_DAYS</code> <span class="muted">(opcional, por defecto 365)</span></li>
     </ul>
-    <p class="tip">
-      <strong>Importante por seguridad:</strong> crea una API key de
-      <strong>solo lectura</strong> (sin permisos de trading ni de retiro) y, si
-      puedes, restríngela por IP. Nexus solo necesita permisos de lectura.
-    </p>
+    <div class="tip">
+      <strong>Permisos de la API key (importante):</strong>
+      <ul class="perms">
+        <li><span class="ok">✅ Enable Reading</span> — viene activado por defecto;
+          cubre los balances y la cuenta de <strong>Spot</strong>.</li>
+        <li><span class="ok">✅ Enable Futures</span> — necesario para leer
+          <strong>Futuros USDⓈ-M</strong> (PnL, posiciones, balance). En Binance no
+          existe un "solo lectura" separado para futuros: se habilita Futures.
+          Nexus igual <strong>nunca</strong> envía órdenes, solo lee.</li>
+        <li><span class="bad">⛔ Enable Withdrawals</span> — déjalo
+          <strong>siempre desactivado</strong>. Nexus no lo necesita.</li>
+      </ul>
+      Si puedes, restringe la key por IP. Sin <em>Enable Futures</em>, el panel de
+      futuros mostrará un error de permisos (el de Spot igual funcionará).
+    </div>
     <p class="muted">Una vez configuradas, recarga esta página.</p>
   </section>
 
@@ -47,8 +57,10 @@
   <section id="error" class="card err" hidden>
     <h2>No se pudo leer la cuenta</h2>
     <p id="error-msg"></p>
-    <p class="muted">Revisa que la API key sea válida, de solo lectura, y con permisos
-       de Futuros/Spot según corresponda.</p>
+    <p class="muted">Revisa que la API key sea válida y con los permisos correctos:
+       <strong>Enable Reading</strong> (para Spot) y <strong>Enable Futures</strong>
+       (para Futuros USDⓈ-M). Si la restringiste por IP, confirma que incluye la IP
+       del servidor.</p>
   </section>
 
   <!-- Panel -->
