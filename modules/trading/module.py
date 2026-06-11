@@ -41,6 +41,19 @@ class TradingModule(NexusModule):
         self.candle_timeframe = cfg.get("candle_timeframe", "1m")
         self.candle_count = int(cfg.get("candle_count", 200))
 
+        # Temporalidades que ofrece el selector del gráfico. Son los valores que
+        # acepta el parámetro `timeframe` de la API de candlestick de Crypto.com
+        # (verificados: 1m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1D, 7D, 1M).
+        self.ui_timeframes = cfg.get("ui_timeframes", ["1m", "5m", "15m", "1h", "4h", "1D"])
+        self.ui_default_timeframe = cfg.get("ui_default_timeframe", "15m")
+        if self.ui_default_timeframe not in self.ui_timeframes:
+            self.ui_default_timeframe = self.ui_timeframes[0]
+
+        # Caché de velas por (instrumento, temporalidad). Evita golpear la API en
+        # cada cambio de temporalidad o con varios dispositivos abiertos a la vez.
+        self._chart_cache = {}
+        self._chart_lock = threading.Lock()
+
         # Estado compartido. Se reemplaza por referencia (atómico bajo el GIL),
         # así las lecturas desde otros hilos siempre ven una foto consistente.
         self._state = {
@@ -146,6 +159,32 @@ class TradingModule(NexusModule):
             "book_imbalance": round(book_imbalance, 1),
         }
 
+    # --- Velas bajo demanda (selector de temporalidad) -----------------
+    # Segundos que dura una vela de cada temporalidad (para la caché).
+    _TF_SECONDS = {
+        "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200,
+        "4h": 14400, "6h": 21600, "12h": 43200, "1D": 86400, "7D": 604800, "1M": 2592000,
+    }
+
+    def _chart_ttl(self, timeframe: str) -> float:
+        """Cuánto sirve la caché antes de volver a pedir velas. Más corto en
+        temporalidades chicas (para que se vean frescas), acotado a 15s."""
+        secs = self._TF_SECONDS.get(timeframe, 60)
+        return max(2.0, min(secs / 8.0, 15.0))
+
+    def _candles_cached(self, instrument: str, timeframe: str) -> list:
+        key = (instrument, timeframe)
+        now = time.time()
+        with self._chart_lock:
+            entry = self._chart_cache.get(key)
+            if entry and now - entry["ts"] < self._chart_ttl(timeframe):
+                return entry["candles"]
+        # Fuera del lock: la llamada de red puede tardar.
+        candles = cryptocom.get_candles(instrument, timeframe, self.candle_count)
+        with self._chart_lock:
+            self._chart_cache[key] = {"candles": candles, "ts": now}
+        return candles
+
     # --- API HTTP ------------------------------------------------------
     def api(self, subpath, query):
         if subpath == "state":
@@ -156,9 +195,34 @@ class TradingModule(NexusModule):
                 "instruments": self.instruments,
                 "poll_interval": self.poll_interval,
                 "timeframe": self.candle_timeframe,
+                "timeframes": self.ui_timeframes,
+                "default_timeframe": self.ui_default_timeframe,
+            }, ensure_ascii=False).encode("utf-8")
+            return (200, "application/json; charset=utf-8", body)
+        if subpath == "candles":
+            instrument = query.get("instrument", "")
+            timeframe = query.get("timeframe", self.ui_default_timeframe)
+            known = {i["name"] for i in self.instruments}
+            if instrument not in known:
+                return self._json_error(400, "instrumento no permitido")
+            if timeframe not in self.ui_timeframes:
+                return self._json_error(400, "temporalidad no válida")
+            try:
+                candles = self._candles_cached(instrument, timeframe)
+            except Exception as exc:  # noqa: BLE001
+                return self._json_error(502, f"no se pudieron obtener las velas: {exc}")
+            body = json.dumps({
+                "instrument": instrument,
+                "timeframe": timeframe,
+                "candles": candles,
             }, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)
         return None
+
+    @staticmethod
+    def _json_error(status: int, message: str):
+        body = json.dumps({"error": message}, ensure_ascii=False).encode("utf-8")
+        return (status, "application/json; charset=utf-8", body)
 
     def sse(self, subpath, query):
         if subpath != "stream":

@@ -149,7 +149,9 @@ Dashboard web que muestra, para cada instrumento (por defecto **BTC/USDT** y
 
 - **Precio en vivo** con variación 24h y parpadeo verde/rojo en cada cambio.
 - **Estadísticas**: máximo/mínimo 24h, mejor bid/ask, volumen.
-- **Gráfico de velas** (OHLCV) dibujado en canvas, sin librerías externas.
+- **Gráfico de velas** (OHLCV) dibujado en canvas, sin librerías externas, con
+  **selector de temporalidad por par** (1m, 5m, 15m, 1h, 4h, 1D): al cambiarla,
+  el gráfico recarga las velas en esa resolución desde Crypto.com.
 - **Libro de órdenes** con barras de profundidad y el spread.
 - **Señales** (semilla de inteligencia, todo informativo):
   - Posición dentro del rango del día (0–100%).

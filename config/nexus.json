@@ -9,6 +9,8 @@
       "book_depth": 12,
       "candle_timeframe": "1m",
       "candle_count": 200,
+      "ui_timeframes": ["1m", "5m", "15m", "1h", "4h", "1D"],
+      "ui_default_timeframe": "15m",
       "instruments": [
         { "name": "BTC_USDT", "label": "BTC/USDT" },
         { "name": "ETH_USDT", "label": "ETH/USDT" }

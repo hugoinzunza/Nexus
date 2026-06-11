@@ -19,6 +19,12 @@
   // Guardamos el estado de cada tarjeta (nodo DOM + último precio) por símbolo.
   const cards = {};
 
+  // Temporalidades del selector. Se sobreescriben con lo que diga el backend
+  // (api/config); estos son el respaldo por si esa llamada falla.
+  let TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1D"];
+  let DEFAULT_TF = "15m";
+  const CANDLE_REFRESH_MS = 6000; // cada cuánto refrescamos las velas del par
+
   // --- Formateo ------------------------------------------------------
   function fmtPrice(n) {
     if (n >= 1000) return n.toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -50,9 +56,73 @@
     node.querySelector(".ic-symbol").textContent = label || symbol;
     container.appendChild(node);
     const canvas = node.querySelector(".chart");
-    const card = { node, canvas, lastPrice: null };
+    // Cada par recuerda su propia temporalidad y sus velas (estado en el front).
+    const card = { node, canvas, lastPrice: null, timeframe: DEFAULT_TF, candles: [] };
     cards[symbol] = card;
+
+    buildTimeframeSelector(symbol, card);
+    loadCandles(symbol, card); // primera carga
+    // Refresco periódico de las velas de la temporalidad activa.
+    card.refreshTimer = setInterval(() => loadCandles(symbol, card), CANDLE_REFRESH_MS);
+
     return card;
+  }
+
+  // --- Selector de temporalidad --------------------------------------
+  function buildTimeframeSelector(symbol, card) {
+    const sel = card.node.querySelector(".tf-selector");
+    if (!sel) return;
+    sel.innerHTML = "";
+    TIMEFRAMES.forEach((tf) => {
+      const btn = document.createElement("button");
+      btn.className = "tf-btn" + (tf === card.timeframe ? " active" : "");
+      btn.textContent = tf;
+      btn.dataset.tf = tf;
+      btn.setAttribute("aria-pressed", tf === card.timeframe ? "true" : "false");
+      btn.addEventListener("click", () => {
+        if (card.timeframe === tf) return;
+        card.timeframe = tf;
+        sel.querySelectorAll(".tf-btn").forEach((b) => {
+          const on = b.dataset.tf === tf;
+          b.classList.toggle("active", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        loadCandles(symbol, card); // recarga con la nueva resolución
+      });
+      sel.appendChild(btn);
+    });
+  }
+
+  // Pide al backend las velas del par en la temporalidad activa y redibuja.
+  async function loadCandles(symbol, card) {
+    const tf = card.timeframe;
+    try {
+      const r = await fetch(`api/candles?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}`);
+      if (!r.ok) return;
+      const j = await r.json();
+      if (card.timeframe !== tf) return; // el usuario cambió mientras tanto
+      if (Array.isArray(j.candles)) {
+        card.candles = j.candles;
+        drawChart(card.canvas, chartData(card));
+      }
+    } catch (err) {
+      /* dejamos las velas que ya teníamos */
+    }
+  }
+
+  // Combina las velas cargadas con el precio en vivo: la última vela y la línea
+  // de precio se mueven con cada tick del SSE, sin esperar el próximo refresco.
+  function chartData(card) {
+    const cs = card.candles;
+    if (!cs || !cs.length) return [];
+    if (card.lastPrice == null) return cs;
+    const out = cs.slice();
+    const last = Object.assign({}, out[out.length - 1]);
+    last.c = card.lastPrice;
+    last.h = Math.max(last.h, card.lastPrice);
+    last.l = Math.min(last.l, card.lastPrice);
+    out[out.length - 1] = last;
+    return out;
   }
 
   // --- Render principal ----------------------------------------------
@@ -72,7 +142,9 @@
       renderStats(card, d.ticker);
       renderBook(card, d.book, d.ticker);
       renderSignals(card, d.signals || {});
-      drawChart(card.canvas, d.candles || []);
+      // El gráfico usa las velas de la temporalidad elegida (api/candles), con
+      // el precio en vivo del SSE sobre la última vela.
+      drawChart(card.canvas, chartData(card));
     });
   }
 
@@ -270,11 +342,25 @@
     } catch (err) { setStatus("bad"); }
   }
 
-  // Arrancamos con SSE; además un polling lento de respaldo por si acaso.
-  if (window.EventSource) {
-    connectSSE();
-  } else {
-    pollOnce();
-    setInterval(pollOnce, 3000);
+  // Cargamos la config del módulo (temporalidades + default) y luego arrancamos
+  // la conexión en vivo. Si la config falla, usamos los valores por defecto.
+  async function init() {
+    try {
+      const cfg = await fetch("api/config").then((r) => r.json());
+      if (Array.isArray(cfg.timeframes) && cfg.timeframes.length) TIMEFRAMES = cfg.timeframes;
+      if (cfg.default_timeframe) DEFAULT_TF = cfg.default_timeframe;
+    } catch (err) {
+      /* nos quedamos con TIMEFRAMES/DEFAULT_TF por defecto */
+    }
+
+    // Arrancamos con SSE; además un polling lento de respaldo por si acaso.
+    if (window.EventSource) {
+      connectSSE();
+    } else {
+      pollOnce();
+      setInterval(pollOnce, 3000);
+    }
   }
+
+  init();
 })();
