@@ -27,6 +27,32 @@ INCOME_PATH = os.path.join(DATA_DIR, "journal_income.json")
 STABLES = {"USDT", "USDC", "BUSD", "FDUSD", "TUSD", "DAI", "USDP"}
 
 
+def _env_int(name: str, default: int) -> int:
+    """Lee una env var numérica de forma robusta: si está ausente, vacía, en
+    blanco o no es un entero válido, usa el default. Una variable mal seteada en
+    Railway (p.ej. BINANCE_LOOKBACK_DAYS="") NUNCA debe romper el módulo."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    raw = raw.strip()
+    if raw == "":
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_int(value, default: int) -> int:
+    """Igual que _env_int pero para valores que ya vienen de config/JSON."""
+    try:
+        if value is None or (isinstance(value, str) and value.strip() == ""):
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class JournalModule(NexusModule):
     slug = "journal"
     title = "Diario"
@@ -36,9 +62,10 @@ class JournalModule(NexusModule):
     def __init__(self, context):
         super().__init__(context)
         cfg = self.config
-        self.lookback_days = int(os.environ.get("BINANCE_LOOKBACK_DAYS",
-                                                cfg.get("lookback_days", 365)))
-        self.cache_ttl = int(cfg.get("cache_ttl_seconds", 180))
+        # Robusto ante env vars vacías o inválidas: caemos al default sin romper.
+        self.lookback_days = _env_int("BINANCE_LOOKBACK_DAYS",
+                                      _as_int(cfg.get("lookback_days"), 365))
+        self.cache_ttl = _as_int(cfg.get("cache_ttl_seconds"), 180)
         self._lock = threading.Lock()
         self._payload = None
         self._payload_ts = 0
