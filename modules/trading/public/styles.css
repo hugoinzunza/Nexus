@@ -79,6 +79,16 @@ body {
 /* Sin el libro al lado, el gráfico toma todo el ancho y más alto. */
 .chart { width: 100%; height: 460px; display: block; flex: 1 1 auto; min-height: 240px; }
 @media (max-width: 760px) { .chart { height: 360px; } }
+/* Contador de cierre de vela: pill en la esquina INFERIOR derecha del gráfico,
+   sobre el eje de tiempo y a la izquierda del eje de precios. Se ancla abajo para
+   no chocar con los toggles (que en móvil envuelven en 2 filas). Sin capturar clics. */
+.candle-timer { position: absolute; bottom: 36px; right: 64px; z-index: 4; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px;
+  background: rgba(15,17,23,0.82); border: 1px solid var(--line);
+  font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent2);
+  font-variant-numeric: tabular-nums; }
+.candle-timer .ct-ic { opacity: .8; }
+.chart-wrap.expanded .candle-timer { bottom: 44px; right: 70px; }
 .chart-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .ind-toggles, .lux-toggles { display: flex; gap: 4px; flex: 0 0 auto; padding-left: 8px;
   border-left: 1px solid var(--line); }

@@ -253,7 +253,7 @@
   // --- Indicadores (Vol / RSI / ADX) ---------------------------------
   // Estado global (mismo para todos los pares), recordado en localStorage.
   const IND_KEY = "nexus_trading_ind";
-  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: false, div: false };
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: false, div: false, slfixed: false };
   let indState = (() => {
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
@@ -389,7 +389,7 @@
   // Indicadores en panes (recrean series) y capas Lux (solo redibujan el primitive).
   const TOGGLE_GROUPS = {
     ".ind-toggles": [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]],
-    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."]],
+    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."], ["slfixed", "SL 1,5%"]],
   };
   const PANE_INDICATORS = new Set(["vol", "rsi", "adx"]);
 
@@ -407,6 +407,7 @@
           indState[k] = !indState[k];
           saveIndState();
           if (PANE_INDICATORS.has(k)) Object.values(cards).forEach((c) => buildIndicators(c));
+          else if (k === "slfixed") Object.values(cards).forEach((c) => loadSMC(c.symbol, c)); // recalcula el plan con el nuevo SL
           else Object.values(cards).forEach((c) => { computeRibbon(c); pushPrim(c); });
           refreshToggleUI();
         });
@@ -453,7 +454,7 @@
     node.querySelector(".ic-symbol").textContent = label || symbol;
     container.appendChild(node);
     const chartEl = node.querySelector(".chart");
-    const card = { node, chartEl, lastPrice: null, timeframe: DEFAULT_TF,
+    const card = { node, chartEl, symbol, lastPrice: null, timeframe: DEFAULT_TF,
                    candles: [], bars: [], smc: null, priceLines: [], fitted: false };
     cards[symbol] = card;
 
@@ -513,8 +514,9 @@
   // Pide el análisis SMC en vivo y lo proyecta como price lines + primitive.
   async function loadSMC(symbol, card) {
     const tf = card.timeframe;
+    const sl = indState.slfixed ? "fixed" : "structural";   // modo de SL del plan TP/SL
     try {
-      const r = await fetch(`api/smc?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}`);
+      const r = await fetch(`api/smc?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&sl=${sl}`);
       if (!r.ok) return;
       const j = await r.json();
       if (card.timeframe !== tf) return;
@@ -832,6 +834,29 @@
     } catch (err) { setStatus("bad"); }
   }
 
+  // --- Contador de cierre de vela (mm:ss / h:mm:ss) ------------------
+  // Los límites de vela se alinean al epoch UTC (1m/5m/15m/1h/4h/1D), así que el
+  // tiempo restante = duración_TF − (ahora_UTC mod duración_TF). Se ajusta solo al
+  // cambiar de temporalidad (lee card.timeframe en cada tick).
+  const TF_SECONDS = { "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600,
+    "2h": 7200, "4h": 14400, "6h": 21600, "12h": 43200, "1D": 86400, "7D": 604800 };
+  function fmtCountdown(s) {
+    s = Math.max(0, Math.floor(s));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const p = (n) => String(n).padStart(2, "0");
+    return h > 0 ? `${h}:${p(m)}:${p(sec)}` : `${p(m)}:${p(sec)}`;
+  }
+  function tickCountdowns() {
+    const nowS = Date.now() / 1000;
+    Object.values(cards).forEach((c) => {
+      const el = c.node && c.node.querySelector(".ct-val");
+      if (!el) return;
+      const dur = TF_SECONDS[c.timeframe];
+      if (!dur) { el.textContent = "—"; return; }
+      el.textContent = fmtCountdown(dur - (nowS % dur));
+    });
+  }
+
   // Cargamos la config del módulo (temporalidades + default) y luego arrancamos
   // la conexión en vivo. Si la config falla, usamos los valores por defecto.
   async function init() {
@@ -851,6 +876,8 @@
       setInterval(pollOnce, 3000);
     }
     setupAlerts();
+    tickCountdowns();
+    setInterval(tickCountdowns, 1000);   // contador de cierre de vela, en vivo
   }
 
   // --- Alertas push (reusa el web push ya cableado) ------------------

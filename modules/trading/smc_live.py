@@ -152,6 +152,8 @@ def _levels(sel_candles, rng, n) -> List[Dict]:
 
 # R:R mínimo para que un escenario valga la pena mostrarse (filtro 1:2).
 MIN_RR = 2.0
+# SL porcentual fijo (modo alternativo al SL estructural): 1,5% del precio de entrada.
+FIXED_SL_PCT = 0.015
 # Tolerancia para considerar que el precio ya está DENTRO de la zona (estado activo).
 TOUCH_TOL = 0.0015
 # Cap de distancia: solo planeamos POIs dentro del dealing range o a <= 5% del precio,
@@ -182,7 +184,7 @@ def _opposite_liquidity(levels, long, ref, rhi, rlo):
     return None
 
 
-def _tpsl(pois, levels, last_price, rng) -> Dict:
+def _tpsl(pois, levels, last_price, rng, sl_mode="structural") -> Dict:
     """Escenario de contexto (NO una orden ni recomendación automática).
 
     Dibuja el PLAN del POI válido en zona correcta MÁS CERCANO para poder PLANEAR la
@@ -190,10 +192,12 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
       - POI válido (✓, sin mitigar), en zona correcta del rango (descuento para largo,
         premium para corto) y CERCA (dentro del dealing range o <= 5% del precio),
       - Entrada = la zona del POI,
-      - SL = más allá del barrido que invalidaría el setup (stop del POI),
-      - TP = la siguiente liquidez SIN BARRER (Weak) en la dirección del trade y más
-        allá del precio actual; respaldo: el extremo del dealing range,
-      - filtro R:R real (dist entrada→TP / dist entrada→SL) >= 2.0 sobre ese TP.
+      - SL según `sl_mode`:
+          "structural" → más allá del barrido que invalidaría el setup (stop del POI),
+          "fixed"      → 1,5% fijo del precio de entrada.
+      - TP = la siguiente liquidez SIN BARRER (Weak) en la dirección del trade más allá
+        del precio; en modo fijo, si esa liquidez no da 2R, se usa el nivel 2R (~3%).
+      - filtro R:R real (dist entrada→TP / dist entrada→SL) >= 2.0.
     Estado: "activo" si el precio ya está dentro de la zona; "pendiente" (en
     vigilancia) si todavía no la toca. Devuelve None si no hay un plan que valga."""
     if not pois or not last_price:
@@ -224,18 +228,32 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
         return None
     cands.sort(key=lambda c: abs(c[2] - last_price))  # el más cercano = el próximo a vigilar
 
-    # 2) Del más cercano al más lejano: TP a la liquidez sin barrer y filtro R:R >= 2.
+    # 2) Del más cercano al más lejano: define SL (según modo), TP y filtro R:R >= 2.
+    fixed = sl_mode == "fixed"
     for p, long, mid in cands:
         entry = round(mid, 2)
-        sl = round(p["stop"], 2)
-        risk = abs(entry - sl)
+        if fixed:
+            risk = entry * FIXED_SL_PCT           # SL fijo 1,5% del precio de entrada
+            sl = round(entry - risk if long else entry + risk, 2)
+        else:
+            sl = round(p["stop"], 2)              # SL estructural (extremo del barrido)
+            risk = abs(entry - sl)
         if risk <= 0:
             continue
         ref = max(entry, last_price) if long else min(entry, last_price)
         target = _opposite_liquidity(levels, long, ref, rhi, rlo)
-        if not target:
-            continue
-        tp, tp_label = target
+        if fixed:
+            # TP = la liquidez opuesta si ya da >=2R; si no, el nivel 2R fijo (~3%).
+            tp = tp_label = None
+            if target and abs(target[0] - entry) / risk >= MIN_RR:
+                tp, tp_label = target
+            else:
+                tp = round(entry + 2 * risk if long else entry - 2 * risk, 2)
+                tp_label = "2R (SL 1,5%)"
+        else:
+            if not target:
+                continue
+            tp, tp_label = target
         rr = abs(tp - entry) / risk
         if rr < MIN_RR:
             continue                       # no llega a 2R → no vale como plan
@@ -250,7 +268,7 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
             "dir": p["dir"], "tf": p["tf"], "state": "activo" if active else "pendiente",
             "entry": entry, "entry_lo": round(p["lo"], 2), "entry_hi": round(p["hi"], 2),
             "sl": sl, "tp": tp, "rr": round(rr, 1), "tp_label": tp_label,
-            "dist_pct": p.get("dist_pct", 0.0),
+            "sl_mode": sl_mode, "dist_pct": p.get("dist_pct", 0.0),
         }
     return None
 
@@ -265,7 +283,8 @@ def active_pois(htf_map: Dict[str, list], last_price: float) -> List[Dict]:
     return out
 
 
-def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: str) -> Dict:
+def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: str,
+            sl_mode: str = "structural") -> Dict:
     """Construye el análisis SMC completo para el frontend."""
     result = {
         "timeframe": sel_tf,
@@ -290,5 +309,5 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
     result["active_pois"] = valids[:12]   # para el panel "POIs activos"
     # Capas estilo LuxAlgo (aditivas): niveles Weak/Strong con % y proyección TP/SL.
     result["levels"] = _levels(sel_candles, result["range"], len(sel_candles)) if sel_candles else []
-    result["tpsl"] = _tpsl(valids, result["levels"], last_price, result["range"])
+    result["tpsl"] = _tpsl(valids, result["levels"], last_price, result["range"], sl_mode)
     return result
