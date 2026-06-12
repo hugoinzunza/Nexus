@@ -831,7 +831,18 @@
   }
 
   // --- Render principal ----------------------------------------------
+  // Auto-actualización: si llega un deploy nuevo (cambia state.version), la
+  // página se recarga sola — la PWA abierta no vuelve a pedir app.js por sí
+  // misma y quedaba corriendo código viejo.
+  let appVersion = null;
+  function checkVersion(v) {
+    if (!v) return;
+    if (appVersion == null) { appVersion = v; return; }
+    if (v !== appVersion) window.location.reload();
+  }
+
   function render(state) {
+    checkVersion(state.version);
     if (state.upstream_ok) setStatus("ok");
     else if (Object.keys(state.instruments || {}).length) setStatus("bad");
 

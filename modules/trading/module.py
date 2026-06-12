@@ -27,6 +27,10 @@ from . import regime
 from .setups_store import SetupStore
 
 _MOD_DIR = os.path.dirname(os.path.abspath(__file__))
+# Versión del despliegue (commit de Railway o arranque del proceso): viaja en el
+# estado SSE para que las páginas ABIERTAS se recarguen solas tras un deploy
+# (la PWA no vuelve a pedir app.js mientras la pestaña siga viva).
+_APP_VERSION = (os.environ.get("RAILWAY_GIT_COMMIT_SHA") or str(int(time.time())))[:10]
 _BACKTEST_PATH = os.path.join(_MOD_DIR, "backtest_results.json")
 _POI_LAYERS_PATH = os.path.join(_MOD_DIR, "poi_layers_results.json")
 _SETUP_BT_PATH = os.path.join(_MOD_DIR, "setup_backtest_results.json")
@@ -146,6 +150,7 @@ class TradingModule(NexusModule):
 
             self._state = {
                 "updated": int(time.time() * 1000),
+                "version": _APP_VERSION,
                 "upstream_ok": ok,
                 "error": error,
                 "instruments": instruments_state,
