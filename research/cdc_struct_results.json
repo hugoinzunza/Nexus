@@ -1,0 +1,402 @@
+{
+ "params": {
+  "PIV": 2,
+  "DISP": 1.0,
+  "CDC_WINDOW": 16,
+  "RR_FIXED": 2.0,
+  "CDC_PIVS": [
+   2,
+   10
+  ],
+  "IS_FRACTION": 0.7,
+  "PAIRS": [
+   "BTCUSDT",
+   "ETHUSDT",
+   "SOLUSDT",
+   "BNBUSDT",
+   "XRPUSDT",
+   "ADAUSDT",
+   "DOGEUSDT"
+  ],
+  "BASE_TFS": [
+   "1h",
+   "15m"
+  ]
+ },
+ "tables": {
+  "1h": {
+   "piv2": {
+    "con_costos": {
+     "IS": {
+      "trades": 622,
+      "wins": 239,
+      "losses": 383,
+      "timeouts": 177,
+      "win_rate": 38.4,
+      "expectancy_R": -0.05,
+      "avg_win_R": 1.337,
+      "avg_loss_R": -0.915,
+      "profit_factor": 0.91,
+      "max_drawdown_R": 65.13,
+      "max_losing_streak": 16,
+      "total_R": -30.91
+     },
+     "OOS": {
+      "trades": 287,
+      "wins": 130,
+      "losses": 157,
+      "timeouts": 89,
+      "win_rate": 45.3,
+      "expectancy_R": 0.066,
+      "avg_win_R": 1.271,
+      "avg_loss_R": -0.932,
+      "profit_factor": 1.13,
+      "max_drawdown_R": 21.82,
+      "max_losing_streak": 7,
+      "total_R": 19.03
+     },
+     "ALL": {
+      "trades": 909,
+      "wins": 369,
+      "losses": 540,
+      "timeouts": 266,
+      "win_rate": 40.6,
+      "expectancy_R": -0.013,
+      "avg_win_R": 1.314,
+      "avg_loss_R": -0.92,
+      "profit_factor": 0.98,
+      "max_drawdown_R": 65.13,
+      "max_losing_streak": 16,
+      "total_R": -11.88
+     }
+    },
+    "sin_costos": {
+     "IS": {
+      "trades": 622,
+      "wins": 242,
+      "losses": 380,
+      "timeouts": 177,
+      "win_rate": 38.9,
+      "expectancy_R": -0.004,
+      "avg_win_R": 1.362,
+      "avg_loss_R": -0.874,
+      "profit_factor": 0.99,
+      "max_drawdown_R": 45.21,
+      "max_losing_streak": 16,
+      "total_R": -2.65
+     },
+     "OOS": {
+      "trades": 287,
+      "wins": 130,
+      "losses": 157,
+      "timeouts": 89,
+      "win_rate": 45.3,
+      "expectancy_R": 0.114,
+      "avg_win_R": 1.313,
+      "avg_loss_R": -0.878,
+      "profit_factor": 1.24,
+      "max_drawdown_R": 19.13,
+      "max_losing_streak": 7,
+      "total_R": 32.77
+     },
+     "ALL": {
+      "trades": 909,
+      "wins": 372,
+      "losses": 537,
+      "timeouts": 266,
+      "win_rate": 40.9,
+      "expectancy_R": 0.033,
+      "avg_win_R": 1.345,
+      "avg_loss_R": -0.876,
+      "profit_factor": 1.06,
+      "max_drawdown_R": 45.21,
+      "max_losing_streak": 16,
+      "total_R": 30.12
+     }
+    }
+   },
+   "piv10": {
+    "con_costos": {
+     "IS": {
+      "trades": 252,
+      "wins": 105,
+      "losses": 147,
+      "timeouts": 80,
+      "win_rate": 41.7,
+      "expectancy_R": 0.022,
+      "avg_win_R": 1.31,
+      "avg_loss_R": -0.897,
+      "profit_factor": 1.04,
+      "max_drawdown_R": 30.79,
+      "max_losing_streak": 13,
+      "total_R": 5.6
+     },
+     "OOS": {
+      "trades": 139,
+      "wins": 61,
+      "losses": 78,
+      "timeouts": 48,
+      "win_rate": 43.9,
+      "expectancy_R": -0.013,
+      "avg_win_R": 1.164,
+      "avg_loss_R": -0.933,
+      "profit_factor": 0.98,
+      "max_drawdown_R": 15.36,
+      "max_losing_streak": 7,
+      "total_R": -1.77
+     },
+     "ALL": {
+      "trades": 391,
+      "wins": 166,
+      "losses": 225,
+      "timeouts": 128,
+      "win_rate": 42.5,
+      "expectancy_R": 0.01,
+      "avg_win_R": 1.256,
+      "avg_loss_R": -0.91,
+      "profit_factor": 1.02,
+      "max_drawdown_R": 30.79,
+      "max_losing_streak": 13,
+      "total_R": 3.82
+     }
+    },
+    "sin_costos": {
+     "IS": {
+      "trades": 252,
+      "wins": 107,
+      "losses": 145,
+      "timeouts": 80,
+      "win_rate": 42.5,
+      "expectancy_R": 0.066,
+      "avg_win_R": 1.326,
+      "avg_loss_R": -0.863,
+      "profit_factor": 1.13,
+      "max_drawdown_R": 24.13,
+      "max_losing_streak": 13,
+      "total_R": 16.71
+     },
+     "OOS": {
+      "trades": 139,
+      "wins": 62,
+      "losses": 77,
+      "timeouts": 48,
+      "win_rate": 44.6,
+      "expectancy_R": 0.037,
+      "avg_win_R": 1.186,
+      "avg_loss_R": -0.889,
+      "profit_factor": 1.07,
+      "max_drawdown_R": 14.11,
+      "max_losing_streak": 7,
+      "total_R": 5.09
+     },
+     "ALL": {
+      "trades": 391,
+      "wins": 169,
+      "losses": 222,
+      "timeouts": 128,
+      "win_rate": 43.2,
+      "expectancy_R": 0.056,
+      "avg_win_R": 1.274,
+      "avg_loss_R": -0.872,
+      "profit_factor": 1.11,
+      "max_drawdown_R": 24.13,
+      "max_losing_streak": 13,
+      "total_R": 21.81
+     }
+    }
+   }
+  },
+  "15m": {
+   "piv2": {
+    "con_costos": {
+     "IS": {
+      "trades": 823,
+      "wins": 341,
+      "losses": 482,
+      "timeouts": 396,
+      "win_rate": 41.4,
+      "expectancy_R": -0.056,
+      "avg_win_R": 1.0,
+      "avg_loss_R": -0.802,
+      "profit_factor": 0.88,
+      "max_drawdown_R": 56.17,
+      "max_losing_streak": 15,
+      "total_R": -45.8
+     },
+     "OOS": {
+      "trades": 378,
+      "wins": 157,
+      "losses": 221,
+      "timeouts": 165,
+      "win_rate": 41.5,
+      "expectancy_R": -0.055,
+      "avg_win_R": 1.098,
+      "avg_loss_R": -0.874,
+      "profit_factor": 0.89,
+      "max_drawdown_R": 34.23,
+      "max_losing_streak": 10,
+      "total_R": -20.77
+     },
+     "ALL": {
+      "trades": 1201,
+      "wins": 498,
+      "losses": 703,
+      "timeouts": 561,
+      "win_rate": 41.5,
+      "expectancy_R": -0.055,
+      "avg_win_R": 1.031,
+      "avg_loss_R": -0.825,
+      "profit_factor": 0.89,
+      "max_drawdown_R": 83.01,
+      "max_losing_streak": 15,
+      "total_R": -66.57
+     }
+    },
+    "sin_costos": {
+     "IS": {
+      "trades": 823,
+      "wins": 361,
+      "losses": 462,
+      "timeouts": 396,
+      "win_rate": 43.9,
+      "expectancy_R": 0.011,
+      "avg_win_R": 1.005,
+      "avg_loss_R": -0.766,
+      "profit_factor": 1.03,
+      "max_drawdown_R": 34.21,
+      "max_losing_streak": 15,
+      "total_R": 8.91
+     },
+     "OOS": {
+      "trades": 378,
+      "wins": 169,
+      "losses": 209,
+      "timeouts": 165,
+      "win_rate": 44.7,
+      "expectancy_R": 0.023,
+      "avg_win_R": 1.085,
+      "avg_loss_R": -0.836,
+      "profit_factor": 1.05,
+      "max_drawdown_R": 17.01,
+      "max_losing_streak": 10,
+      "total_R": 8.79
+     },
+     "ALL": {
+      "trades": 1201,
+      "wins": 530,
+      "losses": 671,
+      "timeouts": 561,
+      "win_rate": 44.1,
+      "expectancy_R": 0.015,
+      "avg_win_R": 1.031,
+      "avg_loss_R": -0.788,
+      "profit_factor": 1.03,
+      "max_drawdown_R": 34.21,
+      "max_losing_streak": 15,
+      "total_R": 17.7
+     }
+    }
+   },
+   "piv10": {
+    "con_costos": {
+     "IS": {
+      "trades": 226,
+      "wins": 88,
+      "losses": 138,
+      "timeouts": 127,
+      "win_rate": 38.9,
+      "expectancy_R": -0.021,
+      "avg_win_R": 1.037,
+      "avg_loss_R": -0.695,
+      "profit_factor": 0.95,
+      "max_drawdown_R": 16.7,
+      "max_losing_streak": 9,
+      "total_R": -4.65
+     },
+     "OOS": {
+      "trades": 122,
+      "wins": 60,
+      "losses": 62,
+      "timeouts": 68,
+      "win_rate": 49.2,
+      "expectancy_R": 0.031,
+      "avg_win_R": 0.895,
+      "avg_loss_R": -0.806,
+      "profit_factor": 1.08,
+      "max_drawdown_R": 7.56,
+      "max_losing_streak": 6,
+      "total_R": 3.75
+     },
+     "ALL": {
+      "trades": 348,
+      "wins": 148,
+      "losses": 200,
+      "timeouts": 195,
+      "win_rate": 42.5,
+      "expectancy_R": -0.003,
+      "avg_win_R": 0.979,
+      "avg_loss_R": -0.729,
+      "profit_factor": 0.99,
+      "max_drawdown_R": 16.7,
+      "max_losing_streak": 9,
+      "total_R": -0.9
+     }
+    },
+    "sin_costos": {
+     "IS": {
+      "trades": 226,
+      "wins": 91,
+      "losses": 135,
+      "timeouts": 127,
+      "win_rate": 40.3,
+      "expectancy_R": 0.036,
+      "avg_win_R": 1.059,
+      "avg_loss_R": -0.655,
+      "profit_factor": 1.09,
+      "max_drawdown_R": 13.27,
+      "max_losing_streak": 9,
+      "total_R": 8.05
+     },
+     "OOS": {
+      "trades": 122,
+      "wins": 61,
+      "losses": 61,
+      "timeouts": 68,
+      "win_rate": 50.0,
+      "expectancy_R": 0.089,
+      "avg_win_R": 0.931,
+      "avg_loss_R": -0.754,
+      "profit_factor": 1.24,
+      "max_drawdown_R": 6.51,
+      "max_losing_streak": 6,
+      "total_R": 10.81
+     },
+     "ALL": {
+      "trades": 348,
+      "wins": 152,
+      "losses": 196,
+      "timeouts": 195,
+      "win_rate": 43.7,
+      "expectancy_R": 0.054,
+      "avg_win_R": 1.008,
+      "avg_loss_R": -0.685,
+      "profit_factor": 1.14,
+      "max_drawdown_R": 13.27,
+      "max_losing_streak": 9,
+      "total_R": 18.86
+     }
+    }
+   }
+  }
+ },
+ "bootstrap": {
+  "1h": {
+   "piv2": 0.822,
+   "piv10": 0.443
+  },
+  "15m": {
+   "piv2": 0.179,
+   "piv10": 0.631
+  }
+ }
+}
