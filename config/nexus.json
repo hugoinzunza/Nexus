@@ -18,9 +18,6 @@
     },
     "journal": {
       "enabled": true
-    },
-    "music": {
-      "enabled": true
     }
   }
 }

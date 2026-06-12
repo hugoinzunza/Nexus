@@ -35,7 +35,7 @@ _HTF_FOR_POI = ["1D", "4h", "1h"]   # temporalidades donde se detectan POIs
 class TradingModule(NexusModule):
     slug = "trading"
     title = "Trading"
-    description = "Co-piloto de mercado cripto en vivo: precios, libro de órdenes y velas (BTC, ETH)."
+    description = "Co-piloto de mercado cripto en vivo: gráficos, estructura SMC, POIs y divergencias (BTC, ETH)."
     icon = "📈"
 
     def __init__(self, context):

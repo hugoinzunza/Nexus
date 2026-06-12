@@ -1,7 +1,7 @@
 {
   "name": "Nexux · Hub personal",
   "short_name": "Nexux",
-  "description": "El hub personal de Hugo: trading en vivo, música y lo que venga.",
+  "description": "El hub personal de Hugo: trading en vivo, análisis SMC y diario.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
