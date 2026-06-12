@@ -281,10 +281,12 @@ def _opposite_liquidity(levels, long, ref, rhi, rlo):
 def _tpsl(pois, levels, last_price, rng) -> Dict:
     """Escenario de contexto (NO una orden ni recomendación automática).
 
-    Dibuja el PLAN del POI válido en zona correcta MÁS CERCANO para poder PLANEAR la
-    entrada, no solo en el instante exacto del toque:
-      - POI válido (✓, sin mitigar), en zona correcta del rango (descuento para largo,
-        premium para corto) y CERCA (dentro del dealing range o <= 5% del precio),
+    Dibuja el PLAN del POI válido MÁS CERCANO para poder PLANEAR la entrada, no
+    solo en el instante exacto del toque:
+      - POI válido (✓, sin mitigar) y CERCA (dentro del dealing range o <= 5% del
+        precio). La zona correcta (descuento largo / premium corto) ya se valida
+        al FORMARSE el POI contra el EQ local de su swing (detect_pois); el filtro
+        de EQ global se eliminó por el research de dealing range (empeoraba OOS),
       - Entrada = la zona del POI,
       - SL ESTRUCTURAL CON TECHO: apenas pasado el nivel que protege el setup (al otro
         lado del barrido, con un pequeño buffer para sobrevivir un sweep), PERO sin que
@@ -297,12 +299,16 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
     vigilancia) si todavía no la toca. Devuelve None si no hay un plan que valga."""
     if not pois or not last_price:
         return None
-    eq = rng.get("eq") if rng else None
     rhi = rng.get("strong_high") if rng else None
     rlo = rng.get("weak_low") if rng else None
     tol = last_price * TOUCH_TOL
 
-    # 1) Candidatos: POI válido, en su zona correcta del rango, y CERCA (cap de distancia).
+    # 1) Candidatos: POI válido y CERCA (cap de distancia). La corrección de zona
+    # (descuento para largos / premium para cortos) ya viene validada en la
+    # FORMACIÓN del POI contra el EQ LOCAL de su swing (detect_pois, fib 0.5 del
+    # último swing high/low). El filtro extra de EQ global (ventana de 400 velas)
+    # se ELIMINÓ: research/dealing_range_2026-06-12.md mostró que empeoraba el
+    # OOS de 1h (−0.096R → −0.130R) y descartaba justo los mejores toques.
     cands = []
     for p in pois:
         # Candidato: POI válido (sin mitigar) o recién tocado en fase CDC (la
@@ -311,11 +317,6 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
             continue
         long = p["dir"] == "long"
         mid = (p["lo"] + p["hi"]) / 2
-        if eq is not None:
-            if long and mid >= eq:        # largo solo si el POI está en DESCUENTO
-                continue
-            if (not long) and mid <= eq:  # corto solo si el POI está en PREMIUM
-                continue
         in_range = rlo is not None and rhi is not None and rlo <= mid <= rhi
         near = abs(p.get("dist_pct", 0.0)) <= DIST_CAP_PCT
         if not (in_range or near):
