@@ -79,7 +79,7 @@
         // juntos, sus títulos se encimarían. `place` busca la altura libre más cercana
         // (arriba o abajo) y la reserva, así cada etiqueta queda legible. Se llevan dos
         // columnas: izquierda (nombres de cajas/Entrada) y derecha (SL/TP/R:R).
-        const _LH = 12, _leftB = [], _rightB = [];
+        const _LH = 12, _leftB = [], _rightB = [], _divB = [];
         const _free = (bands, y) => !bands.some((b) => y < b + _LH && y + _LH > b);
         const _place = (bands, yTop) => {
           if (_free(bands, yTop)) { bands.push(yTop); return yTop; }
@@ -91,6 +91,7 @@
         };
         const placeL = (y) => _place(_leftB, y);
         const placeR = (y) => _place(_rightB, y);
+        const placeD = (y) => _place(_divB, y);   // etiquetas de divergencias (en los pivotes)
         // --- Overlay SMC (siempre): premium/discount, FVG, POIs ---
         if (smc.range && smc.range.eq) {
           const yEq = py(smc.range.eq);
@@ -204,6 +205,31 @@
           }
           ctx.globalAlpha = 1;
         }
+
+        // --- Capa: divergencias precio vs RSI (alcista verde / bajista roja) ---
+        if (show.div && D.div && D.div.length) {
+          ctx.textBaseline = "top"; ctx.font = "bold 9px -apple-system, sans-serif";
+          D.div.forEach((dv) => {
+            const x1 = tx(dv.t1), x2 = tx(dv.t2), y1 = py(dv.p1), y2 = py(dv.p2);
+            if (x1 == null || x2 == null || y1 == null || y2 == null) return;
+            const col = dv.bullish ? "#16c784" : "#ea3943";
+            // Línea entre los dos pivotes.
+            ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+            // Puntos en cada pivote.
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.arc(x1, y1, 2.6, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x2, y2, 2.6, 0, Math.PI * 2); ctx.fill();
+            // Etiqueta junto al segundo pivote (abajo si alcista, arriba si bajista),
+            // con anti-solape para no encimarse con otras etiquetas de divergencia.
+            const label = dv.bullish ? "Div ▲" : "Div ▼";
+            const lw = ctx.measureText(label).width;
+            const ly = placeD(dv.bullish ? y2 + 4 : y2 - 14);
+            let lx = x2 - lw / 2;
+            lx = Math.max(2, Math.min(W - lw - 2, lx));
+            ctx.fillStyle = col; ctx.fillText(label, lx, ly);
+          });
+        }
       });
     }
   }
@@ -225,7 +251,7 @@
   // --- Indicadores (Vol / RSI / ADX) ---------------------------------
   // Estado global (mismo para todos los pares), recordado en localStorage.
   const IND_KEY = "nexus_trading_ind";
-  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: false };
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: false, div: false };
   let indState = (() => {
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
@@ -235,7 +261,7 @@
     for (let i = 0; i < values.length; i++) out.push(i === 0 ? values[0] : values[i] * k + out[i - 1] * (1 - k));
     return out;
   }
-  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl }; }
+  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, div: indState.div }; }
   function saveIndState() { try { localStorage.setItem(IND_KEY, JSON.stringify(indState)); } catch (e) {} }
 
   function rsiCalc(closes, p) {
@@ -361,7 +387,7 @@
   // Indicadores en panes (recrean series) y capas Lux (solo redibujan el primitive).
   const TOGGLE_GROUPS = {
     ".ind-toggles": [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]],
-    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"]],
+    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."]],
   };
   const PANE_INDICATORS = new Set(["vol", "rsi", "adx"]);
 
@@ -529,8 +555,47 @@
   }
 
   // Empuja al primitive todo lo que dibuja: overlay SMC + cinta + niveles + TP/SL.
+  // Divergencias precio vs RSI: alcista (precio mínimo más bajo + RSI más alto) y
+  // bajista (precio máximo más alto + RSI más bajo). Se calculan sobre velas cerradas
+  // (los pivotes necesitan barras a ambos lados → anti-repintado natural).
+  function computeDivergences(card) {
+    card.div = [];
+    const cs = card.candles || [];
+    if (cs.length < 40) return;
+    const closes = cs.map((c) => c.c), highs = cs.map((c) => c.h), lows = cs.map((c) => c.l);
+    const rsi = rsiCalc(closes, 14);
+    const L = 3;                       // barras a cada lado para confirmar un pivote
+    const phs = [], pls = [];
+    for (let i = L; i < cs.length - L; i++) {
+      let isH = true, isL = true;
+      for (let k = 1; k <= L; k++) {
+        if (highs[i] <= highs[i - k] || highs[i] < highs[i + k]) isH = false;
+        if (lows[i] >= lows[i - k] || lows[i] > lows[i + k]) isL = false;
+      }
+      if (isH && rsi[i] != null) phs.push(i);
+      if (isL && rsi[i] != null) pls.push(i);
+    }
+    const MAXBARS = 60, out = [];
+    for (let a = 0; a < phs.length - 1; a++) {           // bajistas (en los máximos)
+      const i = phs[a], j = phs[a + 1];
+      if (j - i > MAXBARS) continue;
+      if (highs[j] > highs[i] && rsi[j] < rsi[i])
+        out.push({ bullish: false, t1: cs[i].t, p1: highs[i], t2: cs[j].t, p2: highs[j] });
+    }
+    for (let a = 0; a < pls.length - 1; a++) {           // alcistas (en los mínimos)
+      const i = pls[a], j = pls[a + 1];
+      if (j - i > MAXBARS) continue;
+      if (lows[j] < lows[i] && rsi[j] > rsi[i])
+        out.push({ bullish: true, t1: cs[i].t, p1: lows[i], t2: cs[j].t, p2: lows[j] });
+    }
+    // Las más recientes (para no saturar el gráfico).
+    card.div = out.sort((x, y) => y.t2 - x.t2).slice(0, 4);
+  }
+
   function pushPrim(card) {
-    if (card.smcPrim) card.smcPrim.setData({ smc: card.smc, ribbon: card.ribbon || [], show: luxShow() });
+    if (card.smcPrim) card.smcPrim.setData({
+      smc: card.smc, ribbon: card.ribbon || [], div: card.div || [], show: luxShow(),
+    });
   }
 
   // --- Selector de temporalidad --------------------------------------
@@ -602,6 +667,7 @@
       else { card.chart.timeScale().fitContent(); card.fitted = true; }
       setIndicatorData(card);
       computeRibbon(card);
+      computeDivergences(card);
       pushPrim(card);
       liveUpdate(card);
     } catch (err) {
@@ -624,8 +690,7 @@
       const card = getCard(symbol, d.label);
       renderTicker(card, d.ticker);  // fija card.lastPrice
       renderStats(card, d.ticker);
-      renderBook(card, d.book, d.ticker);
-      renderSignals(card, d.signals || {});
+      renderSMCStats(card);          // análisis SMC en vivo (reemplaza al libro)
       liveUpdate(card);              // mueve la última vela con el precio en vivo
     });
   }
@@ -654,71 +719,56 @@
     if (!t) return;
     card.node.querySelector(".ic-high").textContent = fmtPrice(t.high);
     card.node.querySelector(".ic-low").textContent = fmtPrice(t.low);
-    card.node.querySelector(".ic-bid").textContent = fmtPrice(t.bid);
-    card.node.querySelector(".ic-ask").textContent = fmtPrice(t.ask);
     card.node.querySelector(".ic-vol").textContent = fmtCompact(t.volume);
   }
 
-  function renderBook(card, book, ticker) {
-    if (!book) return;
-    const asksEl = card.node.querySelector(".book-side.asks");
-    const bidsEl = card.node.querySelector(".book-side.bids");
-    const spreadEl = card.node.querySelector(".book-spread");
-
-    const asks = (book.asks || []).slice(0, 8);
-    const bids = (book.bids || []).slice(0, 8);
-    const maxQty = Math.max(
-      1e-9,
-      ...asks.map((l) => l.qty),
-      ...bids.map((l) => l.qty)
-    );
-
-    function rowHTML(level) {
-      const w = (level.qty / maxQty) * 100;
-      return `<div class="book-row">
-        <span class="depth" style="width:${w}%"></span>
-        <span class="price">${fmtPrice(level.price)}</span>
-        <span class="qty">${fmtQty(level.qty)}</span>
-      </div>`;
-    }
-
-    // Asks de mayor a menor (el mejor ask queda abajo, pegado al spread).
-    asksEl.innerHTML = asks.slice().reverse().map(rowHTML).join("");
-    bidsEl.innerHTML = bids.map(rowHTML).join("");
-
-    if (asks.length && bids.length) {
-      const spread = asks[0].price - bids[0].price;
-      const mid = (asks[0].price + bids[0].price) / 2;
-      const bps = mid > 0 ? (spread / mid) * 10000 : 0;
-      spreadEl.textContent = `spread ${fmtPrice(spread)} · ${bps.toFixed(1)} bps`;
-    }
+  // --- Análisis SMC en vivo (panel que reemplaza al libro de órdenes) ------
+  // Sesión de trading activa (horas UTC, aprox.): útil para saber el contexto.
+  function activeSession() {
+    const h = new Date().getUTCHours();
+    const london = h >= 7 && h < 16, ny = h >= 12 && h < 21, asia = h >= 0 && h < 9;
+    if (london && ny) return { label: "Londres + NY (solape)", active: true };
+    if (ny) return { label: "Nueva York", active: true };
+    if (london) return { label: "Londres", active: true };
+    if (asia) return { label: "Asia", active: true };
+    return { label: "Fuera de sesión", active: false };
   }
 
-  function renderSignals(card, s) {
-    const n = card.node;
-    // Posición en el rango 24h
-    const rangeFill = n.querySelector(".bar-fill.range");
-    rangeFill.style.width = (s.range_pos || 0) + "%";
-    n.querySelector(".sig-range").textContent = (s.range_pos != null ? s.range_pos.toFixed(0) : "—") + "%";
-
-    // Momentum
-    const momEl = n.querySelector(".sig-mom");
-    const mom = s.momentum_15 || 0;
-    momEl.textContent = (mom >= 0 ? "+" : "") + mom.toFixed(2) + "%";
-    momEl.className = "v sig-mom " + (mom > 0 ? "up" : mom < 0 ? "down" : "");
-
-    // Spread
-    n.querySelector(".sig-spread").textContent = (s.spread_bps != null ? s.spread_bps.toFixed(1) : "—") + " bps";
-
-    // Desequilibrio del libro (-100 vendedor … +100 comprador)
-    const imb = s.book_imbalance || 0;
-    const imbFill = n.querySelector(".bar-fill.imb");
-    const half = Math.min(50, Math.abs(imb) / 2);
-    if (imb >= 0) { imbFill.style.left = "50%"; imbFill.style.width = half + "%"; imbFill.style.background = "var(--green)"; }
-    else { imbFill.style.left = (50 - half) + "%"; imbFill.style.width = half + "%"; imbFill.style.background = "var(--red)"; }
-    const imbEl = n.querySelector(".sig-imb");
-    imbEl.textContent = (imb >= 0 ? "+" : "") + imb.toFixed(0);
-    imbEl.className = "v sig-imb " + (imb > 0 ? "up" : imb < 0 ? "down" : "");
+  function renderSMCStats(card) {
+    const n = card.node, smc = card.smc, price = card.lastPrice;
+    const set = (cls, html, klass) => {
+      const e = n.querySelector(cls); if (!e) return;
+      e.innerHTML = html; e.className = "v " + cls.slice(1) + (klass ? " " + klass : "");
+    };
+    const rng = smc && smc.range;
+    // Sesgo premium/descuento respecto al equilibrio (EQ), con el precio en vivo.
+    if (rng && rng.eq && price) {
+      const disc = price < rng.eq;
+      const pct = (price - rng.eq) / rng.eq * 100;
+      set(".smc-bias", (disc ? "Descuento" : "Premium") + " · " + (pct >= 0 ? "+" : "") + pct.toFixed(2) + "% vs EQ",
+        disc ? "up" : "down");
+    } else set(".smc-bias", "—");
+    // Estructura: extremos del dealing range.
+    if (rng) set(".smc-struct", "SH " + fmtPrice(rng.strong_high) + " · WL " + fmtPrice(rng.weak_low));
+    else set(".smc-struct", "—");
+    // Sesión activa.
+    const ses = activeSession();
+    set(".smc-session", ses.label, ses.active ? "up" : "");
+    // POI válido más cercano al precio.
+    const pois = (smc && smc.active_pois) || [];
+    if (pois.length) {
+      const p = pois.slice().sort((a, b) => Math.abs(a.dist_pct) - Math.abs(b.dist_pct))[0];
+      const here = p.in_zone ? " · ● en zona" : "";
+      set(".smc-poi-near", "POI " + p.tf + " " + (p.discount ? "desc." : "prem.") + " · " +
+        (p.dist_pct > 0 ? "+" : "") + p.dist_pct + "%" + here, p.discount ? "up" : "down");
+    } else set(".smc-poi-near", "sin POI válido cerca");
+    // Setup vigente (plan TP/SL).
+    const t = smc && smc.tpsl;
+    if (t) {
+      const est = t.state === "activo" ? "● activo" : "⏳ en vigilancia";
+      set(".smc-setup", "Plan " + t.tf + " " + (t.dir === "long" ? "▲ largo" : "▼ corto") +
+        " · R:R " + t.rr + " · " + est, t.dir === "long" ? "up" : "down");
+    } else set(".smc-setup", "sin plan (no hay R:R≥2)");
   }
 
   // --- Panel "POIs activos" ------------------------------------------

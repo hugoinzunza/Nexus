@@ -30,11 +30,11 @@
   <p class="disclaimer">
     Solo lectura de datos de mercado. Velas y estructura desde <strong>Binance (BTCUSDT.P,
     perpetuo)</strong> para coincidir con lo que ves (si Binance no es accesible, usa Crypto.com);
-    precio en vivo y libro de órdenes desde Crypto.com. No ejecuta operaciones ni mueve fondos.
+    precio en vivo desde Crypto.com. No ejecuta operaciones ni mueve fondos.
     El indicador SMC marca <strong>zonas de interés</strong> (estructura, premium/discount,
     FVG y POIs de 1D/4h/1h) como contexto. Las capas opcionales (cinta de tendencia, niveles
-    Weak/Strong y la proyección <strong>TP/SL</strong>) son <strong>escenarios de contexto, no
-    recomendaciones ni señales de entrada</strong>.
+    Weak/Strong, <strong>divergencias RSI</strong> y la proyección <strong>TP/SL</strong>) son
+    <strong>escenarios de contexto, no recomendaciones ni señales de entrada</strong>.
   </p>
 
   <main id="instruments" class="instruments">
@@ -60,8 +60,6 @@
       <div class="ic-stats">
         <div class="stat"><span class="k">Máx 24h</span><span class="v ic-high"></span></div>
         <div class="stat"><span class="k">Mín 24h</span><span class="v ic-low"></span></div>
-        <div class="stat"><span class="k">Bid</span><span class="v ic-bid"></span></div>
-        <div class="stat"><span class="k">Ask</span><span class="v ic-ask"></span></div>
         <div class="stat"><span class="k">Vol 24h</span><span class="v ic-vol"></span></div>
       </div>
 
@@ -75,21 +73,15 @@
           </div>
           <div class="chart"></div>
         </div>
-        <div class="book">
-          <div class="book-title">Libro de órdenes</div>
-          <div class="book-cols">
-            <div class="book-side asks"></div>
-            <div class="book-spread"></div>
-            <div class="book-side bids"></div>
-          </div>
-        </div>
       </div>
 
-      <div class="signals">
-        <div class="sig"><span class="k">Rango 24h</span><div class="bar"><i class="bar-fill range"></i></div><span class="v sig-range"></span></div>
-        <div class="sig"><span class="k">Momentum 15m</span><span class="v sig-mom"></span></div>
-        <div class="sig"><span class="k">Spread</span><span class="v sig-spread"></span></div>
-        <div class="sig"><span class="k">Presión libro</span><div class="bar center"><i class="bar-fill imb"></i></div><span class="v sig-imb"></span></div>
+      <!-- Análisis SMC en vivo (reemplaza al libro: más útil para planear) -->
+      <div class="signals smc-stats">
+        <div class="sig"><span class="k">Sesgo (premium/descuento)</span><span class="v smc-bias">—</span></div>
+        <div class="sig"><span class="k">Estructura (dealing range)</span><span class="v smc-struct">—</span></div>
+        <div class="sig"><span class="k">Sesión activa</span><span class="v smc-session">—</span></div>
+        <div class="sig"><span class="k">POI más cercano</span><span class="v smc-poi-near">—</span></div>
+        <div class="sig"><span class="k">Setup vigente</span><span class="v smc-setup">—</span></div>
       </div>
 
       <div class="smc-panel">
