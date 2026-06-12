@@ -23,9 +23,12 @@ from core.module_base import NexusModule
 from . import cryptocom
 from . import binance
 from . import smc_live
+from .setups_store import SetupStore
 
-_BACKTEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtest_results.json")
-_POI_LAYERS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poi_layers_results.json")
+_MOD_DIR = os.path.dirname(os.path.abspath(__file__))
+_BACKTEST_PATH = os.path.join(_MOD_DIR, "backtest_results.json")
+_POI_LAYERS_PATH = os.path.join(_MOD_DIR, "poi_layers_results.json")
+_SETUP_BT_PATH = os.path.join(_MOD_DIR, "setup_backtest_results.json")
 _HTF_FOR_POI = ["1D", "4h", "1h"]   # temporalidades donde se detectan POIs
 
 
@@ -71,6 +74,11 @@ class TradingModule(NexusModule):
         self._poi_inside = {}       # instrumento → set de claves de POI con el precio dentro
         self.smc_refresh_every = int(cfg.get("smc_refresh_every", 15))  # cada ~30s
         self.smc_alerts = bool(cfg.get("smc_alerts", True))
+
+        # Registro de SETUPS (planes TP/SL) para forward-test: se generan en las TFs
+        # de planeación y se siguen contra el precio. El Diario los muestra como tabla.
+        self.setup_tfs = cfg.get("setup_tfs", ["1h", "4h"])
+        self._setups = SetupStore()
 
         # Estado compartido. Se reemplaza por referencia (atómico bajo el GIL),
         # así las lecturas desde otros hilos siempre ven una foto consistente.
@@ -153,7 +161,14 @@ class TradingModule(NexusModule):
                         self._poi_zones[name] = smc_live.active_pois(self._htf_candles(name), last)
                     except Exception as exc:  # noqa: BLE001
                         self.context.log(f"smc: no se pudieron calcular POIs de {name}: {exc}")
+                    # Genera/registra los planes de las TFs de planeación (forward-test).
+                    self._record_setups(name, last)
                 self._check_alerts(name, inst.get("label", name), last)
+                # Seguimiento de los setups abiertos contra el precio en vivo (barato).
+                try:
+                    self._setups.track(name, last, time.time())
+                except Exception as exc:  # noqa: BLE001
+                    self.context.log(f"setups: no se pudo seguir {name}: {exc}")
 
             tick += 1
             self._stop.wait(self.poll_interval)
@@ -208,6 +223,18 @@ class TradingModule(NexusModule):
                     url="/m/trading/",
                     tag=f"poi-{name}-{self._poi_key(poi)}",
                 )
+
+    def _record_setups(self, name: str, last: float) -> None:
+        """Para cada TF de planeación, si el indicador genera un PLAN válido (tpsl),
+        lo registra deduplicado en el store para hacerle forward-test."""
+        for tf in self.setup_tfs:
+            try:
+                analysis = self._smc_analysis(name, tf)
+                plan = analysis.get("tpsl")
+                if plan:
+                    self._setups.record(plan, name, tf, last, time.time())
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(f"setups: no se pudo registrar {name} {tf}: {exc}")
 
     @staticmethod
     def _poi_key(poi: dict) -> str:
@@ -351,6 +378,12 @@ class TradingModule(NexusModule):
                 return self._json_error(404, "todavía no hay experimento de capas; corre "
                                              "python3 -m modules.trading.run_poi_lab")
             with open(_POI_LAYERS_PATH, "rb") as fh:
+                return (200, "application/json; charset=utf-8", fh.read())
+        if subpath == "setup_backtest":
+            if not os.path.isfile(_SETUP_BT_PATH):
+                return self._json_error(404, "todavía no hay backtest de setups; corre "
+                                             "python3 -m modules.trading.run_setup_backtest")
+            with open(_SETUP_BT_PATH, "rb") as fh:
                 return (200, "application/json; charset=utf-8", fh.read())
         return None
 

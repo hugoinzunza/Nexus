@@ -26,6 +26,20 @@
     consulta Binance directamente. No ejecuta ni modifica operaciones.
   </p>
 
+  <!-- Setups SMC (forward-test) — independiente del colector de Binance -->
+  <section id="setups-section" class="bt">
+    <h2 class="bt-h">Setups SMC · forward-test <span class="muted" id="setups-meta"></span></h2>
+    <p class="bt-note">
+      Cada plan <strong>TP/SL</strong> que arma el indicador SMC en vivo (⏳ en vigilancia o ● activo)
+      se registra acá y se le sigue el resultado: TP = ganada, SL = perdida, sin llenarse = anulada.
+      Es <strong>forward-test</strong> (escenarios de contexto, no recomendaciones ni señales).
+    </p>
+    <section class="metric-grid" id="setups-summary"></section>
+    <section id="setups-bt" class="verdict" hidden></section>
+    <h3 class="bt-h" style="font-size:15px">Registro</h3>
+    <div class="table-wrap"><table id="setups-table"></table></div>
+  </section>
+
   <!-- Estado: esperando datos del colector -->
   <section id="waiting" class="card connect" hidden>
     <h2>Esperando datos del colector</h2>

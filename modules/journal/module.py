@@ -62,7 +62,27 @@ class JournalModule(NexusModule):
             data["has_data"] = True
             data["age_seconds"] = self._age(data)
             return self._json(200, data)
+        if subpath == "setups":
+            return self._setups_response()
         return None
+
+    # --- Setups SMC (forward-test) -------------------------------------
+    def _setups_response(self):
+        """Tabla de setups que registró el indicador SMC en vivo, con su resumen.
+        Lee el store fresco del disco (lo escribe el módulo de trading)."""
+        try:
+            from modules.trading import setups_store
+        except Exception:  # noqa: BLE001
+            return self._json(200, {"has_data": False, "setups": [], "summary": None})
+        setups = setups_store.load_all()
+        summary = setups_store.summarize(setups)
+        # Más recientes primero; tope para no inflar el payload.
+        ordered = sorted(setups, key=lambda s: s.get("ts_created", 0), reverse=True)[:200]
+        return self._json(200, {
+            "has_data": bool(setups),
+            "summary": summary,
+            "setups": ordered,
+        })
 
     # --- POST (ingesta) ------------------------------------------------
     def api_post(self, subpath, body, headers):

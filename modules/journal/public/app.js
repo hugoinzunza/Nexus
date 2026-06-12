@@ -195,7 +195,71 @@
   }
   function empty(ctx, h) { ctx.fillStyle = "#8b93a7"; ctx.font = "13px -apple-system, sans-serif"; ctx.fillText("Sin datos.", 12, h / 2); }
 
-  $("refresh").addEventListener("click", () => load(true));
+  // --- Setups SMC (forward-test) ------------------------------------
+  const fmtP = (v) => (v == null ? "—" : v.toLocaleString("es", { maximumFractionDigits: 2 }));
+  const STATUS_LABEL = {
+    pendiente: "⏳ en vigilancia", activo: "● activo",
+    ganada: "✅ ganada", perdida: "❌ perdida", anulada: "⊘ anulada",
+  };
+  const STATUS_CLS = { ganada: "up", perdida: "down", activo: "up", anulada: "muted", pendiente: "" };
+
+  function dt(ts) {
+    if (!ts) return "—";
+    const d = new Date(ts * 1000);
+    return d.toLocaleDateString("es", { day: "2-digit", month: "2-digit" }) + " " +
+      d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function loadSetups() {
+    fetch("api/setups").then((r) => r.json()).then((d) => {
+      const s = d.summary || {};
+      const wr = s.win_rate == null ? "—" : s.win_rate + "%";
+      const pfv = (s.pf == null) ? (s.ganadas > 0 ? "∞" : "—") : s.pf;
+      $("setups-meta").textContent = d.has_data
+        ? `${s.total} registrados · ${s.cerradas} cerrados`
+        : "sin registros todavía";
+      $("setups-summary").innerHTML = [
+        card("Cerrados", s.cerradas || 0),
+        card("Win rate", wr, s.win_rate != null && s.win_rate >= 50 ? "up" : ""),
+        card("R promedio", s.avg_r == null ? "—" : s.avg_r, (s.avg_r || 0) > 0 ? "up" : (s.avg_r || 0) < 0 ? "down" : ""),
+        card("Profit factor", pfv, (s.pf != null && s.pf >= 1) || (s.pf == null && s.ganadas > 0) ? "up" : "down"),
+        card("R acumulado", s.total_r == null ? "—" : (s.total_r > 0 ? "+" : "") + s.total_r, (s.total_r || 0) > 0 ? "up" : (s.total_r || 0) < 0 ? "down" : ""),
+        card("Ganadas / Perdidas", `${s.ganadas || 0} / ${s.perdidas || 0}`),
+        card("Activos", s.activos || 0, "up"),
+        card("En vigilancia", s.pendientes || 0),
+      ].join("");
+
+      const rows = (d.setups || []).map((x) => [
+        dt(x.ts_created),
+        x.pair.replace("_", "/"),
+        x.poi_tf,
+        `<span class="${x.dir === "long" ? "up" : "down"}">${x.dir === "long" ? "Largo" : "Corto"}</span>`,
+        fmtP(x.entry_lo) + "–" + fmtP(x.entry_hi),
+        fmtP(x.sl),
+        fmtP(x.tp),
+        (typeof x.rr === "number" ? x.rr.toFixed(1) : x.rr),
+        `<span class="${STATUS_CLS[x.status] || ""}">${STATUS_LABEL[x.status] || x.status}</span>`,
+        x.result_r == null ? "—" : `<span class="${x.result_r > 0 ? "up" : "down"}">${x.result_r > 0 ? "+" : ""}${x.result_r}R</span>`,
+      ]);
+      table($("setups-table"),
+        ["Fecha", "Par", "TF", "Dir", "Entrada", "SL", "TP", "R:R", "Estado", "Resultado"],
+        rows.length ? rows : [["Aún no se registran setups. Aparecen cuando el indicador genera un plan válido (R:R≥2).", "", "", "", "", "", "", "", "", ""]]);
+    }).catch(() => {});
+
+    // Backtest histórico de referencia (mismo criterio sobre datos de Binance).
+    fetch("/m/trading/api/setup_backtest").then((r) => r.ok ? r.json() : null).then((b) => {
+      if (!b) return;
+      const el = $("setups-bt");
+      el.hidden = false;
+      const blk = (t, m) => m ? `<strong>${t}:</strong> ${m.trades} trades · win ${m.win_rate}% · R prom ${m.avg_r} · PF ${pf(m.pf)} · R acum ${m.total_r >= 0 ? "+" : ""}${m.total_r}` : "";
+      el.innerHTML = `<div class="v-title">Backtest de referencia · mismo criterio sobre Binance (anti-repaint, ${b.bars_per_inst || "?"} velas/instrumento)</div>` +
+        `<p class="bt-note">${blk("In-sample", b.in_sample)}<br>${blk("Out-of-sample", b.out_sample)}<br>` +
+        `<span class="muted">${b.note || ""}</span></p>`;
+    }).catch(() => {});
+  }
+
+  $("refresh").addEventListener("click", () => { load(true); loadSetups(); });
   window.addEventListener("resize", () => { if (lastData) render(lastData); });
   load(false);
+  loadSetups();
 })();
