@@ -108,30 +108,38 @@
           ctx.fillText(text, px + 5, y + 3.5);
         };
         // --- Overlay SMC (siempre): premium/descuento, FVG, POIs ---
-        // Premium/descuento estilo LuxAlgo: bandas DENTRO del dealing range con
-        // gradiente que se desvanece hacia el equilibrio (antes: dos mitades
-        // planas que ensuciaban todo el fondo), con etiqueta sutil a la derecha.
+        // Premium/descuento como lo dibuja LuxAlgo: TRES BANDAS discretas dentro
+        // del dealing range — premium pegada a los máximos (ahí se buscan cortos),
+        // equilibrium alrededor del 50% (fib del rango) y descuento pegada a los
+        // mínimos (ahí se buscan largos). NO mitades completas: las zonas marcan
+        // dónde buscar la operación, el 50% solo separa caro de barato.
         if (smc.range && smc.range.eq) {
-          const yHi = py(smc.range.strong_high), yEq = py(smc.range.eq), yLo = py(smc.range.weak_low);
-          if (yEq != null) {
-            const top = yHi != null ? Math.max(0, yHi) : 0;
-            const bot = yLo != null ? Math.min(H, yLo) : H;
-            if (yEq > top) {
-              const g = ctx.createLinearGradient(0, top, 0, yEq);
-              g.addColorStop(0, "rgba(234,57,67,0.13)"); g.addColorStop(1, "rgba(234,57,67,0)");
-              ctx.fillStyle = g; ctx.fillRect(0, top, W, yEq - top);
-            }
-            if (bot > yEq) {
-              const g2 = ctx.createLinearGradient(0, yEq, 0, bot);
-              g2.addColorStop(0, "rgba(22,199,132,0)"); g2.addColorStop(1, "rgba(22,199,132,0.13)");
-              ctx.fillStyle = g2; ctx.fillRect(0, yEq, W, bot - yEq);
-            }
-            ctx.globalAlpha = 0.8;
-            if (yEq - top > 30) pill((top + yEq) / 2 - 7, "PREMIUM", "rgba(234,57,67,0.9)",
-              { right: true, font: "600 9px -apple-system, sans-serif" });
-            if (bot - yEq > 30) pill((yEq + bot) / 2 - 7, "DESCUENTO", "rgba(22,199,132,0.9)",
-              { right: true, font: "600 9px -apple-system, sans-serif" });
-            ctx.globalAlpha = 1;
+          const pHi = smc.range.strong_high, pLo = smc.range.weak_low;
+          const d = pHi - pLo;
+          if (d > 0) {
+            const BAND = 0.08;   // ancho de las bandas premium/descuento (8% del rango)
+            const band = (pTop, pBot, rgb, label) => {
+              const y1 = py(pTop), y2 = py(pBot);
+              if (y1 == null || y2 == null) return;
+              const top = Math.max(0, Math.min(y1, y2));
+              const bot = Math.min(H, Math.max(y1, y2));
+              if (bot - top < 2) return;
+              ctx.fillStyle = `rgba(${rgb},0.09)`;
+              ctx.fillRect(0, top, W, bot - top);
+              ctx.strokeStyle = `rgba(${rgb},0.22)`; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+              ctx.beginPath(); ctx.moveTo(0, top + 0.5); ctx.lineTo(W, top + 0.5);
+              ctx.moveTo(0, bot - 0.5); ctx.lineTo(W, bot - 0.5); ctx.stroke(); ctx.setLineDash([]);
+              if (label && bot - top > 16) {
+                ctx.globalAlpha = 0.85;
+                pill((top + bot) / 2 - 7, label, `rgba(${rgb},0.95)`,
+                  { right: true, font: "600 9px -apple-system, sans-serif" });
+                ctx.globalAlpha = 1;
+              }
+            };
+            band(pHi, pHi - BAND * d, "234,57,67", "PREMIUM");          // pegada al máximo
+            band(smc.range.eq + 0.025 * d, smc.range.eq - 0.025 * d,
+                 "162,155,254", null);                                   // equilibrium (50%)
+            band(pLo + BAND * d, pLo, "22,199,132", "DESCUENTO");        // pegada al mínimo
           }
         }
         // FVG: caja desde su origen hacia la derecha, gradiente que decae y
