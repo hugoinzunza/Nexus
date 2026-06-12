@@ -84,6 +84,10 @@ def summarize(setups: list) -> dict:
     # Comparativa de régimen: los que pasaron el filtro (regime_ok True) vs los que no.
     out["con_filtro"] = _perf([s for s in closed if s.get("regime_ok") is True])
     out["sin_filtro"] = _perf([s for s in closed if s.get("regime_ok") is False])
+    # Comparativa CDC: setups donde el cambio de carácter APARECIÓ (en el POI, en la
+    # dirección correcta, mientras el setup estaba abierto) vs donde nunca apareció.
+    out["con_cdc"] = _perf([s for s in closed if s.get("cdc_ok") is True])
+    out["sin_cdc"] = _perf([s for s in closed if s.get("cdc_ok") is False])
     return out
 
 
@@ -133,6 +137,13 @@ class SetupStore:
                 "regime_ok": plan.get("regime_ok"),
                 "regime_vix": plan.get("regime_vix"),
                 "regime_adx": plan.get("regime_adx"),
+                # CDC (cambio de carácter) como confirmación: estado al generarse y
+                # cdc_ok que pasa a True si el CDC aparece mientras el setup está abierto.
+                "cdc_ok": (bool(plan.get("cdc_ok"))
+                           if plan.get("cdc_status") is not None else None),
+                "cdc_status_init": plan.get("cdc_status"),
+                "cdc_tf": plan.get("cdc_tf"),
+                "ts_cdc": None,
                 "status": "activo" if active else "pendiente",
                 "activated": active,
                 "ts_activated": int(now_s) if active else None,
@@ -144,6 +155,23 @@ class SetupStore:
             })
             self._save()
             return True
+
+    def mark_cdc(self, pair: str, plan: dict, now_s: float) -> bool:
+        """Marca cdc_ok=True en el setup ABIERTO de la misma clave: el cambio de
+        carácter apareció en el POI (en la dirección correcta) mientras seguía
+        abierto. Permite comparar después el desempeño con/sin confirmación."""
+        k = _key(pair, plan)
+        changed = False
+        with self._lock:
+            for s in self._setups:
+                if s["key"] == k and s["status"] in _OPEN and s.get("cdc_ok") is not True:
+                    s["cdc_ok"] = True
+                    s["ts_cdc"] = int(now_s)
+                    s["ts_updated"] = int(now_s)
+                    changed = True
+            if changed:
+                self._save()
+        return changed
 
     def track(self, pair: str, price: float, now_s: float) -> bool:
         """Actualiza los setups ABIERTOS de un par contra el precio en vivo."""

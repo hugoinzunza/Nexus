@@ -199,9 +199,9 @@ class TradingModule(NexusModule):
         last = sel[-1]["c"] if sel else 0.0
         analysis = smc_live.analyze(sel, htf, last, sel_tf)
         # Capa de PERMISO por régimen (VIX<25 + ADX>25). NO toca la detección SMC:
-        # es un semáforo sobre el plan. Se calcula sobre las mismas velas cerradas.
+        # es un semáforo sobre el plan. Solo velas CERRADAS (anti-repaint).
         try:
-            gate = regime.regime_gate(sel)
+            gate = regime.regime_gate(smc_live.closed_candles(sel, sel_tf))
         except Exception as exc:  # noqa: BLE001 - nunca romper el análisis por el régimen
             gate = {"ok": None, "vix": None, "adx": None, "reason": "s/d"}
             self.context.log(f"regime: no disponible para {instrument} {sel_tf}: {exc}")
@@ -248,13 +248,17 @@ class TradingModule(NexusModule):
 
     def _record_setups(self, name: str, last: float) -> None:
         """Para cada TF de planeación, si el indicador genera un PLAN válido (tpsl),
-        lo registra deduplicado en el store para hacerle forward-test."""
+        lo registra deduplicado en el store para hacerle forward-test. Si el CDC
+        aparece mientras el setup sigue abierto, se marca (cdc_ok) para comparar
+        después el desempeño con/sin confirmación."""
         for tf in self.setup_tfs:
             try:
                 analysis = self._smc_analysis(name, tf)
                 plan = analysis.get("tpsl")
                 if plan:
                     self._setups.record(plan, name, tf, last, time.time())
+                    if plan.get("cdc_ok"):
+                        self._setups.mark_cdc(name, plan, time.time())
             except Exception as exc:  # noqa: BLE001
                 self.context.log(f"setups: no se pudo registrar {name} {tf}: {exc}")
 

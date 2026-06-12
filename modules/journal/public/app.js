@@ -229,15 +229,22 @@
         card("En vigilancia", s.pendientes || 0),
       ].join("");
 
-      // Comparativa CON filtro de régimen vs SIN filtro (objetivo del forward-test).
-      const cf = s.con_filtro, sf = s.sin_filtro;
+      // Comparativas del forward-test: régimen (VIX+ADX) y CDC (cambio de carácter).
+      const cf = s.con_filtro, sf = s.sin_filtro, cc = s.con_cdc, sc = s.sin_cdc;
+      const line = (lab, m) => `<strong>${lab}:</strong> ${m.cerradas} cerrados · win ${m.win_rate == null ? "—" : m.win_rate + "%"} · R prom ${m.avg_r == null ? "—" : m.avg_r} · PF ${m.pf == null ? (m.ganadas > 0 ? "∞" : "—") : m.pf} · R acum ${m.total_r == null ? "—" : (m.total_r > 0 ? "+" : "") + m.total_r}`;
+      const blocks = [];
       if (cf && sf && (cf.cerradas || sf.cerradas)) {
-        const line = (lab, m) => `<strong>${lab}:</strong> ${m.cerradas} cerrados · win ${m.win_rate == null ? "—" : m.win_rate + "%"} · R prom ${m.avg_r == null ? "—" : m.avg_r} · PF ${m.pf == null ? (m.ganadas > 0 ? "∞" : "—") : m.pf} · R acum ${m.total_r == null ? "—" : (m.total_r > 0 ? "+" : "") + m.total_r}`;
+        blocks.push(`<div class="v-title">Régimen · ¿el filtro VIX&lt;25 + ADX&gt;25 ayuda? (forward-test en vivo)</div>` +
+          `<p class="bt-note">${line("✓ con filtro (régimen OK)", cf)}<br>${line("✕ sin filtro (régimen desfav.)", sf)}</p>`);
+      }
+      if (cc && sc && (cc.cerradas || sc.cerradas)) {
+        blocks.push(`<div class="v-title">CDC · ¿la confirmación por cambio de carácter ayuda? (hipótesis 1h)</div>` +
+          `<p class="bt-note">${line("✓ con CDC (apareció en el POI)", cc)}<br>${line("✕ sin CDC (nunca apareció)", sc)}</p>`);
+      }
+      if (blocks.length) {
         $("setups-regime").hidden = false;
-        $("setups-regime").innerHTML =
-          `<div class="v-title">Régimen · ¿el filtro VIX&lt;25 + ADX&gt;25 ayuda? (forward-test en vivo)</div>` +
-          `<p class="bt-note">${line("✓ con filtro (régimen OK)", cf)}<br>${line("✕ sin filtro (régimen desfav.)", sf)}<br>` +
-          `<span class="muted">Hipótesis de la investigación: los setups en régimen favorable deberían rendir mejor. Se valida con datos reales en el tiempo.</span></p>`;
+        $("setups-regime").innerHTML = blocks.join("") +
+          `<p class="bt-note"><span class="muted">Hipótesis de la investigación (no garantías): los setups en régimen favorable y con CDC deberían rendir mejor. Se valida con datos reales en el tiempo.</span></p>`;
       }
 
       const regCell = (x) => {
@@ -245,6 +252,14 @@
         const vix = x.regime_vix == null ? "s/d" : x.regime_vix;
         const adx = x.regime_adx == null ? "s/d" : x.regime_adx;
         return `<span class="${x.regime_ok ? "up" : "down"}">${x.regime_ok ? "✓" : "✕"}</span> <span class="muted">V${vix}·A${adx}</span>`;
+      };
+      // CDC: ✓ si el cambio de carácter apareció en el POI (aunque sea después de
+      // generarse el plan); en setups abiertos sin CDC todavía, ⏳.
+      const cdcCell = (x) => {
+        if (x.cdc_ok == null) return '<span class="muted">s/d</span>';
+        if (x.cdc_ok) return '<span class="up">✓</span>';
+        const open = x.status === "pendiente" || x.status === "activo";
+        return open ? '<span class="muted">⏳</span>' : '<span class="down">✕</span>';
       };
       const rows = (d.setups || []).map((x) => [
         dt(x.ts_created),
@@ -256,12 +271,13 @@
         fmtP(x.tp),
         (typeof x.rr === "number" ? x.rr.toFixed(1) : x.rr),
         regCell(x),
+        cdcCell(x),
         `<span class="${STATUS_CLS[x.status] || ""}">${STATUS_LABEL[x.status] || x.status}</span>`,
         x.result_r == null ? "—" : `<span class="${x.result_r > 0 ? "up" : "down"}">${x.result_r > 0 ? "+" : ""}${x.result_r}R</span>`,
       ]);
       table($("setups-table"),
-        ["Fecha", "Par", "TF", "Dir", "Entrada", "SL", "TP", "R:R", "Régimen", "Estado", "Resultado"],
-        rows.length ? rows : [["Aún no se registran setups. Aparecen cuando el indicador genera un plan válido (R:R≥2).", "", "", "", "", "", "", "", "", "", ""]]);
+        ["Fecha", "Par", "TF", "Dir", "Entrada", "SL", "TP", "R:R", "Régimen", "CDC", "Estado", "Resultado"],
+        rows.length ? rows : [["Aún no se registran setups. Aparecen cuando el indicador genera un plan válido (R:R≥2).", "", "", "", "", "", "", "", "", "", "", ""]]);
     }).catch(() => {});
 
     // Backtest histórico de referencia (mismo criterio sobre datos de Binance).

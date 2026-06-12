@@ -197,7 +197,11 @@
             const rr = (typeof t.rr === "number") ? t.rr.toFixed(1) : t.rr;
             const estado = pend ? "⏳ en vigilancia" : "● activo";
             const reg = outReg ? " · ⚠ fuera de régimen" : "";
-            const badge = `R:R ${rr} · ${estado}${reg}`;
+            // CDC (cambio de carácter) como confirmación del plan (hipótesis 1h).
+            const cdcTag = t.cdc_status === "confirmado" ? " · ✓ CDC"
+              : t.cdc_status === "vencido" ? " · ✕ CDC venció"
+              : t.cdc_status ? " · ⏳ CDC" : "";
+            const badge = `R:R ${rr} · ${estado}${reg}${cdcTag}`;
             ctx.font = "bold 10px -apple-system, sans-serif";
             const bw = ctx.measureText(badge).width;
             const by = placeR(yEntry - 8);
@@ -775,15 +779,18 @@
       set(".smc-poi-near", "POI " + p.tf + " " + (p.discount ? "desc." : "prem.") + " · " +
         (p.dist_pct > 0 ? "+" : "") + p.dist_pct + "%" + here, p.discount ? "up" : "down");
     } else set(".smc-poi-near", "sin POI válido cerca");
-    // Setup vigente (plan TP/SL).
+    // Setup vigente (plan TP/SL), con su confirmación CDC (cambio de carácter).
     const t = smc && smc.tpsl;
     if (t) {
       const est = t.state === "activo" ? "● activo" : "⏳ en vigilancia";
       const reg = t.regime_ok === false ? " · ⚠ fuera de régimen" : "";
+      const cdc = t.cdc_status === "confirmado" ? " · ✓ CDC confirmado"
+        : t.cdc_status === "vencido" ? " · ✕ CDC venció sin confirmar"
+        : t.cdc_status ? " · ⏳ esperando CDC" : "";
       const slTxt = (typeof t.sl_pct === "number")
         ? " · SL −" + t.sl_pct.toFixed(1) + "%" + (t.sl_capped ? " (tope, excede estructura)" : "") : "";
       set(".smc-setup", "Plan " + t.tf + " " + (t.dir === "long" ? "▲ largo" : "▼ corto") +
-        " · R:R " + t.rr + slTxt + " · " + est + reg, t.regime_ok === false ? "" : (t.dir === "long" ? "up" : "down"));
+        " · R:R " + t.rr + slTxt + " · " + est + reg + cdc, t.regime_ok === false ? "" : (t.dir === "long" ? "up" : "down"));
     } else set(".smc-setup", "sin plan (no hay R:R≥2)");
   }
 

@@ -15,6 +15,7 @@ Devuelve, para un instrumento y la temporalidad seleccionada:
 """
 from __future__ import annotations
 
+import time
 from typing import Dict, List
 
 from . import smc
@@ -27,6 +28,91 @@ DISP = 1.0
 # que Hugo ve en BTCUSDT.P 15m (lookback 10, calibrado contra sus niveles).
 RANGE_PIV = 10
 POI_TFS = ["1D", "4h", "1h"]   # temporalidades de detección de POIs
+
+# --- CDC (Cambio De Carácter / CHoCH) como CONFIRMACIÓN del plan -----------
+# Validado en research/cdc_backtest_2026-06-12.md: esperar el CDC tras el toque
+# del POI gira el OOS de 1h de −0.096R a +0.066R (P(exp>0)=0.81 — probable, NO
+# concluyente; en 15m no rescata). Mismos parámetros del backtest, sin tuneo.
+CDC_PIV = 2        # pivotes de corto plazo para el CDC (PIV del research)
+CDC_WINDOW = 16    # velas de la TF de planeación que esperamos el CDC tras el toque
+
+# Duración de una vela por TF (para descartar la vela en formación y para la
+# ventana CDC). Claves tal como las usa el selector del módulo.
+TF_MS = {"1m": 60_000, "5m": 300_000, "15m": 900_000, "30m": 1_800_000,
+         "1h": 3_600_000, "2h": 7_200_000, "4h": 14_400_000, "6h": 21_600_000,
+         "12h": 43_200_000, "1D": 86_400_000, "7D": 604_800_000}
+
+
+def closed_candles(candles: list, tf: str, now_ms: int | None = None) -> list:
+    """Solo velas CERRADAS (anti-repaint): descarta la última si aún se está
+    formando. El CDC y el régimen se evalúan únicamente sobre cierres."""
+    if not candles:
+        return candles
+    now_ms = now_ms or int(time.time() * 1000)
+    dur = TF_MS.get(tf)
+    if dur and candles[-1]["t"] + dur > now_ms:
+        return candles[:-1]
+    return candles
+
+
+def _conf_prices(points, n):
+    """Precio del swing más reciente CONFIRMADO (confirm_idx<=j) en cada vela j.
+    Anti-look-ahead: un pivote se conoce recién `lookback` velas después (igual
+    que en el backtest del research)."""
+    out = [None] * n
+    evt = sorted(points, key=lambda p: p["confirm_idx"])
+    pi = 0
+    cur = None
+    for j in range(n):
+        while pi < len(evt) and evt[pi]["confirm_idx"] <= j:
+            cur = evt[pi]["price"]
+            pi += 1
+        out[j] = cur
+    return out
+
+
+def _cdc_state(closed: list, direction: str, zone_lo: float, zone_hi: float) -> Dict:
+    """Estado del CDC para el plan: tras el TOQUE de la zona del POI, ¿hubo un
+    cierre que rompa el último swing relevante en la dirección del plan?
+    (descuento → CDC alcista para largos; premium → CDC bajista para cortos).
+
+    Solo velas cerradas (cero look-ahead); los swings usan confirm_idx. Estados:
+      sin_toque  → el precio todavía no toca la zona (no aplica CDC aún),
+      esperando  → tocó la zona, sin CDC dentro de la ventana todavía,
+      confirmado → apareció el CDC en la dirección correcta dentro de la ventana,
+      vencido    → la ventana (16 velas) pasó sin CDC.
+    """
+    n = len(closed)
+    none = {"status": "sin_toque", "tap_t": None, "cdc_t": None, "bars_since_tap": None}
+    if n < 2 * CDC_PIV + 2:
+        return none
+    # Toque: primera vela que solapa la zona, mirando solo el tramo reciente
+    # (más allá de ~3 ventanas el setup ya no es "este" toque).
+    scan_from = max(0, n - 3 * CDC_WINDOW)
+    tap = None
+    for j in range(scan_from, n):
+        if closed[j]["l"] <= zone_hi and closed[j]["h"] >= zone_lo:
+            tap = j
+            break
+    if tap is None:
+        return none
+    sh, sl = smc.swing_points(closed, CDC_PIV)
+    ref = _conf_prices(sh if direction == "long" else sl, n)
+    closes = [c["c"] for c in closed]
+    end = min(n - 1, tap + CDC_WINDOW)
+    for j in range(tap, end + 1):
+        r = ref[j]
+        if r is None:
+            continue
+        if (direction == "long" and closes[j] > r) or \
+           (direction == "short" and closes[j] < r):
+            return {"status": "confirmado", "tap_t": closed[tap]["t"],
+                    "cdc_t": closed[j]["t"], "bars_since_tap": n - 1 - tap}
+    if n - 1 - tap >= CDC_WINDOW:
+        return {"status": "vencido", "tap_t": closed[tap]["t"], "cdc_t": None,
+                "bars_since_tap": n - 1 - tap}
+    return {"status": "esperando", "tap_t": closed[tap]["t"], "cdc_t": None,
+            "bars_since_tap": n - 1 - tap}
 
 
 def _last_confirmed(points, n):
@@ -214,7 +300,9 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
     # 1) Candidatos: POI válido, en su zona correcta del rango, y CERCA (cap de distancia).
     cands = []
     for p in pois:
-        if not p["valid"]:
+        # Candidato: POI válido (sin mitigar) o recién tocado en fase CDC (la
+        # mitigación del toque no mata el plan mientras se espera la confirmación).
+        if not (p["valid"] or p.get("cdc_phase")):
             continue
         long = p["dir"] == "long"
         mid = (p["lo"] + p["hi"]) / 2
@@ -311,5 +399,24 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
     result["active_pois"] = valids[:12]   # para el panel "POIs activos"
     # Capas estilo LuxAlgo (aditivas): niveles Weak/Strong con % y proyección TP/SL.
     result["levels"] = _levels(sel_candles, result["range"], len(sel_candles)) if sel_candles else []
-    result["tpsl"] = _tpsl(valids, result["levels"], last_price, result["range"])
+    # Fase CDC: un POI recién TOCADO se mitiga (deja de ser "válido"), pero el plan
+    # no debe desaparecer en el toque — es justo cuando se espera el CDC. Lo mantenemos
+    # como candidato mientras dure la ventana (16 velas de la TF de planeación),
+    # siempre que el stop no se haya roto.
+    now_ms = int(time.time() * 1000)
+    sel_ms = TF_MS.get(sel_tf, 3_600_000)
+    cdc_phase = [dict(p, cdc_phase=True) for p in all_pois
+                 if p["mitigated"] and not p["invalid"] and p.get("mit_t")
+                 and now_ms - p["mit_t"] <= (CDC_WINDOW + 1) * sel_ms]
+    result["tpsl"] = _tpsl(valids + cdc_phase, result["levels"], last_price, result["range"])
+    # CDC como CONFIRMACIÓN del plan (anti-repaint: solo velas cerradas de la TF
+    # de planeación). Hipótesis del research: aporta en 1h; se valida en forward-test.
+    plan = result["tpsl"]
+    if plan and sel_candles:
+        cdc = _cdc_state(closed_candles(sel_candles, sel_tf, now_ms),
+                         plan["dir"], plan["entry_lo"], plan["entry_hi"])
+        plan["cdc_status"] = cdc["status"]
+        plan["cdc_ok"] = cdc["status"] == "confirmado"
+        plan["cdc_t"] = cdc["cdc_t"]
+        plan["cdc_tf"] = sel_tf
     return result
