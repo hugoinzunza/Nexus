@@ -91,22 +91,28 @@ def _conf_points(points, n):
     return out
 
 
-# Pivote de los CDC DIBUJADOS: estructural (mismo lookback que Strong High/Weak
-# Low), calibrado contra los ejemplos M15 del indicador de Bitcoin Traders
-# Academy que mandó Hugo (2026-06-12): el CDC de la estrategia rompe swings
-# MAYORES (el máximo del rango, el mínimo que aguantó cientos de velas, el último
-# lower high de la pierna), no micro-pivotes. OJO: la CONFIRMACIÓN del plan
-# (cdc_status) sigue con CDC_PIV=2, que es lo validado en backtest.
-CDC_DRAW_PIV = RANGE_PIV
+# Pivote de los CDC DIBUJADOS: estructura MAYOR (50 velas por lado), calibrado
+# contra los ejemplos M15 del indicador de Bitcoin Traders Academy que mandó
+# Hugo (2026-06-12): con 50 el algoritmo reproduce sus CDC reales (el quiebre
+# del 61.184 del 06-09, el 62.858 del 06-11) y deja el máximo 64.250 como
+# PENDIENTE, igual que en sus capturas. Con el lookback 10 los niveles quedaban
+# casi iguales a los micro. OJO: la CONFIRMACIÓN del plan (cdc_status) sigue
+# con CDC_PIV=2, que es lo validado en backtest (cdc_struct_2026-06-12.md).
+CDC_DRAW_PIV = 50
 
 
-def _cdc_events(closed: list, max_events: int = 6) -> List[Dict]:
-    """Eventos de CDC (cambio de carácter) para DIBUJAR en el gráfico: cierres que
-    rompen el último swing ESTRUCTURAL confirmado en dirección OPUESTA a la del
-    quiebre anterior (los quiebres a favor son BOS y no se marcan). La línea va
-    desde el swing de origen hasta la vela del quiebre, como el indicador de
-    referencia. Anti-repaint: solo velas cerradas, swings con confirm_idx, cada
-    swing se consume tras romperse. Devuelve [{dir, price, t_from, t_to}]."""
+def _cdc_events(closed: list, max_events: int = 4) -> List[Dict]:
+    """CDC (cambios de carácter) para DIBUJAR, como el indicador de referencia:
+
+    - HISTÓRICOS: cierre que rompe el último swing estructural confirmado en
+      dirección OPUESTA al quiebre anterior; la línea va desde el swing de
+      origen hasta la vela del quiebre y queda congelada ahí.
+    - PENDIENTES: el último swing high y el último swing low estructurales SIN
+      romper, extendidos hasta la última vela cerrada — el nivel cuyo cierre en
+      contra cambiaría el carácter (la línea "64.250" de los ejemplos de Hugo).
+
+    Anti-repaint: solo velas cerradas, swings con confirm_idx, cada swing se
+    consume tras romperse. Devuelve [{dir, price, t_from, t_to, pending}]."""
     n = len(closed)
     if n < 2 * CDC_DRAW_PIV + 3:
         return []
@@ -122,16 +128,28 @@ def _cdc_events(closed: list, max_events: int = 6) -> List[Dict]:
         if h is not None and h["idx"] != broken_hi and closes[j] > h["price"]:
             if direction != "up":
                 events.append({"dir": "up", "price": round(h["price"], 6),
-                               "t_from": closed[h["idx"]]["t"], "t_to": closed[j]["t"]})
+                               "t_from": closed[h["idx"]]["t"], "t_to": closed[j]["t"],
+                               "pending": False})
             direction = "up"
             broken_hi = h["idx"]
         if l is not None and l["idx"] != broken_lo and closes[j] < l["price"]:
             if direction != "down":
                 events.append({"dir": "down", "price": round(l["price"], 6),
-                               "t_from": closed[l["idx"]]["t"], "t_to": closed[j]["t"]})
+                               "t_from": closed[l["idx"]]["t"], "t_to": closed[j]["t"],
+                               "pending": False})
             direction = "down"
             broken_lo = l["idx"]
-    return events[-max_events:]
+    events = events[-max_events:]
+    # Niveles pendientes: el high/low estructural vigente sin romper.
+    t_last = closed[-1]["t"]
+    h, l = hi[n - 1], lo[n - 1]
+    if h is not None and h["idx"] != broken_hi:
+        events.append({"dir": "up", "price": round(h["price"], 6),
+                       "t_from": closed[h["idx"]]["t"], "t_to": t_last, "pending": True})
+    if l is not None and l["idx"] != broken_lo:
+        events.append({"dir": "down", "price": round(l["price"], 6),
+                       "t_from": closed[l["idx"]]["t"], "t_to": t_last, "pending": True})
+    return events
 
 
 def _cdc_state(closed: list, direction: str, zone_lo: float, zone_hi: float) -> Dict:

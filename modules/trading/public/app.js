@@ -210,13 +210,17 @@
           smc.cdc_events.forEach((ev) => {
             const y = py(ev.price); if (y == null) return;
             let x1 = tx(ev.t_from), x2 = tx(ev.t_to);
+            if (ev.pending && x2 == null) x2 = W;   // pendiente: hasta el presente
             if (x2 == null) return;
             if (x1 == null) x1 = 0;
             const col = "#ea3943";
             ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.setLineDash([]);
-            ctx.globalAlpha = 0.85;
+            ctx.globalAlpha = ev.pending ? 0.95 : 0.7;
             ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(x2, y - 4); ctx.lineTo(x2, y + 4); ctx.stroke();
+            // Tick de quiebre solo en los históricos (el pendiente sigue vivo).
+            if (!ev.pending) {
+              ctx.beginPath(); ctx.moveTo(x2, y - 4); ctx.lineTo(x2, y + 4); ctx.stroke();
+            }
             ctx.globalAlpha = 1;
             // Etiqueta EN el eje de la línea (centrada sobre ella, al medio del
             // tramo): el fondo de la pill corta la línea, como el indicador.
