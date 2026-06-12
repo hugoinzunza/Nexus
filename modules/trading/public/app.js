@@ -478,6 +478,37 @@
     return card;
   }
 
+  // Encuadre por defecto: las últimas ~220 velas (el resto queda para scroll).
+  function frameRecent(card) {
+    if (!card.chart || !card.bars.length) return;
+    const n = card.bars.length;
+    if (n > 240) card.chart.timeScale().setVisibleLogicalRange({ from: n - 220, to: n + 4 });
+    else card.chart.timeScale().fitContent();
+  }
+
+  // Leyenda OHLC (estilo TradingView): la vela bajo el cursor, o la última
+  // (con el precio en vivo) cuando el cursor no está sobre el gráfico.
+  function renderLegend(card, t) {
+    const el = card.legendEl;
+    if (!el) return;
+    const cs = card.candles || [];
+    if (!cs.length) { el.textContent = ""; return; }
+    let c = cs[cs.length - 1];
+    if (t != null) {
+      const i = card.barIndex ? card.barIndex.get(t) : null;
+      if (i == null) { el.textContent = ""; return; }
+      c = cs[i];
+    } else if (card.lastPrice != null) {
+      c = { o: c.o, h: Math.max(c.h, card.lastPrice), l: Math.min(c.l, card.lastPrice),
+            c: card.lastPrice, v: c.v };
+    }
+    const pct = c.o ? (c.c - c.o) / c.o * 100 : 0;
+    el.innerHTML = `O <b>${fmtPrice(c.o)}</b> H <b>${fmtPrice(c.h)}</b> ` +
+      `L <b>${fmtPrice(c.l)}</b> C <b>${fmtPrice(c.c)}</b> ` +
+      `<span class="${pct >= 0 ? "up" : "down"}">${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%</span>` +
+      ` · Vol <b>${fmtCompact(c.v || 0)}</b>`;
+  }
+
   // --- Gráfico interactivo (TradingView Lightweight Charts) ----------
   function createChart(card) {
     if (!window.LightweightCharts) return;
@@ -505,6 +536,36 @@
     card.chart = chart;
     card.series = series;
     card.smcPrim = prim;
+
+    // Leyenda OHLC superpuesta (arriba a la izquierda del gráfico).
+    const legend = document.createElement("div");
+    legend.className = "chart-legend";
+    card.chartEl.appendChild(legend);
+    card.legendEl = legend;
+    card.legendLast = true;   // sin cursor encima, la leyenda sigue a la última vela
+    chart.subscribeCrosshairMove((param) => {
+      const t = param && param.time != null ? param.time : null;
+      card.legendLast = t == null;
+      renderLegend(card, t);
+    });
+
+    // Botón «ir al presente»: aparece cuando el usuario se desplazó hacia atrás.
+    const goBtn = document.createElement("button");
+    goBtn.className = "goto-now";
+    goBtn.type = "button";
+    goBtn.title = "Ir al presente";
+    goBtn.setAttribute("aria-label", "Ir al presente");
+    goBtn.textContent = "»";
+    goBtn.addEventListener("click", () => chart.timeScale().scrollToRealTime());
+    const wrap = card.node.querySelector(".chart-wrap");
+    if (wrap) wrap.appendChild(goBtn);
+    chart.timeScale().subscribeVisibleLogicalRangeChange((r) => {
+      const n = card.bars.length;
+      goBtn.classList.toggle("show", !!(r && n && r.to < n - 2));
+    });
+
+    // Doble clic sobre el gráfico = reencuadrar las últimas velas (reset).
+    card.chartEl.addEventListener("dblclick", () => frameRecent(card));
   }
 
   // Actualiza la última vela con el precio en vivo del SSE.
@@ -519,6 +580,7 @@
     });
     updateIndicatorsLast(card);
     if (indState.ribbon) { computeRibbon(card); pushPrim(card); }
+    if (card.legendLast) renderLegend(card, null);   // leyenda viva con el último precio
   }
 
   // Pide el análisis SMC en vivo y lo proyecta como price lines + primitive.
@@ -678,13 +740,10 @@
       // últimas ~220 velas y el resto queda para scroll/zoom hacia atrás.
       const range = card.chart.timeScale().getVisibleLogicalRange();
       card.series.setData(card.bars);
+      card.barIndex = new Map(card.bars.map((b, i) => [b.time, i]));
       if (card.fitted && range) card.chart.timeScale().setVisibleLogicalRange(range);
-      else {
-        const n = card.bars.length;
-        if (n > 240) card.chart.timeScale().setVisibleLogicalRange({ from: n - 220, to: n + 4 });
-        else card.chart.timeScale().fitContent();
-        card.fitted = true;
-      }
+      else { frameRecent(card); card.fitted = true; }
+      if (card.legendLast) renderLegend(card, null);
       setIndicatorData(card);
       computeRibbon(card);
       computeDivergences(card);

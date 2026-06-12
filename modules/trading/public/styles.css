@@ -77,7 +77,26 @@ body {
 .chart-wrap { background: var(--panel2); border-radius: 12px; padding: 8px;
   position: relative; display: flex; flex-direction: column; }
 /* Sin el libro al lado, el gráfico toma todo el ancho y más alto. */
-.chart { width: 100%; height: 460px; display: block; flex: 1 1 auto; min-height: 240px; }
+.chart { width: 100%; height: 460px; display: block; flex: 1 1 auto; min-height: 240px;
+  position: relative; }
+/* Leyenda OHLC de la vela bajo el cursor (o la última, en vivo). */
+.chart-legend { position: absolute; top: 6px; left: 8px; z-index: 3; pointer-events: none;
+  font: 500 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted);
+  background: rgba(15,17,23,0.72); border-radius: 6px; padding: 3px 8px;
+  font-variant-numeric: tabular-nums; max-width: calc(100% - 16px); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.chart-legend b { color: var(--text); font-weight: 600; }
+.chart-legend .up { color: var(--green); }
+.chart-legend .down { color: var(--red); }
+/* Botón «ir al presente» (aparece al desplazarse hacia atrás en la historia). */
+.goto-now { position: absolute; bottom: 64px; right: 64px; z-index: 4; cursor: pointer;
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line);
+  background: rgba(15,17,23,0.85); color: var(--accent2); font-size: 15px; line-height: 1;
+  display: none; align-items: center; justify-content: center; font-family: inherit;
+  padding: 0; }
+.goto-now.show { display: inline-flex; }
+.goto-now:hover { border-color: var(--accent); color: var(--text); }
+.chart-wrap.expanded .goto-now { bottom: 78px; right: 70px; }
 @media (max-width: 760px) { .chart { height: 360px; } }
 /* Desktop ancho: layout fluido (la columna de 1100px dejaba la pantalla en negro)
    y gráfico más grande, con alto ligado al viewport para ver más velas y detalle.
