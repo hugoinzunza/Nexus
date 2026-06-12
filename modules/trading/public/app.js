@@ -141,30 +141,38 @@
             const tw = ctx.measureText(label).width;
             ctx.fillText(label, W - tw - 6, y - 5);
           };
-          // Entrada = la zona del POI (banda).
+          // Zona del POI = de dónde sale la entrada (banda de contexto).
           const yhi = py(t.entry_hi), ylo = py(t.entry_lo);
           if (yhi != null && ylo != null) {
             const top = Math.min(yhi, ylo), h = Math.max(2, Math.abs(ylo - yhi));
             ctx.fillStyle = "rgba(108,92,231,0.16)";
             ctx.fillRect(0, top, W, h);
-            ctx.strokeStyle = "rgba(108,92,231,0.85)"; ctx.lineWidth = 1;
+            ctx.strokeStyle = "rgba(108,92,231,0.55)"; ctx.lineWidth = 1;
             ctx.setLineDash([4, 3]); ctx.strokeRect(0.5, top + 0.5, W - 1, h); ctx.setLineDash([]);
             ctx.fillStyle = "#a29bfe"; ctx.textBaseline = "top";
-            ctx.fillText(`Entrada · POI ${t.tf} ${long ? "▲ largo" : "▼ corto"}`, 5, top + 2);
+            ctx.fillText(`POI ${t.tf} ${long ? "▲ largo" : "▼ corto"}`, 5, top + 2);
             ctx.textBaseline = "middle";
           }
-          line(t.sl, "#ea3943", "SL");
-          line(t.tp, "#16c784", `TP · ${t.tp_label}`);
-          // Etiqueta con el R:R real, marcada como escenario de contexto.
+          // SL y TP: línea punteada + etiqueta con su precio (a la derecha).
+          line(t.sl, "#ea3943", `SL ${fmtPrice(t.sl)}`);
+          line(t.tp, "#16c784", `TP · ${t.tp_label} ${fmtPrice(t.tp)}`);
+          // ENTRADA: línea propia, sólida y más marcada, con su precio (a la izquierda
+          // para no chocar con la etiqueta de R:R). Es el tercer nivel del plan.
           const yEntry = py(t.entry);
           if (yEntry != null) {
+            ctx.strokeStyle = "#a29bfe"; ctx.lineWidth = 1.6; ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(0, yEntry); ctx.lineTo(W, yEntry); ctx.stroke();
+            ctx.fillStyle = "#a29bfe"; ctx.font = "bold 10px -apple-system, sans-serif";
+            ctx.fillText(`Entrada ${fmtPrice(t.entry)}`, 5, yEntry - 6);
+            ctx.font = "9px -apple-system, sans-serif";
+            // Etiqueta con el R:R real, marcada como escenario de contexto (a la derecha).
             const rr = (typeof t.rr === "number") ? t.rr.toFixed(1) : t.rr;
             const badge = `R:R ${rr} · escenario`;
             ctx.font = "bold 10px -apple-system, sans-serif";
             const bw = ctx.measureText(badge).width;
             ctx.fillStyle = "rgba(15,17,23,0.85)";
             ctx.fillRect(W - bw - 12, yEntry - 8, bw + 8, 16);
-            ctx.fillStyle = "#a29bfe"; ctx.textBaseline = "middle";
+            ctx.fillStyle = "#a29bfe";
             ctx.fillText(badge, W - bw - 8, yEntry);
             ctx.font = "9px -apple-system, sans-serif";
           }
