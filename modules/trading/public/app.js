@@ -670,11 +670,18 @@
         time: Math.floor(c.t / 1000), open: c.o, high: c.h, low: c.l, close: c.c,
       }));
       // Preservamos el zoom/paneo del usuario en los refrescos; solo reencuadramos
-      // en la primera carga o al cambiar de temporalidad.
+      // en la primera carga o al cambiar de temporalidad. Con la historia larga
+      // (~1000 velas) no usamos fitContent (aplastaría todo): encuadramos las
+      // últimas ~220 velas y el resto queda para scroll/zoom hacia atrás.
       const range = card.chart.timeScale().getVisibleLogicalRange();
       card.series.setData(card.bars);
       if (card.fitted && range) card.chart.timeScale().setVisibleLogicalRange(range);
-      else { card.chart.timeScale().fitContent(); card.fitted = true; }
+      else {
+        const n = card.bars.length;
+        if (n > 240) card.chart.timeScale().setVisibleLogicalRange({ from: n - 220, to: n + 4 });
+        else card.chart.timeScale().fitContent();
+        card.fitted = true;
+      }
       setIndicatorData(card);
       computeRibbon(card);
       computeDivergences(card);

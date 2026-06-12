@@ -27,6 +27,11 @@ DISP = 1.0
 # más grande → swings mayores, alineado con el indicador de Bitcoin Traders Academy
 # que Hugo ve en BTCUSDT.P 15m (lookback 10, calibrado contra sus niveles).
 RANGE_PIV = 10
+# El rango y los niveles se calculan sobre las últimas RANGE_WINDOW velas, aunque
+# el gráfico cargue mucha más historia: la calibración del dealing range se hizo
+# con ~400 velas y un rango sobre meses daría extremos irrelevantes. La historia
+# completa sí alimenta POIs, FVGs y CDC.
+RANGE_WINDOW = 400
 POI_TFS = ["1D", "4h", "1h"]   # temporalidades de detección de POIs
 
 # --- CDC (Cambio De Carácter / CHoCH) como CONFIRMACIÓN del plan -----------
@@ -376,10 +381,11 @@ def active_pois(htf_map: Dict[str, list], last_price: float) -> List[Dict]:
 
 def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: str) -> Dict:
     """Construye el análisis SMC completo para el frontend."""
+    rng_candles = sel_candles[-RANGE_WINDOW:] if sel_candles else sel_candles
     result = {
         "timeframe": sel_tf,
         "last_price": last_price,
-        "range": _range(sel_candles) if sel_candles else None,
+        "range": _range(rng_candles) if sel_candles else None,
         "fvgs": _fvgs(sel_candles) if sel_candles else [],
         "pois": [],
         "note": "Zonas de interés (contexto), no recomendaciones de compra/venta.",
@@ -396,9 +402,13 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
     mitig = [p for p in all_pois if not p["valid"]]
     mitig.sort(key=lambda p: -p["t_conf"])
     result["pois"] = valids[:12] + mitig[:6]
-    result["active_pois"] = valids[:12]   # para el panel "POIs activos"
+    # Panel "POIs activos": solo los CERCANOS al precio. Con la historia larga
+    # aparecen POIs de 1D válidos pero a −40% o más (BTC de otra era) que son
+    # ruido para operar hoy; el gráfico igual los dibuja si entran en rango.
+    near = [p for p in valids if abs(p.get("dist_pct", 0.0)) <= 15.0]
+    result["active_pois"] = near[:12]
     # Capas estilo LuxAlgo (aditivas): niveles Weak/Strong con % y proyección TP/SL.
-    result["levels"] = _levels(sel_candles, result["range"], len(sel_candles)) if sel_candles else []
+    result["levels"] = _levels(rng_candles, result["range"], len(rng_candles)) if sel_candles else []
     # Fase CDC: un POI recién TOCADO se mitiga (deja de ser "válido"), pero el plan
     # no debe desaparecer en el toque — es justo cuando se espera el CDC. Lo mantenemos
     # como candidato mientras dure la ventana (16 velas de la TF de planeación),

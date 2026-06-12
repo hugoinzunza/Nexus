@@ -88,12 +88,20 @@ def get_book(instrument: str, depth: int = 12) -> dict:
     return {"bids": norm(level.get("bids", [])), "asks": norm(level.get("asks", []))}
 
 
-def get_candles(instrument: str, timeframe: str = "1m", count: int = 200) -> list:
-    """Velas OHLCV. Devuelve lista ordenada (más antigua → más reciente)."""
-    result = _get(
-        f"/public/get-candlestick?instrument_name={instrument}"
-        f"&timeframe={timeframe}&count={count}"
-    )
+# La API pública devuelve como máximo 300 velas por petición (aunque se pidan más).
+MAX_CANDLES_PER_CALL = 300
+
+
+def get_candles(instrument: str, timeframe: str = "1m", count: int = 200,
+                end_ts: int | None = None) -> list:
+    """Velas OHLCV. Devuelve lista ordenada (más antigua → más reciente).
+    `end_ts` (ms) pide velas ANTERIORES a ese instante — sirve para paginar
+    hacia atrás (get_candles_deep)."""
+    url = (f"/public/get-candlestick?instrument_name={instrument}"
+           f"&timeframe={timeframe}&count={min(count, MAX_CANDLES_PER_CALL)}")
+    if end_ts is not None:
+        url += f"&end_ts={int(end_ts)}"
+    result = _get(url)
     out = []
     for c in result.get("data", []):
         out.append({
@@ -106,3 +114,22 @@ def get_candles(instrument: str, timeframe: str = "1m", count: int = 200) -> lis
         })
     out.sort(key=lambda x: x["t"])
     return out
+
+
+def get_candles_deep(instrument: str, timeframe: str, count: int) -> list:
+    """Historia larga: pagina hacia atrás con end_ts hasta juntar `count` velas
+    (o hasta que la API no entregue más). Pensado para la carga inicial del
+    gráfico; los refrescos siguientes deben ser incrementales (get_candles)."""
+    out = get_candles(instrument, timeframe, MAX_CANDLES_PER_CALL)
+    pages = 1
+    while len(out) < count and pages < 8:
+        oldest = out[0]["t"] if out else None
+        if oldest is None:
+            break
+        older = get_candles(instrument, timeframe, MAX_CANDLES_PER_CALL, end_ts=oldest - 1)
+        older = [c for c in older if c["t"] < oldest]
+        if not older:
+            break
+        out = older + out
+        pages += 1
+    return out[-count:]

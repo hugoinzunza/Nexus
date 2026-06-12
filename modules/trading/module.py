@@ -53,6 +53,11 @@ class TradingModule(NexusModule):
         self.book_depth = int(cfg.get("book_depth", 12))
         self.candle_timeframe = cfg.get("candle_timeframe", "1m")
         self.candle_count = int(cfg.get("candle_count", 400))
+        # Historia del GRÁFICO y del análisis SMC (scroll/zoom hacia atrás + más
+        # estructura para POIs/CDC). Se carga profunda una vez por TF y después
+        # solo se refresca el tramo reciente (fusión incremental por timestamp).
+        # El estado SSE sigue usando candle_count (liviano, se empuja cada 2s).
+        self.chart_candle_count = int(cfg.get("chart_candle_count", 1000))
 
         # Temporalidades que ofrece el selector del gráfico. Son los valores que
         # acepta el parámetro `timeframe` de la API de candlestick de Crypto.com
@@ -317,6 +322,19 @@ class TradingModule(NexusModule):
         secs = self._TF_SECONDS.get(timeframe, 60)
         return max(2.0, min(secs / 8.0, 15.0))
 
+    # Tamaño del refresco incremental: cubre de sobra el lapso entre refrescos
+    # (TTL ≤ 15s) y cualquier hueco razonable, sin volver a bajar toda la historia.
+    _REFRESH_BATCH = 120
+
+    @staticmethod
+    def _merge_candles(old: list, new: list, cap: int) -> list:
+        """Fusiona el tramo nuevo sobre la historia: por timestamp, lo nuevo pisa
+        a lo viejo (la vela en curso se actualiza) y se recorta a `cap` velas."""
+        by_t = {c["t"]: c for c in old}
+        by_t.update({c["t"]: c for c in new})
+        out = sorted(by_t.values(), key=lambda c: c["t"])
+        return out[-cap:]
+
     def _candles_cached(self, instrument: str, timeframe: str) -> list:
         key = (instrument, timeframe)
         now = time.time()
@@ -324,24 +342,36 @@ class TradingModule(NexusModule):
             entry = self._chart_cache.get(key)
             if entry and now - entry["ts"] < self._chart_ttl(timeframe):
                 return entry["candles"]
+            prev = entry["candles"] if entry else None
         # Fuente de velas/estructura: Binance si el instrumento lo configura (para
         # que el gráfico y los swings coincidan con lo que Hugo ve en BTCUSDT.P).
         # Pero Binance bloquea por geo a Railway (HTTP 451); si falla, caemos a
         # Crypto.com y recordamos el bloqueo 5 min para no reintentar en cada carga.
         # El ticker/orderbook siempre vienen de Crypto.com.
+        # Historia: la PRIMERA carga por TF es profunda (chart_candle_count velas;
+        # en Crypto.com pagina con end_ts porque su API entrega máx. 300 por
+        # petición). Los refrescos siguientes piden solo el tramo reciente y se
+        # fusionan sobre la historia ya cargada (rápido y amable con la API).
         inst = self._inst_by_name.get(instrument, {})
+        want = self.chart_candle_count
+        fetch_n = self._REFRESH_BATCH if prev else want
         candles = None
         if inst.get("binance") and time.time() > self._binance_blocked_until:
             try:
                 candles = binance.recent_klines(inst["binance"], timeframe,
-                                                limit=self.candle_count,
+                                                limit=fetch_n,
                                                 market=inst.get("market", "futures"))
             except Exception as exc:  # noqa: BLE001 - geo-block u otra falla de red
                 self._binance_blocked_until = time.time() + 300
                 self.context.log(f"trading: Binance no disponible ({type(exc).__name__}), "
                                  "uso Crypto.com 5 min")
         if candles is None:
-            candles = cryptocom.get_candles(instrument, timeframe, self.candle_count)
+            if fetch_n > cryptocom.MAX_CANDLES_PER_CALL:
+                candles = cryptocom.get_candles_deep(instrument, timeframe, fetch_n)
+            else:
+                candles = cryptocom.get_candles(instrument, timeframe, fetch_n)
+        if prev:
+            candles = self._merge_candles(prev, candles, want)
         with self._chart_lock:
             self._chart_cache[key] = {"candles": candles, "ts": now}
         return candles
