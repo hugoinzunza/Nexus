@@ -187,8 +187,8 @@ class TradingModule(NexusModule):
         """Velas recientes de las temporalidades de detección de POIs (cacheadas)."""
         return {tf: self._candles_cached(instrument, tf) for tf in _HTF_FOR_POI}
 
-    def _smc_analysis(self, instrument: str, sel_tf: str, sl_mode: str = "structural") -> dict:
-        key = (instrument, sel_tf, sl_mode)
+    def _smc_analysis(self, instrument: str, sel_tf: str) -> dict:
+        key = (instrument, sel_tf)
         now = time.time()
         with self._smc_lock:
             entry = self._smc_cache.get(key)
@@ -197,7 +197,7 @@ class TradingModule(NexusModule):
         sel = self._candles_cached(instrument, sel_tf)
         htf = self._htf_candles(instrument)
         last = sel[-1]["c"] if sel else 0.0
-        analysis = smc_live.analyze(sel, htf, last, sel_tf, sl_mode)
+        analysis = smc_live.analyze(sel, htf, last, sel_tf)
         # Capa de PERMISO por régimen (VIX<25 + ADX>25). NO toca la detección SMC:
         # es un semáforo sobre el plan. Se calcula sobre las mismas velas cerradas.
         try:
@@ -382,9 +382,8 @@ class TradingModule(NexusModule):
                 return self._json_error(400, "instrumento no permitido")
             if timeframe not in self.ui_timeframes:
                 return self._json_error(400, "temporalidad no válida")
-            sl_mode = "fixed" if query.get("sl") == "fixed" else "structural"
             try:
-                analysis = self._smc_analysis(instrument, timeframe, sl_mode)
+                analysis = self._smc_analysis(instrument, timeframe)
             except Exception as exc:  # noqa: BLE001
                 return self._json_error(502, f"no se pudo analizar SMC: {exc}")
             body = json.dumps({"instrument": instrument, **analysis},

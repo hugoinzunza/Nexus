@@ -176,7 +176,9 @@
           }
           // SL y TP: línea punteada + etiqueta con su precio (a la derecha).
           ctx.globalAlpha = alpha;
-          line(t.sl, "#ea3943", `SL ${fmtPrice(t.sl)}`);
+          const slPctTxt = (typeof t.sl_pct === "number")
+            ? ` (−${t.sl_pct.toFixed(1)}%${t.sl_capped ? " · tope 1,5%" : ""})` : "";
+          line(t.sl, t.sl_capped ? "#f5a623" : "#ea3943", `SL ${fmtPrice(t.sl)}${slPctTxt}`);
           line(t.tp, "#16c784", `TP · ${t.tp_label} ${fmtPrice(t.tp)}`);
           // ENTRADA: línea propia, con su precio (a la izquierda para no chocar con el
           // badge). Sólida si está activa, punteada si está pendiente. Tercer nivel del plan.
@@ -253,7 +255,7 @@
   // --- Indicadores (Vol / RSI / ADX) ---------------------------------
   // Estado global (mismo para todos los pares), recordado en localStorage.
   const IND_KEY = "nexus_trading_ind";
-  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: false, div: false, slfixed: false };
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: false, div: false };
   let indState = (() => {
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
@@ -389,7 +391,7 @@
   // Indicadores en panes (recrean series) y capas Lux (solo redibujan el primitive).
   const TOGGLE_GROUPS = {
     ".ind-toggles": [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]],
-    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."], ["slfixed", "SL 1,5%"]],
+    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."]],
   };
   const PANE_INDICATORS = new Set(["vol", "rsi", "adx"]);
 
@@ -407,7 +409,6 @@
           indState[k] = !indState[k];
           saveIndState();
           if (PANE_INDICATORS.has(k)) Object.values(cards).forEach((c) => buildIndicators(c));
-          else if (k === "slfixed") Object.values(cards).forEach((c) => loadSMC(c.symbol, c)); // recalcula el plan con el nuevo SL
           else Object.values(cards).forEach((c) => { computeRibbon(c); pushPrim(c); });
           refreshToggleUI();
         });
@@ -514,9 +515,8 @@
   // Pide el análisis SMC en vivo y lo proyecta como price lines + primitive.
   async function loadSMC(symbol, card) {
     const tf = card.timeframe;
-    const sl = indState.slfixed ? "fixed" : "structural";   // modo de SL del plan TP/SL
     try {
-      const r = await fetch(`api/smc?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&sl=${sl}`);
+      const r = await fetch(`api/smc?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}`);
       if (!r.ok) return;
       const j = await r.json();
       if (card.timeframe !== tf) return;
@@ -780,8 +780,10 @@
     if (t) {
       const est = t.state === "activo" ? "● activo" : "⏳ en vigilancia";
       const reg = t.regime_ok === false ? " · ⚠ fuera de régimen" : "";
+      const slTxt = (typeof t.sl_pct === "number")
+        ? " · SL −" + t.sl_pct.toFixed(1) + "%" + (t.sl_capped ? " (tope, excede estructura)" : "") : "";
       set(".smc-setup", "Plan " + t.tf + " " + (t.dir === "long" ? "▲ largo" : "▼ corto") +
-        " · R:R " + t.rr + " · " + est + reg, t.regime_ok === false ? "" : (t.dir === "long" ? "up" : "down"));
+        " · R:R " + t.rr + slTxt + " · " + est + reg, t.regime_ok === false ? "" : (t.dir === "long" ? "up" : "down"));
     } else set(".smc-setup", "sin plan (no hay R:R≥2)");
   }
 
