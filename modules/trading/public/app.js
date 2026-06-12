@@ -202,24 +202,26 @@
         }
 
         // --- Capa CDC: cambios de carácter (CHoCH) sobre velas cerradas ---
-        // SIEMPRE visible (sin toggle, pedido de Hugo): línea desde el swing roto
-        // hasta la vela cuyo CIERRE lo rompió, con etiqueta "CDC" — como el
-        // indicador de referencia. Verde = CDC alcista (rompe el último swing
-        // high), rojo = bajista (rompe el swing low).
+        // SIEMPRE visible (sin toggle, pedido de Hugo): línea desde el swing
+        // ESTRUCTURAL roto hasta la vela cuyo CIERRE lo rompió, con etiqueta
+        // "CDC" en el eje de la línea — roja siempre, como el indicador de
+        // referencia (calibrado con los ejemplos M15 de Hugo).
         if (smc.cdc_events && smc.cdc_events.length) {
           smc.cdc_events.forEach((ev) => {
             const y = py(ev.price); if (y == null) return;
             let x1 = tx(ev.t_from), x2 = tx(ev.t_to);
             if (x2 == null) return;
             if (x1 == null) x1 = 0;
-            const col = ev.dir === "up" ? "#16c784" : "#ea3943";
+            const col = "#ea3943";
             ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.setLineDash([]);
             ctx.globalAlpha = 0.85;
             ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(x2, y - 4); ctx.lineTo(x2, y + 4); ctx.stroke();
             ctx.globalAlpha = 1;
-            pill(placeD(ev.dir === "up" ? y - 19 : y + 5), "CDC", col,
-                 { x: Math.max(2, Math.min(x2 - 16, W - 44)),
+            // Etiqueta EN el eje de la línea (centrada sobre ella, al medio del
+            // tramo): el fondo de la pill corta la línea, como el indicador.
+            pill(y - 8, "CDC", col,
+                 { x: Math.max(2, Math.min((x1 + x2) / 2 - 14, W - 44)),
                    font: "600 9px -apple-system, sans-serif" });
           });
         }

@@ -91,16 +91,26 @@ def _conf_points(points, n):
     return out
 
 
+# Pivote de los CDC DIBUJADOS: estructural (mismo lookback que Strong High/Weak
+# Low), calibrado contra los ejemplos M15 del indicador de Bitcoin Traders
+# Academy que mandó Hugo (2026-06-12): el CDC de la estrategia rompe swings
+# MAYORES (el máximo del rango, el mínimo que aguantó cientos de velas, el último
+# lower high de la pierna), no micro-pivotes. OJO: la CONFIRMACIÓN del plan
+# (cdc_status) sigue con CDC_PIV=2, que es lo validado en backtest.
+CDC_DRAW_PIV = RANGE_PIV
+
+
 def _cdc_events(closed: list, max_events: int = 6) -> List[Dict]:
     """Eventos de CDC (cambio de carácter) para DIBUJAR en el gráfico: cierres que
-    rompen el último swing confirmado en dirección OPUESTA a la del quiebre
-    anterior (los quiebres a favor son BOS y no se marcan, para no saturar).
-    Anti-repaint: solo velas cerradas, swings con confirm_idx, cada swing se
-    consume tras romperse. Devuelve [{dir, price, t_from, t_to}] (los últimos)."""
+    rompen el último swing ESTRUCTURAL confirmado en dirección OPUESTA a la del
+    quiebre anterior (los quiebres a favor son BOS y no se marcan). La línea va
+    desde el swing de origen hasta la vela del quiebre, como el indicador de
+    referencia. Anti-repaint: solo velas cerradas, swings con confirm_idx, cada
+    swing se consume tras romperse. Devuelve [{dir, price, t_from, t_to}]."""
     n = len(closed)
-    if n < 2 * CDC_PIV + 3:
+    if n < 2 * CDC_DRAW_PIV + 3:
         return []
-    sh, sl = smc.swing_points(closed, CDC_PIV)
+    sh, sl = smc.swing_points(closed, CDC_DRAW_PIV)
     hi = _conf_points(sh, n)
     lo = _conf_points(sl, n)
     closes = [c["c"] for c in closed]
