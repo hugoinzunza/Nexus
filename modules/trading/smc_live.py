@@ -152,23 +152,50 @@ def _levels(sel_candles, rng, n) -> List[Dict]:
 
 # R:R mínimo para que un escenario valga la pena mostrarse (filtro 1:2).
 MIN_RR = 2.0
-# "Tocando o entrando" a la zona: tolerancia chica alrededor del POI (0.15%).
+# Tolerancia para considerar que el precio ya está DENTRO de la zona (estado activo).
 TOUCH_TOL = 0.0015
+# Cap de distancia: solo planeamos POIs dentro del dealing range o a <= 5% del precio,
+# para no dibujar order blocks irrelevantes (p. ej. un OB de 1D a +90%).
+DIST_CAP_PCT = 5.0
+
+
+def _opposite_liquidity(levels, long, ref, rhi, rlo):
+    """TP = la siguiente liquidez SIN BARRER (Weak) en la dirección del trade y más
+    allá del precio de referencia (Weak High arriba para largo / Weak Low abajo para
+    corto). Respaldo: el extremo del dealing range. Devuelve (precio, etiqueta) o None.
+    Apuntar a liquidez weak (no barrida) evita el bug de tomar un nivel ya barrido o
+    por detrás del precio, que daba un R:R falso."""
+    if long:
+        weak = [l["price"] for l in levels
+                if l["type"] == "high" and l["kind"] == "weak" and l["price"] > ref]
+        if weak:
+            return round(min(weak), 2), "Weak High"
+        if rhi and rhi > ref:
+            return round(rhi, 2), "Strong High"   # respaldo: techo del rango
+        return None
+    weak = [l["price"] for l in levels
+            if l["type"] == "low" and l["kind"] == "weak" and l["price"] < ref]
+    if weak:
+        return round(max(weak), 2), "Weak Low"
+    if rlo and rlo < ref:
+        return round(rlo, 2), "Weak Low"          # respaldo: piso del rango
+    return None
 
 
 def _tpsl(pois, levels, last_price, rng) -> Dict:
     """Escenario de contexto (NO una orden ni recomendación automática).
 
-    Solo arma un setup cuando hay CONFLUENCIA real de SMC, no un TP/SL que flota:
-      - POI válido (✓, sin mitigar) que el precio está TOCANDO/ENTRANDO ahora,
-      - en la zona correcta del rango: descuento (bajo EQ) para LARGO,
-        premium (sobre EQ) para CORTO,
+    Dibuja el PLAN del POI válido en zona correcta MÁS CERCANO para poder PLANEAR la
+    entrada, no solo en el instante exacto del toque:
+      - POI válido (✓, sin mitigar), en zona correcta del rango (descuento para largo,
+        premium para corto) y CERCA (dentro del dealing range o <= 5% del precio),
       - Entrada = la zona del POI,
-      - SL = más allá del extremo del barrido que invalidaría el setup (stop del POI),
-      - TP = la SIGUIENTE liquidez opuesta más cercana (Weak High arriba para largo /
-        Weak Low abajo para corto; respaldo: el extremo del dealing range),
-      - y el R:R real (dist entrada→TP / dist entrada→SL) es >= 2.0.
-    Si el TP más cercano no da 2R, o no hay confluencia, devuelve None (no se dibuja)."""
+      - SL = más allá del barrido que invalidaría el setup (stop del POI),
+      - TP = la siguiente liquidez SIN BARRER (Weak) en la dirección del trade y más
+        allá del precio actual; respaldo: el extremo del dealing range,
+      - filtro R:R real (dist entrada→TP / dist entrada→SL) >= 2.0 sobre ese TP.
+    Estado: "activo" si el precio ya está dentro de la zona; "pendiente" (en
+    vigilancia) si todavía no la toca. Devuelve None si no hay un plan que valga."""
     if not pois or not last_price:
         return None
     eq = rng.get("eq") if rng else None
@@ -176,7 +203,7 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
     rlo = rng.get("weak_low") if rng else None
     tol = last_price * TOUCH_TOL
 
-    # 1) Candidatos: POI válido, en su zona correcta del rango, que el precio toca/entra.
+    # 1) Candidatos: POI válido, en su zona correcta del rango, y CERCA (cap de distancia).
     cands = []
     for p in pois:
         if not p["valid"]:
@@ -188,47 +215,42 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
                 continue
             if (not long) and mid <= eq:  # corto solo si el POI está en PREMIUM
                 continue
-        if not ((p["lo"] - tol) <= last_price <= (p["hi"] + tol)):
-            continue                       # el precio no está tocando/entrando la zona
+        in_range = rlo is not None and rhi is not None and rlo <= mid <= rhi
+        near = abs(p.get("dist_pct", 0.0)) <= DIST_CAP_PCT
+        if not (in_range or near):
+            continue                       # POI lejano/irrelevante → no se planea
         cands.append((p, long, mid))
     if not cands:
         return None
-    cands.sort(key=lambda c: abs(c[2] - last_price))  # el que el precio interactúa ahora
+    cands.sort(key=lambda c: abs(c[2] - last_price))  # el más cercano = el próximo a vigilar
 
-    # 2) Para cada candidato, TP = liquidez opuesta MÁS CERCANA y filtro R:R >= 2.
+    # 2) Del más cercano al más lejano: TP a la liquidez sin barrer y filtro R:R >= 2.
     for p, long, mid in cands:
         entry = round(mid, 2)
         sl = round(p["stop"], 2)
         risk = abs(entry - sl)
         if risk <= 0:
             continue
-        if long:
-            ups = [l["price"] for l in levels if l["type"] == "high" and l["price"] > entry]
-            if rhi and rhi > entry:
-                ups.append(rhi)
-            if not ups:
-                continue
-            tp = round(min(ups), 2)       # la primera liquidez que el precio buscaría
-        else:
-            dns = [l["price"] for l in levels if l["type"] == "low" and l["price"] < entry]
-            if rlo and rlo < entry:
-                dns.append(rlo)
-            if not dns:
-                continue
-            tp = round(max(dns), 2)
+        ref = max(entry, last_price) if long else min(entry, last_price)
+        target = _opposite_liquidity(levels, long, ref, rhi, rlo)
+        if not target:
+            continue
+        tp, tp_label = target
         rr = abs(tp - entry) / risk
         if rr < MIN_RR:
-            continue                       # el TP más cercano no da 2R → no es setup
-        # Etiqueta de la liquidez objetivo (Weak/Strong High/Low si está en niveles).
-        tp_label = "Liquidez opuesta"
+            continue                       # no llega a 2R → no vale como plan
+        # Etiqueta más precisa si el TP coincide con un nivel concreto.
         for l in levels:
             if round(l["price"], 2) == tp:
                 tp_label = l["label"]
                 break
+        # Estado: activo si el precio ya está dentro de la zona, sino en vigilancia.
+        active = (p["lo"] - tol) <= last_price <= (p["hi"] + tol)
         return {
-            "dir": p["dir"], "tf": p["tf"],
+            "dir": p["dir"], "tf": p["tf"], "state": "activo" if active else "pendiente",
             "entry": entry, "entry_lo": round(p["lo"], 2), "entry_hi": round(p["hi"], 2),
             "sl": sl, "tp": tp, "rr": round(rr, 1), "tp_label": tp_label,
+            "dist_pct": p.get("dist_pct", 0.0),
         }
     return None
 
