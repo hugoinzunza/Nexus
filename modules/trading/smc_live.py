@@ -150,29 +150,87 @@ def _levels(sel_candles, rng, n) -> List[Dict]:
     return out
 
 
-def _tpsl(pois, levels, last_price) -> Dict:
-    """Proyección de escenario (NO señal) para el POI válido más cercano al precio:
-    SL más allá del barrido/OB y TP por múltiplos R + siguiente liquidez opuesta."""
-    valids = [p for p in pois if p["valid"]]
-    if not valids:
+# R:R mínimo para que un escenario valga la pena mostrarse (filtro 1:2).
+MIN_RR = 2.0
+# "Tocando o entrando" a la zona: tolerancia chica alrededor del POI (0.15%).
+TOUCH_TOL = 0.0015
+
+
+def _tpsl(pois, levels, last_price, rng) -> Dict:
+    """Escenario de contexto (NO una orden ni recomendación automática).
+
+    Solo arma un setup cuando hay CONFLUENCIA real de SMC, no un TP/SL que flota:
+      - POI válido (✓, sin mitigar) que el precio está TOCANDO/ENTRANDO ahora,
+      - en la zona correcta del rango: descuento (bajo EQ) para LARGO,
+        premium (sobre EQ) para CORTO,
+      - Entrada = la zona del POI,
+      - SL = más allá del extremo del barrido que invalidaría el setup (stop del POI),
+      - TP = la SIGUIENTE liquidez opuesta más cercana (Weak High arriba para largo /
+        Weak Low abajo para corto; respaldo: el extremo del dealing range),
+      - y el R:R real (dist entrada→TP / dist entrada→SL) es >= 2.0.
+    Si el TP más cercano no da 2R, o no hay confluencia, devuelve None (no se dibuja)."""
+    if not pois or not last_price:
         return None
-    poi = min(valids, key=lambda p: abs(p["dist_pct"]))
-    entry = round((poi["lo"] + poi["hi"]) / 2, 2)
-    sl = round(poi["stop"], 6)
-    risk = abs(entry - sl)
-    if risk <= 0:
+    eq = rng.get("eq") if rng else None
+    rhi = rng.get("strong_high") if rng else None
+    rlo = rng.get("weak_low") if rng else None
+    tol = last_price * TOUCH_TOL
+
+    # 1) Candidatos: POI válido, en su zona correcta del rango, que el precio toca/entra.
+    cands = []
+    for p in pois:
+        if not p["valid"]:
+            continue
+        long = p["dir"] == "long"
+        mid = (p["lo"] + p["hi"]) / 2
+        if eq is not None:
+            if long and mid >= eq:        # largo solo si el POI está en DESCUENTO
+                continue
+            if (not long) and mid <= eq:  # corto solo si el POI está en PREMIUM
+                continue
+        if not ((p["lo"] - tol) <= last_price <= (p["hi"] + tol)):
+            continue                       # el precio no está tocando/entrando la zona
+        cands.append((p, long, mid))
+    if not cands:
         return None
-    long = poi["dir"] == "long"
-    sgn = 1 if long else -1
-    tp = [round(entry + sgn * m * risk, 2) for m in (1, 2, 3)]
-    if long:
-        ups = [l["price"] for l in levels if l["type"] == "high" and l["price"] > entry]
-        liq = round(min(ups), 2) if ups else None
-    else:
-        dns = [l["price"] for l in levels if l["type"] == "low" and l["price"] < entry]
-        liq = round(max(dns), 2) if dns else None
-    return {"dir": poi["dir"], "tf": poi["tf"], "entry": entry, "sl": round(sl, 2),
-            "tp1": tp[0], "tp2": tp[1], "tp3": tp[2], "liq": liq}
+    cands.sort(key=lambda c: abs(c[2] - last_price))  # el que el precio interactúa ahora
+
+    # 2) Para cada candidato, TP = liquidez opuesta MÁS CERCANA y filtro R:R >= 2.
+    for p, long, mid in cands:
+        entry = round(mid, 2)
+        sl = round(p["stop"], 2)
+        risk = abs(entry - sl)
+        if risk <= 0:
+            continue
+        if long:
+            ups = [l["price"] for l in levels if l["type"] == "high" and l["price"] > entry]
+            if rhi and rhi > entry:
+                ups.append(rhi)
+            if not ups:
+                continue
+            tp = round(min(ups), 2)       # la primera liquidez que el precio buscaría
+        else:
+            dns = [l["price"] for l in levels if l["type"] == "low" and l["price"] < entry]
+            if rlo and rlo < entry:
+                dns.append(rlo)
+            if not dns:
+                continue
+            tp = round(max(dns), 2)
+        rr = abs(tp - entry) / risk
+        if rr < MIN_RR:
+            continue                       # el TP más cercano no da 2R → no es setup
+        # Etiqueta de la liquidez objetivo (Weak/Strong High/Low si está en niveles).
+        tp_label = "Liquidez opuesta"
+        for l in levels:
+            if round(l["price"], 2) == tp:
+                tp_label = l["label"]
+                break
+        return {
+            "dir": p["dir"], "tf": p["tf"],
+            "entry": entry, "entry_lo": round(p["lo"], 2), "entry_hi": round(p["hi"], 2),
+            "sl": sl, "tp": tp, "rr": round(rr, 1), "tp_label": tp_label,
+        }
+    return None
 
 
 def active_pois(htf_map: Dict[str, list], last_price: float) -> List[Dict]:
@@ -210,5 +268,5 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
     result["active_pois"] = valids[:12]   # para el panel "POIs activos"
     # Capas estilo LuxAlgo (aditivas): niveles Weak/Strong con % y proyección TP/SL.
     result["levels"] = _levels(sel_candles, result["range"], len(sel_candles)) if sel_candles else []
-    result["tpsl"] = _tpsl(valids, result["levels"], last_price)
+    result["tpsl"] = _tpsl(valids, result["levels"], last_price, result["range"])
     return result

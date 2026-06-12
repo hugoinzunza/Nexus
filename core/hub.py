@@ -1,4 +1,4 @@
-"""El hub de Nexus: ciclo de vida de los módulos y estado del sistema.
+"""El hub de Nexux: ciclo de vida de los módulos y estado del sistema.
 
 Antes esta clase también levantaba un servidor HTTP propio (http.server). Ahora
 el servidor es FastAPI + uvicorn (ver `core/app.py`); el hub se ocupa solo de:
@@ -42,7 +42,7 @@ class Hub:
 
     # ------------------------------------------------------------------
     def boot(self) -> None:
-        log("⚡ Arrancando Nexus…")
+        log("⚡ Arrancando Nexux…")
         modules_root = os.path.join(ROOT, "modules")
         self.modules = load_modules(modules_root, self.config, log)
         self.modules_by_slug = {m.slug: m for m in self.modules}
@@ -54,7 +54,7 @@ class Hub:
                 log(f"⚠️  el módulo '{module.slug}' falló al arrancar: {exc}")
 
         log("─" * 52)
-        log(f"🌐 Nexus listo · {len(self.modules)} módulo(s) cargado(s)")
+        log(f"🌐 Nexux listo · {len(self.modules)} módulo(s) cargado(s)")
         for m in self.modules:
             log(f"   {m.icon}  {m.title:<16} → /m/{m.slug}/")
         log("─" * 52)
@@ -65,13 +65,13 @@ class Hub:
                 module.stop()
             except Exception:  # noqa: BLE001
                 pass
-        log("Nexus detenido. ¡Hasta la próxima!")
+        log("Nexux detenido. ¡Hasta la próxima!")
 
     # ------------------------------------------------------------------
     def health(self) -> dict:
         uptime = (datetime.now() - self.started_at).total_seconds()
         return {
-            "name": "Nexus",
+            "name": "Nexux",
             "status": "ok",
             "uptime_seconds": round(uptime, 1),
             "modules": [m.health() for m in self.modules],
@@ -100,14 +100,14 @@ _LANDING_TEMPLATE = """<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f1117">
-  <meta name="description" content="Nexus · el hub personal de Hugo">
-  <title>Nexus · Hub personal</title>
+  <meta name="description" content="Nexux · el hub personal de Hugo">
+  <title>Nexux · Hub personal</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Nexus">
+  <meta name="apple-mobile-web-app-title" content="Nexux">
   <style>
     :root { --bg:#0f1117; --panel:#171a23; --line:#262b38; --text:#e6e9f0;
             --muted:#8b93a7; --accent:#6c5ce7; --accent2:#a29bfe; }
@@ -138,7 +138,7 @@ _LANDING_TEMPLATE = """<!doctype html>
 </head>
 <body>
   <header>
-    <div class="logo">◆ Nexus</div>
+    <div class="logo">◆ Nexux</div>
     <div class="tagline">Hub personal de Hugo · corriendo en el Mac mini</div>
   </header>
   <main class="grid">

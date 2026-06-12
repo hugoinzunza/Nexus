@@ -1,12 +1,12 @@
-# Autostart de Nexus en el Mac mini (launchd)
+# Autostart de Nexux en el Mac mini (launchd)
 
-Esto hace que Nexus arranque solo cuando enciendes el Mac mini y se mantenga
+Esto hace que Nexux arranque solo cuando enciendes el Mac mini y se mantenga
 corriendo 24/7 (si se cae, `launchd` lo vuelve a levantar). El Mac mini no
-necesita pantalla: Nexus queda escuchando en la red y lo abres desde el iPhone,
+necesita pantalla: Nexux queda escuchando en la red y lo abres desde el iPhone,
 el iPad o el MacBook.
 
 > El plist está en [`com.hugo.nexus.plist`](com.hugo.nexus.plist). Si clonaste
-> Nexus en una carpeta distinta a `/Users/hugh/Nexus`, edita las rutas adentro
+> Nexux en una carpeta distinta a `/Users/hugh/Nexus`, edita las rutas adentro
 > antes de instalarlo.
 
 ## Requisitos previos
@@ -85,4 +85,4 @@ http://IP_DEL_MAC_MINI:8800/
 ```
 
 Para tenerlo a mano, en el iPhone/iPad usa **Compartir → Agregar a pantalla de
-inicio**: Nexus se instala como app (PWA) a pantalla completa.
+inicio**: Nexux se instala como app (PWA) a pantalla completa.

@@ -125,9 +125,12 @@
           });
         }
 
-        // --- Capa LuxAlgo: proyección TP/SL (escenario, NO señal) ---
+        // --- Capa LuxAlgo: escenario TP/SL anclado a estructura (NO una orden) ---
+        // Solo llega aquí si el backend validó: POI ✓ que el precio toca, en su
+        // zona correcta (descuento/premium) y con R:R real >= 2. Es contexto.
         if (show.tpsl && smc.tpsl) {
           const t = smc.tpsl;
+          const long = t.dir === "long";
           ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "middle";
           const line = (price, color, label) => {
             if (price == null) return;
@@ -138,11 +141,33 @@
             const tw = ctx.measureText(label).width;
             ctx.fillText(label, W - tw - 6, y - 5);
           };
+          // Entrada = la zona del POI (banda).
+          const yhi = py(t.entry_hi), ylo = py(t.entry_lo);
+          if (yhi != null && ylo != null) {
+            const top = Math.min(yhi, ylo), h = Math.max(2, Math.abs(ylo - yhi));
+            ctx.fillStyle = "rgba(108,92,231,0.16)";
+            ctx.fillRect(0, top, W, h);
+            ctx.strokeStyle = "rgba(108,92,231,0.85)"; ctx.lineWidth = 1;
+            ctx.setLineDash([4, 3]); ctx.strokeRect(0.5, top + 0.5, W - 1, h); ctx.setLineDash([]);
+            ctx.fillStyle = "#a29bfe"; ctx.textBaseline = "top";
+            ctx.fillText(`Entrada · POI ${t.tf} ${long ? "▲ largo" : "▼ corto"}`, 5, top + 2);
+            ctx.textBaseline = "middle";
+          }
           line(t.sl, "#ea3943", "SL");
-          line(t.tp1, "rgba(22,199,132,0.8)", "TP1 (1R)");
-          line(t.tp2, "rgba(22,199,132,0.9)", "TP2 (2R)");
-          line(t.tp3, "#16c784", "TP3 (3R)");
-          line(t.liq, "#a29bfe", "Liquidez");
+          line(t.tp, "#16c784", `TP · ${t.tp_label}`);
+          // Etiqueta con el R:R real, marcada como escenario de contexto.
+          const yEntry = py(t.entry);
+          if (yEntry != null) {
+            const rr = (typeof t.rr === "number") ? t.rr.toFixed(1) : t.rr;
+            const badge = `R:R ${rr} · escenario`;
+            ctx.font = "bold 10px -apple-system, sans-serif";
+            const bw = ctx.measureText(badge).width;
+            ctx.fillStyle = "rgba(15,17,23,0.85)";
+            ctx.fillRect(W - bw - 12, yEntry - 8, bw + 8, 16);
+            ctx.fillStyle = "#a29bfe"; ctx.textBaseline = "middle";
+            ctx.fillText(badge, W - bw - 8, yEntry);
+            ctx.font = "9px -apple-system, sans-serif";
+          }
         }
       });
     }

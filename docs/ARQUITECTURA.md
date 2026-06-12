@@ -1,6 +1,6 @@
-# Arquitectura de Nexus
+# Arquitectura de Nexux
 
-Nexus se divide en dos partes:
+Nexux se divide en dos partes:
 
 - **El núcleo (`core/`)**: pequeño y estable. Es una app **FastAPI** (servida
   por **uvicorn**) que sabe cargar módulos, enrutar peticiones HTTP, servir

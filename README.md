@@ -1,10 +1,10 @@
-# ◆ Nexus
+# ◆ Nexux
 
 **Hub personal de Hugo**, pensado para correr 24/7 en el Mac mini. Un núcleo
 modular (FastAPI + uvicorn) al que le vas enchufando módulos según hagan falta.
-El nombre es general a propósito: Nexus va a crecer.
+El nombre es general a propósito: Nexux va a crecer.
 
-Como el Mac mini no tiene pantalla, Nexus está pensado **mobile-first**: lo abres
+Como el Mac mini no tiene pantalla, Nexux está pensado **mobile-first**: lo abres
 desde el iPhone, el iPad o el MacBook, y puedes instalarlo como app (PWA) a
 pantalla completa.
 
@@ -16,14 +16,14 @@ Hoy arranca con estas áreas:
   **solo lectura** (¡ya funcional!).
 - **🎵 Música** — reservado, placeholder por ahora.
 
-> ⚠️ **Solo lectura.** Nexus observa los mercados y muestra información. **No
+> ⚠️ **Solo lectura.** Nexux observa los mercados y muestra información. **No
 > ejecuta operaciones ni mueve dinero.** Usa únicamente endpoints públicos.
 
 ---
 
 ## 🧠 La visión
 
-Nexus es el "cerebro central" de Hugo en su Mac mini. La idea es tener **un solo
+Nexux es el "cerebro central" de Hugo en su Mac mini. La idea es tener **un solo
 lugar** desde donde vivan cosas distintas (trading, música, y lo que venga:
 finanzas, automatización del hogar, notas, salud, etc.), cada una como un
 **módulo independiente** que puedes prender, apagar o reemplazar sin tocar el
@@ -67,7 +67,7 @@ Para detenerlo: `Ctrl + C`.
 
 ## 📱 Cómo abrirlo desde el iPhone, iPad o MacBook
 
-El Mac mini sirve Nexus en la red local. Desde otro dispositivo **en la misma
+El Mac mini sirve Nexux en la red local. Desde otro dispositivo **en la misma
 red Wi-Fi**, necesitas la IP del Mac mini:
 
 ```bash
@@ -86,7 +86,7 @@ http://192.168.1.50:8800/
 **Instalarlo como app (PWA):**
 
 - **iPhone / iPad (Safari):** toca **Compartir → Agregar a pantalla de inicio**.
-  Nexus se instala como app a pantalla completa, con su ícono.
+  Nexux se instala como app a pantalla completa, con su ícono.
 - **MacBook (Chrome/Edge):** ícono de **instalar** en la barra de direcciones.
 - **MacBook (Safari):** **Archivo → Agregar al Dock**.
 
@@ -99,7 +99,7 @@ http://192.168.1.50:8800/
 
 ## ☁️ Cómo desplegarlo en Railway
 
-Nexus se despliega como un proyecto **aparte** en Railway (llámalo "Nexus",
+Nexux se despliega como un proyecto **aparte** en Railway (llámalo "Nexus",
 separado del ERP de PROTEQ). Usa **Nixpacks** (no Dockerfile): no necesita
 Chromium ni WeasyPrint, así que el build es liviano.
 
@@ -119,7 +119,7 @@ Archivos que ya dejé listos:
    builder (debe quedar **Nixpacks**, no Docker).
 4. En **Settings → Networking → Generate Domain** para obtener una URL pública
    con HTTPS (ej: `nexus-production.up.railway.app`).
-5. Railway inyecta `PORT` solo; Nexus lo respeta. No hace falta configurar nada
+5. Railway inyecta `PORT` solo; Nexux lo respeta. No hace falta configurar nada
    más para arrancar.
 
 ### Variables de entorno (opcionales, para alertas push a futuro)
@@ -137,7 +137,7 @@ lista. Cuando quieras activarlas, configura en Railway:
 
 ## 🖥️ Autostart 24/7 en el Mac mini (launchd)
 
-Si prefieres correr Nexus en el propio Mac mini (en vez de, o además de,
+Si prefieres correr Nexux en el propio Mac mini (en vez de, o además de,
 Railway), hay un servicio `launchd` que lo arranca solo al encender y lo mantiene
 vivo. Las instrucciones completas están en
 [`deploy/AUTOSTART_MACMINI.md`](deploy/AUTOSTART_MACMINI.md) y el archivo del
@@ -239,10 +239,10 @@ Panel de estadísticas de tu trading real en Binance. **Solo lectura**: hace
   cuenta de **Spot**.
 - ✅ **Enable Futures** — necesario para leer **Futuros USDⓈ-M** (PnL, posiciones,
   balance). En Binance **no existe un "solo lectura" separado para futuros**: se
-  habilita Futures. Nexus igual **nunca** envía órdenes, solo lee.
+  habilita Futures. Nexux igual **nunca** envía órdenes, solo lee.
 - ⛔ **Enable Withdrawals** — déjalo **siempre desactivado**.
 
-Si puedes, restringe la key por IP. Nexus lee las claves desde el entorno; no las
+Si puedes, restringe la key por IP. Nexux lee las claves desde el entorno; no las
 guarda, no las loguea y no las commitea. Sin claves, el panel muestra una pantalla
 "Conecta tu Binance" y no se rompe. Sin *Enable Futures*, el panel de futuros
 muestra un error de permisos pero el de Spot sigue funcionando.
@@ -314,7 +314,7 @@ El núcleo es chico y estable; la funcionalidad vive en `modules/`. Ver
   WebSocket más adelante es un cambio acotado al módulo.
 - **Frontend vanilla (HTML/CSS/JS + canvas).** Sin frameworks ni CDNs: carga
   rápido y funciona desde cualquier dispositivo.
-- **PWA instalable.** Manifest + service worker para usar Nexus como app a
+- **PWA instalable.** Manifest + service worker para usar Nexux como app a
   pantalla completa en el iPhone/iPad, con web push ya cableado para alertas.
 
 ---
@@ -331,4 +331,4 @@ El núcleo es chico y estable; la funcionalidad vive en `modules/`. Ver
 
 ---
 
-*Nexus es independiente del proyecto ClaudeOS. No comparten código ni carpetas.*
+*Nexux es independiente del proyecto ClaudeOS. No comparten código ni carpetas.*

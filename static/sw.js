@@ -1,7 +1,7 @@
 /**
- * Service Worker — Nexus PWA
+ * Service Worker — Nexux PWA
  *
- * Lo justo para que Nexus sea instalable como app y reciba notificaciones push.
+ * Lo justo para que Nexux sea instalable como app y reciba notificaciones push.
  * IMPORTANTE: NO interceptamos fetch ni cacheamos assets (network-passthrough),
  * así la PWA siempre toma la versión recién desplegada sin servir nada viejo.
  * Si en el futuro se agrega caché offline, debe ser network-first y versionada.
@@ -29,7 +29,7 @@ self.addEventListener('message', (event) => {
 
 // ── Notificaciones push (preparado para las alertas a futuro) ──────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'Nexus', body: 'Tienes una novedad' };
+  let data = { title: 'Nexux', body: 'Tienes una novedad' };
   if (event.data) {
     try {
       data = event.data.json();
@@ -46,7 +46,7 @@ self.addEventListener('push', (event) => {
     requireInteraction: data.requireInteraction || false,
     vibrate: [200, 100, 200],
   };
-  event.waitUntil(self.registration.showNotification(data.title || 'Nexus', opts));
+  event.waitUntil(self.registration.showNotification(data.title || 'Nexux', opts));
 });
 
 self.addEventListener('notificationclick', (event) => {

@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
     hub.shutdown()
 
 
-app = FastAPI(title="Nexus · Hub personal", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Nexux · Hub personal", version="0.2.0", lifespan=lifespan)
 
 # Recursos estáticos compartidos de la PWA (manifest, sw, íconos, pwa.js).
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
