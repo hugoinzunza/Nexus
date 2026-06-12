@@ -23,6 +23,7 @@ from core.module_base import NexusModule
 from . import cryptocom
 from . import binance
 from . import smc_live
+from . import regime
 from .setups_store import SetupStore
 
 _MOD_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -170,6 +171,14 @@ class TradingModule(NexusModule):
                 except Exception as exc:  # noqa: BLE001
                     self.context.log(f"setups: no se pudo seguir {name}: {exc}")
 
+            # Precalienta la caché del VIX en este hilo de fondo (la descarga no debe
+            # bloquear las llamadas a la API). Cacheado en disco ~6 h.
+            if tick % self.smc_refresh_every == 0:
+                try:
+                    regime.vix_now()
+                except Exception:  # noqa: BLE001
+                    pass
+
             tick += 1
             self._stop.wait(self.poll_interval)
 
@@ -189,6 +198,19 @@ class TradingModule(NexusModule):
         htf = self._htf_candles(instrument)
         last = sel[-1]["c"] if sel else 0.0
         analysis = smc_live.analyze(sel, htf, last, sel_tf)
+        # Capa de PERMISO por régimen (VIX<25 + ADX>25). NO toca la detección SMC:
+        # es un semáforo sobre el plan. Se calcula sobre las mismas velas cerradas.
+        try:
+            gate = regime.regime_gate(sel)
+        except Exception as exc:  # noqa: BLE001 - nunca romper el análisis por el régimen
+            gate = {"ok": None, "vix": None, "adx": None, "reason": "s/d"}
+            self.context.log(f"regime: no disponible para {instrument} {sel_tf}: {exc}")
+        analysis["regime"] = gate
+        if analysis.get("tpsl"):
+            analysis["tpsl"]["regime_ok"] = gate["ok"]
+            analysis["tpsl"]["regime_vix"] = gate["vix"]
+            analysis["tpsl"]["regime_adx"] = gate["adx"]
+            analysis["tpsl"]["regime_reason"] = gate["reason"]
         with self._smc_lock:
             self._smc_cache[key] = {"analysis": analysis, "ts": now}
         return analysis

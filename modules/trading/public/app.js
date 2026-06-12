@@ -161,7 +161,8 @@
           // Estado del plan: "pendiente" (en vigilancia, precio aún fuera de la zona)
           // o "activo" (el precio ya está dentro). Pendiente se ve más tenue/dashed.
           const pend = t.state === "pendiente";
-          const alpha = pend ? 0.6 : 1;
+          const outReg = t.regime_ok === false;   // plan fuera de régimen → más tenue
+          const alpha = (pend ? 0.6 : 1) * (outReg ? 0.55 : 1);
           // Zona del POI = de dónde sale la entrada (banda de contexto).
           const yhi = py(t.entry_hi), ylo = py(t.entry_lo);
           if (yhi != null && ylo != null) {
@@ -193,13 +194,14 @@
             // Badge: R:R real + estado (⏳ en vigilancia / ● activo). Es escenario, no orden.
             const rr = (typeof t.rr === "number") ? t.rr.toFixed(1) : t.rr;
             const estado = pend ? "⏳ en vigilancia" : "● activo";
-            const badge = `R:R ${rr} · ${estado}`;
+            const reg = outReg ? " · ⚠ fuera de régimen" : "";
+            const badge = `R:R ${rr} · ${estado}${reg}`;
             ctx.font = "bold 10px -apple-system, sans-serif";
             const bw = ctx.measureText(badge).width;
             const by = placeR(yEntry - 8);
             ctx.fillStyle = "rgba(15,17,23,0.85)";
             ctx.fillRect(W - bw - 12, by, bw + 8, 16);
-            ctx.fillStyle = pend ? "#a29bfe" : "#16c784";
+            ctx.fillStyle = outReg ? "#f5a623" : (pend ? "#a29bfe" : "#16c784");
             ctx.fillText(badge, W - bw - 8, by + 3);
             ctx.font = "9px -apple-system, sans-serif";
           }
@@ -740,6 +742,15 @@
       const e = n.querySelector(cls); if (!e) return;
       e.innerHTML = html; e.className = "v " + cls.slice(1) + (klass ? " " + klass : "");
     };
+    // Régimen (VIX + ADX) — semáforo del filtro de la investigación (forward-test).
+    const rg = smc && smc.regime;
+    if (rg) {
+      const vix = rg.vix == null ? "s/d" : rg.vix;
+      const adx = rg.adx == null ? "s/d" : rg.adx;
+      const mark = rg.ok === true ? "✓ favorable" : rg.ok === false ? "✕ desfavorable" : "s/d";
+      set(".smc-regime", `${mark} · VIX ${vix} · ADX ${adx}`,
+        rg.ok === true ? "up" : rg.ok === false ? "down" : "");
+    } else set(".smc-regime", "—");
     const rng = smc && smc.range;
     // Sesgo premium/descuento respecto al equilibrio (EQ), con el precio en vivo.
     if (rng && rng.eq && price) {
@@ -766,8 +777,9 @@
     const t = smc && smc.tpsl;
     if (t) {
       const est = t.state === "activo" ? "● activo" : "⏳ en vigilancia";
+      const reg = t.regime_ok === false ? " · ⚠ fuera de régimen" : "";
       set(".smc-setup", "Plan " + t.tf + " " + (t.dir === "long" ? "▲ largo" : "▼ corto") +
-        " · R:R " + t.rr + " · " + est, t.dir === "long" ? "up" : "down");
+        " · R:R " + t.rr + " · " + est + reg, t.regime_ok === false ? "" : (t.dir === "long" ? "up" : "down"));
     } else set(".smc-setup", "sin plan (no hay R:R≥2)");
   }
 

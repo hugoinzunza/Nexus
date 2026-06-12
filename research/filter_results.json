@@ -1,0 +1,1417 @@
+{
+ "costs": {
+  "commission_per_side": 0.0005,
+  "slippage": 0.0002,
+  "cost_frac_roundtrip": 0.0014
+ },
+ "n_closed": 611,
+ "n_anuladas": 561,
+ "base": {
+  "oos": {
+   "n": 262,
+   "wins": 32,
+   "win": 12.2,
+   "exp": -0.023,
+   "pf": 0.98,
+   "totalR": -5.9,
+   "avg_cost_R": 0.289
+  },
+  "is": {
+   "n": 349,
+   "wins": 57,
+   "win": 16.3,
+   "exp": 0.965,
+   "pf": 1.89,
+   "totalR": 336.8,
+   "avg_cost_R": 0.287
+  },
+  "oos_gross": {
+   "n": 262,
+   "wins": 32,
+   "win": 12.2,
+   "exp": 0.266,
+   "pf": 1.3,
+   "totalR": 69.7,
+   "avg_cost_R": 0.289
+  }
+ },
+ "filters": [
+  {
+   "name": "EMA 9/21 a favor",
+   "family": "EMA",
+   "oos_net": {
+    "n": 102,
+    "wins": 16,
+    "win": 15.7,
+    "exp": 0.186,
+    "pf": 1.17,
+    "totalR": 18.9,
+    "avg_cost_R": 0.311
+   },
+   "is_net": {
+    "n": 136,
+    "wins": 25,
+    "win": 18.4,
+    "exp": 0.693,
+    "pf": 1.64,
+    "totalR": 94.2,
+    "avg_cost_R": 0.318
+   },
+   "oos_gross": {
+    "n": 102,
+    "wins": 16,
+    "win": 15.7,
+    "exp": 0.497,
+    "pf": 1.59,
+    "totalR": 50.7,
+    "avg_cost_R": 0.311
+   },
+   "wf_net": {
+    "n": 238,
+    "wins": 41,
+    "win": 17.2,
+    "exp": 0.476,
+    "pf": 1.43,
+    "totalR": 113.2,
+    "avg_cost_R": 0.315
+   },
+   "full_net": {
+    "n": 238,
+    "wins": 41,
+    "win": 17.2,
+    "exp": 0.476,
+    "pf": 1.43,
+    "totalR": 113.2,
+    "avg_cost_R": 0.315
+   },
+   "delta_oos_exp": 0.209,
+   "robust": true
+  },
+  {
+   "name": "EMA 20/50 a favor",
+   "family": "EMA",
+   "oos_net": {
+    "n": 79,
+    "wins": 13,
+    "win": 16.5,
+    "exp": 0.486,
+    "pf": 1.43,
+    "totalR": 38.4,
+    "avg_cost_R": 0.339
+   },
+   "is_net": {
+    "n": 102,
+    "wins": 12,
+    "win": 11.8,
+    "exp": 1.297,
+    "pf": 2.11,
+    "totalR": 132.3,
+    "avg_cost_R": 0.336
+   },
+   "oos_gross": {
+    "n": 79,
+    "wins": 13,
+    "win": 16.5,
+    "exp": 0.825,
+    "pf": 1.99,
+    "totalR": 65.2,
+    "avg_cost_R": 0.339
+   },
+   "wf_net": {
+    "n": 181,
+    "wins": 25,
+    "win": 13.8,
+    "exp": 0.943,
+    "pf": 1.82,
+    "totalR": 170.7,
+    "avg_cost_R": 0.337
+   },
+   "full_net": {
+    "n": 181,
+    "wins": 25,
+    "win": 13.8,
+    "exp": 0.943,
+    "pf": 1.82,
+    "totalR": 170.7,
+    "avg_cost_R": 0.337
+   },
+   "delta_oos_exp": 0.509,
+   "robust": true
+  },
+  {
+   "name": "EMA 50/200 a favor",
+   "family": "EMA",
+   "oos_net": {
+    "n": 72,
+    "wins": 8,
+    "win": 11.1,
+    "exp": -0.056,
+    "pf": 0.95,
+    "totalR": -4.0,
+    "avg_cost_R": 0.328
+   },
+   "is_net": {
+    "n": 65,
+    "wins": 10,
+    "win": 15.4,
+    "exp": 2.393,
+    "pf": 3.19,
+    "totalR": 155.6,
+    "avg_cost_R": 0.283
+   },
+   "oos_gross": {
+    "n": 72,
+    "wins": 8,
+    "win": 11.1,
+    "exp": 0.272,
+    "pf": 1.31,
+    "totalR": 19.6,
+    "avg_cost_R": 0.328
+   },
+   "wf_net": {
+    "n": 137,
+    "wins": 18,
+    "win": 13.1,
+    "exp": 1.106,
+    "pf": 1.97,
+    "totalR": 151.5,
+    "avg_cost_R": 0.307
+   },
+   "full_net": {
+    "n": 137,
+    "wins": 18,
+    "win": 13.1,
+    "exp": 1.106,
+    "pf": 1.97,
+    "totalR": 151.5,
+    "avg_cost_R": 0.307
+   },
+   "delta_oos_exp": -0.033,
+   "robust": false
+  },
+  {
+   "name": "EMA 53/200 a favor (Hugo)",
+   "family": "EMA",
+   "oos_net": {
+    "n": 71,
+    "wins": 7,
+    "win": 9.9,
+    "exp": -0.318,
+    "pf": 0.73,
+    "totalR": -22.6,
+    "avg_cost_R": 0.328
+   },
+   "is_net": {
+    "n": 65,
+    "wins": 10,
+    "win": 15.4,
+    "exp": 2.393,
+    "pf": 3.19,
+    "totalR": 155.6,
+    "avg_cost_R": 0.284
+   },
+   "oos_gross": {
+    "n": 71,
+    "wins": 7,
+    "win": 9.9,
+    "exp": 0.01,
+    "pf": 1.01,
+    "totalR": 0.7,
+    "avg_cost_R": 0.328
+   },
+   "wf_net": {
+    "n": 136,
+    "wins": 17,
+    "win": 12.5,
+    "exp": 0.978,
+    "pf": 1.85,
+    "totalR": 133.0,
+    "avg_cost_R": 0.307
+   },
+   "full_net": {
+    "n": 136,
+    "wins": 17,
+    "win": 12.5,
+    "exp": 0.978,
+    "pf": 1.85,
+    "totalR": 133.0,
+    "avg_cost_R": 0.307
+   },
+   "delta_oos_exp": -0.295,
+   "robust": false
+  },
+  {
+   "name": "EMA 9/21 EN CONTRA",
+   "family": "EMA",
+   "oos_net": {
+    "n": 160,
+    "wins": 16,
+    "win": 10.0,
+    "exp": -0.155,
+    "pf": 0.86,
+    "totalR": -24.8,
+    "avg_cost_R": 0.274
+   },
+   "is_net": {
+    "n": 213,
+    "wins": 32,
+    "win": 15.0,
+    "exp": 1.139,
+    "pf": 2.06,
+    "totalR": 242.5,
+    "avg_cost_R": 0.267
+   },
+   "oos_gross": {
+    "n": 160,
+    "wins": 16,
+    "win": 10.0,
+    "exp": 0.119,
+    "pf": 1.13,
+    "totalR": 19.0,
+    "avg_cost_R": 0.274
+   },
+   "wf_net": {
+    "n": 373,
+    "wins": 48,
+    "win": 12.9,
+    "exp": 0.584,
+    "pf": 1.53,
+    "totalR": 217.7,
+    "avg_cost_R": 0.27
+   },
+   "full_net": {
+    "n": 373,
+    "wins": 48,
+    "win": 12.9,
+    "exp": 0.584,
+    "pf": 1.53,
+    "totalR": 217.7,
+    "avg_cost_R": 0.27
+   },
+   "delta_oos_exp": -0.132,
+   "robust": false
+  },
+  {
+   "name": "EMA 50/200 EN CONTRA",
+   "family": "EMA",
+   "oos_net": {
+    "n": 190,
+    "wins": 24,
+    "win": 12.6,
+    "exp": -0.01,
+    "pf": 0.99,
+    "totalR": -1.9,
+    "avg_cost_R": 0.273
+   },
+   "is_net": {
+    "n": 284,
+    "wins": 47,
+    "win": 16.5,
+    "exp": 0.638,
+    "pf": 1.59,
+    "totalR": 181.2,
+    "avg_cost_R": 0.288
+   },
+   "oos_gross": {
+    "n": 190,
+    "wins": 24,
+    "win": 12.6,
+    "exp": 0.264,
+    "pf": 1.3,
+    "totalR": 50.1,
+    "avg_cost_R": 0.273
+   },
+   "wf_net": {
+    "n": 474,
+    "wins": 71,
+    "win": 15.0,
+    "exp": 0.378,
+    "pf": 1.35,
+    "totalR": 179.3,
+    "avg_cost_R": 0.282
+   },
+   "full_net": {
+    "n": 474,
+    "wins": 71,
+    "win": 15.0,
+    "exp": 0.378,
+    "pf": 1.35,
+    "totalR": 179.3,
+    "avg_cost_R": 0.282
+   },
+   "delta_oos_exp": 0.013,
+   "robust": false
+  },
+  {
+   "name": "Precio sobre EMA200 a favor",
+   "family": "EMA",
+   "oos_net": {
+    "n": 80,
+    "wins": 12,
+    "win": 15.0,
+    "exp": 0.223,
+    "pf": 1.2,
+    "totalR": 17.9,
+    "avg_cost_R": 0.343
+   },
+   "is_net": {
+    "n": 82,
+    "wins": 7,
+    "win": 8.5,
+    "exp": 1.062,
+    "pf": 1.88,
+    "totalR": 87.0,
+    "avg_cost_R": 0.308
+   },
+   "oos_gross": {
+    "n": 80,
+    "wins": 12,
+    "win": 15.0,
+    "exp": 0.566,
+    "pf": 1.67,
+    "totalR": 45.3,
+    "avg_cost_R": 0.343
+   },
+   "wf_net": {
+    "n": 162,
+    "wins": 19,
+    "win": 11.7,
+    "exp": 0.648,
+    "pf": 1.55,
+    "totalR": 104.9,
+    "avg_cost_R": 0.325
+   },
+   "full_net": {
+    "n": 162,
+    "wins": 19,
+    "win": 11.7,
+    "exp": 0.648,
+    "pf": 1.55,
+    "totalR": 104.9,
+    "avg_cost_R": 0.325
+   },
+   "delta_oos_exp": 0.246,
+   "robust": true
+  },
+  {
+   "name": "Precio sobre EMA50 a favor",
+   "family": "EMA",
+   "oos_net": {
+    "n": 108,
+    "wins": 17,
+    "win": 15.7,
+    "exp": 0.312,
+    "pf": 1.27,
+    "totalR": 33.7,
+    "avg_cost_R": 0.342
+   },
+   "is_net": {
+    "n": 139,
+    "wins": 26,
+    "win": 18.7,
+    "exp": 1.248,
+    "pf": 2.17,
+    "totalR": 173.5,
+    "avg_cost_R": 0.303
+   },
+   "oos_gross": {
+    "n": 108,
+    "wins": 17,
+    "win": 15.7,
+    "exp": 0.654,
+    "pf": 1.78,
+    "totalR": 70.6,
+    "avg_cost_R": 0.342
+   },
+   "wf_net": {
+    "n": 247,
+    "wins": 43,
+    "win": 17.4,
+    "exp": 0.839,
+    "pf": 1.77,
+    "totalR": 207.1,
+    "avg_cost_R": 0.32
+   },
+   "full_net": {
+    "n": 247,
+    "wins": 43,
+    "win": 17.4,
+    "exp": 0.839,
+    "pf": 1.77,
+    "totalR": 207.1,
+    "avg_cost_R": 0.32
+   },
+   "delta_oos_exp": 0.335,
+   "robust": true
+  },
+  {
+   "name": "Pendiente EMA200 a favor",
+   "family": "EMA",
+   "oos_net": {
+    "n": 69,
+    "wins": 12,
+    "win": 17.4,
+    "exp": 0.474,
+    "pf": 1.43,
+    "totalR": 32.7,
+    "avg_cost_R": 0.342
+   },
+   "is_net": {
+    "n": 71,
+    "wins": 10,
+    "win": 14.1,
+    "exp": 1.944,
+    "pf": 2.74,
+    "totalR": 138.0,
+    "avg_cost_R": 0.291
+   },
+   "oos_gross": {
+    "n": 69,
+    "wins": 12,
+    "win": 17.4,
+    "exp": 0.816,
+    "pf": 1.99,
+    "totalR": 56.3,
+    "avg_cost_R": 0.342
+   },
+   "wf_net": {
+    "n": 140,
+    "wins": 22,
+    "win": 15.7,
+    "exp": 1.219,
+    "pf": 2.1,
+    "totalR": 170.7,
+    "avg_cost_R": 0.316
+   },
+   "full_net": {
+    "n": 140,
+    "wins": 22,
+    "win": 15.7,
+    "exp": 1.219,
+    "pf": 2.1,
+    "totalR": 170.7,
+    "avg_cost_R": 0.316
+   },
+   "delta_oos_exp": 0.497,
+   "robust": true
+  },
+  {
+   "name": "RSI no extremo (long<70/short>30)",
+   "family": "RSI",
+   "oos_net": {
+    "n": 251,
+    "wins": 29,
+    "win": 11.6,
+    "exp": -0.092,
+    "pf": 0.92,
+    "totalR": -23.0,
+    "avg_cost_R": 0.288
+   },
+   "is_net": {
+    "n": 335,
+    "wins": 56,
+    "win": 16.7,
+    "exp": 0.905,
+    "pf": 1.84,
+    "totalR": 303.1,
+    "avg_cost_R": 0.286
+   },
+   "oos_gross": {
+    "n": 251,
+    "wins": 29,
+    "win": 11.6,
+    "exp": 0.196,
+    "pf": 1.22,
+    "totalR": 49.2,
+    "avg_cost_R": 0.288
+   },
+   "wf_net": {
+    "n": 586,
+    "wins": 85,
+    "win": 14.5,
+    "exp": 0.478,
+    "pf": 1.43,
+    "totalR": 280.1,
+    "avg_cost_R": 0.287
+   },
+   "full_net": {
+    "n": 586,
+    "wins": 85,
+    "win": 14.5,
+    "exp": 0.478,
+    "pf": 1.43,
+    "totalR": 280.1,
+    "avg_cost_R": 0.287
+   },
+   "delta_oos_exp": -0.069,
+   "robust": false
+  },
+  {
+   "name": "RSI a favor del valor (long<45/short>55)",
+   "family": "RSI",
+   "oos_net": {
+    "n": 94,
+    "wins": 9,
+    "win": 9.6,
+    "exp": -0.131,
+    "pf": 0.88,
+    "totalR": -12.3,
+    "avg_cost_R": 0.233
+   },
+   "is_net": {
+    "n": 132,
+    "wins": 19,
+    "win": 14.4,
+    "exp": 0.758,
+    "pf": 1.71,
+    "totalR": 100.0,
+    "avg_cost_R": 0.239
+   },
+   "oos_gross": {
+    "n": 94,
+    "wins": 9,
+    "win": 9.6,
+    "exp": 0.102,
+    "pf": 1.11,
+    "totalR": 9.6,
+    "avg_cost_R": 0.233
+   },
+   "wf_net": {
+    "n": 226,
+    "wins": 28,
+    "win": 12.4,
+    "exp": 0.388,
+    "pf": 1.36,
+    "totalR": 87.7,
+    "avg_cost_R": 0.236
+   },
+   "full_net": {
+    "n": 226,
+    "wins": 28,
+    "win": 12.4,
+    "exp": 0.388,
+    "pf": 1.36,
+    "totalR": 87.7,
+    "avg_cost_R": 0.236
+   },
+   "delta_oos_exp": -0.108,
+   "robust": false
+  },
+  {
+   "name": "RSI momentum (long>50/short<50)",
+   "family": "RSI",
+   "oos_net": {
+    "n": 124,
+    "wins": 16,
+    "win": 12.9,
+    "exp": -0.1,
+    "pf": 0.91,
+    "totalR": -12.4,
+    "avg_cost_R": 0.331
+   },
+   "is_net": {
+    "n": 162,
+    "wins": 30,
+    "win": 18.5,
+    "exp": 0.878,
+    "pf": 1.82,
+    "totalR": 142.2,
+    "avg_cost_R": 0.308
+   },
+   "oos_gross": {
+    "n": 124,
+    "wins": 16,
+    "win": 12.9,
+    "exp": 0.231,
+    "pf": 1.27,
+    "totalR": 28.7,
+    "avg_cost_R": 0.331
+   },
+   "wf_net": {
+    "n": 286,
+    "wins": 46,
+    "win": 16.1,
+    "exp": 0.454,
+    "pf": 1.41,
+    "totalR": 129.9,
+    "avg_cost_R": 0.318
+   },
+   "full_net": {
+    "n": 286,
+    "wins": 46,
+    "win": 16.1,
+    "exp": 0.454,
+    "pf": 1.41,
+    "totalR": 129.9,
+    "avg_cost_R": 0.318
+   },
+   "delta_oos_exp": -0.077,
+   "robust": false
+  },
+  {
+   "name": "ADX>20 (con tendencia)",
+   "family": "ADX",
+   "oos_net": {
+    "n": 198,
+    "wins": 28,
+    "win": 14.1,
+    "exp": 0.238,
+    "pf": 1.22,
+    "totalR": 47.1,
+    "avg_cost_R": 0.283
+   },
+   "is_net": {
+    "n": 246,
+    "wins": 33,
+    "win": 13.4,
+    "exp": 0.667,
+    "pf": 1.61,
+    "totalR": 164.1,
+    "avg_cost_R": 0.26
+   },
+   "oos_gross": {
+    "n": 198,
+    "wins": 28,
+    "win": 14.1,
+    "exp": 0.521,
+    "pf": 1.61,
+    "totalR": 103.1,
+    "avg_cost_R": 0.283
+   },
+   "wf_net": {
+    "n": 444,
+    "wins": 61,
+    "win": 13.7,
+    "exp": 0.476,
+    "pf": 1.43,
+    "totalR": 211.3,
+    "avg_cost_R": 0.27
+   },
+   "full_net": {
+    "n": 444,
+    "wins": 61,
+    "win": 13.7,
+    "exp": 0.476,
+    "pf": 1.43,
+    "totalR": 211.3,
+    "avg_cost_R": 0.27
+   },
+   "delta_oos_exp": 0.261,
+   "robust": true
+  },
+  {
+   "name": "ADX>25 (tendencia fuerte)",
+   "family": "ADX",
+   "oos_net": {
+    "n": 154,
+    "wins": 24,
+    "win": 15.6,
+    "exp": 0.38,
+    "pf": 1.35,
+    "totalR": 58.5,
+    "avg_cost_R": 0.27
+   },
+   "is_net": {
+    "n": 188,
+    "wins": 24,
+    "win": 12.8,
+    "exp": 0.671,
+    "pf": 1.6,
+    "totalR": 126.2,
+    "avg_cost_R": 0.265
+   },
+   "oos_gross": {
+    "n": 154,
+    "wins": 24,
+    "win": 15.6,
+    "exp": 0.649,
+    "pf": 1.77,
+    "totalR": 100.0,
+    "avg_cost_R": 0.27
+   },
+   "wf_net": {
+    "n": 342,
+    "wins": 48,
+    "win": 14.0,
+    "exp": 0.54,
+    "pf": 1.49,
+    "totalR": 184.7,
+    "avg_cost_R": 0.267
+   },
+   "full_net": {
+    "n": 342,
+    "wins": 48,
+    "win": 14.0,
+    "exp": 0.54,
+    "pf": 1.49,
+    "totalR": 184.7,
+    "avg_cost_R": 0.267
+   },
+   "delta_oos_exp": 0.403,
+   "robust": true
+  },
+  {
+   "name": "ADX<20 (en rango)",
+   "family": "ADX",
+   "oos_net": {
+    "n": 63,
+    "wins": 4,
+    "win": 6.3,
+    "exp": -0.823,
+    "pf": 0.33,
+    "totalR": -51.8,
+    "avg_cost_R": 0.308
+   },
+   "is_net": {
+    "n": 103,
+    "wins": 24,
+    "win": 23.3,
+    "exp": 1.676,
+    "pf": 2.61,
+    "totalR": 172.6,
+    "avg_cost_R": 0.353
+   },
+   "oos_gross": {
+    "n": 63,
+    "wins": 4,
+    "win": 6.3,
+    "exp": -0.514,
+    "pf": 0.45,
+    "totalR": -32.4,
+    "avg_cost_R": 0.308
+   },
+   "wf_net": {
+    "n": 166,
+    "wins": 28,
+    "win": 16.9,
+    "exp": 0.728,
+    "pf": 1.65,
+    "totalR": 120.8,
+    "avg_cost_R": 0.336
+   },
+   "full_net": {
+    "n": 166,
+    "wins": 28,
+    "win": 16.9,
+    "exp": 0.728,
+    "pf": 1.65,
+    "totalR": 120.8,
+    "avg_cost_R": 0.336
+   },
+   "delta_oos_exp": -0.8,
+   "robust": false
+  },
+  {
+   "name": "Volumen > media",
+   "family": "Volumen",
+   "oos_net": {
+    "n": 141,
+    "wins": 9,
+    "win": 6.4,
+    "exp": -0.557,
+    "pf": 0.54,
+    "totalR": -78.5,
+    "avg_cost_R": 0.278
+   },
+   "is_net": {
+    "n": 188,
+    "wins": 27,
+    "win": 14.4,
+    "exp": 0.668,
+    "pf": 1.6,
+    "totalR": 125.7,
+    "avg_cost_R": 0.288
+   },
+   "oos_gross": {
+    "n": 141,
+    "wins": 9,
+    "win": 6.4,
+    "exp": -0.279,
+    "pf": 0.7,
+    "totalR": -39.3,
+    "avg_cost_R": 0.278
+   },
+   "wf_net": {
+    "n": 329,
+    "wins": 36,
+    "win": 10.9,
+    "exp": 0.143,
+    "pf": 1.12,
+    "totalR": 47.2,
+    "avg_cost_R": 0.284
+   },
+   "full_net": {
+    "n": 329,
+    "wins": 36,
+    "win": 10.9,
+    "exp": 0.143,
+    "pf": 1.12,
+    "totalR": 47.2,
+    "avg_cost_R": 0.284
+   },
+   "delta_oos_exp": -0.534,
+   "robust": false
+  },
+  {
+   "name": "Volumen > 1.5x media",
+   "family": "Volumen",
+   "oos_net": {
+    "n": 72,
+    "wins": 4,
+    "win": 5.6,
+    "exp": -0.703,
+    "pf": 0.41,
+    "totalR": -50.6,
+    "avg_cost_R": 0.257
+   },
+   "is_net": {
+    "n": 102,
+    "wins": 14,
+    "win": 13.7,
+    "exp": 0.392,
+    "pf": 1.35,
+    "totalR": 40.0,
+    "avg_cost_R": 0.289
+   },
+   "oos_gross": {
+    "n": 72,
+    "wins": 4,
+    "win": 5.6,
+    "exp": -0.446,
+    "pf": 0.53,
+    "totalR": -32.1,
+    "avg_cost_R": 0.257
+   },
+   "wf_net": {
+    "n": 174,
+    "wins": 18,
+    "win": 10.3,
+    "exp": -0.061,
+    "pf": 0.95,
+    "totalR": -10.7,
+    "avg_cost_R": 0.276
+   },
+   "full_net": {
+    "n": 174,
+    "wins": 18,
+    "win": 10.3,
+    "exp": -0.061,
+    "pf": 0.95,
+    "totalR": -10.7,
+    "avg_cost_R": 0.276
+   },
+   "delta_oos_exp": -0.68,
+   "robust": false
+  },
+  {
+   "name": "Solo NY",
+   "family": "Sesión",
+   "oos_net": {
+    "n": 107,
+    "wins": 8,
+    "win": 7.5,
+    "exp": -0.683,
+    "pf": 0.43,
+    "totalR": -73.1,
+    "avg_cost_R": 0.29
+   },
+   "is_net": {
+    "n": 134,
+    "wins": 17,
+    "win": 12.7,
+    "exp": 0.74,
+    "pf": 1.67,
+    "totalR": 99.1,
+    "avg_cost_R": 0.271
+   },
+   "oos_gross": {
+    "n": 107,
+    "wins": 8,
+    "win": 7.5,
+    "exp": -0.393,
+    "pf": 0.58,
+    "totalR": -42.0,
+    "avg_cost_R": 0.29
+   },
+   "wf_net": {
+    "n": 241,
+    "wins": 25,
+    "win": 10.4,
+    "exp": 0.108,
+    "pf": 1.09,
+    "totalR": 26.0,
+    "avg_cost_R": 0.279
+   },
+   "full_net": {
+    "n": 241,
+    "wins": 25,
+    "win": 10.4,
+    "exp": 0.108,
+    "pf": 1.09,
+    "totalR": 26.0,
+    "avg_cost_R": 0.279
+   },
+   "delta_oos_exp": -0.66,
+   "robust": false
+  },
+  {
+   "name": "Excluir Londres",
+   "family": "Sesión",
+   "oos_net": {
+    "n": 203,
+    "wins": 24,
+    "win": 11.8,
+    "exp": -0.182,
+    "pf": 0.84,
+    "totalR": -36.8,
+    "avg_cost_R": 0.291
+   },
+   "is_net": {
+    "n": 260,
+    "wins": 43,
+    "win": 16.5,
+    "exp": 0.906,
+    "pf": 1.85,
+    "totalR": 235.5,
+    "avg_cost_R": 0.272
+   },
+   "oos_gross": {
+    "n": 203,
+    "wins": 24,
+    "win": 11.8,
+    "exp": 0.11,
+    "pf": 1.12,
+    "totalR": 22.3,
+    "avg_cost_R": 0.291
+   },
+   "wf_net": {
+    "n": 463,
+    "wins": 67,
+    "win": 14.5,
+    "exp": 0.429,
+    "pf": 1.39,
+    "totalR": 198.6,
+    "avg_cost_R": 0.281
+   },
+   "full_net": {
+    "n": 463,
+    "wins": 67,
+    "win": 14.5,
+    "exp": 0.429,
+    "pf": 1.39,
+    "totalR": 198.6,
+    "avg_cost_R": 0.281
+   },
+   "delta_oos_exp": -0.159,
+   "robust": false
+  },
+  {
+   "name": "NY o Asia (excl. Londres y Fuera)",
+   "family": "Sesión",
+   "oos_net": {
+    "n": 182,
+    "wins": 19,
+    "win": 10.4,
+    "exp": -0.321,
+    "pf": 0.72,
+    "totalR": -58.3,
+    "avg_cost_R": 0.296
+   },
+   "is_net": {
+    "n": 250,
+    "wins": 42,
+    "win": 16.8,
+    "exp": 0.965,
+    "pf": 1.91,
+    "totalR": 241.2,
+    "avg_cost_R": 0.275
+   },
+   "oos_gross": {
+    "n": 182,
+    "wins": 19,
+    "win": 10.4,
+    "exp": -0.025,
+    "pf": 0.97,
+    "totalR": -4.5,
+    "avg_cost_R": 0.296
+   },
+   "wf_net": {
+    "n": 432,
+    "wins": 61,
+    "win": 14.1,
+    "exp": 0.423,
+    "pf": 1.38,
+    "totalR": 182.8,
+    "avg_cost_R": 0.283
+   },
+   "full_net": {
+    "n": 432,
+    "wins": 61,
+    "win": 14.1,
+    "exp": 0.423,
+    "pf": 1.38,
+    "totalR": 182.8,
+    "avg_cost_R": 0.283
+   },
+   "delta_oos_exp": -0.298,
+   "robust": false
+  },
+  {
+   "name": "VIX < 20 (calma)",
+   "family": "Macro-VIX",
+   "oos_net": {
+    "n": 187,
+    "wins": 29,
+    "win": 15.5,
+    "exp": 0.404,
+    "pf": 1.37,
+    "totalR": 75.5,
+    "avg_cost_R": 0.303
+   },
+   "is_net": {
+    "n": 291,
+    "wins": 53,
+    "win": 18.2,
+    "exp": 1.287,
+    "pf": 2.21,
+    "totalR": 374.5,
+    "avg_cost_R": 0.295
+   },
+   "oos_gross": {
+    "n": 187,
+    "wins": 29,
+    "win": 15.5,
+    "exp": 0.706,
+    "pf": 1.84,
+    "totalR": 132.1,
+    "avg_cost_R": 0.303
+   },
+   "wf_net": {
+    "n": 478,
+    "wins": 82,
+    "win": 17.2,
+    "exp": 0.941,
+    "pf": 1.87,
+    "totalR": 449.9,
+    "avg_cost_R": 0.298
+   },
+   "full_net": {
+    "n": 478,
+    "wins": 82,
+    "win": 17.2,
+    "exp": 0.941,
+    "pf": 1.87,
+    "totalR": 449.9,
+    "avg_cost_R": 0.298
+   },
+   "delta_oos_exp": 0.427,
+   "robust": true
+  },
+  {
+   "name": "VIX < 25",
+   "family": "Macro-VIX",
+   "oos_net": {
+    "n": 208,
+    "wins": 31,
+    "win": 14.9,
+    "exp": 0.273,
+    "pf": 1.25,
+    "totalR": 56.7,
+    "avg_cost_R": 0.301
+   },
+   "is_net": {
+    "n": 349,
+    "wins": 57,
+    "win": 16.3,
+    "exp": 0.965,
+    "pf": 1.89,
+    "totalR": 336.8,
+    "avg_cost_R": 0.287
+   },
+   "oos_gross": {
+    "n": 208,
+    "wins": 31,
+    "win": 14.9,
+    "exp": 0.573,
+    "pf": 1.67,
+    "totalR": 119.2,
+    "avg_cost_R": 0.301
+   },
+   "wf_net": {
+    "n": 557,
+    "wins": 88,
+    "win": 15.8,
+    "exp": 0.706,
+    "pf": 1.65,
+    "totalR": 393.4,
+    "avg_cost_R": 0.292
+   },
+   "full_net": {
+    "n": 557,
+    "wins": 88,
+    "win": 15.8,
+    "exp": 0.706,
+    "pf": 1.65,
+    "totalR": 393.4,
+    "avg_cost_R": 0.292
+   },
+   "delta_oos_exp": 0.296,
+   "robust": true
+  },
+  {
+   "name": "VIX > 25 (estrés)",
+   "family": "Macro-VIX",
+   "oos_net": {
+    "n": 54,
+    "wins": 1,
+    "win": 1.9,
+    "exp": -1.159,
+    "pf": 0.05,
+    "totalR": -62.6,
+    "avg_cost_R": 0.242
+   },
+   "is_net": {
+    "n": 0,
+    "win": 0.0,
+    "exp": 0.0,
+    "pf": 0.0,
+    "totalR": 0.0,
+    "avg_cost_R": 0.0,
+    "wins": 0
+   },
+   "oos_gross": {
+    "n": 54,
+    "wins": 1,
+    "win": 1.9,
+    "exp": -0.917,
+    "pf": 0.07,
+    "totalR": -49.5,
+    "avg_cost_R": 0.242
+   },
+   "wf_net": {
+    "n": 54,
+    "wins": 1,
+    "win": 1.9,
+    "exp": -1.159,
+    "pf": 0.05,
+    "totalR": -62.6,
+    "avg_cost_R": 0.242
+   },
+   "full_net": {
+    "n": 54,
+    "wins": 1,
+    "win": 1.9,
+    "exp": -1.159,
+    "pf": 0.05,
+    "totalR": -62.6,
+    "avg_cost_R": 0.242
+   },
+   "delta_oos_exp": -1.136,
+   "robust": false
+  },
+  {
+   "name": "Corr BTC-SPX < 0.3 (desacople)",
+   "family": "Macro-Corr",
+   "oos_net": {
+    "n": 27,
+    "wins": 2,
+    "win": 7.4,
+    "exp": -0.242,
+    "pf": 0.81,
+    "totalR": -6.5,
+    "avg_cost_R": 0.397
+   },
+   "is_net": {
+    "n": 52,
+    "wins": 11,
+    "win": 21.2,
+    "exp": 1.056,
+    "pf": 1.96,
+    "totalR": 54.9,
+    "avg_cost_R": 0.346
+   },
+   "oos_gross": {
+    "n": 27,
+    "wins": 2,
+    "win": 7.4,
+    "exp": 0.156,
+    "pf": 1.17,
+    "totalR": 4.2,
+    "avg_cost_R": 0.397
+   },
+   "wf_net": {
+    "n": 79,
+    "wins": 13,
+    "win": 16.5,
+    "exp": 0.612,
+    "pf": 1.53,
+    "totalR": 48.4,
+    "avg_cost_R": 0.364
+   },
+   "full_net": {
+    "n": 79,
+    "wins": 13,
+    "win": 16.5,
+    "exp": 0.612,
+    "pf": 1.53,
+    "totalR": 48.4,
+    "avg_cost_R": 0.364
+   },
+   "delta_oos_exp": -0.219,
+   "robust": false
+  },
+  {
+   "name": "Corr BTC-SPX > 0.5 (acople risk-on)",
+   "family": "Macro-Corr",
+   "oos_net": {
+    "n": 110,
+    "wins": 13,
+    "win": 11.8,
+    "exp": -0.421,
+    "pf": 0.63,
+    "totalR": -46.3,
+    "avg_cost_R": 0.25
+   },
+   "is_net": {
+    "n": 139,
+    "wins": 17,
+    "win": 12.2,
+    "exp": 0.877,
+    "pf": 1.79,
+    "totalR": 121.9,
+    "avg_cost_R": 0.279
+   },
+   "oos_gross": {
+    "n": 110,
+    "wins": 13,
+    "win": 11.8,
+    "exp": -0.171,
+    "pf": 0.81,
+    "totalR": -18.8,
+    "avg_cost_R": 0.25
+   },
+   "wf_net": {
+    "n": 249,
+    "wins": 30,
+    "win": 12.0,
+    "exp": 0.303,
+    "pf": 1.27,
+    "totalR": 75.6,
+    "avg_cost_R": 0.266
+   },
+   "full_net": {
+    "n": 249,
+    "wins": 30,
+    "win": 12.0,
+    "exp": 0.303,
+    "pf": 1.27,
+    "totalR": 75.6,
+    "avg_cost_R": 0.266
+   },
+   "delta_oos_exp": -0.398,
+   "robust": false
+  },
+  {
+   "name": "BTC sobre su MA200d (risk-on)",
+   "family": "Macro-BTC",
+   "oos_net": {
+    "n": 0,
+    "win": 0.0,
+    "exp": 0.0,
+    "pf": 0.0,
+    "totalR": 0.0,
+    "avg_cost_R": 0.0,
+    "wins": 0
+   },
+   "is_net": {
+    "n": 167,
+    "wins": 34,
+    "win": 20.4,
+    "exp": 1.621,
+    "pf": 2.52,
+    "totalR": 270.6,
+    "avg_cost_R": 0.326
+   },
+   "oos_gross": {
+    "n": 0,
+    "win": 0.0,
+    "exp": 0.0,
+    "pf": 0.0,
+    "totalR": 0.0,
+    "avg_cost_R": 0.0,
+    "wins": 0
+   },
+   "wf_net": {
+    "n": 167,
+    "wins": 34,
+    "win": 20.4,
+    "exp": 1.621,
+    "pf": 2.52,
+    "totalR": 270.6,
+    "avg_cost_R": 0.326
+   },
+   "full_net": {
+    "n": 167,
+    "wins": 34,
+    "win": 20.4,
+    "exp": 1.621,
+    "pf": 2.52,
+    "totalR": 270.6,
+    "avg_cost_R": 0.326
+   },
+   "delta_oos_exp": 0.023,
+   "robust": false
+  },
+  {
+   "name": "BTC bajo su MA200d (risk-off)",
+   "family": "Macro-BTC",
+   "oos_net": {
+    "n": 262,
+    "wins": 32,
+    "win": 12.2,
+    "exp": -0.023,
+    "pf": 0.98,
+    "totalR": -5.9,
+    "avg_cost_R": 0.289
+   },
+   "is_net": {
+    "n": 182,
+    "wins": 23,
+    "win": 12.6,
+    "exp": 0.363,
+    "pf": 1.33,
+    "totalR": 66.1,
+    "avg_cost_R": 0.252
+   },
+   "oos_gross": {
+    "n": 262,
+    "wins": 32,
+    "win": 12.2,
+    "exp": 0.266,
+    "pf": 1.3,
+    "totalR": 69.7,
+    "avg_cost_R": 0.289
+   },
+   "wf_net": {
+    "n": 444,
+    "wins": 55,
+    "win": 12.4,
+    "exp": 0.136,
+    "pf": 1.12,
+    "totalR": 60.2,
+    "avg_cost_R": 0.274
+   },
+   "full_net": {
+    "n": 444,
+    "wins": 55,
+    "win": 12.4,
+    "exp": 0.136,
+    "pf": 1.12,
+    "totalR": 60.2,
+    "avg_cost_R": 0.274
+   },
+   "delta_oos_exp": 0.0,
+   "robust": false
+  }
+ ]
+}

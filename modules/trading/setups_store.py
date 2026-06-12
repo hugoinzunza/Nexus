@@ -49,25 +49,16 @@ def load_all(path: str = SETUPS_PATH) -> list:
         return []
 
 
-def summarize(setups: list) -> dict:
-    """Resumen tipo diario: win rate, R promedio y profit factor de lo cerrado.
-    Solo ganada/perdida cuentan para el desempeño; anuladas se informan aparte."""
-    closed = [s for s in setups if s["status"] in ("ganada", "perdida")]
+def _perf(closed: list) -> dict:
+    """Desempeño (win rate, R prom, PF, R acum) de un set de setups cerrados."""
     wins = [s for s in closed if s["status"] == "ganada"]
     losses = [s for s in closed if s["status"] == "perdida"]
     n = len(closed)
     gross_win = sum(s.get("result_r") or 0.0 for s in wins)
     gross_loss = abs(sum(s.get("result_r") or 0.0 for s in losses))  # = nº de pérdidas
     total_r = sum(s.get("result_r") or 0.0 for s in closed)
-    if gross_loss > 0:
-        pf = round(gross_win / gross_loss, 2)
-    else:
-        pf = None  # sin pérdidas: PF indefinido (el front muestra ∞ si hay ganadas)
+    pf = round(gross_win / gross_loss, 2) if gross_loss > 0 else None
     return {
-        "total": len(setups),
-        "pendientes": sum(1 for s in setups if s["status"] == "pendiente"),
-        "activos": sum(1 for s in setups if s["status"] == "activo"),
-        "anuladas": sum(1 for s in setups if s["status"] == "anulada"),
         "cerradas": n,
         "ganadas": len(wins),
         "perdidas": len(losses),
@@ -76,6 +67,24 @@ def summarize(setups: list) -> dict:
         "total_r": round(total_r, 2),
         "pf": pf,
     }
+
+
+def summarize(setups: list) -> dict:
+    """Resumen tipo diario: win rate, R promedio y profit factor de lo cerrado.
+    Solo ganada/perdida cuentan para el desempeño; anuladas se informan aparte.
+    Incluye el desglose CON filtro de régimen vs SIN filtro (objetivo del forward-test)."""
+    closed = [s for s in setups if s["status"] in ("ganada", "perdida")]
+    out = {
+        "total": len(setups),
+        "pendientes": sum(1 for s in setups if s["status"] == "pendiente"),
+        "activos": sum(1 for s in setups if s["status"] == "activo"),
+        "anuladas": sum(1 for s in setups if s["status"] == "anulada"),
+    }
+    out.update(_perf(closed))
+    # Comparativa de régimen: los que pasaron el filtro (regime_ok True) vs los que no.
+    out["con_filtro"] = _perf([s for s in closed if s.get("regime_ok") is True])
+    out["sin_filtro"] = _perf([s for s in closed if s.get("regime_ok") is False])
+    return out
 
 
 class SetupStore:
@@ -120,6 +129,10 @@ class SetupStore:
                 "rr": plan["rr"],
                 "tp_label": plan.get("tp_label", ""),
                 "state_init": plan.get("state", "pendiente"),
+                # Filtro de régimen al momento de generarse (forward-test con/sin filtro).
+                "regime_ok": plan.get("regime_ok"),
+                "regime_vix": plan.get("regime_vix"),
+                "regime_adx": plan.get("regime_adx"),
                 "status": "activo" if active else "pendiente",
                 "activated": active,
                 "ts_activated": int(now_s) if active else None,

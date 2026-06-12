@@ -1,0 +1,3 @@
+# Datos regenerables / pesados (se reconstruyen con collect_trades.py)
+trades_features.json
+collect.log
