@@ -76,6 +76,54 @@ def _conf_prices(points, n):
     return out
 
 
+def _conf_points(points, n):
+    """Como _conf_prices pero devuelve el PIVOTE completo (precio + idx) más
+    reciente confirmado en cada vela j (para dibujar desde dónde viene el CDC)."""
+    out = [None] * n
+    evt = sorted(points, key=lambda p: p["confirm_idx"])
+    pi = 0
+    cur = None
+    for j in range(n):
+        while pi < len(evt) and evt[pi]["confirm_idx"] <= j:
+            cur = evt[pi]
+            pi += 1
+        out[j] = cur
+    return out
+
+
+def _cdc_events(closed: list, max_events: int = 6) -> List[Dict]:
+    """Eventos de CDC (cambio de carácter) para DIBUJAR en el gráfico: cierres que
+    rompen el último swing confirmado en dirección OPUESTA a la del quiebre
+    anterior (los quiebres a favor son BOS y no se marcan, para no saturar).
+    Anti-repaint: solo velas cerradas, swings con confirm_idx, cada swing se
+    consume tras romperse. Devuelve [{dir, price, t_from, t_to}] (los últimos)."""
+    n = len(closed)
+    if n < 2 * CDC_PIV + 3:
+        return []
+    sh, sl = smc.swing_points(closed, CDC_PIV)
+    hi = _conf_points(sh, n)
+    lo = _conf_points(sl, n)
+    closes = [c["c"] for c in closed]
+    events = []
+    direction = None
+    broken_hi = broken_lo = -1
+    for j in range(n):
+        h, l = hi[j], lo[j]
+        if h is not None and h["idx"] != broken_hi and closes[j] > h["price"]:
+            if direction != "up":
+                events.append({"dir": "up", "price": round(h["price"], 6),
+                               "t_from": closed[h["idx"]]["t"], "t_to": closed[j]["t"]})
+            direction = "up"
+            broken_hi = h["idx"]
+        if l is not None and l["idx"] != broken_lo and closes[j] < l["price"]:
+            if direction != "down":
+                events.append({"dir": "down", "price": round(l["price"], 6),
+                               "t_from": closed[l["idx"]]["t"], "t_to": closed[j]["t"]})
+            direction = "down"
+            broken_lo = l["idx"]
+    return events[-max_events:]
+
+
 def _cdc_state(closed: list, direction: str, zone_lo: float, zone_hi: float) -> Dict:
     """Estado del CDC para el plan: tras el TOQUE de la zona del POI, ¿hubo un
     cierre que rompa el último swing relevante en la dirección del plan?
@@ -420,12 +468,14 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
                  if p["mitigated"] and not p["invalid"] and p.get("mit_t")
                  and now_ms - p["mit_t"] <= (CDC_WINDOW + 1) * sel_ms]
     result["tpsl"] = _tpsl(valids + cdc_phase, result["levels"], last_price, result["range"])
-    # CDC como CONFIRMACIÓN del plan (anti-repaint: solo velas cerradas de la TF
-    # de planeación). Hipótesis del research: aporta en 1h; se valida en forward-test.
+    # CDC: eventos de cambio de carácter para DIBUJAR (capa del gráfico) y, si
+    # hay plan, la CONFIRMACIÓN del plan (anti-repaint: solo velas cerradas de la
+    # TF de planeación). Hipótesis del research: aporta en 1h; forward-test.
+    closed = closed_candles(sel_candles, sel_tf, now_ms) if sel_candles else []
+    result["cdc_events"] = _cdc_events(closed) if closed else []
     plan = result["tpsl"]
-    if plan and sel_candles:
-        cdc = _cdc_state(closed_candles(sel_candles, sel_tf, now_ms),
-                         plan["dir"], plan["entry_lo"], plan["entry_hi"])
+    if plan and closed:
+        cdc = _cdc_state(closed, plan["dir"], plan["entry_lo"], plan["entry_hi"])
         plan["cdc_status"] = cdc["status"]
         plan["cdc_ok"] = cdc["status"] == "confirmado"
         plan["cdc_t"] = cdc["cdc_t"]

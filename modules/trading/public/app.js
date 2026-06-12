@@ -201,6 +201,28 @@
           });
         }
 
+        // --- Capa CDC: cambios de carácter (CHoCH) sobre velas cerradas ---
+        // Línea desde el swing roto hasta la vela cuyo CIERRE lo rompió, con
+        // etiqueta "CDC" — como el indicador de referencia. Verde = CDC alcista
+        // (rompe el último swing high), rojo = bajista (rompe el swing low).
+        if (show.cdc && smc.cdc_events && smc.cdc_events.length) {
+          smc.cdc_events.forEach((ev) => {
+            const y = py(ev.price); if (y == null) return;
+            let x1 = tx(ev.t_from), x2 = tx(ev.t_to);
+            if (x2 == null) return;
+            if (x1 == null) x1 = 0;
+            const col = ev.dir === "up" ? "#16c784" : "#ea3943";
+            ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.setLineDash([]);
+            ctx.globalAlpha = 0.85;
+            ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x2, y - 4); ctx.lineTo(x2, y + 4); ctx.stroke();
+            ctx.globalAlpha = 1;
+            pill(placeD(ev.dir === "up" ? y - 19 : y + 5), "CDC", col,
+                 { x: Math.max(2, Math.min(x2 - 16, W - 44)),
+                   font: "600 9px -apple-system, sans-serif" });
+          });
+        }
+
         // --- Capa LuxAlgo: escenario TP/SL anclado a estructura (NO una orden) ---
         // Solo llega aquí si el backend validó: POI ✓ que el precio toca, en su
         // zona correcta (descuento/premium) y con R:R real >= 2. Es contexto.
@@ -312,7 +334,7 @@
   const IND_KEY = "nexus_trading_ind";
   // TP/SL (la capa del PLAN) parte encendida: es el corazón del indicador y ahí
   // viven las etiquetas de régimen y CDC del badge.
-  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, div: false };
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, cdc: true, div: false };
   let indState = (() => {
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
@@ -322,7 +344,7 @@
     for (let i = 0; i < values.length; i++) out.push(i === 0 ? values[0] : values[i] * k + out[i - 1] * (1 - k));
     return out;
   }
-  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, div: indState.div }; }
+  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, cdc: indState.cdc, div: indState.div }; }
   function saveIndState() { try { localStorage.setItem(IND_KEY, JSON.stringify(indState)); } catch (e) {} }
 
   function rsiCalc(closes, p) {
@@ -448,7 +470,7 @@
   // Indicadores en panes (recrean series) y capas Lux (solo redibujan el primitive).
   const TOGGLE_GROUPS = {
     ".ind-toggles": [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]],
-    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."]],
+    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["cdc", "CDC"], ["div", "Diverg."]],
   };
   const PANE_INDICATORS = new Set(["vol", "rsi", "adx"]);
 
