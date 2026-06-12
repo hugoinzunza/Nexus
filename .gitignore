@@ -22,3 +22,6 @@ logs/
 
 # Datos en runtime (suscripciones push, etc.)
 data/
+
+# Worktrees temporales de agentes Claude
+.claude/worktrees/
