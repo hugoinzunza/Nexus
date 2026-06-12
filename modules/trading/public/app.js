@@ -259,7 +259,9 @@
   // --- Indicadores (Vol / RSI / ADX) ---------------------------------
   // Estado global (mismo para todos los pares), recordado en localStorage.
   const IND_KEY = "nexus_trading_ind";
-  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: false, div: false };
+  // TP/SL (la capa del PLAN) parte encendida: es el corazón del indicador y ahí
+  // viven las etiquetas de régimen y CDC del badge.
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, div: false };
   let indState = (() => {
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
@@ -791,7 +793,8 @@
         ? " · SL −" + t.sl_pct.toFixed(1) + "%" + (t.sl_capped ? " (tope, excede estructura)" : "") : "";
       set(".smc-setup", "Plan " + t.tf + " " + (t.dir === "long" ? "▲ largo" : "▼ corto") +
         " · R:R " + t.rr + slTxt + " · " + est + reg + cdc, t.regime_ok === false ? "" : (t.dir === "long" ? "up" : "down"));
-    } else set(".smc-setup", "sin plan (no hay R:R≥2)");
+    } else set(".smc-setup", "sin plan en " + card.timeframe +
+      " (sin R:R≥2 ahora) · los planes salen sobre todo en 1h/4h");
   }
 
   // --- Panel "POIs activos" ------------------------------------------
