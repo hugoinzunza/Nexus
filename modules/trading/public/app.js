@@ -202,10 +202,11 @@
         }
 
         // --- Capa CDC: cambios de carácter (CHoCH) sobre velas cerradas ---
-        // Línea desde el swing roto hasta la vela cuyo CIERRE lo rompió, con
-        // etiqueta "CDC" — como el indicador de referencia. Verde = CDC alcista
-        // (rompe el último swing high), rojo = bajista (rompe el swing low).
-        if (show.cdc && smc.cdc_events && smc.cdc_events.length) {
+        // SIEMPRE visible (sin toggle, pedido de Hugo): línea desde el swing roto
+        // hasta la vela cuyo CIERRE lo rompió, con etiqueta "CDC" — como el
+        // indicador de referencia. Verde = CDC alcista (rompe el último swing
+        // high), rojo = bajista (rompe el swing low).
+        if (smc.cdc_events && smc.cdc_events.length) {
           smc.cdc_events.forEach((ev) => {
             const y = py(ev.price); if (y == null) return;
             let x1 = tx(ev.t_from), x2 = tx(ev.t_to);
@@ -334,7 +335,7 @@
   const IND_KEY = "nexus_trading_ind";
   // TP/SL (la capa del PLAN) parte encendida: es el corazón del indicador y ahí
   // viven las etiquetas de régimen y CDC del badge.
-  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, cdc: true, div: false };
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, div: false };
   let indState = (() => {
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
@@ -344,7 +345,7 @@
     for (let i = 0; i < values.length; i++) out.push(i === 0 ? values[0] : values[i] * k + out[i - 1] * (1 - k));
     return out;
   }
-  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, cdc: indState.cdc, div: indState.div }; }
+  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, div: indState.div }; }
   function saveIndState() { try { localStorage.setItem(IND_KEY, JSON.stringify(indState)); } catch (e) {} }
 
   function rsiCalc(closes, p) {
@@ -470,7 +471,7 @@
   // Indicadores en panes (recrean series) y capas Lux (solo redibujan el primitive).
   const TOGGLE_GROUPS = {
     ".ind-toggles": [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]],
-    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["cdc", "CDC"], ["div", "Diverg."]],
+    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."]],
   };
   const PANE_INDICATORS = new Set(["vol", "rsi", "adx"]);
 
