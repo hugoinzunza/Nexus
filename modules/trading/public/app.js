@@ -75,6 +75,22 @@
         }
 
         if (!smc) return;
+        // Anti-solape de etiquetas: cuando dos price-lines/cajas tienen precios muy
+        // juntos, sus títulos se encimarían. `place` busca la altura libre más cercana
+        // (arriba o abajo) y la reserva, así cada etiqueta queda legible. Se llevan dos
+        // columnas: izquierda (nombres de cajas/Entrada) y derecha (SL/TP/R:R).
+        const _LH = 12, _leftB = [], _rightB = [];
+        const _free = (bands, y) => !bands.some((b) => y < b + _LH && y + _LH > b);
+        const _place = (bands, yTop) => {
+          if (_free(bands, yTop)) { bands.push(yTop); return yTop; }
+          for (let k = 1; k <= 12; k++) {
+            const d = yTop + k * _LH; if (d + _LH < H && _free(bands, d)) { bands.push(d); return d; }
+            const u = yTop - k * _LH; if (u > 0 && _free(bands, u)) { bands.push(u); return u; }
+          }
+          bands.push(yTop); return yTop;
+        };
+        const placeL = (y) => _place(_leftB, y);
+        const placeR = (y) => _place(_rightB, y);
         // --- Overlay SMC (siempre): premium/discount, FVG, POIs ---
         if (smc.range && smc.range.eq) {
           const yEq = py(smc.range.eq);
@@ -105,12 +121,12 @@
           ctx.lineWidth = 1; ctx.setLineDash(poi.valid ? [] : [3, 3]);
           ctx.strokeRect(0.5, top + 0.5, W - 1, h); ctx.setLineDash([]);
           ctx.fillStyle = long ? "#16c784" : "#ea3943";
-          ctx.fillText(`POI ${poi.tf} ${poi.valid ? "✓" : "✕"}`, 5, top + 2);
+          ctx.fillText(`POI ${poi.tf} ${poi.valid ? "✓" : "✕"}`, 5, placeL(top + 2));
         });
 
         // --- Capa LuxAlgo: niveles Weak/Strong con % ---
         if (show.levels && smc.levels) {
-          ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "middle";
+          ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "top";
           smc.levels.forEach((lv) => {
             const y = py(lv.price); if (y == null) return;
             const high = lv.type === "high";
@@ -121,7 +137,7 @@
             ctx.setLineDash([]); ctx.globalAlpha = 1;
             ctx.fillStyle = col;
             const txt = `${lv.label}${lv.pct != null ? " " + lv.pct + "%" : ""}`;
-            ctx.fillText(txt, 4, y + (high ? -6 : 6));
+            ctx.fillText(txt, 4, placeL(y - (high ? 12 : 0)));
           });
         }
 
@@ -131,7 +147,7 @@
         if (show.tpsl && smc.tpsl) {
           const t = smc.tpsl;
           const long = t.dir === "long";
-          ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "middle";
+          ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "top";
           const line = (price, color, label) => {
             if (price == null) return;
             const y = py(price); if (y == null) return;
@@ -139,7 +155,7 @@
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); ctx.setLineDash([]);
             ctx.fillStyle = color;
             const tw = ctx.measureText(label).width;
-            ctx.fillText(label, W - tw - 6, y - 5);
+            ctx.fillText(label, W - tw - 6, placeR(y - 12));  // etiqueta sobre la línea, sin encimar
           };
           // Estado del plan: "pendiente" (en vigilancia, precio aún fuera de la zona)
           // o "activo" (el precio ya está dentro). Pendiente se ve más tenue/dashed.
@@ -154,8 +170,7 @@
             ctx.strokeStyle = "rgba(108,92,231,0.55)"; ctx.lineWidth = 1;
             ctx.setLineDash([4, 3]); ctx.strokeRect(0.5, top + 0.5, W - 1, h); ctx.setLineDash([]);
             ctx.fillStyle = "#a29bfe"; ctx.textBaseline = "top";
-            ctx.fillText(`POI ${t.tf} ${long ? "▲ largo" : "▼ corto"}`, 5, top + 2);
-            ctx.textBaseline = "middle";
+            ctx.fillText(`Plan ${t.tf} ${long ? "▲ largo" : "▼ corto"}`, 5, placeL(top + 2));
           }
           // SL y TP: línea punteada + etiqueta con su precio (a la derecha).
           ctx.globalAlpha = alpha;
@@ -170,7 +185,8 @@
             ctx.beginPath(); ctx.moveTo(0, yEntry); ctx.lineTo(W, yEntry); ctx.stroke();
             ctx.setLineDash([]);
             ctx.fillStyle = "#a29bfe"; ctx.font = "bold 10px -apple-system, sans-serif";
-            ctx.fillText(`Entrada ${fmtPrice(t.entry)}`, 5, yEntry - 6);
+            ctx.textBaseline = "top";
+            ctx.fillText(`Entrada ${fmtPrice(t.entry)}`, 5, placeL(yEntry - 12));
             ctx.font = "9px -apple-system, sans-serif";
             ctx.globalAlpha = 1;
             // Badge: R:R real + estado (⏳ en vigilancia / ● activo). Es escenario, no orden.
@@ -179,10 +195,11 @@
             const badge = `R:R ${rr} · ${estado}`;
             ctx.font = "bold 10px -apple-system, sans-serif";
             const bw = ctx.measureText(badge).width;
+            const by = placeR(yEntry - 8);
             ctx.fillStyle = "rgba(15,17,23,0.85)";
-            ctx.fillRect(W - bw - 12, yEntry - 8, bw + 8, 16);
+            ctx.fillRect(W - bw - 12, by, bw + 8, 16);
             ctx.fillStyle = pend ? "#a29bfe" : "#16c784";
-            ctx.fillText(badge, W - bw - 8, yEntry);
+            ctx.fillText(badge, W - bw - 8, by + 3);
             ctx.font = "9px -apple-system, sans-serif";
           }
           ctx.globalAlpha = 1;
