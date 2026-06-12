@@ -484,8 +484,11 @@
     const LC = window.LightweightCharts;
     const chart = LC.createChart(card.chartEl, {
       autoSize: true,
+      // Sin el logo/link de TradingView dentro del canvas; la atribución de
+      // Lightweight Charts (Apache-2.0) va en el pie de la página.
       layout: { background: { color: "transparent" }, textColor: "#8b93a7",
-                fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif" },
+                fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
+                attributionLogo: false },
       grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
       crosshair: { mode: LC.CrosshairMode.Normal },
       rightPriceScale: { borderColor: "#262b38" },
