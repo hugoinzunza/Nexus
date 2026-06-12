@@ -1,13 +1,17 @@
-/* Estilos del dashboard de trading. Tema oscuro, sin frameworks. */
+/* Estilos del dashboard de trading. Tema oscuro, sin frameworks.
+   Paleta Nexux: fondo profundo casi negro con glow violeta/cian ambiental,
+   paneles "glass" y acentos violeta (#6c5ce7) + cian (#22d3ee). */
 :root {
-  --bg: #0f1117;
-  --panel: #171a23;
-  --panel2: #1d2130;
-  --line: #262b38;
-  --text: #e6e9f0;
+  --bg: #0a0c11;
+  --panel: rgba(23, 26, 37, 0.72);
+  --panel2: rgba(16, 18, 27, 0.85);
+  --chart-bg: #0b0d13;
+  --line: #232938;
+  --text: #e8ebf2;
   --muted: #8b93a7;
   --accent: #6c5ce7;
   --accent2: #a29bfe;
+  --cyan: #22d3ee;
   --green: #16c784;
   --red: #ea3943;
   --amber: #f5a623;
@@ -18,7 +22,14 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
+/* Glow ambiental (mismo lenguaje visual que la portada de Nexux). */
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(900px 420px at 18% -6%, rgba(108,92,231,0.16), transparent 70%),
+    radial-gradient(700px 380px at 92% 0%, rgba(34,211,238,0.07), transparent 72%),
+    var(--bg); }
 .topbar {
   display: flex; align-items: center; gap: 16px;
   padding: 16px 24px;
@@ -29,8 +40,8 @@ body {
   padding-right: calc(24px + env(safe-area-inset-right, 0px));
   padding-left: calc(24px + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; background: rgba(15,17,23,.92);
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 5;
+  position: sticky; top: 0; background: rgba(10,12,17,.78);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 5;
 }
 .back { color: var(--accent2); text-decoration: none; font-weight: 700;
   display: inline-flex; align-items: center; min-height: 44px; }
@@ -49,8 +60,14 @@ body {
 }
 .instrument-card {
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: 16px; padding: 18px;
+  border-radius: 20px; padding: 18px;
+  position: relative; overflow: hidden;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 18px 50px -28px rgba(0,0,0,0.8);
 }
+/* Filo superior con gradiente de la marca, sutil. */
+.instrument-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 1.5px;
+  background: linear-gradient(90deg, transparent, rgba(108,92,231,0.55), rgba(34,211,238,0.35), transparent); }
 .ic-header { display: flex; justify-content: space-between; align-items: flex-start; }
 .ic-title { display: flex; align-items: center; gap: 10px; }
 .ic-symbol { margin: 0; font-size: 22px; letter-spacing: .5px; }
@@ -74,7 +91,10 @@ body {
   display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 14px;
 }
 
-.chart-wrap { background: var(--panel2); border-radius: 12px; padding: 8px;
+/* El lienzo del gráfico va más OSCURO que los paneles: así las cajas de
+   POI/OB/FVG y las bandas premium/descuento contrastan y se leen. */
+.chart-wrap { background: var(--chart-bg); border: 1px solid var(--line);
+  border-radius: 14px; padding: 8px;
   position: relative; display: flex; flex-direction: column; }
 /* Sin el libro al lado, el gráfico toma todo el ancho y más alto. */
 .chart { width: 100%; height: 460px; display: block; flex: 1 1 auto; min-height: 240px;
@@ -107,20 +127,17 @@ body {
   .chart { height: clamp(520px, 60vh, 820px); }
   .signals { grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); }
 }
-/* Contador de cierre de vela: pill en la esquina INFERIOR derecha del gráfico,
-   sobre el eje de tiempo y a la izquierda del eje de precios. Se ancla abajo para
-   no chocar con los toggles (que en móvil envuelven en 2 filas). Sin capturar clics. */
-.candle-timer { position: absolute; bottom: 36px; right: 64px; z-index: 4; pointer-events: none;
-  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px;
-  background: rgba(15,17,23,0.82); border: 1px solid var(--line);
+/* Contador de cierre de vela: chip en la FILA DE CONTROLES (junto al botón de
+   expandir), ya no flotando sobre el eje del gráfico. */
+.candle-timer { display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 11px; border-radius: 999px; margin-left: auto;
+  background: rgba(108,92,231,0.10); border: 1px solid rgba(108,92,231,0.35);
   font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent2);
-  font-variant-numeric: tabular-nums; }
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
 .candle-timer .ct-ic { opacity: .8; }
-.chart-wrap.expanded .candle-timer { bottom: 44px; right: 70px; }
 .chart-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .ind-toggles, .lux-toggles { display: flex; gap: 4px; flex: 0 0 auto; padding-left: 8px;
   border-left: 1px solid var(--line); }
-.chart-expand { margin-left: auto; }
 .ind-btn { padding: 5px 9px; font-size: 11.5px; }
 .ind-btn.active { background: rgba(162,155,254,.16); border-color: var(--accent2); color: var(--accent2); }
 /* Las capas SMC+ (Lux) usan el verde de acento para distinguirse de los indicadores. */
@@ -146,15 +163,16 @@ body.chart-open { overflow: hidden; }
 .tf-selector::-webkit-scrollbar { display: none; }
 .tf-btn {
   flex: 0 0 auto; cursor: pointer; user-select: none;
-  background: transparent; color: var(--muted);
-  border: 1px solid var(--line); border-radius: 8px;
-  padding: 5px 11px; font-size: 12.5px; font-weight: 600;
+  background: rgba(255,255,255,0.02); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 12px; font-size: 12.5px; font-weight: 600;
   font-family: inherit; font-variant-numeric: tabular-nums;
   transition: background .12s, color .12s, border-color .12s;
 }
 .tf-btn:hover { color: var(--text); border-color: var(--accent); }
 .tf-btn.active {
-  background: var(--accent); color: #fff; border-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent), #5848c9); color: #fff;
+  border-color: transparent; box-shadow: 0 4px 14px -6px rgba(108,92,231,0.7);
 }
 
 .book { background: var(--panel2); border-radius: 12px; padding: 12px; }
@@ -178,13 +196,18 @@ body.chart-open { overflow: hidden; }
   padding: 6px 0; font-variant-numeric: tabular-nums;
 }
 
-.signals { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 14px; margin-top: 16px; }
+.signals { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; margin-top: 16px; }
 .sig {
-  background: var(--panel2); border-radius: 10px; padding: 10px 12px;
-  display: flex; flex-direction: column; gap: 6px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 11px 13px; display: flex; flex-direction: column; gap: 6px;
+  transition: border-color .15s;
 }
-.sig .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-.sig .v { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sig:hover { border-color: rgba(108,92,231,0.45); }
+.sig .k { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px;
+  display: flex; align-items: center; gap: 6px; }
+.sig .k::before { content: ""; width: 5px; height: 5px; border-radius: 2px;
+  background: linear-gradient(135deg, var(--accent), var(--cyan)); flex: 0 0 auto; }
+.sig .v { font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.4; }
 .sig .v.up { color: var(--green); }
 .sig .v.down { color: var(--red); }
 .bar { height: 6px; background: #11141d; border-radius: 4px; overflow: hidden; position: relative; }
@@ -203,7 +226,7 @@ body.chart-open { overflow: hidden; }
 
 /* Panel "POIs activos" del indicador SMC */
 .smc-panel { margin-top: 16px; background: var(--panel2); border: 1px solid var(--line);
-  border-radius: 12px; padding: 12px 14px; }
+  border-radius: 14px; padding: 12px 14px; }
 .smc-head { display: flex; align-items: center; justify-content: space-between;
   gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .smc-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }

@@ -79,7 +79,7 @@
         // juntos, sus títulos se encimarían. `place` busca la altura libre más cercana
         // (arriba o abajo) y la reserva, así cada etiqueta queda legible. Se llevan dos
         // columnas: izquierda (nombres de cajas/Entrada) y derecha (SL/TP/R:R).
-        const _LH = 12, _leftB = [], _rightB = [], _divB = [];
+        const _LH = 16, _leftB = [], _rightB = [], _divB = [];   // alto de banda = alto de pill
         const _free = (bands, y) => !bands.some((b) => y < b + _LH && y + _LH > b);
         const _place = (bands, yTop) => {
           if (_free(bands, yTop)) { bands.push(yTop); return yTop; }
@@ -92,42 +92,94 @@
         const placeL = (y) => _place(_leftB, y);
         const placeR = (y) => _place(_rightB, y);
         const placeD = (y) => _place(_divB, y);   // etiquetas de divergencias (en los pivotes)
-        // --- Overlay SMC (siempre): premium/discount, FVG, POIs ---
+        // Etiqueta tipo "pill" (fondo oscuro redondeado) para que el texto se lea
+        // sobre velas y cajas — estilo LuxAlgo. opts.right ancla al borde derecho.
+        const pill = (y, text, color, opts = {}) => {
+          ctx.font = opts.font || "9.5px -apple-system, sans-serif";
+          ctx.textBaseline = "top";
+          const w = ctx.measureText(text).width + 10;
+          let px = opts.x != null ? opts.x : 6;
+          if (opts.right) px = W - w - 6;
+          px = Math.max(2, Math.min(px, W - w - 2));
+          ctx.fillStyle = "rgba(9,11,17,0.82)";
+          if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px, y, w, 15, 4); ctx.fill(); }
+          else ctx.fillRect(px, y, w, 15);
+          ctx.fillStyle = color;
+          ctx.fillText(text, px + 5, y + 3.5);
+        };
+        // --- Overlay SMC (siempre): premium/descuento, FVG, POIs ---
+        // Premium/descuento estilo LuxAlgo: bandas DENTRO del dealing range con
+        // gradiente que se desvanece hacia el equilibrio (antes: dos mitades
+        // planas que ensuciaban todo el fondo), con etiqueta sutil a la derecha.
         if (smc.range && smc.range.eq) {
-          const yEq = py(smc.range.eq);
+          const yHi = py(smc.range.strong_high), yEq = py(smc.range.eq), yLo = py(smc.range.weak_low);
           if (yEq != null) {
-            ctx.fillStyle = "rgba(234,57,67,0.05)"; ctx.fillRect(0, 0, W, yEq);
-            ctx.fillStyle = "rgba(22,199,132,0.05)"; ctx.fillRect(0, yEq, W, H - yEq);
+            const top = yHi != null ? Math.max(0, yHi) : 0;
+            const bot = yLo != null ? Math.min(H, yLo) : H;
+            if (yEq > top) {
+              const g = ctx.createLinearGradient(0, top, 0, yEq);
+              g.addColorStop(0, "rgba(234,57,67,0.13)"); g.addColorStop(1, "rgba(234,57,67,0)");
+              ctx.fillStyle = g; ctx.fillRect(0, top, W, yEq - top);
+            }
+            if (bot > yEq) {
+              const g2 = ctx.createLinearGradient(0, yEq, 0, bot);
+              g2.addColorStop(0, "rgba(22,199,132,0)"); g2.addColorStop(1, "rgba(22,199,132,0.13)");
+              ctx.fillStyle = g2; ctx.fillRect(0, yEq, W, bot - yEq);
+            }
+            ctx.globalAlpha = 0.8;
+            if (yEq - top > 30) pill((top + yEq) / 2 - 7, "PREMIUM", "rgba(234,57,67,0.9)",
+              { right: true, font: "600 9px -apple-system, sans-serif" });
+            if (bot - yEq > 30) pill((yEq + bot) / 2 - 7, "DESCUENTO", "rgba(22,199,132,0.9)",
+              { right: true, font: "600 9px -apple-system, sans-serif" });
+            ctx.globalAlpha = 1;
           }
         }
-        ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "top";
+        // FVG: caja desde su origen hacia la derecha, gradiente que decae y
+        // etiqueta pill a la derecha (solo si la caja tiene alto suficiente).
         (smc.fvgs || []).filter((f) => !f.filled).forEach((f) => {
           const y1 = py(f.hi), y2 = py(f.lo); if (y1 == null || y2 == null) return;
           let x = tx(f.t); if (x == null) x = 0; x = Math.max(0, x);
-          const top = Math.min(y1, y2);
-          ctx.fillStyle = f.bullish ? "rgba(108,92,231,0.13)" : "rgba(245,166,35,0.13)";
-          ctx.fillRect(x, top, W - x, Math.abs(y2 - y1));
-          ctx.fillStyle = f.bullish ? "#a29bfe" : "#f5a623";
-          ctx.fillText(f.bullish ? "FVG↑" : "FVG↓", x + 3, top + 1);
+          const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
+          const col = f.bullish ? "162,155,254" : "245,166,35";
+          const g = ctx.createLinearGradient(x, 0, W, 0);
+          g.addColorStop(0, `rgba(${col},0.16)`); g.addColorStop(1, `rgba(${col},0.05)`);
+          ctx.fillStyle = g; ctx.fillRect(x, top, W - x, h);
+          ctx.strokeStyle = `rgba(${col},0.3)`; ctx.lineWidth = 1;
+          ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
+          if (h > 10) pill(placeR(top + h / 2 - 7), f.bullish ? "FVG ▲" : "FVG ▼",
+            f.bullish ? "#a29bfe" : "#f5a623", { right: true });
         });
-        ctx.font = "10px -apple-system, sans-serif"; ctx.textBaseline = "top";
+        // POI / order blocks: nacen en su vela de confirmación y se extienden a
+        // la derecha. Válido = relleno con gradiente + borde + línea de
+        // mitigación al 50%; mitigado/roto = fondo no sólido y sin etiqueta
+        // (estilo breaker de LuxAlgo: menos ruido).
         (smc.pois || []).forEach((poi) => {
           const y1 = py(poi.hi), y2 = py(poi.lo); if (y1 == null || y2 == null) return;
           const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
+          let x = poi.t_conf ? tx(poi.t_conf) : 0; if (x == null) x = 0; x = Math.max(0, x);
           const long = poi.dir === "long";
           const base = long ? "22,199,132" : "234,57,67";
-          ctx.fillStyle = `rgba(${base},${poi.valid ? 0.13 : 0.05})`;
-          ctx.fillRect(0, top, W, h);
-          ctx.strokeStyle = `rgba(${base},${poi.valid ? 0.7 : 0.3})`;
-          ctx.lineWidth = 1; ctx.setLineDash(poi.valid ? [] : [3, 3]);
-          ctx.strokeRect(0.5, top + 0.5, W - 1, h); ctx.setLineDash([]);
-          ctx.fillStyle = long ? "#16c784" : "#ea3943";
-          ctx.fillText(`POI ${poi.tf} ${poi.valid ? "✓" : "✕"}`, 5, placeL(top + 2));
+          if (poi.valid) {
+            const g = ctx.createLinearGradient(x, 0, W, 0);
+            g.addColorStop(0, `rgba(${base},0.20)`); g.addColorStop(1, `rgba(${base},0.06)`);
+            ctx.fillStyle = g; ctx.fillRect(x, top, W - x, h);
+            ctx.strokeStyle = `rgba(${base},0.55)`; ctx.lineWidth = 1;
+            ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
+            ctx.strokeStyle = `rgba(${base},0.35)`; ctx.setLineDash([2, 3]);
+            ctx.beginPath(); ctx.moveTo(x, top + h / 2); ctx.lineTo(W, top + h / 2); ctx.stroke();
+            ctx.setLineDash([]);
+            pill(placeR(top + 2), `POI ${poi.tf}`, long ? "#16c784" : "#ea3943", { right: true });
+          } else {
+            ctx.fillStyle = `rgba(${base},0.04)`;
+            ctx.fillRect(x, top, W - x, h);
+            ctx.strokeStyle = `rgba(${base},0.18)`; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+            ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
+            ctx.setLineDash([]);
+          }
         });
 
         // --- Capa LuxAlgo: niveles Weak/Strong con % ---
         if (show.levels && smc.levels) {
-          ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "top";
           smc.levels.forEach((lv) => {
             const y = py(lv.price); if (y == null) return;
             const high = lv.type === "high";
@@ -136,9 +188,8 @@
             ctx.setLineDash([1, 4]); ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
             ctx.setLineDash([]); ctx.globalAlpha = 1;
-            ctx.fillStyle = col;
-            const txt = `${lv.label}${lv.pct != null ? " " + lv.pct + "%" : ""}`;
-            ctx.fillText(txt, 4, placeL(y - (high ? 12 : 0)));
+            pill(placeL(y - (high ? 16 : 2)),
+              `${lv.label}${lv.pct != null ? " · " + lv.pct + "%" : ""}`, col);
           });
         }
 
@@ -148,33 +199,33 @@
         if (show.tpsl && smc.tpsl) {
           const t = smc.tpsl;
           const long = t.dir === "long";
-          ctx.font = "9px -apple-system, sans-serif"; ctx.textBaseline = "top";
           const line = (price, color, label) => {
             if (price == null) return;
             const y = py(price); if (y == null) return;
             ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); ctx.setLineDash([]);
-            ctx.fillStyle = color;
-            const tw = ctx.measureText(label).width;
-            ctx.fillText(label, W - tw - 6, placeR(y - 12));  // etiqueta sobre la línea, sin encimar
+            pill(placeR(y - 16), label, color, { right: true });
           };
           // Estado del plan: "pendiente" (en vigilancia, precio aún fuera de la zona)
           // o "activo" (el precio ya está dentro). Pendiente se ve más tenue/dashed.
           const pend = t.state === "pendiente";
           const outReg = t.regime_ok === false;   // plan fuera de régimen → más tenue
-          const alpha = (pend ? 0.6 : 1) * (outReg ? 0.55 : 1);
+          // Piso de 0.55: atenuado pero siempre legible (las pills ya dan contraste).
+          const alpha = Math.max(0.55, (pend ? 0.65 : 1) * (outReg ? 0.6 : 1));
           // Zona del POI = de dónde sale la entrada (banda de contexto).
           const yhi = py(t.entry_hi), ylo = py(t.entry_lo);
           if (yhi != null && ylo != null) {
             const top = Math.min(yhi, ylo), h = Math.max(2, Math.abs(ylo - yhi));
-            ctx.fillStyle = pend ? "rgba(108,92,231,0.10)" : "rgba(108,92,231,0.16)";
-            ctx.fillRect(0, top, W, h);
-            ctx.strokeStyle = "rgba(108,92,231,0.55)"; ctx.lineWidth = 1;
+            const g = ctx.createLinearGradient(0, top, 0, top + h);
+            g.addColorStop(0, pend ? "rgba(108,92,231,0.14)" : "rgba(108,92,231,0.22)");
+            g.addColorStop(1, pend ? "rgba(108,92,231,0.06)" : "rgba(108,92,231,0.10)");
+            ctx.fillStyle = g; ctx.fillRect(0, top, W, h);
+            ctx.strokeStyle = "rgba(162,155,254,0.6)"; ctx.lineWidth = 1;
             ctx.setLineDash([4, 3]); ctx.strokeRect(0.5, top + 0.5, W - 1, h); ctx.setLineDash([]);
-            ctx.fillStyle = "#a29bfe"; ctx.textBaseline = "top";
-            ctx.fillText(`Plan ${t.tf} ${long ? "▲ largo" : "▼ corto"}`, 5, placeL(top + 2));
+            pill(placeL(top + 2), `Plan ${t.tf} ${long ? "▲ largo" : "▼ corto"}`, "#a29bfe",
+              { font: "600 9.5px -apple-system, sans-serif" });
           }
-          // SL y TP: línea punteada + etiqueta con su precio (a la derecha).
+          // SL y TP: línea punteada + etiqueta pill con su precio (a la derecha).
           ctx.globalAlpha = alpha;
           const slPctTxt = (typeof t.sl_pct === "number")
             ? ` (−${t.sl_pct.toFixed(1)}%${t.sl_capped ? " · tope 1,5%" : ""})` : "";
@@ -188,10 +239,8 @@
             ctx.setLineDash(pend ? [6, 4] : []);
             ctx.beginPath(); ctx.moveTo(0, yEntry); ctx.lineTo(W, yEntry); ctx.stroke();
             ctx.setLineDash([]);
-            ctx.fillStyle = "#a29bfe"; ctx.font = "bold 10px -apple-system, sans-serif";
-            ctx.textBaseline = "top";
-            ctx.fillText(`Entrada ${fmtPrice(t.entry)}`, 5, placeL(yEntry - 12));
-            ctx.font = "9px -apple-system, sans-serif";
+            pill(placeL(yEntry - 16), `Entrada ${fmtPrice(t.entry)}`, "#cfc9ff",
+              { font: "bold 10px -apple-system, sans-serif" });
             ctx.globalAlpha = 1;
             // Badge: R:R real + estado (⏳ en vigilancia / ● activo). Es escenario, no orden.
             const rr = (typeof t.rr === "number") ? t.rr.toFixed(1) : t.rr;
@@ -201,15 +250,9 @@
             const cdcTag = t.cdc_status === "confirmado" ? " · ✓ CDC"
               : t.cdc_status === "vencido" ? " · ✕ CDC venció"
               : t.cdc_status ? " · ⏳ CDC" : "";
-            const badge = `R:R ${rr} · ${estado}${reg}${cdcTag}`;
-            ctx.font = "bold 10px -apple-system, sans-serif";
-            const bw = ctx.measureText(badge).width;
-            const by = placeR(yEntry - 8);
-            ctx.fillStyle = "rgba(15,17,23,0.85)";
-            ctx.fillRect(W - bw - 12, by, bw + 8, 16);
-            ctx.fillStyle = outReg ? "#f5a623" : (pend ? "#a29bfe" : "#16c784");
-            ctx.fillText(badge, W - bw - 8, by + 3);
-            ctx.font = "9px -apple-system, sans-serif";
+            pill(placeR(yEntry - 8), `R:R ${rr} · ${estado}${reg}${cdcTag}`,
+              outReg ? "#f5a623" : (pend ? "#a29bfe" : "#16c784"),
+              { right: true, font: "bold 10px -apple-system, sans-serif" });
           }
           ctx.globalAlpha = 1;
         }
