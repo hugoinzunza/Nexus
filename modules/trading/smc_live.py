@@ -117,21 +117,40 @@ def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
     INF = 10 ** 9
     events = []
 
-    def run(own, opp, is_high):
-        # Barra en que cada swing propio queda DISPONIBLE: su confirmación y la
-        # del primer pivote opuesto posterior (la calificación).
+    def availability(own, opp, is_high):
+        """Barra en que cada swing propio queda DISPONIBLE como nivel CDC, con la
+        calificación ENDURECIDA (regla confirmada por Hugo, 2026-06-13): el
+        movimiento que sale del swing debe ROMPER ESTRUCTURA con CUERPO — un
+        cierre más allá del swing OPUESTO confirmado previo (la mecha no vale).
+        Un extremo cuyo retroceso fue solo un pivote menor NO califica: los
+        Strong vigentes dejan de marcar CDC hasta que de verdad se rompan.
+        Además se descarta el swing cuyo propio nivel fue cerrado-atravesado
+        antes de calificar (nunca llegó a ser un nivel CDC conocido)."""
         opp_sorted = sorted(opp, key=lambda p: p["idx"])
         opp_idx = [p["idx"] for p in opp_sorted]
-        suf = [INF] * (len(opp_sorted) + 1)
-        for i in range(len(opp_sorted) - 1, -1, -1):
-            suf[i] = min(opp_sorted[i]["confirm_idx"], suf[i + 1])
-        avail = []
+        out = []
         for p in own:
-            k = bisect.bisect_right(opp_idx, p["idx"])
-            a = max(p["confirm_idx"], suf[k])
-            if a < INF:
-                avail.append((a, p))
-        avail.sort(key=lambda t: t[0])
+            k = bisect.bisect_right(opp_idx, p["idx"]) - 1
+            if k < 0:
+                continue
+            ref = opp_sorted[k]          # el swing opuesto previo (estructura)
+            qual = next((j for j in range(p["idx"] + 1, n)
+                         if ((closes[j] < ref["price"]) if is_high
+                             else (closes[j] > ref["price"]))), None)
+            if qual is None:
+                continue
+            a = max(p["confirm_idx"], ref["confirm_idx"], qual)
+            crossed = next((j for j in range(p["idx"] + 1, min(a + 1, n))
+                            if ((closes[j] > p["price"]) if is_high
+                                else (closes[j] < p["price"]))), None)
+            if crossed is not None:
+                continue
+            out.append((a, p))
+        out.sort(key=lambda t: t[0])
+        return out
+
+    def run(own, opp, is_high):
+        avail = availability(own, opp, is_high)
 
         out = []
         floor = -1      # tras un quiebre, solo cuentan swings posteriores
@@ -175,19 +194,9 @@ def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
     def run_internal(own, opp, is_high, max_keep=2):
         """Estructura INTERNA (la 2ª escala del indicador, ejemplos 61.19/61.55
         de Hugo): el nivel es el swing calificado MÁS RECIENTE de cada lado (no
-        el extremo); al romperlo con un cierre, CDC interno congelado ahí."""
-        opp_sorted = sorted(opp, key=lambda p: p["idx"])
-        opp_idx = [p["idx"] for p in opp_sorted]
-        suf = [INF] * (len(opp_sorted) + 1)
-        for i in range(len(opp_sorted) - 1, -1, -1):
-            suf[i] = min(opp_sorted[i]["confirm_idx"], suf[i + 1])
-        avail = []
-        for p in own:
-            k = bisect.bisect_right(opp_idx, p["idx"])
-            a = max(p["confirm_idx"], suf[k])
-            if a < INF:
-                avail.append((a, p))
-        avail.sort(key=lambda t: t[0])
+        el extremo); al romperlo con un cierre, CDC interno congelado ahí.
+        Usa la MISMA calificación endurecida (ruptura de estructura con cuerpo)."""
+        avail = availability(own, opp, is_high)
         out = []
         floor = -1
         cur = None
