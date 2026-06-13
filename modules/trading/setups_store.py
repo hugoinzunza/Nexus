@@ -270,20 +270,27 @@ class SetupStore:
                 self._save()
         return changed
 
-    def track(self, pair: str, price: float, now_s: float) -> bool:
-        """Actualiza los setups ABIERTOS de un par contra el precio en vivo."""
+    def track(self, pair: str, price: float, now_s: float) -> list:
+        """Actualiza los setups ABIERTOS de un par contra el precio en vivo. Devuelve
+        las TRANSICIONES ocurridas [{prev, status, ...}] para disparar alertas."""
         if not price:
-            return False
-        changed = False
+            return []
+        transitions = []
         with self._lock:
             for s in self._setups:
                 if s["pair"] != pair or s["status"] in _CLOSED:
                     continue
+                prev = s["status"]
                 if self._update(s, price, now_s):
-                    changed = True
-            if changed:
+                    transitions.append({
+                        "prev": prev, "status": s["status"], "pair": s["pair"],
+                        "dir": s["dir"], "source": s.get("source", "indicador"),
+                        "poi_tf": s.get("poi_tf"), "rr": s.get("rr"),
+                        "result_r": s.get("result_r"), "key": s["key"],
+                    })
+            if transitions:
                 self._save()
-        return changed
+        return transitions
 
     @staticmethod
     def _update(s: dict, price: float, now_s: float) -> bool:
