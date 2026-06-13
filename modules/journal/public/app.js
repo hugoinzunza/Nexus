@@ -215,9 +215,14 @@
       const s = d.summary || {};
       const wr = s.win_rate == null ? "—" : s.win_rate + "%";
       const pfv = (s.pf == null) ? (s.ganadas > 0 ? "∞" : "—") : s.pf;
-      $("setups-meta").textContent = d.has_data
+      let src = "";
+      if (d.source === "macmini") {
+        const mins = d.age_seconds != null ? Math.round(d.age_seconds / 60) : null;
+        src = ` · vía Mac mini (Binance${mins != null ? `, hace ${mins}m` : ""})`;
+      }
+      $("setups-meta").textContent = (d.has_data
         ? `${s.total} registrados · ${s.cerradas} cerrados`
-        : "sin registros todavía";
+        : "sin registros todavía") + src;
       $("setups-summary").innerHTML = [
         card("Cerrados", s.cerradas || 0),
         card("Win rate", wr, s.win_rate != null && s.win_rate >= 50 ? "up" : ""),

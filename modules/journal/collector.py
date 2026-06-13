@@ -40,6 +40,8 @@ from modules.journal import stats
 
 DATA_DIR = os.path.join(ROOT, "data")
 INCOME_PATH = os.path.join(DATA_DIR, "journal_income.json")
+# Forward-test que escribe la app de Nexus (poller de trading) en el Mac mini.
+SETUPS_PATH = os.path.join(DATA_DIR, "setups.json")
 STABLES = {"USDT", "USDC", "BUSD", "FDUSD", "TUSD", "DAI", "USDP"}
 
 # Rutas candidatas del archivo de credenciales (la primera que exista, gana).
@@ -228,10 +230,36 @@ def main():
 
     try:
         resp = send(payload, url, token)
-        log(f"✓ enviado a Railway: {resp}")
+        log(f"✓ income enviado a Railway: {resp}")
     except Exception as exc:  # noqa: BLE001
-        log(f"❌ error enviando a Railway: {type(exc).__name__}: {exc}")
+        log(f"❌ error enviando income a Railway: {type(exc).__name__}: {exc}")
         sys.exit(1)
+
+    # También enviamos el FORWARD-TEST de setups (lo escribe la app del Mac mini con
+    # precios Binance). Así nexux.cl muestra el paper-trading real y persistente.
+    send_setups(url, token)
+
+
+def send_setups(income_url: str, token: str) -> None:
+    """Lee el setups.json local (forward-test, Binance) y lo POSTea a Railway."""
+    if not os.path.isfile(SETUPS_PATH):
+        log("setups.json no existe todavía (la app aún no registró planes)")
+        return
+    try:
+        with open(SETUPS_PATH, "r", encoding="utf-8") as fh:
+            setups = json.load(fh)
+    except Exception as exc:  # noqa: BLE001
+        log(f"no se pudo leer setups.json: {exc}")
+        return
+    base = income_url.rstrip("/")
+    setups_url = base[:-len("/ingest")] + "/ingest_setups" if base.endswith("/ingest") else base + "/ingest_setups"
+    payload = {"setups": setups, "generated_at_ms": int(time.time() * 1000),
+               "count": len(setups) if isinstance(setups, list) else 0}
+    try:
+        resp = send(payload, setups_url, token)
+        log(f"✓ setups enviados a Railway ({payload['count']}): {resp}")
+    except Exception as exc:  # noqa: BLE001
+        log(f"❌ error enviando setups: {type(exc).__name__}: {exc}")
 
 
 if __name__ == "__main__":

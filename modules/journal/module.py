@@ -27,6 +27,10 @@ from core.module_base import NexusModule
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(ROOT, "data")
 INGEST_PATH = os.path.join(DATA_DIR, "journal_ingest.json")
+# Forward-test de setups ingerido del Mac mini (Binance, continuo): en Railway el
+# setups.json local es efímero y usa precios de Crypto.com, así que el colector
+# manda el del Mac mini y acá se prefiere.
+SETUPS_INGEST_PATH = os.path.join(DATA_DIR, "setups_ingest.json")
 MAX_BODY = 4_000_000  # 4 MB: tope defensivo del payload de ingesta
 
 
@@ -74,7 +78,15 @@ class JournalModule(NexusModule):
             from modules.trading import setups_store
         except Exception:  # noqa: BLE001
             return self._json(200, {"has_data": False, "setups": [], "summary": None})
+        # Preferir el forward-test ingerido del Mac mini (Binance, continuo) sobre el
+        # local de Railway (efímero, Crypto.com). Caer al local si no hay ingesta.
+        source, age = "local", None
         setups = setups_store.load_all()
+        ing = self._read_setups_ingest()
+        if ing and isinstance(ing.get("setups"), list):
+            setups = ing["setups"]
+            source = "macmini"
+            age = self._age(ing)
         summary = setups_store.summarize(setups)
         paper = setups_store.paper_account(setups)
         # Más recientes primero; tope para no inflar el payload.
@@ -84,11 +96,22 @@ class JournalModule(NexusModule):
             "summary": summary,
             "paper": paper,
             "setups": ordered,
+            "source": source,
+            "age_seconds": age,
         })
+
+    def _read_setups_ingest(self):
+        if not os.path.isfile(SETUPS_INGEST_PATH):
+            return None
+        try:
+            with open(SETUPS_INGEST_PATH, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+        except Exception:  # noqa: BLE001
+            return None
 
     # --- POST (ingesta) ------------------------------------------------
     def api_post(self, subpath, body, headers):
-        if subpath != "ingest":
+        if subpath not in ("ingest", "ingest_setups"):
             return None
         token = self._token()
         if not token:
@@ -106,13 +129,14 @@ class JournalModule(NexusModule):
 
         body = dict(body)
         body["_received_at_ms"] = int(time.time() * 1000)
+        dest = SETUPS_INGEST_PATH if subpath == "ingest_setups" else INGEST_PATH
         with self._lock:
             os.makedirs(DATA_DIR, exist_ok=True)
-            tmp = INGEST_PATH + ".tmp"
+            tmp = dest + ".tmp"
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump(body, fh, ensure_ascii=False)
-            os.replace(tmp, INGEST_PATH)
-        self.context.log("journal: payload ingerido del colector")
+            os.replace(tmp, dest)
+        self.context.log(f"journal: {subpath} ingerido del colector")
         return self._json(200, {"ok": True, "received_at_ms": body["_received_at_ms"]})
 
     # --- Helpers -------------------------------------------------------
