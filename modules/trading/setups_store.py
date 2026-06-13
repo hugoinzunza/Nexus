@@ -125,12 +125,16 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         if slf <= 0:
             continue
         net_r = s["result_r"] - cost_rate / slf
-        eq += net_r * (risk_pct * eq)
+        pnl = net_r * (risk_pct * eq)
+        eq += pnl
         if s["result_r"] > 0:
             wins += 1
         peak = max(peak, eq)
         if peak > 0:
             mdd = min(mdd, (eq - peak) / peak)
+        # P&L en USD de ESTE trade (riesgo = % del equity vigente) para el registro.
+        s["paper_pnl"] = round(pnl, 2)
+        s["paper_equity"] = round(eq, 2)
         curve.append({"t": s["ts_closed"], "equity": round(eq, 2)})
     n = len(curve)
     return {

@@ -294,10 +294,11 @@
         cdcCell(x),
         `<span class="${STATUS_CLS[x.status] || ""}">${STATUS_LABEL[x.status] || x.status}</span>`,
         x.result_r == null ? "—" : `<span class="${x.result_r > 0 ? "up" : "down"}">${x.result_r > 0 ? "+" : ""}${x.result_r}R</span>`,
+        x.paper_pnl == null ? "—" : `<span class="${x.paper_pnl >= 0 ? "up" : "down"}">${x.paper_pnl >= 0 ? "+" : ""}$${Math.round(x.paper_pnl).toLocaleString("es")}</span>`,
       ]);
       table($("setups-table"),
-        ["Fecha", "Par", "TF", "Dir", "Entrada", "SL", "TP", "R:R", "Régimen", "CDC", "Estado", "Resultado"],
-        rows.length ? rows : [["Aún no se registran setups. Aparecen cuando el indicador genera un plan válido (R:R≥2).", "", "", "", "", "", "", "", "", "", "", ""]]);
+        ["Fecha", "Par", "TF", "Dir", "Entrada", "SL", "TP", "R:R", "Régimen", "CDC", "Estado", "Resultado", "P&L"],
+        rows.length ? rows : [["Aún no se registran setups. Aparecen cuando el indicador genera un plan válido (R:R≥2).", "", "", "", "", "", "", "", "", "", "", "", ""]]);
     }).catch(() => {});
 
     // Backtest histórico de referencia (mismo criterio sobre datos de Binance).
