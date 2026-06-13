@@ -28,11 +28,15 @@ DISP = 1.0
 # más grande → swings mayores, alineado con el indicador de Bitcoin Traders Academy
 # que Hugo ve en BTCUSDT.P 15m (lookback 10, calibrado contra sus niveles).
 RANGE_PIV = 10
-# El rango y los niveles se calculan sobre las últimas RANGE_WINDOW velas, aunque
-# el gráfico cargue mucha más historia: la calibración del dealing range se hizo
-# con ~400 velas y un rango sobre meses daría extremos irrelevantes. La historia
-# completa sí alimenta POIs, FVGs y CDC.
+# Ventana del CDC (selección de swings y expiración 2×): historia local para que
+# el cambio de carácter sea reciente, no de meses atrás.
 RANGE_WINDOW = 400
+# Ventana del DEALING RANGE (Strong High / Weak Low + niveles): más larga que la
+# del CDC para abarcar la PIERNA actual completa. Con 400 el piso quedaba en un
+# mínimo interno (~60.7); con 800 (~8 días en 15m) llega al Weak Low real de la
+# liquidez (~59k, el bajo del 06-05) SIN arrastrar highs de la era previa (el
+# 67.9k del 06-02 queda fuera). Alineado con el indicador de Hugo (BTA).
+DEALING_RANGE_WINDOW = 800
 POI_TFS = ["1D", "4h", "1h"]   # temporalidades de detección de POIs
 
 # --- CDC (Cambio De Carácter / CHoCH) como CONFIRMACIÓN del plan -----------
@@ -581,7 +585,7 @@ def active_pois(htf_map: Dict[str, list], last_price: float) -> List[Dict]:
 
 def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: str) -> Dict:
     """Construye el análisis SMC completo para el frontend."""
-    rng_candles = sel_candles[-RANGE_WINDOW:] if sel_candles else sel_candles
+    rng_candles = sel_candles[-DEALING_RANGE_WINDOW:] if sel_candles else sel_candles
     result = {
         "timeframe": sel_tf,
         "last_price": last_price,
