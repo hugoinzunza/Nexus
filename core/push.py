@@ -35,8 +35,8 @@ def init(root: str, log=print) -> None:
     """Configura dónde se guardan las suscripciones. Lo llama el lifespan."""
     global _SUBS_PATH, _LOG
     _LOG = log
-    data_dir = os.path.join(root, "data")
-    os.makedirs(data_dir, exist_ok=True)
+    from core.paths import persist_dir
+    data_dir = persist_dir(root)   # volumen de Railway si hay → persiste deploys
     _SUBS_PATH = os.path.join(data_dir, "push_subs.json")
     if not os.path.isfile(_SUBS_PATH):
         _write_all([])

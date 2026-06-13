@@ -25,7 +25,9 @@ import time
 from core.module_base import NexusModule
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DATA_DIR = os.path.join(ROOT, "data")
+from core.paths import persist_dir  # noqa: E402
+# Estado que debe sobrevivir deploys (ingestas del colector) → volumen en Railway.
+DATA_DIR = persist_dir(ROOT)
 INGEST_PATH = os.path.join(DATA_DIR, "journal_ingest.json")
 # Forward-test de setups ingerido del Mac mini (Binance, continuo): en Railway el
 # setups.json local es efímero y usa precios de Crypto.com, así que el colector
