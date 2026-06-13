@@ -132,9 +132,11 @@ def enviar_push(sub: dict, payload: dict) -> tuple[bool, str]:
     try:
         webpush(
             subscription_info=sub_info,
-            data=json.dumps(payload),
-            vapid_private_key=_private_key_pem(),
+            # pywebpush/py_vapid acepta la clave RAW base64url directo; convertirla a
+            # PEM PKCS8 hacía que py_vapid no la deserializara (ASN.1 invalid length).
+            vapid_private_key=os.environ.get("VAPID_PRIVATE_KEY_B64", "").strip(),
             vapid_claims=_vapid_claims(),
+            data=json.dumps(payload),
             ttl=3600 * 24,
         )
         return True, ""
