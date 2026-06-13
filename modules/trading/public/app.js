@@ -239,6 +239,34 @@
           });
         }
 
+        // --- Cajita del trade ACTIVO (forward-test), acotada desde la entrada ---
+        // Zona de RIESGO (entrada→SL, rojo) y RECOMPENSA (entrada→TP, verde), desde
+        // la barra de activación hacia la derecha, como el indicador del curso.
+        if (show.tpsl && D.trades && D.trades.length) {
+          D.trades.forEach((tr) => {
+            const yE = py(tr.entry);
+            const t0 = (tr.ts_activated || tr.ts_created || 0) * 1000;
+            let x1 = t0 ? tx(t0) : null;
+            let x2 = tx(Date.now());                 // borde derecho = ahora (no el futuro vacío)
+            if (x1 == null) x1 = 0;                   // activación fuera de vista por la izq.
+            if (x2 == null) x2 = W;
+            x1 = Math.max(0, Math.min(x1, W));
+            x2 = Math.max(x1 + 2, Math.min(x2, W));
+            const drawBox = (p2, rgb) => {
+              const y2 = py(p2);
+              if (yE == null || y2 == null) return;
+              const top = Math.min(yE, y2), h = Math.max(1, Math.abs(y2 - yE));
+              ctx.fillStyle = `rgba(${rgb},0.12)`;
+              ctx.fillRect(x1, top, x2 - x1, h);
+              ctx.strokeStyle = `rgba(${rgb},0.5)`;
+              ctx.lineWidth = 1;
+              ctx.strokeRect(x1 + 0.5, top + 0.5, Math.max(1, x2 - x1 - 1), h);
+            };
+            drawBox(tr.sl, "234,57,67");    // entrada → SL: riesgo
+            drawBox(tr.tp, "22,199,132");   // entrada → TP: recompensa
+          });
+        }
+
         // --- Capa LuxAlgo: escenario TP/SL anclado a estructura (NO una orden) ---
         // Solo llega aquí si el backend validó: POI ✓ que el precio toca, en su
         // zona correcta (descuento/premium) y con R:R real >= 2. Es contexto.
@@ -258,20 +286,6 @@
           const outReg = t.regime_ok === false;   // plan fuera de régimen → más tenue
           // Piso de 0.55: atenuado pero siempre legible (las pills ya dan contraste).
           const alpha = Math.max(0.55, (pend ? 0.65 : 1) * (outReg ? 0.6 : 1));
-          // CAJA del trade ACTIVO: zona de RIESGO (entrada→SL, rojo tenue) y de
-          // RECOMPENSA (entrada→TP, verde tenue), de fondo hasta que el trade cierre.
-          if (!pend) {
-            const yE2 = py(t.entry);
-            const box = (p2, rgb) => {
-              const y2 = py(p2);
-              if (yE2 == null || y2 == null) return;
-              const top = Math.min(yE2, y2), h = Math.max(1, Math.abs(y2 - yE2));
-              ctx.fillStyle = `rgba(${rgb},0.10)`;
-              ctx.fillRect(0, top, W, h);
-            };
-            box(t.sl, "234,57,67");    // entrada → SL: riesgo
-            box(t.tp, "22,199,132");   // entrada → TP: recompensa
-          }
           // Zona del POI = de dónde sale la entrada (banda de contexto).
           const yhi = py(t.entry_hi), ylo = py(t.entry_lo);
           if (yhi != null && ylo != null) {
@@ -697,6 +711,11 @@
       const j = await r.json();
       if (card.timeframe !== tf) return;
       card.smc = j;
+      // Trades ACTIVOS del forward-test (para dibujar la cajita acotada del trade).
+      try {
+        const sj = await fetch("/m/journal/api/setups").then((r) => (r.ok ? r.json() : null));
+        card.trades = ((sj && sj.setups) || []).filter((x) => x.status === "activo" && x.pair === symbol);
+      } catch (e) { /* sin trades activos */ }
       applySMC(card);
       renderSMCPanel(card);
     } catch (err) { /* mantenemos el análisis previo */ }
@@ -774,7 +793,8 @@
 
   function pushPrim(card) {
     if (card.smcPrim) card.smcPrim.setData({
-      smc: card.smc, ribbon: card.ribbon || [], div: card.div || [], show: luxShow(),
+      smc: card.smc, ribbon: card.ribbon || [], div: card.div || [],
+      trades: card.trades || [], show: luxShow(),
     });
   }
 
