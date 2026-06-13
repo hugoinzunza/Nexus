@@ -261,6 +261,11 @@
         blocks.push(`<div class="v-title">CDC · ¿la confirmación por cambio de carácter ayuda? (hipótesis 1h)</div>` +
           `<p class="bt-note">${line("✓ con CDC (apareció en el POI)", cc)}<br>${line("✕ sin CDC (nunca apareció)", sc)}</p>`);
       }
+      const pr = s.profe, ind = s.indicador;
+      if (pr && ind && (pr.cerradas || ind.cerradas)) {
+        blocks.push(`<div class="v-title">Fuente · entradas del profe (manual) vs indicador (auto)</div>` +
+          `<p class="bt-note">${line("👤 profe", pr)}<br>${line("🤖 indicador", ind)}</p>`);
+      }
       if (blocks.length) {
         $("setups-regime").hidden = false;
         $("setups-regime").innerHTML = blocks.join("") +
@@ -283,7 +288,7 @@
       };
       const rows = (d.setups || []).map((x) => [
         dt(x.ts_created),
-        x.pair.replace("_", "/"),
+        x.pair.replace("_", "/") + (x.source === "profe" ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">profe</span>' : ""),
         x.poi_tf,
         `<span class="${x.dir === "long" ? "up" : "down"}">${x.dir === "long" ? "Largo" : "Corto"}</span>`,
         fmtP(x.entry_lo) + "–" + fmtP(x.entry_hi),

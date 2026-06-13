@@ -19,6 +19,7 @@ import json
 import math
 import os
 import threading
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(ROOT, "data")
@@ -88,6 +89,9 @@ def summarize(setups: list) -> dict:
     # dirección correcta, mientras el setup estaba abierto) vs donde nunca apareció.
     out["con_cdc"] = _perf([s for s in closed if s.get("cdc_ok") is True])
     out["sin_cdc"] = _perf([s for s in closed if s.get("cdc_ok") is False])
+    # Comparativa por FUENTE: entradas del profe (manuales) vs las del indicador.
+    out["profe"] = _perf([s for s in closed if s.get("source") == "profe"])
+    out["indicador"] = _perf([s for s in closed if s.get("source") in (None, "indicador")])
     return out
 
 
@@ -166,9 +170,11 @@ class SetupStore:
             json.dump(self._setups, fh, ensure_ascii=False)
         os.replace(tmp, self.path)
 
-    def record(self, plan: dict, pair: str, sel_tf: str, last_price: float, now_s: float) -> bool:
+    def record(self, plan: dict, pair: str, sel_tf: str, last_price: float, now_s: float,
+               source: str = "indicador") -> bool:
         """Registra un plan nuevo si no hay ya uno ABIERTO con la misma clave.
-        Devuelve True si creó un registro."""
+        `source`: "indicador" (auto) o "profe" (entrada manual del curso), para
+        comparar después el desempeño de cada fuente. Devuelve True si creó uno."""
         if not plan:
             return False
         k = _key(pair, plan)
@@ -179,6 +185,7 @@ class SetupStore:
             active = plan.get("state") == "activo"
             self._setups.append({
                 "key": k,
+                "source": source,
                 "ts_created": int(now_s),
                 "pair": pair,
                 "sel_tf": sel_tf,
@@ -214,6 +221,37 @@ class SetupStore:
             })
             self._save()
             return True
+
+    def add_manual(self, pair: str, direction: str, entry: float, sl: float, tp: float,
+                   tf: str = "manual", last_price: float | None = None,
+                   now_s: float | None = None, label: str = "profe") -> dict:
+        """Agrega una entrada MANUAL (del profe) al forward-test. La zona de entrada
+        es el precio puntual (límite); se le sigue activación/TP/SL igual que a las
+        del indicador. Devuelve {ok, created, rr, status} o {ok: False, error}."""
+        try:
+            entry, sl, tp = float(entry), float(sl), float(tp)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "entry/sl/tp deben ser números"}
+        direction = "long" if str(direction).lower() in ("long", "largo", "buy", "compra") else "short"
+        risk = abs(entry - sl)
+        if risk <= 0 or entry <= 0:
+            return {"ok": False, "error": "SL inválido (riesgo cero)"}
+        # Coherencia: en long, SL<entry<TP; en short, SL>entry>TP.
+        if direction == "long" and not (sl < entry < tp):
+            return {"ok": False, "error": "long requiere SL < entrada < TP"}
+        if direction == "short" and not (sl > entry > tp):
+            return {"ok": False, "error": "short requiere SL > entrada > TP"}
+        now_s = now_s or time.time()
+        in_zone = last_price is not None and abs(last_price - entry) / entry <= _ZONE_BUF
+        plan = {
+            "tf": tf, "dir": direction, "entry": entry, "entry_lo": entry, "entry_hi": entry,
+            "sl": sl, "tp": tp, "rr": round(abs(tp - entry) / risk, 2),
+            "tp_label": label, "state": "activo" if in_zone else "pendiente",
+            "regime_ok": None, "cdc_status": None,
+        }
+        created = self.record(plan, pair, tf, last_price or entry, now_s, source="profe")
+        return {"ok": True, "created": created, "rr": plan["rr"],
+                "status": plan["state"], "sl_pct": round(risk / entry * 100, 2)}
 
     def mark_cdc(self, pair: str, plan: dict, now_s: float) -> bool:
         """Marca cdc_ok=True en el setup ABIERTO de la misma clave: el cambio de

@@ -14,6 +14,7 @@ Importante: NO ejecuta operaciones. Es un observador.
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import threading
@@ -535,6 +536,52 @@ class TradingModule(NexusModule):
             with open(_SETUP_BT_PATH, "rb") as fh:
                 return (200, "application/json; charset=utf-8", fh.read())
         return None
+
+    def api_post(self, subpath, body, headers):
+        """Carga MANUAL de una entrada del profe al forward-test (paper). NO coloca
+        órdenes — solo registra el plan para seguirlo. Auth con NEXUS_INGEST_TOKEN
+        si está configurado (igual que la ingesta del Diario)."""
+        if subpath != "manual_setup":
+            return None
+        token = os.environ.get("NEXUS_INGEST_TOKEN", "").strip()
+        if token:
+            provided = headers.get("x-nexus-token", "")
+            if not provided:
+                auth = headers.get("authorization", "")
+                if auth.lower().startswith("bearer "):
+                    provided = auth[7:]
+            if not hmac.compare_digest(str(provided), str(token)):
+                return self._json_error(401, "token inválido")
+        if not isinstance(body, dict):
+            return self._json_error(400, "payload inválido (JSON objeto)")
+        # Normaliza el par a un instrumento conocido (BTC / BTCUSDT / BTC_USDT).
+        raw = str(body.get("pair", "")).upper().replace("/", "_")
+        pair = None
+        for inst in self.instruments:
+            nm = inst["name"]
+            bnc = (inst.get("binance") or "").upper()
+            base = nm.split("_")[0]
+            if raw in (nm, bnc, base, base + "_USDT", base + "USDT"):
+                pair = nm
+                break
+        if not pair:
+            return self._json_error(400, f"par desconocido: {body.get('pair')!r} (usa BTC o ETH)")
+        last = None
+        try:
+            st = (self._state or {}).get("instruments", {}).get(pair) or {}
+            last = (st.get("ticker") or {}).get("last")
+        except Exception:  # noqa: BLE001
+            last = None
+        res = self._setups.add_manual(
+            pair, body.get("dir", "long"), body.get("entry"), body.get("sl"),
+            body.get("tp"), tf=body.get("tf", "manual"), last_price=last,
+            label=body.get("label", "profe"))
+        if not res.get("ok"):
+            return self._json_error(400, res.get("error", "no se pudo registrar"))
+        self.context.log(f"setups: entrada MANUAL (profe) registrada {pair} {body.get('dir')} "
+                         f"@ {body.get('entry')} (rr {res['rr']})")
+        return (200, "application/json; charset=utf-8",
+                json.dumps(res, ensure_ascii=False).encode("utf-8"))
 
     @staticmethod
     def _json_error(status: int, message: str):
