@@ -1,5 +1,5 @@
 {
-  "generated_at": 1781273502176,
+  "generated_at": 1781355584830,
   "params": {
     "win": 400,
     "min_rr": 2.0,
@@ -18,58 +18,140 @@
       "4h": 180
     }
   },
-  "bars_per_inst": 6000,
+  "bars_per_inst": 52000,
+  "span": {
+    "from": 1652673600000,
+    "to": 1781200800000
+  },
   "in_sample": {
-    "trades": 117,
-    "ganadas": 19,
-    "perdidas": 98,
-    "anuladas": 131,
-    "win_rate": 16.2,
-    "avg_r": 0.81,
-    "total_r": 94.4,
-    "pf": 1.96
+    "trades": 1214,
+    "ganadas": 214,
+    "perdidas": 1000,
+    "anuladas": 1124,
+    "win_rate": 17.6,
+    "avg_r": 0.45,
+    "total_r": 544.6,
+    "pf": 1.54
   },
   "out_sample": {
-    "trades": 93,
-    "ganadas": 16,
-    "perdidas": 77,
-    "anuladas": 106,
-    "win_rate": 17.2,
-    "avg_r": 0.98,
-    "total_r": 91.2,
-    "pf": 2.18
+    "trades": 580,
+    "ganadas": 125,
+    "perdidas": 455,
+    "anuladas": 517,
+    "win_rate": 21.6,
+    "avg_r": 1.17,
+    "total_r": 677.2,
+    "pf": 2.49
   },
   "all": {
-    "trades": 210,
-    "ganadas": 35,
-    "perdidas": 175,
-    "anuladas": 237,
-    "win_rate": 16.7,
-    "avg_r": 0.88,
-    "total_r": 185.6,
-    "pf": 2.06
+    "trades": 1794,
+    "ganadas": 339,
+    "perdidas": 1455,
+    "anuladas": 1641,
+    "win_rate": 18.9,
+    "avg_r": 0.68,
+    "total_r": 1221.8,
+    "pf": 1.84
   },
   "by_pair": {
     "BTC_USDT": {
-      "trades": 109,
-      "ganadas": 17,
-      "perdidas": 92,
-      "anuladas": 97,
-      "win_rate": 15.6,
-      "avg_r": 0.42,
-      "total_r": 46.0,
-      "pf": 1.5
+      "trades": 920,
+      "ganadas": 176,
+      "perdidas": 744,
+      "anuladas": 804,
+      "win_rate": 19.1,
+      "avg_r": 0.47,
+      "total_r": 431.7,
+      "pf": 1.58
     },
     "ETH_USDT": {
-      "trades": 101,
-      "ganadas": 18,
-      "perdidas": 83,
-      "anuladas": 140,
-      "win_rate": 17.8,
-      "avg_r": 1.38,
-      "total_r": 139.6,
-      "pf": 2.68
+      "trades": 874,
+      "ganadas": 163,
+      "perdidas": 711,
+      "anuladas": 837,
+      "win_rate": 18.6,
+      "avg_r": 0.9,
+      "total_r": 790.1,
+      "pf": 2.11
     }
   },
-  "note": "Mismo criterio que el indicador en vivo. Una entrada cuenta solo si el precio entró a la zona (se activó). Pasado no garantiza futuro."
+  "by_year": {
+    "2022": {
+      "trades": 219,
+      "ganadas": 38,
+      "perdidas": 181,
+      "anuladas": 0,
+      "win_rate": 17.4,
+      "avg_r": 0.53,
+      "total_r": 116.5,
+      "pf": 1.64
+    },
+    "2023": {
+      "trades": 427,
+      "ganadas": 88,
+      "perdidas": 339,
+      "anuladas": 0,
+      "win_rate": 20.6,
+      "avg_r": 0.51,
+      "total_r": 218.2,
+      "pf": 1.64
+    },
+    "2024": {
+      "trades": 457,
+      "ganadas": 74,
+      "perdidas": 383,
+      "anuladas": 0,
+      "win_rate": 16.2,
+      "avg_r": 0.45,
+      "total_r": 203.8,
+      "pf": 1.53
+    },
+    "2025": {
+      "trades": 499,
+      "ganadas": 96,
+      "perdidas": 403,
+      "anuladas": 0,
+      "win_rate": 19.2,
+      "avg_r": 0.83,
+      "total_r": 413.5,
+      "pf": 2.03
+    },
+    "2026": {
+      "trades": 192,
+      "ganadas": 43,
+      "perdidas": 149,
+      "anuladas": 0,
+      "win_rate": 22.4,
+      "avg_r": 1.41,
+      "total_r": 269.8,
+      "pf": 2.81
+    }
+  },
+  "cap_sensitivity": {
+    "sin_tope": {
+      "avg_r": 0.68,
+      "total_r": 1221.8
+    },
+    "15R": {
+      "avg_r": 0.57,
+      "total_r": 1028.0
+    },
+    "10R": {
+      "avg_r": 0.45,
+      "total_r": 802.2
+    },
+    "5R": {
+      "avg_r": 0.05,
+      "total_r": 96.4
+    },
+    "3R": {
+      "avg_r": -0.25,
+      "total_r": -448.7
+    }
+  },
+  "risk": {
+    "max_drawdown_r": -41.7,
+    "max_losing_streak": 32
+  },
+  "note": "Mismo criterio que el indicador en vivo. Una entrada cuenta solo si el precio entró a la zona (se activó). El edge depende de dejar correr los winners a la liquidez lejana (ver cap_sensitivity): capar en 3R lo vuelve negativo. Pasado no garantiza futuro."
 }

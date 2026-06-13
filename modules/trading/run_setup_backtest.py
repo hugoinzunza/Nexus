@@ -37,7 +37,11 @@ FILE_TF = {"1D": "1d", "4h": "4h", "1h": "1h", "15m": "15m"}
 TF_MS = {"15m": 900_000, "1h": 3_600_000, "4h": 14_400_000, "1D": 86_400_000}
 
 WIN = 400                              # velas que ve el indicador (igual que en vivo)
-BARS = {"1h": 4000, "4h": 2000}        # ventana de backtest por TF de planeación
+# Ventana de backtest por TF: usa TODA la historia persistida (~4 años) para que el
+# veredicto cubra regímenes distintos (bear 2022, recuperación 2023, bull 2024), no
+# solo el último tramo. La detección por barra es local (WIN velas), así que esto
+# solo amplía cuántas barras de decisión se evalúan.
+BARS = {"1h": 40000, "4h": 12000}
 MAX_FWD = {"1h": 240, "4h": 180}       # barras hacia adelante para resolver el trade
 IS_FRAC = 0.70                         # 70% in-sample / 30% out-of-sample (por tiempo)
 
@@ -178,17 +182,49 @@ def main():
     is_tr = [t for t in all_trades if t["t"] <= split]
     oos_tr = [t for t in all_trades if t["t"] > split]
 
+    # Desglose por AÑO (¿el edge aguanta distintos regímenes o es de uno solo?).
+    closed_sorted = sorted((t for t in all_trades if t["status"] in ("ganada", "perdida")),
+                           key=lambda t: t["t"])
+    by_year = {}
+    for t in closed_sorted:
+        by_year.setdefault(time.strftime("%Y", time.gmtime(t["t"] / 1000)), []).append(t)
+    by_year = {y: _stats(ts) for y, ts in by_year.items()}
+
+    # Sensibilidad al CAP de R de los winners: ¿el edge depende de dejar correr al
+    # TP lejano (liquidez opuesta), o sobrevive tomando profit antes? Clave para
+    # ejecutar: si capas en 3R y se vuelve negativo, el edge VIVE en los winners
+    # grandes.
+    rs = [t["r"] for t in closed_sorted]
+    cap_sensitivity = {}
+    for cap in (None, 15, 10, 5, 3):
+        tot = sum((min(r, cap) if (cap and r > 0) else r) for r in rs)
+        cap_sensitivity[("sin_tope" if cap is None else f"{cap}R")] = {
+            "avg_r": round(tot / len(rs), 2) if rs else 0.0, "total_r": round(tot, 1)}
+
+    # Drawdown y racha perdedora más larga (en R), para dimensionar la dureza real.
+    eq = peak = mdd = streak = max_streak = 0
+    for t in closed_sorted:
+        eq += t["r"]; peak = max(peak, eq); mdd = min(mdd, eq - peak)
+        streak = streak + 1 if t["r"] < 0 else 0
+        max_streak = max(max_streak, streak)
+
     result = {
         "generated_at": int(time.time() * 1000),
         "params": {"win": WIN, "min_rr": smc_live.MIN_RR, "is_frac": IS_FRAC,
                    "sel_tfs": SEL_TFS, "poi_tfs": POI_TFS, "max_fwd": MAX_FWD},
         "bars_per_inst": sum(BARS.get(tf, 0) for tf in SEL_TFS),
+        "span": {"from": closed_sorted[0]["t"], "to": closed_sorted[-1]["t"]} if closed_sorted else None,
         "in_sample": _stats(is_tr),
         "out_sample": _stats(oos_tr),
         "all": _stats(all_trades),
         "by_pair": by_pair,
+        "by_year": by_year,
+        "cap_sensitivity": cap_sensitivity,
+        "risk": {"max_drawdown_r": round(mdd, 1), "max_losing_streak": max_streak},
         "note": ("Mismo criterio que el indicador en vivo. Una entrada cuenta solo si "
-                 "el precio entró a la zona (se activó). Pasado no garantiza futuro."),
+                 "el precio entró a la zona (se activó). El edge depende de dejar "
+                 "correr los winners a la liquidez lejana (ver cap_sensitivity): "
+                 "capar en 3R lo vuelve negativo. Pasado no garantiza futuro."),
     }
     with open(OUT_PATH, "w", encoding="utf-8") as fh:
         json.dump(result, fh, ensure_ascii=False, indent=2)
