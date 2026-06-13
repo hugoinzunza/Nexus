@@ -26,6 +26,20 @@
     consulta Binance directamente. No ejecuta ni modifica operaciones.
   </p>
 
+  <!-- Calculadora de posición / riesgo -->
+  <section id="calc-section" class="bt">
+    <h2 class="bt-h">Calculadora de posición</h2>
+    <p class="bt-note">Dado tu capital, riesgo por trade y la entrada/SL, calcula el tamaño, el apalancamiento que implica y el precio de liquidación. No es una orden; es para dimensionar.</p>
+    <div class="calc-grid">
+      <label>Capital (USD)<input id="calc-cap" type="number" value="38000" step="100"></label>
+      <label>Riesgo %<input id="calc-risk" type="number" value="2" step="0.5"></label>
+      <label>Entrada<input id="calc-entry" type="number" step="any" placeholder="64000"></label>
+      <label>SL<input id="calc-sl" type="number" step="any" placeholder="62720"></label>
+      <label>TP (opcional)<input id="calc-tp" type="number" step="any" placeholder="69120"></label>
+    </div>
+    <section class="metric-grid" id="calc-out"></section>
+  </section>
+
   <!-- Setups SMC (forward-test) — independiente del colector de Binance -->
   <section id="setups-section" class="bt">
     <h2 class="bt-h">Setups SMC · forward-test <span class="muted" id="setups-meta"></span></h2>
@@ -37,6 +51,7 @@
     <section class="metric-grid" id="setups-summary"></section>
     <h3 class="bt-h" style="font-size:15px">Cuenta paper (dinero simulado) <span class="muted" id="setups-paper-meta"></span></h3>
     <section class="metric-grid" id="setups-paper"></section>
+    <div class="chart-wrap" id="paper-equity-wrap" hidden><canvas id="paper-equity-chart" class="chart"></canvas></div>
     <section id="setups-regime" class="verdict" hidden></section>
     <section id="setups-bt" class="verdict" hidden></section>
     <h3 class="bt-h" style="font-size:15px">Registro</h3>

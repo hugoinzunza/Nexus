@@ -247,6 +247,14 @@
           card("Drawdown máx", p.max_dd_pct + "%", "down"),
           card("Win rate", p.win_rate == null ? "—" : p.win_rate + "%"),
         ].join("");
+        // Curva de equity paper (reusa drawEquity, que plotea .pnl desde 0).
+        const wrap = $("paper-equity-wrap");
+        if (p.curve && p.curve.length) {
+          wrap.hidden = false;
+          drawEquity($("paper-equity-chart"), p.curve.map((c) => ({ pnl: c.equity - p.capital_inicial })));
+        } else {
+          wrap.hidden = true;
+        }
       }
 
       // Comparativas del forward-test: régimen (VIX+ADX) y CDC (cambio de carácter).
@@ -317,6 +325,47 @@
         `<span class="muted">${b.note || ""}</span></p>`;
     }).catch(() => {});
   }
+
+  // --- Calculadora de posición / riesgo ------------------------------
+  function calc() {
+    const num = (id) => parseFloat($(id).value);
+    const cap = num("calc-cap"), riskp = num("calc-risk"), entry = num("calc-entry"), sl = num("calc-sl"), tp = num("calc-tp");
+    const out = $("calc-out");
+    if (!(cap > 0 && riskp > 0 && entry > 0 && sl > 0) || entry === sl) {
+      out.innerHTML = '<p class="bt-note"><span class="muted">Completa capital, riesgo, entrada y SL.</span></p>';
+      return;
+    }
+    const long = sl < entry;
+    const slFrac = Math.abs(entry - sl) / entry;
+    const riskUsd = cap * riskp / 100;
+    const notional = riskUsd / slFrac;
+    const units = notional / entry;
+    const lev = notional / cap;
+    const liq = long ? entry * (1 - 1 / lev + 0.004) : entry * (1 + 1 / lev - 0.004);
+    const liqDist = Math.abs(liq - entry) / entry * 100;
+    const usd = (v) => "$" + Math.round(v).toLocaleString("es");
+    const cards = [
+      card("Dirección", long ? "Long" : "Short", long ? "up" : "down"),
+      card("SL distancia", slFrac * 100 < 0.005 ? "—" : (slFrac * 100).toFixed(2) + "%"),
+      card("Riesgo", usd(riskUsd), "down"),
+      card("Notional", usd(notional)),
+      card("Tamaño", units.toFixed(units < 1 ? 4 : 2)),
+      card("Apalanc. efectivo", lev.toFixed(1) + "x", lev > 5 ? "down" : ""),
+      card("Liquidación", usd(liq) + ` (${liqDist.toFixed(1)}%)`, "down"),
+    ];
+    const tpOk = tp > 0 && ((long && tp > entry) || (!long && tp < entry));
+    if (tpOk) {
+      const rr = Math.abs(tp - entry) / Math.abs(entry - sl);
+      const profit = notional * Math.abs(tp - entry) / entry;
+      cards.push(card("R:R", rr.toFixed(1), rr >= 2 ? "up" : ""));
+      cards.push(card("Ganancia pot.", "+" + usd(profit), "up"));
+    }
+    out.innerHTML = cards.join("");
+  }
+  ["calc-cap", "calc-risk", "calc-entry", "calc-sl", "calc-tp"].forEach((id) => {
+    const el = $(id); if (el) el.addEventListener("input", calc);
+  });
+  calc();
 
   $("refresh").addEventListener("click", () => { load(true); loadSetups(); });
   window.addEventListener("resize", () => { if (lastData) render(lastData); });
