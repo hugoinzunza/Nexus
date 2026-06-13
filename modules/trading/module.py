@@ -35,6 +35,9 @@ _BACKTEST_PATH = os.path.join(_MOD_DIR, "backtest_results.json")
 _POI_LAYERS_PATH = os.path.join(_MOD_DIR, "poi_layers_results.json")
 _SETUP_BT_PATH = os.path.join(_MOD_DIR, "setup_backtest_results.json")
 _HTF_FOR_POI = ["1D", "4h", "1h"]   # temporalidades donde se detectan POIs
+# Tope de velas por petición del gráfico (paginación): acota el payload por página
+# del back-load al scrollear años hacia atrás. ~3 MB en 15m, cómodo en móvil.
+MAX_CHART_PAGE = 5000
 
 
 class TradingModule(NexusModule):
@@ -80,6 +83,7 @@ class TradingModule(NexusModule):
         # Binance) y se versiona en git, así Railway —geo-bloqueado de Binance— la
         # ve igual. Alimenta la detección de POIs lejanos (zonas bajo el precio).
         self._deep_cache = {}       # (symbol, interval) → {"candles", "mtime"}
+        self._full_cache = {}       # (instrumento, tf) → {"candles", "ts"} serie completa
 
         # Indicador SMC en vivo: análisis cacheado, zonas de POI activas (para las
         # alertas) y estado de "precio dentro" para no spamear (una alerta por toque).
@@ -226,6 +230,24 @@ class TradingModule(NexusModule):
         with self._chart_lock:
             self._deep_cache[key] = {"candles": candles, "mtime": mtime}
         return candles
+
+    def _full_candles(self, instrument: str, timeframe: str) -> list:
+        """Serie COMPLETA para el gráfico: historia profunda persistida (años) con
+        el tramo en vivo fusionado encima, para poder scrollear hacia atrás. Si no
+        hay archivo profundo, cae al tramo en vivo. Cacheada con el mismo TTL del
+        gráfico (la parte vieja es estática; solo el borde se refresca)."""
+        key = (instrument, timeframe)
+        now = time.time()
+        with self._chart_lock:
+            entry = self._full_cache.get(key)
+            if entry and now - entry["ts"] < self._chart_ttl(timeframe):
+                return entry["candles"]
+        recent = self._candles_cached(instrument, timeframe)
+        deep = self._deep_history(instrument, timeframe)
+        full = self._merge_candles(deep, recent, len(deep) + len(recent) + 10) if deep else recent
+        with self._chart_lock:
+            self._full_cache[key] = {"candles": full, "ts": now}
+        return full
 
     def _htf_candles(self, instrument: str) -> dict:
         """Velas de las TF de POIs: historia PROFUNDA persistida (años) con el tramo
@@ -446,13 +468,32 @@ class TradingModule(NexusModule):
             if timeframe not in self.ui_timeframes:
                 return self._json_error(400, "temporalidad no válida")
             try:
-                candles = self._candles_cached(instrument, timeframe)
+                full = self._full_candles(instrument, timeframe)
             except Exception as exc:  # noqa: BLE001
                 return self._json_error(502, f"no se pudieron obtener las velas: {exc}")
+            # Paginación para scrollear años sin mandar todo de una (mobile-first):
+            #   limit  → cuántas velas (tope MAX_CHART_PAGE),
+            #   before → devuelve el tramo ANTERIOR a ese timestamp (ms) para el
+            #            back-load al hacer scroll a la izquierda.
+            try:
+                limit = min(int(query.get("limit", self.chart_candle_count)), MAX_CHART_PAGE)
+            except (TypeError, ValueError):
+                limit = self.chart_candle_count
+            before = query.get("before")
+            if before:
+                try:
+                    bt = int(before)
+                    subset = [c for c in full if c["t"] < bt]
+                except (TypeError, ValueError):
+                    subset = full
+            else:
+                subset = full
+            candles = subset[-limit:] if limit > 0 else subset
             body = json.dumps({
                 "instrument": instrument,
                 "timeframe": timeframe,
                 "candles": candles,
+                "has_more": len(subset) > len(candles),  # ¿quedan más viejas?
             }, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)
         if subpath == "smc":

@@ -642,6 +642,8 @@
     chart.timeScale().subscribeVisibleLogicalRangeChange((r) => {
       const n = card.bars.length;
       goBtn.classList.toggle("show", !!(r && n && r.to < n - 2));
+      // Cerca del borde izquierdo → trae más historia (scroll años hacia atrás).
+      if (r && r.from < 10 && card.hasMore && !card.loadingOlder) loadOlder(card);
     });
 
     // Doble clic sobre el gráfico = reencuadrar las últimas velas (reset).
@@ -767,6 +769,9 @@
       btn.addEventListener("click", () => {
         if (card.timeframe === tf) return;
         card.timeframe = tf;
+        card.candles = [];     // reset: no mezclar velas de otra temporalidad
+        card.hasMore = false;
+        card.loadingOlder = false;
         sel.querySelectorAll(".tf-btn").forEach((b) => {
           const on = b.dataset.tf === tf;
           b.classList.toggle("active", on);
@@ -802,35 +807,85 @@
     });
   }
 
-  // Pide al backend las velas del par y las carga en el gráfico.
+  // Fusiona velas por timestamp (lo nuevo pisa lo viejo), ordenado por tiempo.
+  function mergeCandles(a, b) {
+    const by = new Map();
+    for (const c of a) by.set(c.t, c);
+    for (const c of b) by.set(c.t, c);
+    return Array.from(by.values()).sort((x, y) => x.t - y.t);
+  }
+
+  function rebuildBars(card) {
+    card.bars = card.candles.map((c) => ({
+      time: Math.floor(c.t / 1000), open: c.o, high: c.h, low: c.l, close: c.c,
+    }));
+    card.barIndex = new Map(card.bars.map((b, i) => [b.time, i]));
+  }
+
+  // Pide al backend el tramo RECIENTE y lo carga/fusiona en el gráfico. Conserva
+  // la historia ya traída por scroll (loadOlder); en los refrescos solo redibuja
+  // si apareció una vela nueva (si no, basta liveUpdate → barato con años cargados).
   async function loadCandles(symbol, card) {
     const tf = card.timeframe;
     try {
-      const r = await fetch(`api/candles?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}`);
+      const r = await fetch(`api/candles?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&limit=1500`);
       if (!r.ok) return;
       const j = await r.json();
       if (card.timeframe !== tf || !Array.isArray(j.candles) || !card.series) return;
-      card.candles = j.candles;
-      card.bars = j.candles.map((c) => ({
-        time: Math.floor(c.t / 1000), open: c.o, high: c.h, low: c.l, close: c.c,
-      }));
-      // Preservamos el zoom/paneo del usuario en los refrescos; solo reencuadramos
-      // en la primera carga o al cambiar de temporalidad. Con la historia larga
-      // (~1000 velas) no usamos fitContent (aplastaría todo): encuadramos las
-      // últimas ~220 velas y el resto queda para scroll/zoom hacia atrás.
+      const first = !card.candles.length;
+      const prevLen = card.candles.length;
+      card.candles = first ? j.candles : mergeCandles(card.candles, j.candles);
+      if (first) card.hasMore = !!j.has_more;   // ¿hay historia más vieja para scroll?
+      if (first || card.candles.length !== prevLen) {
+        rebuildBars(card);
+        const range = card.chart.timeScale().getVisibleLogicalRange();
+        card.series.setData(card.bars);
+        if (card.fitted && range) card.chart.timeScale().setVisibleLogicalRange(range);
+        else { frameRecent(card); card.fitted = true; }
+        if (card.legendLast) renderLegend(card, null);
+        setIndicatorData(card);
+        computeRibbon(card);
+        computeDivergences(card);
+        pushPrim(card);
+      }
+      liveUpdate(card);
+    } catch (err) {
+      /* dejamos las velas que ya teníamos */
+    }
+  }
+
+  // Back-load: trae el tramo ANTERIOR al más viejo cargado (scroll a la izquierda),
+  // hasta el fondo de la historia. Mantiene la vista anclada desplazando el rango
+  // lógico por las velas agregadas adelante.
+  async function loadOlder(card) {
+    if (card.loadingOlder || !card.hasMore || !card.candles.length) return;
+    card.loadingOlder = true;
+    const tf = card.timeframe;
+    const before = card.candles[0].t;
+    try {
+      const r = await fetch(`api/candles?instrument=${encodeURIComponent(card.symbol)}&timeframe=${encodeURIComponent(tf)}&before=${before}&limit=3000`);
+      if (!r.ok) return;
+      const j = await r.json();
+      if (card.timeframe !== tf || !Array.isArray(j.candles) || !card.series) return;
+      const older = j.candles.filter((c) => c.t < before);
+      card.hasMore = !!j.has_more && older.length > 0;
+      if (!older.length) return;
+      const added = older.length;
+      card.candles = mergeCandles(older, card.candles);
+      rebuildBars(card);
       const range = card.chart.timeScale().getVisibleLogicalRange();
       card.series.setData(card.bars);
-      card.barIndex = new Map(card.bars.map((b, i) => [b.time, i]));
-      if (card.fitted && range) card.chart.timeScale().setVisibleLogicalRange(range);
-      else { frameRecent(card); card.fitted = true; }
-      if (card.legendLast) renderLegend(card, null);
+      if (range) {
+        card.chart.timeScale().setVisibleLogicalRange({ from: range.from + added, to: range.to + added });
+      }
       setIndicatorData(card);
       computeRibbon(card);
       computeDivergences(card);
       pushPrim(card);
-      liveUpdate(card);
     } catch (err) {
-      /* dejamos las velas que ya teníamos */
+      /* nada: reintenta en el próximo scroll */
+    } finally {
+      card.loadingOlder = false;
     }
   }
 
