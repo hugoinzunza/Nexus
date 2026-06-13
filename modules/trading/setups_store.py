@@ -140,6 +140,21 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         s["paper_pnl"] = round(pnl, 2)
         s["paper_equity"] = round(eq, 2)
         curve.append({"t": s["ts_closed"], "equity": round(eq, 2)})
+    # Sizing de las operaciones ABIERTAS (activas) con el equity vigente: con cuánto
+    # se entró (notional), el apalancamiento efectivo y el riesgo. El P&L en vivo lo
+    # calcula el frontend con el precio actual.
+    for s in setups:
+        if s.get("status") != "activo":
+            continue
+        entry, sl = s.get("entry") or 0.0, s.get("sl") or 0.0
+        slf = abs(entry - sl) / entry if entry else 0.0
+        if slf <= 0:
+            continue
+        risk_usd = risk_pct * eq
+        s["paper_notional"] = round(risk_usd / slf, 2)
+        s["paper_leverage"] = round(risk_pct / slf, 1)
+        s["paper_risk"] = round(risk_usd, 2)
+        s["paper_equity_base"] = round(eq, 2)
     n = len(curve)
     return {
         "capital_inicial": capital,

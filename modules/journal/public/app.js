@@ -211,7 +211,7 @@
   }
 
   function loadSetups() {
-    fetch("api/setups").then((r) => r.json()).then((d) => {
+    fetch("api/setups").then((r) => r.json()).then(async (d) => {
       const s = d.summary || {};
       const wr = s.win_rate == null ? "—" : s.win_rate + "%";
       const pfv = (s.pf == null) ? (s.ganadas > 0 ? "∞" : "—") : s.pf;
@@ -260,6 +260,44 @@
         } else {
           wrap.hidden = true;
         }
+      }
+
+      // --- Operaciones en curso (activas): dinero, apalancamiento y P&L en vivo ---
+      const active = (d.setups || []).filter((x) => x.status === "activo");
+      $("live-meta").textContent = active.length ? `${active.length} activa(s)` : "";
+      const liveEl = $("setups-live");
+      if (!active.length) {
+        liveEl.innerHTML = '<p class="bt-note"><span class="muted">Ninguna operación activa ahora. Aparecen acá cuando un setup se llena.</span></p>';
+      } else {
+        let prices = {};
+        try {
+          const stt = await fetch("/m/trading/api/state").then((r) => (r.ok ? r.json() : null));
+          Object.entries((stt && stt.instruments) || {}).forEach(([k, v]) => { prices[k] = (v.ticker || {}).last; });
+        } catch (e) { /* sin precio en vivo */ }
+        const sg = (v) => (v >= 0 ? "+" : "");
+        const px = (n) => Number(n).toLocaleString("es", { maximumFractionDigits: 2 });
+        liveEl.innerHTML = active.map((x) => {
+          const long = x.dir === "long";
+          const cur = prices[x.pair];
+          const slf = Math.abs(x.entry - x.sl) / x.entry;
+          const move = cur ? ((cur - x.entry) / x.entry) * (long ? 1 : -1) : null;
+          const pnl = (move != null && x.paper_notional) ? move * x.paper_notional : null;
+          const r = (move != null && slf > 0) ? move / slf : null;
+          const cls = pnl == null ? "" : (pnl >= 0 ? "up" : "down");
+          const badge = x.source === "profe" ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">profe</span>' : "";
+          return `<div style="margin:6px 0 14px">
+            <div class="v-title">${x.pair.replace("_", "/")} ${long ? "▲ Long" : "▼ Short"} · ${x.poi_tf}${badge}</div>
+            <section class="metric-grid">
+              ${card("Entrada", px(x.entry))}
+              ${card("Ahora", cur ? px(cur) : "—")}
+              ${card("Apalanc.", x.paper_leverage != null ? x.paper_leverage + "x" : "—")}
+              ${card("Margen", (x.paper_notional && x.paper_leverage) ? "$" + Math.round(x.paper_notional / x.paper_leverage).toLocaleString("es") : "—")}
+              ${card("Notional", x.paper_notional != null ? "$" + Math.round(x.paper_notional).toLocaleString("es") : "—")}
+              ${card("P&L vivo", pnl == null ? "—" : sg(pnl) + "$" + Math.round(pnl).toLocaleString("es"), cls)}
+              ${card("En R", r == null ? "—" : sg(r) + r.toFixed(2) + "R", cls)}
+            </section>
+          </div>`;
+        }).join("");
       }
 
       // Comparativas del forward-test: régimen (VIX+ADX) y CDC (cambio de carácter).
