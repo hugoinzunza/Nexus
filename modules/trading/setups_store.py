@@ -91,6 +91,61 @@ def summarize(setups: list) -> dict:
     return out
 
 
+# --- Cuenta PAPER (forward-test con dinero simulado) -----------------------
+# Convierte los setups cerrados en P&L en USD con sizing por riesgo, compuesto.
+# Es la config que el estudio nocturno marcó como sana (ver
+# research/veredicto_estrategia_2026-06-13.md): ~2% de riesgo por trade (≈3x
+# efectivo con el SL ajustado), NO 10x/20x. Dinero SIMULADO: valida la ejecución
+# antes de arriesgar real.
+PAPER_CAPITAL = 38000.0     # capital inicial (USD) — el de Hugo en Binance
+PAPER_RISK_PCT = 0.02       # riesgo por trade (2% del capital, compuesto)
+PAPER_COST_RATE = 0.0014    # comisión 0.05%/lado + slippage 0.02%/fill (round-trip)
+
+
+def paper_account(setups: list, capital: float = PAPER_CAPITAL,
+                  risk_pct: float = PAPER_RISK_PCT,
+                  cost_rate: float = PAPER_COST_RATE) -> dict:
+    """Cuenta de PAPER TRADING sobre los setups CERRADOS (ganada/perdida): cada
+    trade arriesga `risk_pct` del capital vigente (compuesto); el P&L en USD es
+    R_neto × riesgo, con R_neto = result_r − costo (costo_R = cost_rate / SL%).
+    Devuelve equity final, P&L, retorno %, drawdown máximo y la curva. Es dinero
+    simulado — el bot NO coloca órdenes."""
+    closed = sorted(
+        [s for s in setups
+         if s["status"] in ("ganada", "perdida")
+         and s.get("result_r") is not None and s.get("ts_closed")],
+        key=lambda s: s["ts_closed"])
+    eq = peak = capital
+    mdd = 0.0
+    wins = 0
+    curve = []
+    for s in closed:
+        entry, sl = s.get("entry") or 0.0, s.get("sl") or 0.0
+        slf = abs(entry - sl) / entry if entry else 0.0
+        if slf <= 0:
+            continue
+        net_r = s["result_r"] - cost_rate / slf
+        eq += net_r * (risk_pct * eq)
+        if s["result_r"] > 0:
+            wins += 1
+        peak = max(peak, eq)
+        if peak > 0:
+            mdd = min(mdd, (eq - peak) / peak)
+        curve.append({"t": s["ts_closed"], "equity": round(eq, 2)})
+    n = len(curve)
+    return {
+        "capital_inicial": capital,
+        "riesgo_pct": round(risk_pct * 100, 1),
+        "equity": round(eq, 2),
+        "pnl": round(eq - capital, 2),
+        "return_pct": round((eq / capital - 1) * 100, 2) if capital else 0.0,
+        "max_dd_pct": round(mdd * 100, 1),
+        "trades": n,
+        "win_rate": round(wins / n * 100, 1) if n else None,
+        "curve": curve[-300:],
+    }
+
+
 class SetupStore:
     """Registro con persistencia en disco y seguimiento de resultados. Thread-safe."""
 

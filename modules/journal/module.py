@@ -76,11 +76,13 @@ class JournalModule(NexusModule):
             return self._json(200, {"has_data": False, "setups": [], "summary": None})
         setups = setups_store.load_all()
         summary = setups_store.summarize(setups)
+        paper = setups_store.paper_account(setups)
         # Más recientes primero; tope para no inflar el payload.
         ordered = sorted(setups, key=lambda s: s.get("ts_created", 0), reverse=True)[:200]
         return self._json(200, {
             "has_data": bool(setups),
             "summary": summary,
+            "paper": paper,
             "setups": ordered,
         })
 

@@ -229,6 +229,21 @@
         card("En vigilancia", s.pendientes || 0),
       ].join("");
 
+      // Cuenta PAPER: el forward-test traducido a USD con sizing sano (dinero simulado).
+      const p = d.paper;
+      if (p) {
+        $("setups-paper-meta").textContent =
+          `inicial $${p.capital_inicial.toLocaleString("es")} · ${p.riesgo_pct}% riesgo/trade · ${p.trades} trades`;
+        const sign = (v) => (v > 0 ? "+" : "") + v;
+        $("setups-paper").innerHTML = [
+          card("Equity", "$" + p.equity.toLocaleString("es"), p.pnl >= 0 ? "up" : "down"),
+          card("P&L", "$" + sign(Math.round(p.pnl)).toLocaleString("es"), p.pnl >= 0 ? "up" : "down"),
+          card("Retorno", sign(p.return_pct) + "%", p.return_pct >= 0 ? "up" : "down"),
+          card("Drawdown máx", p.max_dd_pct + "%", "down"),
+          card("Win rate", p.win_rate == null ? "—" : p.win_rate + "%"),
+        ].join("");
+      }
+
       // Comparativas del forward-test: régimen (VIX+ADX) y CDC (cambio de carácter).
       const cf = s.con_filtro, sf = s.sin_filtro, cc = s.con_cdc, sc = s.sin_cdc;
       const line = (lab, m) => `<strong>${lab}:</strong> ${m.cerradas} cerrados · win ${m.win_rate == null ? "—" : m.win_rate + "%"} · R prom ${m.avg_r == null ? "—" : m.avg_r} · PF ${m.pf == null ? (m.ganadas > 0 ? "∞" : "—") : m.pf} · R acum ${m.total_r == null ? "—" : (m.total_r > 0 ? "+" : "") + m.total_r}`;
