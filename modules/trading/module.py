@@ -31,6 +31,10 @@ _MOD_DIR = os.path.dirname(os.path.abspath(__file__))
 # estado SSE para que las páginas ABIERTAS se recarguen solas tras un deploy
 # (la PWA no vuelve a pedir app.js mientras la pestaña siga viva).
 _APP_VERSION = (os.environ.get("RAILWAY_GIT_COMMIT_SHA") or str(int(time.time())))[:10]
+# Historia profunda persistida (klines_*.json), en la RAÍZ del repo. Ruta ABSOLUTA:
+# en Railway/launchd el CWD no siempre es la raíz; con ruta relativa la historia
+# profunda no cargaría y caería silenciosa al feed en vivo (sin scroll/zonas).
+_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(_MOD_DIR)), "data")
 _BACKTEST_PATH = os.path.join(_MOD_DIR, "backtest_results.json")
 _POI_LAYERS_PATH = os.path.join(_MOD_DIR, "poi_layers_results.json")
 _SETUP_BT_PATH = os.path.join(_MOD_DIR, "setup_backtest_results.json")
@@ -212,7 +216,7 @@ class TradingModule(NexusModule):
         if not sym:
             return []
         iv = binance.UI_TO_BINANCE.get(timeframe, timeframe)
-        path = os.path.join("data", f"klines_{sym}_{iv}.json")
+        path = os.path.join(_DATA_DIR, f"klines_{sym}_{iv}.json")
         try:
             mtime = os.path.getmtime(path)
         except OSError:
@@ -479,6 +483,7 @@ class TradingModule(NexusModule):
                 limit = min(int(query.get("limit", self.chart_candle_count)), MAX_CHART_PAGE)
             except (TypeError, ValueError):
                 limit = self.chart_candle_count
+            limit = max(1, limit)   # limit<=0 no debe devolver TODA la historia
             before = query.get("before")
             if before:
                 try:
