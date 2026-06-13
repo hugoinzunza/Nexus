@@ -172,11 +172,54 @@ def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
                         "pending": True})
         return out
 
+    def run_internal(own, opp, is_high, max_keep=2):
+        """Estructura INTERNA (la 2ª escala del indicador, ejemplos 61.19/61.55
+        de Hugo): el nivel es el swing calificado MÁS RECIENTE de cada lado (no
+        el extremo); al romperlo con un cierre, CDC interno congelado ahí."""
+        opp_sorted = sorted(opp, key=lambda p: p["idx"])
+        opp_idx = [p["idx"] for p in opp_sorted]
+        suf = [INF] * (len(opp_sorted) + 1)
+        for i in range(len(opp_sorted) - 1, -1, -1):
+            suf[i] = min(opp_sorted[i]["confirm_idx"], suf[i + 1])
+        avail = []
+        for p in own:
+            k = bisect.bisect_right(opp_idx, p["idx"])
+            a = max(p["confirm_idx"], suf[k])
+            if a < INF:
+                avail.append((a, p))
+        avail.sort(key=lambda t: t[0])
+        out = []
+        floor = -1
+        cur = None
+        pi = 0
+        for j in range(n):
+            while pi < len(avail) and avail[pi][0] <= j:
+                p = avail[pi][1]
+                pi += 1
+                # El calificado más reciente pasa a ser el nivel interno vigente.
+                if p["idx"] > floor and (cur is None or p["idx"] > cur["idx"]):
+                    cur = p
+            if cur is None:
+                continue
+            if (closes[j] > cur["price"]) if is_high else (closes[j] < cur["price"]):
+                out.append({"dir": "up" if is_high else "down",
+                            "price": round(cur["price"], 6),
+                            "t_from": closed[cur["idx"]]["t"], "t_to": closed[j]["t"],
+                            "pending": False})
+                floor = j
+                cur = None
+        return out[-max_keep:]
+
     for own, opp, is_high in ((sh, sl, True), (sl, sh, False)):
         evs = run(own, opp, is_high)
         pend = [e for e in evs if e["pending"]]
         hist = [e for e in evs if not e["pending"]][-max_events:]
         events.extend(hist + pend)
+        # Capa interna, deduplicada contra la mayor (mismo nivel y quiebre).
+        seen = {(e["price"], e["t_to"]) for e in events}
+        for e in run_internal(own, opp, is_high):
+            if (e["price"], e["t_to"]) not in seen:
+                events.append(e)
     events.sort(key=lambda e: e["t_to"])
     return events
 
