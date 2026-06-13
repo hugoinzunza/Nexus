@@ -456,6 +456,9 @@ TOUCH_TOL = 0.0015
 # Cap de distancia: solo planeamos POIs dentro del dealing range o a <= 5% del precio,
 # para no dibujar order blocks irrelevantes (p. ej. un OB de 1D a +90%).
 DIST_CAP_PCT = 5.0
+# Más allá de este % del precio, un POI se marca como REFERENCIA (zona profunda de
+# contexto, dibujada atenuada) en vez de zona operable.
+REFERENCE_DIST_PCT = 15.0
 
 
 def _opposite_liquidity(levels, long, ref, rhi, rlo):
@@ -617,13 +620,20 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
     above = sorted((p for p in valids if p["lo"] > last_price and id(p) not in drawn),
                    key=lambda p: (p["lo"] + p["hi"]) / 2 - last_price)
     # Deduplicado por valor (la historia larga repite el mismo OB) preservando orden.
+    ladder = below[:8] + above[:4]
     seen_z, pois = set(), []
-    for p in draw + below[:8] + above[:4]:
+    for p in draw + ladder:
         zkey = (p["dir"], p["tf"], round(p["lo"], 2), round(p["hi"], 2))
         if zkey in seen_z:
             continue
         seen_z.add(zkey)
         pois.append(p)
+    # REFERENCIA = zona LEJANA (contexto "qué hay si el mercado se va"); el frontend
+    # la dibuja atenuada para no saturar al alejar el zoom. Cercanas (<=15%) = zonas
+    # operables, sólidas. Basado en DISTANCIA, no en el ranking (con pocos POIs
+    # cercanos, una zona profunda igual debe verse como referencia).
+    for p in pois:
+        p["reference"] = abs(p.get("dist_pct", 0.0)) > REFERENCE_DIST_PCT
     result["pois"] = pois
     # Panel "POIs activos": solo los CERCANOS al precio. Con la historia larga
     # aparecen POIs de 1D válidos pero a −40% o más (BTC de otra era) que son

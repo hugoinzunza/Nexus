@@ -167,7 +167,16 @@
           let x = poi.t_conf ? tx(poi.t_conf) : 0; if (x == null) x = 0; x = Math.max(0, x);
           const long = poi.dir === "long";
           const base = long ? "22,199,132" : "234,57,67";
-          if (poi.valid) {
+          if (poi.valid && poi.reference) {
+            // Zona PROFUNDA de referencia ("qué hay si el mercado se va"): atenuada
+            // y punteada para no saturar al alejar el zoom; etiqueta con la distancia.
+            ctx.fillStyle = `rgba(${base},0.05)`; ctx.fillRect(x, top, W - x, h);
+            ctx.strokeStyle = `rgba(${base},0.22)`; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+            ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
+            ctx.setLineDash([]);
+            const d = poi.dist_pct != null ? ` ${poi.dist_pct > 0 ? "+" : ""}${Math.round(poi.dist_pct)}%` : "";
+            pill(placeR(top + 2), `${poi.tf}${d}`, `rgba(${base},0.7)`, { right: true });
+          } else if (poi.valid) {
             const g = ctx.createLinearGradient(x, 0, W, 0);
             g.addColorStop(0, `rgba(${base},0.20)`); g.addColorStop(1, `rgba(${base},0.06)`);
             ctx.fillStyle = g; ctx.fillRect(x, top, W - x, h);
