@@ -123,7 +123,8 @@ async def push_test(request: Request):
         title="🔔 Nexus · prueba",
         body="Si ves esto, las alertas SMC funcionan. (mensaje de prueba)",
         url="/m/trading/", tag="nexus-test")
-    return {"ok": True, "enviados": enviados, "errores": len(errores)}
+    return {"ok": True, "enviados": enviados, "errores": errores,
+            "suscripciones": len(push._read_all())}
 
 
 # --- Módulos -------------------------------------------------------------
