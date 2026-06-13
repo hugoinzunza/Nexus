@@ -20,8 +20,13 @@ deploy/collector.env
 *.log
 logs/
 
-# Datos en runtime (suscripciones push, etc.)
-data/
+# Datos en runtime (sensibles / efímeros): NO se versionan.
+#   journal_income.json, push_subs.json, setups.json, vix_1d.json, etc.
+# Pero la HISTORIA de velas (klines_*.json) SÍ se versiona: Railway está
+# geo-bloqueado de Binance (HTTP 451), así que la única forma de que producción
+# tenga años de estructura para los POIs profundos es traerla en el deploy.
+data/*
+!data/klines_*.json
 
 # Worktrees temporales de agentes Claude
 .claude/worktrees/

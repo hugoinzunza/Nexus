@@ -75,6 +75,11 @@ class TradingModule(NexusModule):
         # cada cambio de temporalidad o con varios dispositivos abiertos a la vez.
         self._chart_cache = {}
         self._chart_lock = threading.Lock()
+        # Historia PROFUNDA persistida (data/klines_*.json, años de velas) cacheada
+        # en memoria por mtime. La produce el fetcher del Mac mini (que sí llega a
+        # Binance) y se versiona en git, así Railway —geo-bloqueado de Binance— la
+        # ve igual. Alimenta la detección de POIs lejanos (zonas bajo el precio).
+        self._deep_cache = {}       # (symbol, interval) → {"candles", "mtime"}
 
         # Indicador SMC en vivo: análisis cacheado, zonas de POI activas (para las
         # alertas) y estado de "precio dentro" para no spamear (una alerta por toque).
@@ -193,9 +198,46 @@ class TradingModule(NexusModule):
             self._stop.wait(self.poll_interval)
 
     # --- SMC en vivo + alertas -----------------------------------------
+    def _deep_history(self, instrument: str, timeframe: str) -> list:
+        """Historia profunda persistida (data/klines_{symbol}_{interval}.json) para
+        la TF pedida. Cacheada en memoria por mtime: solo se relee si el archivo
+        cambió (lo actualiza el fetcher del Mac mini y lo trae el deploy). Devuelve
+        [] si no hay archivo (p. ej. instrumento sin `binance` configurado)."""
+        inst = self._inst_by_name.get(instrument, {})
+        sym = inst.get("binance")
+        if not sym:
+            return []
+        iv = binance.UI_TO_BINANCE.get(timeframe, timeframe)
+        path = os.path.join("data", f"klines_{sym}_{iv}.json")
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return []
+        key = (sym, iv)
+        with self._chart_lock:
+            entry = self._deep_cache.get(key)
+            if entry and entry["mtime"] == mtime:
+                return entry["candles"]
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                candles = json.load(fh)
+        except Exception:  # noqa: BLE001 - archivo corrupto/ausente: seguimos sin profundo
+            return []
+        with self._chart_lock:
+            self._deep_cache[key] = {"candles": candles, "mtime": mtime}
+        return candles
+
     def _htf_candles(self, instrument: str) -> dict:
-        """Velas recientes de las temporalidades de detección de POIs (cacheadas)."""
-        return {tf: self._candles_cached(instrument, tf) for tf in _HTF_FOR_POI}
+        """Velas de las TF de POIs: historia PROFUNDA persistida (años) con el tramo
+        en vivo fusionado encima. Así la detección de POIs ve zonas lejanas —los
+        OB/POI bajo el precio que importan si el mercado cae fuerte— y no solo las
+        últimas ~1000 velas. Si no hay archivo profundo, cae al tramo en vivo."""
+        out = {}
+        for tf in _HTF_FOR_POI:
+            recent = self._candles_cached(instrument, tf)
+            deep = self._deep_history(instrument, tf)
+            out[tf] = self._merge_candles(deep, recent, len(deep) + len(recent) + 10) if deep else recent
+        return out
 
     def _smc_analysis(self, instrument: str, sel_tf: str) -> dict:
         key = (instrument, sel_tf)

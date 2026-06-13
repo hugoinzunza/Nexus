@@ -601,7 +601,26 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
     valids.sort(key=lambda p: abs(p["dist_pct"]))
     mitig = [p for p in all_pois if not p["valid"]]
     mitig.sort(key=lambda p: -p["t_conf"])
-    result["pois"] = valids[:12] + mitig[:6]
+    draw = valids[:12] + mitig[:6]
+    # ESCALERA PROFUNDA: con años de historia hay POIs/OB válidos lejos del precio
+    # (p. ej. los <58k que pregunta Hugo). Los más cercanos ya entran en valids[:12];
+    # acá sumamos los siguientes válidos BAJO y SOBRE el precio aunque estén lejos,
+    # como referencia de "qué hay si el mercado se va" (el gráfico los dibuja cuando
+    # el precio entra en su rango). Acotado para no saturar.
+    drawn = {id(p) for p in draw}
+    below = sorted((p for p in valids if p["hi"] < last_price and id(p) not in drawn),
+                   key=lambda p: last_price - (p["lo"] + p["hi"]) / 2)
+    above = sorted((p for p in valids if p["lo"] > last_price and id(p) not in drawn),
+                   key=lambda p: (p["lo"] + p["hi"]) / 2 - last_price)
+    # Deduplicado por valor (la historia larga repite el mismo OB) preservando orden.
+    seen_z, pois = set(), []
+    for p in draw + below[:8] + above[:4]:
+        zkey = (p["dir"], p["tf"], round(p["lo"], 2), round(p["hi"], 2))
+        if zkey in seen_z:
+            continue
+        seen_z.add(zkey)
+        pois.append(p)
+    result["pois"] = pois
     # Panel "POIs activos": solo los CERCANOS al precio. Con la historia larga
     # aparecen POIs de 1D válidos pero a −40% o más (BTC de otra era) que son
     # ruido para operar hoy; el gráfico igual los dibuja si entran en rango.
