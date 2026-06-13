@@ -55,26 +55,6 @@ def _vapid_claims() -> dict:
     return {"sub": os.environ.get("VAPID_SUBJECT", "mailto:hugo@nexus.local")}
 
 
-def _private_key_pem() -> str:
-    """Convierte VAPID_PRIVATE_KEY_B64 (32 bytes raw en base64url) a PEM PKCS8,
-    que es lo que espera pywebpush."""
-    raw_b64 = os.environ.get("VAPID_PRIVATE_KEY_B64", "").strip()
-    if not raw_b64:
-        return ""
-    import base64
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives.asymmetric import ec
-
-    padded = raw_b64 + "=" * (-len(raw_b64) % 4)
-    priv_int = int.from_bytes(base64.urlsafe_b64decode(padded), "big")
-    priv = ec.derive_private_key(priv_int, ec.SECP256R1())
-    return priv.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode()
-
-
 # --- Almacén de suscripciones (archivo JSON) -----------------------------
 def _read_all() -> list:
     if not _SUBS_PATH or not os.path.isfile(_SUBS_PATH):
