@@ -91,64 +91,78 @@ def _conf_points(points, n):
     return out
 
 
-# Pivote de los CDC DIBUJADOS: estructura MAYOR (50 velas por lado), calibrado
-# contra los ejemplos M15 del indicador de Bitcoin Traders Academy que mandó
-# Hugo (2026-06-12): con 50 el algoritmo reproduce sus CDC reales (el quiebre
-# del 61.184 del 06-09, el 62.858 del 06-11) y deja el máximo 64.250 como
-# PENDIENTE, igual que en sus capturas. Con el lookback 10 los niveles quedaban
-# casi iguales a los micro. OJO: la CONFIRMACIÓN del plan (cdc_status) sigue
-# con CDC_PIV=2, que es lo validado en backtest (cdc_struct_2026-06-12.md).
-CDC_DRAW_PIV = 50
+def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
+    """CDC (cambios de carácter) para DIBUJAR, replicando el indicador de
+    referencia (calibrado contra los ejemplos M15 de Hugo, 2026-06-12):
 
+    El CDC rompe los EXTREMOS del dealing range — el Strong High / Weak Low de
+    la ventana estructural (RANGE_PIV / RANGE_WINDOW, los mismos del rango) —
+    NO swings interiores. Por eso un rally que no cierra sobre el máximo del
+    rango no cambia el carácter (el ejemplo del 06-12: máximo cierre 63.69 bajo
+    la línea 64.234 → la línea sigue pendiente, igual que el indicador).
 
-def _cdc_events(closed: list, max_events: int = 4) -> List[Dict]:
-    """CDC (cambios de carácter) para DIBUJAR, como el indicador de referencia:
+    - PENDIENTES: el extremo vigente sin romper, extendido desde su vela de
+      origen hasta la última vela cerrada (el nivel cuyo CIERRE en contra
+      cambiaría el carácter).
+    - HISTÓRICOS: cuando un cierre rompe el extremo, la línea queda congelada
+      en la vela del quiebre y el rango se renueva con los swings posteriores.
 
-    - HISTÓRICOS: cierre que rompe el último swing estructural confirmado en
-      dirección OPUESTA al quiebre anterior; la línea va desde el swing de
-      origen hasta la vela del quiebre y queda congelada ahí.
-    - PENDIENTES: el último swing high y el último swing low estructurales SIN
-      romper, extendidos hasta la última vela cerrada — el nivel cuyo cierre en
-      contra cambiaría el carácter (la línea "64.250" de los ejemplos de Hugo).
-
-    Anti-repaint: solo velas cerradas, swings con confirm_idx, cada swing se
-    consume tras romperse. Devuelve [{dir, price, t_from, t_to, pending}]."""
+    Anti-repaint: solo velas cerradas y swings con confirm_idx.
+    Devuelve [{dir, price, t_from, t_to, pending}]."""
     n = len(closed)
-    if n < 2 * CDC_DRAW_PIV + 3:
+    if n < 2 * RANGE_PIV + 3:
         return []
-    sh, sl = smc.swing_points(closed, CDC_DRAW_PIV)
-    hi = _conf_points(sh, n)
-    lo = _conf_points(sl, n)
+    sh, sl = smc.swing_points(closed, RANGE_PIV)
     closes = [c["c"] for c in closed]
     events = []
-    direction = None
-    broken_hi = broken_lo = -1
-    for j in range(n):
-        h, l = hi[j], lo[j]
-        if h is not None and h["idx"] != broken_hi and closes[j] > h["price"]:
-            if direction != "up":
-                events.append({"dir": "up", "price": round(h["price"], 6),
-                               "t_from": closed[h["idx"]]["t"], "t_to": closed[j]["t"],
-                               "pending": False})
-            direction = "up"
-            broken_hi = h["idx"]
-        if l is not None and l["idx"] != broken_lo and closes[j] < l["price"]:
-            if direction != "down":
-                events.append({"dir": "down", "price": round(l["price"], 6),
-                               "t_from": closed[l["idx"]]["t"], "t_to": closed[j]["t"],
-                               "pending": False})
-            direction = "down"
-            broken_lo = l["idx"]
-    events = events[-max_events:]
-    # Niveles pendientes: el high/low estructural vigente sin romper.
-    t_last = closed[-1]["t"]
-    h, l = hi[n - 1], lo[n - 1]
-    if h is not None and h["idx"] != broken_hi:
-        events.append({"dir": "up", "price": round(h["price"], 6),
-                       "t_from": closed[h["idx"]]["t"], "t_to": t_last, "pending": True})
-    if l is not None and l["idx"] != broken_lo:
-        events.append({"dir": "down", "price": round(l["price"], 6),
-                       "t_from": closed[l["idx"]]["t"], "t_to": t_last, "pending": True})
+
+    def run(points, is_high):
+        evt = sorted(points, key=lambda p: p["confirm_idx"])
+        active = []          # swings ya confirmados
+        pi = 0
+        floor = -1           # tras un quiebre, solo cuentan swings posteriores
+        cur = None           # extremo vigente (candidato a CDC)
+
+        def best(j):
+            cands = [p for p in active if p["idx"] > floor and p["idx"] >= j - RANGE_WINDOW]
+            if not cands:
+                return None
+            return max(cands, key=lambda p: p["price"]) if is_high \
+                else min(cands, key=lambda p: p["price"])
+
+        out = []
+        for j in range(n):
+            added = False
+            while pi < len(evt) and evt[pi]["confirm_idx"] <= j:
+                active.append(evt[pi])
+                pi += 1
+                added = True
+            if added or cur is None or cur["idx"] <= floor or cur["idx"] < j - RANGE_WINDOW:
+                cur = best(j)
+            if cur is None:
+                continue
+            broke = closes[j] > cur["price"] if is_high else closes[j] < cur["price"]
+            if broke:
+                out.append({"dir": "up" if is_high else "down",
+                            "price": round(cur["price"], 6),
+                            "t_from": closed[cur["idx"]]["t"], "t_to": closed[j]["t"],
+                            "pending": False})
+                floor = j
+                cur = best(j)
+        # Pendiente: el extremo vigente sin romper, hasta la última vela cerrada.
+        if cur is not None:
+            out.append({"dir": "up" if is_high else "down",
+                        "price": round(cur["price"], 6),
+                        "t_from": closed[cur["idx"]]["t"], "t_to": closed[n - 1]["t"],
+                        "pending": True})
+        return out
+
+    for series, is_high in ((sh, True), (sl, False)):
+        evs = run(series, is_high)
+        pend = [e for e in evs if e["pending"]]
+        hist = [e for e in evs if not e["pending"]][-max_events:]
+        events.extend(hist + pend)
+    events.sort(key=lambda e: e["t_to"])
     return events
 
 
