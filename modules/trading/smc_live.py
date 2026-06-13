@@ -15,6 +15,7 @@ Devuelve, para un instrumento y la temporalidad seleccionada:
 """
 from __future__ import annotations
 
+import bisect
 import time
 from typing import Dict, List
 
@@ -93,19 +94,18 @@ def _conf_points(points, n):
 
 def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
     """CDC (cambios de carácter) para DIBUJAR, replicando el indicador de
-    referencia (calibrado contra los ejemplos M15 de Hugo, 2026-06-12):
+    referencia (iterado con los ejemplos M15 de Hugo, 2026-06-12):
 
-    El CDC rompe los EXTREMOS del dealing range — el Strong High / Weak Low de
-    la ventana estructural (RANGE_PIV / RANGE_WINDOW, los mismos del rango) —
-    NO swings interiores. Por eso un rally que no cierra sobre el máximo del
-    rango no cambia el carácter (el ejemplo del 06-12: máximo cierre 63.69 bajo
-    la línea 64.234 → la línea sigue pendiente, igual que el indicador).
-
-    - PENDIENTES: el extremo vigente sin romper, extendido desde su vela de
-      origen hasta la última vela cerrada (el nivel cuyo CIERRE en contra
-      cambiaría el carácter).
-    - HISTÓRICOS: cuando un cierre rompe el extremo, la línea queda congelada
-      en la vela del quiebre y el rango se renueva con los swings posteriores.
+    - Un swing solo CALIFICA como nivel de CDC cuando después de él confirma un
+      pivote OPUESTO (ya produjo reversión). El extremo del movimiento en curso
+      (el Strong High/Weak Low recién hechos) NO califica: "los strong no son
+      CDC" — romperlos a favor es continuación, no cambio de carácter.
+    - Cada lado es independiente (sin alternancia forzada).
+    - El nivel vigente es PEGAJOSO: elegido el candidato (el extremo calificado
+      de la ventana), la línea vive hasta que un CIERRE la rompe — aunque su
+      origen envejezca (la línea 64.234 del ejemplo sobrevivió 5 días y todo un
+      rally que nunca cerró sobre ella). Expira solo si supera 2× la ventana.
+    - HISTÓRICOS: al romperse, la línea queda congelada en la vela del quiebre.
 
     Anti-repaint: solo velas cerradas y swings con confirm_idx.
     Devuelve [{dir, price, t_from, t_to, pending}]."""
@@ -114,42 +114,57 @@ def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
         return []
     sh, sl = smc.swing_points(closed, RANGE_PIV)
     closes = [c["c"] for c in closed]
+    INF = 10 ** 9
     events = []
 
-    def run(points, is_high):
-        evt = sorted(points, key=lambda p: p["confirm_idx"])
-        active = []          # swings ya confirmados
-        pi = 0
-        floor = -1           # tras un quiebre, solo cuentan swings posteriores
-        cur = None           # extremo vigente (candidato a CDC)
-
-        def best(j):
-            cands = [p for p in active if p["idx"] > floor and p["idx"] >= j - RANGE_WINDOW]
-            if not cands:
-                return None
-            return max(cands, key=lambda p: p["price"]) if is_high \
-                else min(cands, key=lambda p: p["price"])
+    def run(own, opp, is_high):
+        # Barra en que cada swing propio queda DISPONIBLE: su confirmación y la
+        # del primer pivote opuesto posterior (la calificación).
+        opp_sorted = sorted(opp, key=lambda p: p["idx"])
+        opp_idx = [p["idx"] for p in opp_sorted]
+        suf = [INF] * (len(opp_sorted) + 1)
+        for i in range(len(opp_sorted) - 1, -1, -1):
+            suf[i] = min(opp_sorted[i]["confirm_idx"], suf[i + 1])
+        avail = []
+        for p in own:
+            k = bisect.bisect_right(opp_idx, p["idx"])
+            a = max(p["confirm_idx"], suf[k])
+            if a < INF:
+                avail.append((a, p))
+        avail.sort(key=lambda t: t[0])
 
         out = []
+        floor = -1      # tras un quiebre, solo cuentan swings posteriores
+        cur = None
+        pool = []
+        pi = 0
         for j in range(n):
             added = False
-            while pi < len(evt) and evt[pi]["confirm_idx"] <= j:
-                active.append(evt[pi])
+            while pi < len(avail) and avail[pi][0] <= j:
+                pool.append(avail[pi][1])
                 pi += 1
                 added = True
-            if added or cur is None or cur["idx"] <= floor or cur["idx"] < j - RANGE_WINDOW:
-                cur = best(j)
+            if cur is not None and (cur["idx"] <= floor or j - cur["idx"] > 2 * RANGE_WINDOW):
+                cur = None
+            if cur is None or added:
+                cands = [p for p in pool if p["idx"] > floor and p["idx"] >= j - RANGE_WINDOW]
+                if cur is not None:
+                    # Solo un calificado MÁS extremo puede reemplazar al vigente.
+                    cands = [p for p in cands
+                             if (p["price"] > cur["price"]) == is_high
+                             and p["price"] != cur["price"]] + [cur]
+                if cands:
+                    cur = max(cands, key=lambda p: p["price"]) if is_high \
+                        else min(cands, key=lambda p: p["price"])
             if cur is None:
                 continue
-            broke = closes[j] > cur["price"] if is_high else closes[j] < cur["price"]
-            if broke:
+            if (closes[j] > cur["price"]) if is_high else (closes[j] < cur["price"]):
                 out.append({"dir": "up" if is_high else "down",
                             "price": round(cur["price"], 6),
                             "t_from": closed[cur["idx"]]["t"], "t_to": closed[j]["t"],
                             "pending": False})
                 floor = j
-                cur = best(j)
-        # Pendiente: el extremo vigente sin romper, hasta la última vela cerrada.
+                cur = None
         if cur is not None:
             out.append({"dir": "up" if is_high else "down",
                         "price": round(cur["price"], 6),
@@ -157,8 +172,8 @@ def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
                         "pending": True})
         return out
 
-    for series, is_high in ((sh, True), (sl, False)):
-        evs = run(series, is_high)
+    for own, opp, is_high in ((sh, sl, True), (sl, sh, False)):
+        evs = run(own, opp, is_high)
         pend = [e for e in evs if e["pending"]]
         hist = [e for e in evs if not e["pending"]][-max_events:]
         events.extend(hist + pend)
