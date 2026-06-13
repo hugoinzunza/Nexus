@@ -245,9 +245,9 @@
         if (show.tpsl && D.trades && D.trades.length) {
           D.trades.forEach((tr) => {
             const yE = py(tr.entry);
-            const t0 = (tr.ts_activated || tr.ts_created || 0) * 1000;
-            let x1 = t0 ? tx(t0) : null;
-            let x2 = tx(Date.now());                 // borde derecho = ahora (no el futuro vacío)
+            // Anclas a barras reales (ver loadSMC): tx() de tiempos no-barra da null.
+            let x1 = tr._anchorT ? tx(tr._anchorT * 1000) : null;
+            let x2 = tr._lastT ? tx(tr._lastT * 1000) : null;
             if (x1 == null) x1 = 0;                   // activación fuera de vista por la izq.
             if (x2 == null) x2 = W;
             x1 = Math.max(0, Math.min(x1, W));
@@ -286,16 +286,27 @@
           const outReg = t.regime_ok === false;   // plan fuera de régimen → más tenue
           // Piso de 0.55: atenuado pero siempre legible (las pills ya dan contraste).
           const alpha = Math.max(0.55, (pend ? 0.65 : 1) * (outReg ? 0.6 : 1));
-          // Zona del POI = de dónde sale la entrada (banda de contexto).
+          // Zona del POI. Si el trade está ACTIVO, acotamos la banda desde la barra
+          // de activación (caja, no banda de borde a borde); pendiente sigue full.
+          const activeMatch = (D.trades || []).find((tr) => tr.dir === t.dir);
+          // Si el trade está ACTIVO acotamos la banda a una CAJA (barra de activación
+          // → última barra), igual que la cajita del trade. Pendiente sigue full.
+          let xPlan = 0, xPlanEnd = W;
+          if (activeMatch && activeMatch._anchorT) {
+            const xp = tx(activeMatch._anchorT * 1000);
+            const xe = activeMatch._lastT ? tx(activeMatch._lastT * 1000) : null;
+            if (xp != null) xPlan = Math.max(0, Math.min(xp, W - 2));
+            if (xe != null) xPlanEnd = Math.max(xPlan + 2, Math.min(xe, W));
+          }
           const yhi = py(t.entry_hi), ylo = py(t.entry_lo);
           if (yhi != null && ylo != null) {
             const top = Math.min(yhi, ylo), h = Math.max(2, Math.abs(ylo - yhi));
             const g = ctx.createLinearGradient(0, top, 0, top + h);
             g.addColorStop(0, pend ? "rgba(108,92,231,0.14)" : "rgba(108,92,231,0.22)");
             g.addColorStop(1, pend ? "rgba(108,92,231,0.06)" : "rgba(108,92,231,0.10)");
-            ctx.fillStyle = g; ctx.fillRect(0, top, W, h);
+            ctx.fillStyle = g; ctx.fillRect(xPlan, top, xPlanEnd - xPlan, h);
             ctx.strokeStyle = "rgba(162,155,254,0.6)"; ctx.lineWidth = 1;
-            ctx.setLineDash([4, 3]); ctx.strokeRect(0.5, top + 0.5, W - 1, h); ctx.setLineDash([]);
+            ctx.setLineDash([4, 3]); ctx.strokeRect(xPlan + 0.5, top + 0.5, Math.max(1, xPlanEnd - xPlan - 1), h); ctx.setLineDash([]);
             pill(placeL(top + 2), `Plan ${t.tf} ${long ? "▲ largo" : "▼ corto"}`, "#a29bfe",
               { font: "600 9.5px -apple-system, sans-serif" });
           }
@@ -715,6 +726,23 @@
       try {
         const sj = await fetch("/m/journal/api/setups").then((r) => (r.ok ? r.json() : null));
         card.trades = ((sj && sj.setups) || []).filter((x) => x.status === "activo" && x.pair === symbol);
+        // timeToCoordinate(ts) devuelve null para tiempos que NO son barras (la
+        // activación y "ahora" casi nunca caen en un borde de 15m), y por eso la
+        // caja salía de borde a borde. Anclamos a barras REALES: la primera barra
+        // >= activación (borde izq.) y la última barra cargada (borde der.).
+        const bars = card.bars || [];
+        if (bars.length) {
+          const lastT = bars[bars.length - 1].time;     // segundos epoch
+          card.trades.forEach((tr) => {
+            const act = (tr.ts_activated || tr.ts_created || 0);
+            let anchor = bars[0].time;
+            for (let i = 0; i < bars.length; i++) {
+              if (bars[i].time >= act) { anchor = bars[i].time; break; }
+            }
+            tr._anchorT = anchor;     // segundos: barra de activación (o 1ª visible)
+            tr._lastT = lastT;        // segundos: última barra (borde derecho)
+          });
+        }
       } catch (e) { /* sin trades activos */ }
       applySMC(card);
       renderSMCPanel(card);

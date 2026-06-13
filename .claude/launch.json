@@ -3,9 +3,12 @@
   "configurations": [
     {
       "name": "nexus",
-      "runtimeExecutable": ".venv/bin/uvicorn",
-      "runtimeArgs": ["core.app:app", "--host", "0.0.0.0", "--port", "8800", "--reload"],
-      "port": 8800
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": [
+        "-c",
+        "import os,uvicorn; uvicorn.run('core.app:app', host='0.0.0.0', port=int(os.environ.get('PORT') or 8801), reload=True)"
+      ],
+      "autoPort": true
     }
   ]
 }
