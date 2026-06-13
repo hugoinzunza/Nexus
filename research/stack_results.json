@@ -1,0 +1,447 @@
+{
+ "params": {
+  "TF": "1h",
+  "CDC_WINDOW": 16,
+  "VIX_MAX": 25.0,
+  "ADX_MIN": 25.0,
+  "MIN_RR_LIQ": 2.0
+ },
+ "tables": {
+  "BASE": {
+   "IS": {
+    "trades": 1615,
+    "wins": 617,
+    "losses": 998,
+    "timeouts": 127,
+    "win_rate": 38.2,
+    "expectancy_R": -0.024,
+    "avg_win_R": 1.708,
+    "avg_loss_R": -1.094,
+    "profit_factor": 0.97,
+    "max_drawdown_R": 118.67,
+    "max_losing_streak": 17,
+    "total_R": -38.21
+   },
+   "OOS": {
+    "trades": 815,
+    "wins": 294,
+    "losses": 521,
+    "timeouts": 45,
+    "win_rate": 36.1,
+    "expectancy_R": -0.096,
+    "avg_win_R": 1.717,
+    "avg_loss_R": -1.119,
+    "profit_factor": 0.87,
+    "max_drawdown_R": 99.2,
+    "max_losing_streak": 21,
+    "total_R": -78.03
+   },
+   "ALL": {
+    "trades": 2430,
+    "wins": 911,
+    "losses": 1519,
+    "timeouts": 172,
+    "win_rate": 37.5,
+    "expectancy_R": -0.048,
+    "avg_win_R": 1.711,
+    "avg_loss_R": -1.102,
+    "profit_factor": 0.93,
+    "max_drawdown_R": 176.55,
+    "max_losing_streak": 21,
+    "total_R": -116.24
+   }
+  },
+  "REG": {
+   "IS": {
+    "trades": 635,
+    "wins": 213,
+    "losses": 422,
+    "timeouts": 56,
+    "win_rate": 33.5,
+    "expectancy_R": -0.174,
+    "avg_win_R": 1.649,
+    "avg_loss_R": -1.094,
+    "profit_factor": 0.76,
+    "max_drawdown_R": 123.37,
+    "max_losing_streak": 19,
+    "total_R": -110.51
+   },
+   "OOS": {
+    "trades": 311,
+    "wins": 122,
+    "losses": 189,
+    "timeouts": 19,
+    "win_rate": 39.2,
+    "expectancy_R": -0.012,
+    "avg_win_R": 1.698,
+    "avg_loss_R": -1.116,
+    "profit_factor": 0.98,
+    "max_drawdown_R": 39.18,
+    "max_losing_streak": 18,
+    "total_R": -3.7
+   },
+   "ALL": {
+    "trades": 946,
+    "wins": 335,
+    "losses": 611,
+    "timeouts": 75,
+    "win_rate": 35.4,
+    "expectancy_R": -0.121,
+    "avg_win_R": 1.667,
+    "avg_loss_R": -1.101,
+    "profit_factor": 0.83,
+    "max_drawdown_R": 123.37,
+    "max_losing_streak": 19,
+    "total_R": -114.21
+   }
+  },
+  "CDC": {
+   "IS": {
+    "trades": 622,
+    "wins": 239,
+    "losses": 383,
+    "timeouts": 177,
+    "win_rate": 38.4,
+    "expectancy_R": -0.05,
+    "avg_win_R": 1.337,
+    "avg_loss_R": -0.915,
+    "profit_factor": 0.91,
+    "max_drawdown_R": 65.13,
+    "max_losing_streak": 16,
+    "total_R": -30.91
+   },
+   "OOS": {
+    "trades": 287,
+    "wins": 130,
+    "losses": 157,
+    "timeouts": 89,
+    "win_rate": 45.3,
+    "expectancy_R": 0.066,
+    "avg_win_R": 1.271,
+    "avg_loss_R": -0.932,
+    "profit_factor": 1.13,
+    "max_drawdown_R": 21.82,
+    "max_losing_streak": 7,
+    "total_R": 19.03
+   },
+   "ALL": {
+    "trades": 909,
+    "wins": 369,
+    "losses": 540,
+    "timeouts": 266,
+    "win_rate": 40.6,
+    "expectancy_R": -0.013,
+    "avg_win_R": 1.314,
+    "avg_loss_R": -0.92,
+    "profit_factor": 0.98,
+    "max_drawdown_R": 65.13,
+    "max_losing_streak": 16,
+    "total_R": -11.88
+   }
+  },
+  "REG+CDC": {
+   "IS": {
+    "trades": 223,
+    "wins": 74,
+    "losses": 149,
+    "timeouts": 74,
+    "win_rate": 33.2,
+    "expectancy_R": -0.186,
+    "avg_win_R": 1.199,
+    "avg_loss_R": -0.873,
+    "profit_factor": 0.68,
+    "max_drawdown_R": 46.69,
+    "max_losing_streak": 18,
+    "total_R": -41.44
+   },
+   "OOS": {
+    "trades": 105,
+    "wins": 52,
+    "losses": 53,
+    "timeouts": 37,
+    "win_rate": 49.5,
+    "expectancy_R": 0.066,
+    "avg_win_R": 1.124,
+    "avg_loss_R": -0.971,
+    "profit_factor": 1.14,
+    "max_drawdown_R": 12.78,
+    "max_losing_streak": 8,
+    "total_R": 6.97
+   },
+   "ALL": {
+    "trades": 328,
+    "wins": 126,
+    "losses": 202,
+    "timeouts": 111,
+    "win_rate": 38.4,
+    "expectancy_R": -0.105,
+    "avg_win_R": 1.168,
+    "avg_loss_R": -0.899,
+    "profit_factor": 0.81,
+    "max_drawdown_R": 46.69,
+    "max_losing_streak": 18,
+    "total_R": -34.47
+   }
+  },
+  "BASE_LIQ": {
+   "IS": {
+    "trades": 720,
+    "wins": 187,
+    "losses": 533,
+    "timeouts": 21,
+    "win_rate": 26.0,
+    "expectancy_R": -0.039,
+    "avg_win_R": 3.208,
+    "avg_loss_R": -1.178,
+    "profit_factor": 0.96,
+    "max_drawdown_R": 64.45,
+    "max_losing_streak": 19,
+    "total_R": -27.85
+   },
+   "OOS": {
+    "trades": 383,
+    "wins": 113,
+    "losses": 270,
+    "timeouts": 6,
+    "win_rate": 29.5,
+    "expectancy_R": 0.371,
+    "avg_win_R": 4.128,
+    "avg_loss_R": -1.202,
+    "profit_factor": 1.44,
+    "max_drawdown_R": 23.76,
+    "max_losing_streak": 11,
+    "total_R": 141.91
+   },
+   "ALL": {
+    "trades": 1103,
+    "wins": 300,
+    "losses": 803,
+    "timeouts": 27,
+    "win_rate": 27.2,
+    "expectancy_R": 0.103,
+    "avg_win_R": 3.554,
+    "avg_loss_R": -1.186,
+    "profit_factor": 1.12,
+    "max_drawdown_R": 64.45,
+    "max_losing_streak": 19,
+    "total_R": 114.06
+   }
+  },
+  "REGCDC_LIQ": {
+   "IS": {
+    "trades": 7,
+    "wins": 2,
+    "losses": 5,
+    "timeouts": 2,
+    "win_rate": 28.6,
+    "expectancy_R": -0.363,
+    "avg_win_R": 1.114,
+    "avg_loss_R": -0.954,
+    "profit_factor": 0.47,
+    "max_drawdown_R": 3.63,
+    "max_losing_streak": 3,
+    "total_R": -2.54
+   },
+   "OOS": {
+    "trades": 4,
+    "wins": 2,
+    "losses": 2,
+    "timeouts": 0,
+    "win_rate": 50.0,
+    "expectancy_R": 0.514,
+    "avg_win_R": 2.066,
+    "avg_loss_R": -1.038,
+    "profit_factor": 1.99,
+    "max_drawdown_R": 2.08,
+    "max_losing_streak": 2,
+    "total_R": 2.06
+   },
+   "ALL": {
+    "trades": 11,
+    "wins": 4,
+    "losses": 7,
+    "timeouts": 2,
+    "win_rate": 36.4,
+    "expectancy_R": -0.044,
+    "avg_win_R": 1.59,
+    "avg_loss_R": -0.978,
+    "profit_factor": 0.93,
+    "max_drawdown_R": 3.63,
+    "max_losing_streak": 3,
+    "total_R": -0.49
+   }
+  }
+ },
+ "bootstrap": {
+  "BASE": 0.026,
+  "REG": 0.438,
+  "CDC": 0.822,
+  "REG+CDC": 0.709,
+  "BASE_LIQ": 0.993,
+  "REGCDC_LIQ": null
+ },
+ "walk_forward": {
+  "BASE": [
+   {
+    "n": 496,
+    "exp_R": 0.051,
+    "PF": 1.08
+   },
+   {
+    "n": 397,
+    "exp_R": -0.009,
+    "PF": 0.99
+   },
+   {
+    "n": 480,
+    "exp_R": -0.137,
+    "PF": 0.81
+   },
+   {
+    "n": 509,
+    "exp_R": -0.005,
+    "PF": 0.99
+   },
+   {
+    "n": 547,
+    "exp_R": -0.127,
+    "PF": 0.83
+   }
+  ],
+  "REG": [
+   {
+    "n": 132,
+    "exp_R": -0.253,
+    "PF": 0.67
+   },
+   {
+    "n": 165,
+    "exp_R": -0.005,
+    "PF": 0.99
+   },
+   {
+    "n": 237,
+    "exp_R": -0.309,
+    "PF": 0.6
+   },
+   {
+    "n": 196,
+    "exp_R": 0.059,
+    "PF": 1.09
+   },
+   {
+    "n": 215,
+    "exp_R": -0.084,
+    "PF": 0.88
+   }
+  ],
+  "CDC": [
+   {
+    "n": 189,
+    "exp_R": -0.17,
+    "PF": 0.72
+   },
+   {
+    "n": 151,
+    "exp_R": -0.003,
+    "PF": 0.99
+   },
+   {
+    "n": 185,
+    "exp_R": -0.049,
+    "PF": 0.92
+   },
+   {
+    "n": 194,
+    "exp_R": 0.048,
+    "PF": 1.09
+   },
+   {
+    "n": 190,
+    "exp_R": 0.108,
+    "PF": 1.22
+   }
+  ],
+  "REG+CDC": [
+   {
+    "n": 44,
+    "exp_R": -0.508,
+    "PF": 0.34
+   },
+   {
+    "n": 61,
+    "exp_R": -0.044,
+    "PF": 0.91
+   },
+   {
+    "n": 82,
+    "exp_R": -0.224,
+    "PF": 0.63
+   },
+   {
+    "n": 68,
+    "exp_R": 0.135,
+    "PF": 1.29
+   },
+   {
+    "n": 73,
+    "exp_R": -0.004,
+    "PF": 0.99
+   }
+  ],
+  "BASE_LIQ": [
+   {
+    "n": 211,
+    "exp_R": -0.154,
+    "PF": 0.82
+   },
+   {
+    "n": 180,
+    "exp_R": 0.147,
+    "PF": 1.18
+   },
+   {
+    "n": 208,
+    "exp_R": -0.151,
+    "PF": 0.83
+   },
+   {
+    "n": 247,
+    "exp_R": 0.359,
+    "PF": 1.43
+   },
+   {
+    "n": 256,
+    "exp_R": 0.246,
+    "PF": 1.28
+   }
+  ],
+  "REGCDC_LIQ": [
+   {
+    "n": 1,
+    "exp_R": -1.039,
+    "PF": 0.0
+   },
+   {
+    "n": 2,
+    "exp_R": -0.478,
+    "PF": 0.1
+   },
+   {
+    "n": 3,
+    "exp_R": 0.161,
+    "PF": 1.3
+   },
+   {
+    "n": 1,
+    "exp_R": -1.03,
+    "PF": 0.0
+   },
+   {
+    "n": 4,
+    "exp_R": 0.514,
+    "PF": 1.99
+   }
+  ]
+ }
+}
