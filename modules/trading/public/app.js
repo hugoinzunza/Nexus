@@ -258,6 +258,20 @@
           const outReg = t.regime_ok === false;   // plan fuera de régimen → más tenue
           // Piso de 0.55: atenuado pero siempre legible (las pills ya dan contraste).
           const alpha = Math.max(0.55, (pend ? 0.65 : 1) * (outReg ? 0.6 : 1));
+          // CAJA del trade ACTIVO: zona de RIESGO (entrada→SL, rojo tenue) y de
+          // RECOMPENSA (entrada→TP, verde tenue), de fondo hasta que el trade cierre.
+          if (!pend) {
+            const yE2 = py(t.entry);
+            const box = (p2, rgb) => {
+              const y2 = py(p2);
+              if (yE2 == null || y2 == null) return;
+              const top = Math.min(yE2, y2), h = Math.max(1, Math.abs(y2 - yE2));
+              ctx.fillStyle = `rgba(${rgb},0.10)`;
+              ctx.fillRect(0, top, W, h);
+            };
+            box(t.sl, "234,57,67");    // entrada → SL: riesgo
+            box(t.tp, "22,199,132");   // entrada → TP: recompensa
+          }
           // Zona del POI = de dónde sale la entrada (banda de contexto).
           const yhi = py(t.entry_hi), ylo = py(t.entry_lo);
           if (yhi != null && ylo != null) {
