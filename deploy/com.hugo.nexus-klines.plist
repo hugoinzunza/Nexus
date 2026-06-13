@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Refresco de la historia de velas: corre en el Mac mini (que sí llega a
+         Binance), baja lo nuevo y lo publica a Railway por git push. MENSUAL:
+         el merge en vivo cubre el hueco reciente, así que no hace falta más, y
+         cada push reescribe el JSON completo (no inflar el repo). SOLO LECTURA
+         de Binance. -->
+    <key>Label</key>
+    <string>com.hugo.nexus-klines</string>
+
+    <!-- AJUSTA las rutas si clonaste Nexus en otra carpeta. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/hugh/Nexus/.venv/bin/python</string>
+        <string>-m</string>
+        <string>modules.trading.refresh_klines</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/hugh/Nexus</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <!-- El 1 de cada mes a las 04:00. (launchd corre el agente del usuario, que
+         tiene acceso al llavero → la clave SSH de git debe estar en el llavero:
+         ssh-add --apple-use-keychain ~/.ssh/id_ed25519 una vez.) -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Day</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>4</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- Logs del refresco. -->
+    <key>StandardOutPath</key>
+    <string>/Users/hugh/Nexus/logs/klines.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/hugh/Nexus/logs/klines.err.log</string>
+</dict>
+</plist>
