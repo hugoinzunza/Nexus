@@ -110,6 +110,22 @@ async def push_unsubscribe(request: Request):
     return {"ok": True, "suscripciones": n}
 
 
+@app.post("/api/push/test")
+async def push_test(request: Request):
+    """Dispara una notificación de PRUEBA a las suscripciones. Auth con
+    NEXUS_INGEST_TOKEN (header X-Nexus-Token) para no dejarlo abierto."""
+    import hmac
+    token = os.environ.get("NEXUS_INGEST_TOKEN", "").strip()
+    provided = request.headers.get("x-nexus-token", "")
+    if not token or not hmac.compare_digest(str(provided), str(token)):
+        return JSONResponse({"error": "no autorizado"}, status_code=401)
+    enviados, errores = push.notificar(
+        title="🔔 Nexus · prueba",
+        body="Si ves esto, las alertas SMC funcionan. (mensaje de prueba)",
+        url="/m/trading/", tag="nexus-test")
+    return {"ok": True, "enviados": enviados, "errores": len(errores)}
+
+
 # --- Módulos -------------------------------------------------------------
 @app.get("/m/{slug}/api/{subpath:path}")
 def module_api(slug: str, subpath: str, request: Request):
