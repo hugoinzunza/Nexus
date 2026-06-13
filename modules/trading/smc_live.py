@@ -41,6 +41,13 @@ POI_TFS = ["1D", "4h", "1h"]   # temporalidades de detección de POIs
 # concluyente; en 15m no rescata). Mismos parámetros del backtest, sin tuneo.
 CDC_PIV = 2        # pivotes de corto plazo para el CDC (PIV del research)
 CDC_WINDOW = 16    # velas de la TF de planeación que esperamos el CDC tras el toque
+# Un CDC PENDIENTE (nivel aún no roto) solo se dibuja si está CERCA del precio: el
+# indicador del curso marca el nivel overhead/underfoot que está en juego (la línea
+# 64.234 a +0,8% sobrevivió 5 días en la captura de Hugo), NO la liquidez ya barrida
+# lejos (un mínimo estructural a −5/−7% es el Weak Low, no un CDC). Acortar la ventana
+# de selección no basta: SIEMPRE queda algún extremo sin romper → un pendiente espurio
+# que solo se reubica; el filtro correcto es la proximidad al último cierre.
+CDC_PEND_MAX_DIST_PCT = 2.5
 
 # Duración de una vela por TF (para descartar la vela en formación y para la
 # ventana CDC). Claves tal como las usa el selector del módulo.
@@ -114,8 +121,16 @@ def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
         return []
     sh, sl = smc.swing_points(closed, RANGE_PIV)
     closes = [c["c"] for c in closed]
+    last = closes[-1]
     INF = 10 ** 9
     events = []
+
+    def mk(cur, jto, is_high, pending):
+        return {"dir": "up" if is_high else "down",
+                "price": round(cur["price"], 6),
+                "idx_from": cur["idx"], "idx_to": jto,
+                "t_from": closed[cur["idx"]]["t"], "t_to": closed[jto]["t"],
+                "pending": pending}
 
     def availability(own, opp, is_high):
         """Barra en que cada swing propio queda DISPONIBLE como nivel CDC, con la
@@ -178,17 +193,11 @@ def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
             if cur is None:
                 continue
             if (closes[j] > cur["price"]) if is_high else (closes[j] < cur["price"]):
-                out.append({"dir": "up" if is_high else "down",
-                            "price": round(cur["price"], 6),
-                            "t_from": closed[cur["idx"]]["t"], "t_to": closed[j]["t"],
-                            "pending": False})
+                out.append(mk(cur, j, is_high, False))
                 floor = j
                 cur = None
         if cur is not None:
-            out.append({"dir": "up" if is_high else "down",
-                        "price": round(cur["price"], 6),
-                        "t_from": closed[cur["idx"]]["t"], "t_to": closed[n - 1]["t"],
-                        "pending": True})
+            out.append(mk(cur, n - 1, is_high, True))
         return out
 
     def run_internal(own, opp, is_high, max_keep=2):
@@ -211,25 +220,58 @@ def _cdc_events(closed: list, max_events: int = 3) -> List[Dict]:
             if cur is None:
                 continue
             if (closes[j] > cur["price"]) if is_high else (closes[j] < cur["price"]):
-                out.append({"dir": "up" if is_high else "down",
-                            "price": round(cur["price"], 6),
-                            "t_from": closed[cur["idx"]]["t"], "t_to": closed[j]["t"],
-                            "pending": False})
+                out.append(mk(cur, j, is_high, False))
                 floor = j
                 cur = None
         return out[-max_keep:]
 
+    # 1) Estructura MAYOR de ambos lados. Los PENDIENTES (nivel aún sin romper) se
+    # filtran por proximidad: solo el nivel en juego cerca del precio (la línea
+    # 64.234 overhead de la captura), no la liquidez ya barrida lejos (el mínimo
+    # estructural a −5/−7% que es Weak Low, no CDC). Así desaparece el pendiente
+    # espurio ~59 sin afectar el dealing range ni el pendiente 64.234.
+    majors = []
     for own, opp, is_high in ((sh, sl, True), (sl, sh, False)):
-        evs = run(own, opp, is_high)
-        pend = [e for e in evs if e["pending"]]
-        hist = [e for e in evs if not e["pending"]][-max_events:]
+        majors.extend(run(own, opp, is_high))
+    majors = [e for e in majors if (not e["pending"])
+              or (last and abs(e["price"] - last) / last * 100 <= CDC_PEND_MAX_DIST_PCT)]
+
+    def covered_by_major(e):
+        """Un CDC interno es CONTINUACIÓN (no cambio de carácter) cuando rompe en la
+        MISMA dirección de un nivel MAYOR activo que lo domina: el rally hacia el
+        Strong High overhead (64.234/64.250) hace que cada quiebre interno al alza
+        sea continuación, no CDC (la queja de Hugo del rally del 06-12 y del interno
+        63.843). El interno a la BAJA 61.18 va EN CONTRA del mayor (no hay un nivel
+        mayor bajista que lo cubra: el pendiente ~59 se filtró por lejano) → se
+        mantiene. La cobertura incluye la pierna de FORMACIÓN del nivel mayor
+        (origen hasta 2·RANGE_PIV velas después del quiebre interno)."""
+        for m in majors:
+            if m["dir"] != e["dir"]:
+                continue
+            beyond = (m["price"] >= e["price"]) if e["dir"] == "up" else (m["price"] <= e["price"])
+            if beyond and m["idx_to"] >= e["idx_to"] and m["idx_from"] <= e["idx_to"] + 2 * RANGE_PIV:
+                return True
+        return False
+
+    for is_high in (True, False):
+        d = "up" if is_high else "down"
+        side = [e for e in majors if e["dir"] == d]
+        pend = [e for e in side if e["pending"]]
+        hist = [e for e in side if not e["pending"]][-max_events:]
         events.extend(hist + pend)
-        # Capa interna, deduplicada contra la mayor (mismo nivel y quiebre).
-        seen = {(e["price"], e["t_to"]) for e in events}
+    # 2) Capa interna, deduplicada contra la mayor y sin los quiebres de continuación.
+    seen = {(e["price"], e["t_to"]) for e in events}
+    for own, opp, is_high in ((sh, sl, True), (sl, sh, False)):
         for e in run_internal(own, opp, is_high):
-            if (e["price"], e["t_to"]) not in seen:
-                events.append(e)
+            if (e["price"], e["t_to"]) in seen:
+                continue
+            if covered_by_major(e):
+                continue
+            events.append(e)
     events.sort(key=lambda e: e["t_to"])
+    for e in events:                       # campos internos de cálculo, fuera del payload
+        e.pop("idx_from", None)
+        e.pop("idx_to", None)
     return events
 
 
