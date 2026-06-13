@@ -215,14 +215,19 @@
       const s = d.summary || {};
       const wr = s.win_rate == null ? "—" : s.win_rate + "%";
       const pfv = (s.pf == null) ? (s.ganadas > 0 ? "∞" : "—") : s.pf;
-      let src = "";
-      if (d.source === "macmini") {
-        const mins = d.age_seconds != null ? Math.round(d.age_seconds / 60) : null;
-        src = ` · vía Mac mini (Binance${mins != null ? `, hace ${mins}m` : ""})`;
-      }
-      $("setups-meta").textContent = (d.has_data
+      const metaTxt = d.has_data
         ? `${s.total} registrados · ${s.cerradas} cerrados`
-        : "sin registros todavía") + src;
+        : "sin registros todavía";
+      let status = "";
+      if (d.source === "macmini") {
+        const ageMin = d.age_seconds != null ? Math.round(d.age_seconds / 60) : null;
+        const collectorStale = d.age_seconds != null && d.age_seconds > 900;  // >15 min sin enviar
+        const appDown = d.health && d.health.alive === false;
+        if (appDown) status = ' · <span class="down">● app del Mac mini caída — el forward-test no avanza</span>';
+        else if (collectorStale) status = ` · <span class="down">● colector sin enviar hace ${ageMin}m</span>`;
+        else status = ` · <span class="up">● al día</span> <span class="muted">(Binance, hace ${ageMin}m)</span>`;
+      }
+      $("setups-meta").innerHTML = metaTxt + status;
       $("setups-summary").innerHTML = [
         card("Cerrados", s.cerradas || 0),
         card("Win rate", wr, s.win_rate != null && s.win_rate >= 50 ? "up" : ""),

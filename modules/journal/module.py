@@ -80,13 +80,14 @@ class JournalModule(NexusModule):
             return self._json(200, {"has_data": False, "setups": [], "summary": None})
         # Preferir el forward-test ingerido del Mac mini (Binance, continuo) sobre el
         # local de Railway (efímero, Crypto.com). Caer al local si no hay ingesta.
-        source, age = "local", None
+        source, age, health = "local", None, None
         setups = setups_store.load_all()
         ing = self._read_setups_ingest()
         if ing and isinstance(ing.get("setups"), list):
             setups = ing["setups"]
             source = "macmini"
             age = self._age(ing)
+            health = ing.get("macmini")
         summary = setups_store.summarize(setups)
         paper = setups_store.paper_account(setups)
         # Más recientes primero; tope para no inflar el payload.
@@ -98,6 +99,7 @@ class JournalModule(NexusModule):
             "setups": ordered,
             "source": source,
             "age_seconds": age,
+            "health": health,
         })
 
     def _read_setups_ingest(self):

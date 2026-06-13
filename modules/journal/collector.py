@@ -240,6 +240,21 @@ def main():
     send_setups(url, token)
 
 
+def app_health() -> dict:
+    """Salud de la app del Mac mini: pinguea su estado (poller cada ~2s). Si no
+    responde o el estado está viejo, la app está caída → el forward-test no avanza.
+    Detecta la muerte de la APP (distinto de la muerte del COLECTOR, que se ve por
+    la antigüedad de recepción en Railway)."""
+    url = os.environ.get("NEXUS_LOCAL_APP", "http://localhost:8800") + "/m/trading/api/state"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            upd = (json.load(resp) or {}).get("updated") or 0
+        age = (time.time() * 1000 - upd) / 1000 if upd else None
+        return {"alive": age is not None and age < 30, "age_s": round(age, 1) if age is not None else None}
+    except Exception as exc:  # noqa: BLE001
+        return {"alive": False, "error": type(exc).__name__}
+
+
 def send_setups(income_url: str, token: str) -> None:
     """Lee el setups.json local (forward-test, Binance) y lo POSTea a Railway."""
     if not os.path.isfile(SETUPS_PATH):
@@ -253,8 +268,11 @@ def send_setups(income_url: str, token: str) -> None:
         return
     base = income_url.rstrip("/")
     setups_url = base[:-len("/ingest")] + "/ingest_setups" if base.endswith("/ingest") else base + "/ingest_setups"
+    health = app_health()
+    log(f"salud app Mac mini: {health}")
     payload = {"setups": setups, "generated_at_ms": int(time.time() * 1000),
-               "count": len(setups) if isinstance(setups, list) else 0}
+               "count": len(setups) if isinstance(setups, list) else 0,
+               "macmini": health}
     try:
         resp = send(payload, setups_url, token)
         log(f"✓ setups enviados a Railway ({payload['count']}): {resp}")
