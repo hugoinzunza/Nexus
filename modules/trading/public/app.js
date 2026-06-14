@@ -287,6 +287,19 @@
             // En break-even ya no hay riesgo de SL → no dibujamos la caja roja.
             if (!tr.sl_be) drawBox(tr.sl, "234,57,67");  // entrada → SL: riesgo
             drawBox(tr.tp, "22,199,132");                 // entrada → TP: recompensa
+            // Runner en trailing: la zona ASEGURADA (entrada→trailing stop) crece a
+            // medida que el stop sube, y se dibuja la línea del trailing stop (se mueve).
+            if (tr.trailing && tr.sl_cur != null) {
+              const yT = py(tr.sl_cur);
+              if (yE != null && yT != null) {
+                const top = Math.min(yE, yT), h = Math.max(1, Math.abs(yT - yE));
+                ctx.fillStyle = "rgba(22,199,132,0.18)"; ctx.fillRect(x1, top, x2 - x1, h);  // asegurado
+                ctx.strokeStyle = "rgba(245,166,35,0.95)"; ctx.lineWidth = 1.4; ctx.setLineDash([4, 3]);
+                ctx.beginPath(); ctx.moveTo(x1, yT); ctx.lineTo(x2, yT); ctx.stroke(); ctx.setLineDash([]);
+                pill(yT - 8, "Trail SL " + fmtPrice(tr.sl_cur), "#f5a623",
+                     { x: Math.max(2, Math.min(x1 + 2, W - 90)), font: "600 9px -apple-system, sans-serif" });
+              }
+            }
           });
         }
 
