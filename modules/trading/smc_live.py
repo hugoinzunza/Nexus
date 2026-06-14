@@ -663,7 +663,6 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
         "last_price": last_price,
         "range": _range(rng_candles) if sel_candles else None,
         "fvgs": _fvgs(sel_candles) if sel_candles else [],
-        "fvgs_htf": deep_fvgs(htf_map, last_price) if htf_map else [],
         "pois": [],
         "note": "Zonas de interés (contexto), no recomendaciones de compra/venta.",
     }

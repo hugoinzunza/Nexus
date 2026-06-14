@@ -182,25 +182,6 @@
           if (h > 10) pill(placeR(top + h / 2 - 7), f.bullish ? "FVG ▲" : "FVG ▼",
             f.bullish ? "#a29bfe" : "#f5a623", { right: true });
         });
-        // FVG de TIMEFRAME ALTO (1D/4h) sobre TODA la historia: imbalances SIN LLENAR
-        // que el precio puede ir a buscar (el "análisis superior"/inferior). Banda a lo
-        // ancho con etiqueta de TF; solo las que caen en la vista, atenuadas por lejanía.
-        (smc.fvgs_htf || []).forEach((f) => {
-          if (Math.abs(f.dist_pct || 0) > 25) return;          // demasiado lejos, no aporta
-          const y1 = py(f.hi), y2 = py(f.lo); if (y1 == null || y2 == null) return;
-          const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
-          if (top > H || top + h < 0) return;                  // fuera de la vista vertical
-          const far = Math.abs(f.dist_pct || 0) > 12;
-          const a = far ? 0.45 : 1;                             // lejos = más tenue
-          const col = f.bullish ? "162,155,254" : "245,166,35"; // alcista=soporte / bajista=oferta
-          ctx.fillStyle = `rgba(${col},${0.08 * a})`;
-          ctx.fillRect(0, top, W, h);
-          ctx.strokeStyle = `rgba(${col},${0.4 * a})`; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
-          ctx.strokeRect(0.5, top + 0.5, W - 1, h); ctx.setLineDash([]);
-          const d = f.dist_pct != null ? ` ${f.dist_pct > 0 ? "+" : ""}${Math.round(f.dist_pct)}%` : "";
-          pill(placeR(top + Math.max(2, h / 2 - 7)), `FVG ${f.tf}${d}`,
-               f.bullish ? "#a29bfe" : "#f5a623", { right: true, font: "600 9px -apple-system, sans-serif" });
-        });
         // POI / order blocks: nacen en su vela de confirmación y se extienden a
         // la derecha. Válido = relleno con gradiente + borde + línea de
         // mitigación al 50%; mitigado/roto = fondo no sólido y sin etiqueta
