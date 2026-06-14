@@ -52,8 +52,8 @@
     <h3 class="bt-h" style="font-size:15px">Cuenta paper (dinero simulado) <span class="muted" id="setups-paper-meta"></span></h3>
     <section class="metric-grid" id="setups-paper"></section>
     <div class="chart-wrap" id="paper-equity-wrap" hidden><canvas id="paper-equity-chart" class="chart"></canvas></div>
-    <h3 class="bt-h" style="font-size:15px">Cuenta selectiva · solo POI de 4h/1D <span class="muted" id="setups-paper-sel-meta"></span></h3>
-    <p class="bt-note">La misma estrategia pero registrando <strong>solo</strong> los setups cuya zona nace en timeframe alto (el edge robusto del backtest). Corre en paralelo a la completa para comparar en vivo calidad vs cantidad.</p>
+    <h3 class="bt-h" style="font-size:15px">Cuenta selectiva · config óptima <span class="muted" id="setups-paper-sel-meta"></span></h3>
+    <p class="bt-note">La misma estrategia pero registrando <strong>solo</strong> los setups de la config óptima del backtest (validada IS/OOS): zona POI de <strong>4h/1D</strong> + disciplina <strong>premium/descuento</strong> + <strong>R:R ≥ 5</strong>. Corre en paralelo a la completa para comparar calidad vs cantidad y decidir a futuro.</p>
     <section class="metric-grid" id="setups-paper-sel"></section>
     <h3 class="bt-h" style="font-size:15px">Operaciones en curso <span class="muted" id="live-meta"></span></h3>
     <div id="setups-live"></div>

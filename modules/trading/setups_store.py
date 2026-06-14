@@ -106,14 +106,18 @@ PAPER_RISK_PCT = 0.02       # riesgo por trade (2% del capital, compuesto)
 PAPER_COST_RATE = 0.0014    # comisión 0.05%/lado + slippage 0.02%/fill (round-trip)
 
 
-# Cuenta SELECTIVA: solo setups cuya zona POI nace en timeframe ALTO (4h/1D). El
-# laboratorio de filtros (validado IS/OOS) mostró que son el edge robusto: avgR 0,90
-# vs 0,76, win 85%, PF 7,1. La cuenta completa sigue registrando todo en paralelo.
+# Cuenta SELECTIVA = la config ÓPTIMA del laboratorio (validada IS/OOS): zona POI de
+# timeframe ALTO (4h/1D) + disciplina premium/descuento (OTE) + R:R ≥ 5. Es el edge
+# más fuerte (avgR ~0,92, win 85%, PF 7,3). La cuenta completa registra todo en
+# paralelo, para comparar calidad vs cantidad y tomar decisiones a futuro.
 SELECTIVE_POI_TFS = ("4h", "1D")
+SELECTIVE_MIN_RR = 5.0
 
 
 def is_selective(s: dict) -> bool:
-    return s.get("poi_tf") in SELECTIVE_POI_TFS
+    return (s.get("poi_tf") in SELECTIVE_POI_TFS
+            and s.get("disc_ok") is True
+            and (s.get("rr") or 0) >= SELECTIVE_MIN_RR)
 
 
 def paper_account(setups: list, capital: float = PAPER_CAPITAL,
@@ -230,6 +234,8 @@ class SetupStore:
                 "tp": plan["tp"],
                 "rr": plan["rr"],
                 "tp_label": plan.get("tp_label", ""),
+                # Disciplina premium/descuento (OTE) al generarse: para la cuenta selectiva.
+                "disc_ok": plan.get("disc_ok"),
                 "state_init": plan.get("state", "pendiente"),
                 # Filtro de régimen al momento de generarse (forward-test con/sin filtro).
                 "regime_ok": plan.get("regime_ok"),

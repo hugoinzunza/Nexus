@@ -584,12 +584,20 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
                 break
         # Estado: activo si el precio ya está dentro de la zona, sino en vigilancia.
         active = (p["lo"] - tol) <= last_price <= (p["hi"] + tol)
+        # Disciplina premium/descuento (OTE) respecto al EQ del dealing range: largo en
+        # descuento (entry < eq) / corto en premium (entry > eq). Para la cuenta selectiva.
+        eq = rng.get("eq") if rng else None
+        if eq is None and rhi is not None and rlo is not None:
+            eq = (rhi + rlo) / 2
+        disc_ok = None
+        if eq is not None:
+            disc_ok = (entry < eq) if long else (entry > eq)
         return {
             "dir": p["dir"], "tf": p["tf"], "state": "activo" if active else "pendiente",
             "entry": entry, "entry_lo": _q(p["lo"]), "entry_hi": _q(p["hi"]),
             "sl": sl, "tp": tp, "rr": round(rr, 1), "tp_label": tp_label,
             "sl_pct": round(risk / entry * 100, 2), "sl_capped": sl_capped,
-            "dist_pct": p.get("dist_pct", 0.0),
+            "dist_pct": p.get("dist_pct", 0.0), "disc_ok": disc_ok,
         }
     return None
 
