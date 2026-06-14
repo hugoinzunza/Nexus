@@ -166,6 +166,9 @@
         // mitigación al 50%; mitigado/roto = fondo no sólido y sin etiqueta
         // (estilo breaker de LuxAlgo: menos ruido).
         (smc.pois || []).forEach((poi) => {
+          // Toggle "Solo 4h/1D": muestra únicamente order blocks de timeframe alto
+          // (el edge robusto del backtest: avgR 0,90 vs 0,76, win 85%).
+          if (show.htf && poi.tf !== "4h" && poi.tf !== "1D") return;
           const y1 = py(poi.hi), y2 = py(poi.lo); if (y1 == null || y2 == null) return;
           const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
           let x = poi.t_conf ? tx(poi.t_conf) : 0; if (x == null) x = 0; x = Math.max(0, x);
@@ -274,7 +277,7 @@
         // --- Capa LuxAlgo: escenario TP/SL anclado a estructura (NO una orden) ---
         // Solo llega aquí si el backend validó: POI ✓ que el precio toca, en su
         // zona correcta (descuento/premium) y con R:R real >= 2. Es contexto.
-        if (show.tpsl && smc.tpsl) {
+        if (show.tpsl && smc.tpsl && (!show.htf || smc.tpsl.tf === "4h" || smc.tpsl.tf === "1D")) {
           const t = smc.tpsl;
           const long = t.dir === "long";
           const line = (price, color, label) => {
@@ -393,7 +396,7 @@
   const IND_KEY = "nexus_trading_ind";
   // TP/SL (la capa del PLAN) parte encendida: es el corazón del indicador y ahí
   // viven las etiquetas de régimen y CDC del badge.
-  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, div: false };
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, div: false, htf: false };
   let indState = (() => {
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
@@ -403,7 +406,7 @@
     for (let i = 0; i < values.length; i++) out.push(i === 0 ? values[0] : values[i] * k + out[i - 1] * (1 - k));
     return out;
   }
-  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, div: indState.div }; }
+  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, div: indState.div, htf: indState.htf }; }
   function saveIndState() { try { localStorage.setItem(IND_KEY, JSON.stringify(indState)); } catch (e) {} }
 
   function rsiCalc(closes, p) {
@@ -529,7 +532,7 @@
   // Indicadores en panes (recrean series) y capas Lux (solo redibujan el primitive).
   const TOGGLE_GROUPS = {
     ".ind-toggles": [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]],
-    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."]],
+    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."], ["htf", "Solo 4h/1D"]],
   };
   const PANE_INDICATORS = new Set(["vol", "rsi", "adx"]);
 
