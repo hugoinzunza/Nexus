@@ -113,6 +113,13 @@ PAPER_COST_RATE = 0.0014    # comisión 0.05%/lado + slippage 0.02%/fill (round-
 SELECTIVE_POI_TFS = ("4h", "1D")
 SELECTIVE_MIN_RR = 5.0
 
+# Plan de SALIDA del bot: parciales + break-even (la estrategia validada que GANA en
+# todo vs el TP único). Legs intermedios (R, fracción) antes del runner; el resto se
+# deja correr al TP lejano. El SL pasa a break-even tras llenar PARTIAL_BE_AFTER legs.
+PARTIAL_LEGS = [(1.0, 0.5), (2.0, 0.25)]   # TP1: 1R cierra 50% · TP2: 2R cierra 25%
+PARTIAL_BE_AFTER = 1                         # break-even tras el 1er parcial (TP1)
+_LEG_NAMES = {0: "TP1", 1: "TP2"}
+
 
 def is_selective(s: dict) -> bool:
     return (s.get("poi_tf") in SELECTIVE_POI_TFS
@@ -319,19 +326,23 @@ class SetupStore:
                 if s["pair"] != pair or s["status"] in _CLOSED:
                     continue
                 prev = s["status"]
-                if self._update(s, price, now_s):
+                for ev in self._update(s, price, now_s):
                     transitions.append({
                         "prev": prev, "status": s["status"], "pair": s["pair"],
                         "dir": s["dir"], "source": s.get("source", "indicador"),
                         "poi_tf": s.get("poi_tf"), "rr": s.get("rr"),
                         "result_r": s.get("result_r"), "key": s["key"],
+                        **ev,   # type ("activated"|"partial"|"closed") y datos del parcial
                     })
             if transitions:
                 self._save()
         return transitions
 
     @staticmethod
-    def _update(s: dict, price: float, now_s: float) -> bool:
+    def _update(s: dict, price: float, now_s: float) -> list:
+        """Avanza un setup contra el precio en vivo. Devuelve la lista de EVENTOS
+        ocurridos en esta llamada: activación, parciales (TP1/TP2) con break-even, y
+        cierre final. Puede haber varios en una sola llamada (gaps de precio)."""
         long = s["dir"] == "long"
         lo, hi = s["entry_lo"], s["entry_hi"]
         buf = price * _ZONE_BUF
@@ -342,42 +353,92 @@ class SetupStore:
                 s["status"] = "activo"
                 s["ts_activated"] = int(now_s)
                 s["ts_updated"] = int(now_s)
-                return True
+                return [{"type": "activated"}]
             # Pendiente que se fue al TP sin llenarse → oportunidad perdida (anulada).
             if (long and price >= s["tp"]) or ((not long) and price <= s["tp"]):
                 s["status"] = "anulada"
                 s["ts_closed"] = int(now_s)
                 s["outcome_price"] = price
                 s["ts_updated"] = int(now_s)
-                return True
+                return [{"type": "closed"}]
             # Expiración por tiempo (nunca se llenó).
             exp_h = _EXPIRE_HOURS.get(s["poi_tf"], _DEFAULT_EXPIRE_H)
             if now_s - s["ts_created"] > exp_h * 3600:
                 s["status"] = "anulada"
                 s["ts_closed"] = int(now_s)
                 s["ts_updated"] = int(now_s)
-                return True
-            return False
-        # Activo: resolver TP / SL.
-        if long:
-            hit_sl = price <= s["sl"]
-            hit_tp = price >= s["tp"]
-        else:
-            hit_sl = price >= s["sl"]
-            hit_tp = price <= s["tp"]
-        if hit_sl:
-            s["status"] = "perdida"
-            s["result_r"] = -1.0
-            s["outcome_price"] = s["sl"]
-        elif hit_tp:
+                return [{"type": "closed"}]
+            return []
+
+        # --- Activo: plan de salida ESCALONADA (parciales) + break-even ---
+        entry, sl0, rr = s["entry"], s["sl"], float(s["rr"])
+        risk = abs(entry - sl0)
+        if risk <= 0:                       # plan degenerado → resolución simple
+            return SetupStore._update_simple(s, price, now_s)
+        # Estado de parciales (init perezoso para trades ya abiertos antes del deploy).
+        if "remaining" not in s:
+            s["remaining"] = 1.0
+            s["realized_r"] = 0.0
+            s["legs_filled"] = 0
+            s["sl_cur"] = sl0
+            s["sl_be"] = False
+        events = []
+        # 1) Stop / break-even primero (conservador). En BE el SL = entrada → aporta 0R.
+        if (long and price <= s["sl_cur"]) or ((not long) and price >= s["sl_cur"]):
+            stop_r = (s["sl_cur"] - entry) / risk if long else (entry - s["sl_cur"]) / risk
+            s["realized_r"] = round(s["realized_r"] + s["remaining"] * stop_r, 4)
+            s["remaining"] = 0.0
+            s["result_r"] = s["realized_r"]
+            s["status"] = "ganada" if s["result_r"] > 1e-9 else "perdida"
+            s["outcome_price"] = s["sl_cur"]
+            s["ts_closed"] = int(now_s)
+            s["ts_updated"] = int(now_s)
+            return [{"type": "closed", "be": s.get("sl_be", False)}]
+        # 2) Parciales intermedios (TP1, TP2…) en orden.
+        for idx, (R, frac) in enumerate(PARTIAL_LEGS):
+            if s["legs_filled"] > idx:
+                continue                    # ya tomado
+            if R >= rr:
+                break                       # cae en/más allá del TP lejano → lo cubre el runner
+            target = entry + R * risk if long else entry - R * risk
+            if (long and price >= target) or ((not long) and price <= target):
+                s["realized_r"] = round(s["realized_r"] + frac * R, 4)
+                s["remaining"] = round(s["remaining"] - frac, 4)
+                s["legs_filled"] = idx + 1
+                if s["legs_filled"] >= PARTIAL_BE_AFTER and not s["sl_be"]:
+                    s["sl_cur"] = entry      # SL a break-even
+                    s["sl_be"] = True
+                events.append({"type": "partial", "leg": _LEG_NAMES.get(idx, f"TP{idx+1}"),
+                               "r_level": R, "frac_closed": frac,
+                               "realized_r": s["realized_r"], "remaining": s["remaining"],
+                               "be": s["sl_be"]})
+            else:
+                break                        # legs en orden: si no llegó, los siguientes tampoco
+        # 3) Runner al TP lejano → cierre final.
+        if s["remaining"] > 1e-9 and ((long and price >= s["tp"]) or ((not long) and price <= s["tp"])):
+            s["realized_r"] = round(s["realized_r"] + s["remaining"] * rr, 4)
+            s["remaining"] = 0.0
+            s["result_r"] = s["realized_r"]
             s["status"] = "ganada"
-            s["result_r"] = float(s["rr"])
             s["outcome_price"] = s["tp"]
+            s["ts_closed"] = int(now_s)
+            events.append({"type": "closed", "be": s.get("sl_be", False)})
+        if events:
+            s["ts_updated"] = int(now_s)
+        return events
+
+    @staticmethod
+    def _update_simple(s: dict, price: float, now_s: float) -> list:
+        """Resolución binaria (respaldo si no hay distancia de SL válida)."""
+        long = s["dir"] == "long"
+        if (long and price <= s["sl"]) or ((not long) and price >= s["sl"]):
+            s["status"] = "perdida"; s["result_r"] = -1.0; s["outcome_price"] = s["sl"]
+        elif (long and price >= s["tp"]) or ((not long) and price <= s["tp"]):
+            s["status"] = "ganada"; s["result_r"] = float(s["rr"]); s["outcome_price"] = s["tp"]
         else:
-            return False
-        s["ts_closed"] = int(now_s)
-        s["ts_updated"] = int(now_s)
-        return True
+            return []
+        s["ts_closed"] = int(now_s); s["ts_updated"] = int(now_s)
+        return [{"type": "closed"}]
 
     # --- lectura -------------------------------------------------------
     def all(self) -> list:

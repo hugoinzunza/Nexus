@@ -295,17 +295,31 @@
           const cur = prices[x.pair];
           const slf = Math.abs(x.entry - x.sl) / x.entry;
           const move = cur ? ((cur - x.entry) / x.entry) * (long ? 1 : -1) : null;
-          const pnl = (move != null && x.paper_notional) ? move * x.paper_notional : null;
-          const r = (move != null && slf > 0) ? move / slf : null;
-          const cls = pnl == null ? "" : (pnl >= 0 ? "up" : "down");
+          const remaining = (x.remaining != null) ? x.remaining : 1;
+          const realized = x.realized_r || 0;
+          // P&L vivo = solo la porción remanente; En R = asegurado + R no realizada del resto.
+          const pnl = (move != null && x.paper_notional) ? move * x.paper_notional * remaining : null;
+          const r = (move != null && slf > 0) ? realized + remaining * (move / slf) : null;
+          const cls = r == null ? "" : (r >= 0 ? "up" : "down");
           const badge = x.source === "profe" ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">profe</span>' : "";
+          // Plan de parciales + break-even (la estrategia del bot).
+          const risk = Math.abs(x.entry - x.sl);
+          const legs = x.legs_filled || 0;
+          const legsTxt = (legs >= 2 ? "TP1✓ TP2✓" : legs >= 1 ? "TP1✓ TP2·" : "—") + (x.sl_be ? " · BE" : "");
+          let nextLabel, nextPx;
+          if (legs < 1) { nextLabel = "TP1 1R"; nextPx = long ? x.entry + risk : x.entry - risk; }
+          else if (legs < 2) { nextLabel = "TP2 2R"; nextPx = long ? x.entry + 2 * risk : x.entry - 2 * risk; }
+          else { nextLabel = "Runner→TP"; nextPx = x.tp; }
+          const secured = (x.realized_r != null && x.realized_r > 0) ? "+" + x.realized_r + "R" : "—";
           return `<div style="margin:6px 0 14px">
             <div class="v-title">${x.pair.replace("_", "/")} ${long ? "▲ Long" : "▼ Short"} · ${x.poi_tf}${badge}</div>
             <section class="metric-grid">
               ${card("Entrada", px(x.entry))}
               ${card("Ahora", cur ? px(cur) : "—")}
+              ${card("Parciales", legsTxt, legs > 0 ? "up" : "")}
+              ${card("Asegurado", secured, legs > 0 ? "up" : "")}
+              ${card("Próx. " + nextLabel, px(nextPx))}
               ${card("Apalanc.", x.paper_leverage != null ? x.paper_leverage + "x" : "—")}
-              ${card("Margen", (x.paper_notional && x.paper_leverage) ? "$" + Math.round(x.paper_notional / x.paper_leverage).toLocaleString("es") : "—")}
               ${card("Notional", x.paper_notional != null ? "$" + Math.round(x.paper_notional).toLocaleString("es") : "—")}
               ${card("P&L vivo", pnl == null ? "—" : sg(pnl) + "$" + Math.round(pnl).toLocaleString("es"), cls)}
               ${card("En R", r == null ? "—" : sg(r) + r.toFixed(2) + "R", cls)}

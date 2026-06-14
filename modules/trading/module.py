@@ -349,21 +349,32 @@ class TradingModule(NexusModule):
         for t in transitions:
             src = " (profe)" if t.get("source") == "profe" else ""
             d = "Long" if t["dir"] == "long" else "Short"
+            typ = t.get("type")
             st = t["status"]
-            if st == "activo":
+            tag_extra = st
+            if typ == "partial":
+                # Parcial alcanzado: toca tomar beneficios y (tras TP1) mover a break-even.
+                leg = t.get("leg", "TP")
+                pct = int(round(t.get("frac_closed", 0) * 100))
+                be = " · SL a break-even" if t.get("be") else ""
+                title = f"🎯 {base} · {leg} alcanzado{src}"
+                body = (f"{base} {d}: toma {pct}% (parcial en {leg}, "
+                        f"{t.get('r_level')}R){be}. Acumulado +{t.get('realized_r')}R.")
+                tag_extra = f"{leg}"
+            elif typ == "activated":
                 title = f"{base} · entrada llenada{src}"
                 body = f"{base} {d} {t.get('poi_tf', '')}: el precio entró a la zona. Trade activo (no es señal)."
             elif st == "ganada":
                 title = f"✅ {base} · ganada{src}"
-                body = f"{base} {d} llegó al TP (+{t.get('rr')}R)."
+                body = f"{base} {d} cerró el trade (+{t.get('result_r')}R con parciales)."
             elif st == "perdida":
                 title = f"❌ {base} · perdida{src}"
-                body = f"{base} {d} tocó el SL (−1R)."
+                body = f"{base} {d} tocó el SL ({t.get('result_r')}R)."
             else:
                 continue  # anulada / otras: no alertamos
             try:
                 push.notificar(title=title, body=body, url="/m/trading/",
-                               tag=f"setup-{t['key']}-{st}")
+                               tag=f"setup-{t['key']}-{tag_extra}")
             except Exception as exc:  # noqa: BLE001
                 self.context.log(f"alertas: no se pudo notificar {t['key']}: {exc}")
 
