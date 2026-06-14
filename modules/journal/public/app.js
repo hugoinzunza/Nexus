@@ -257,6 +257,7 @@
           card("Asegurado (abiertos)", sec > 0 ? "+$" + Math.round(sec).toLocaleString("es") : "—", sec > 0 ? "up" : ""),
           card("Equity cerrada", "$" + Math.round(p.equity).toLocaleString("es"), p.pnl >= 0 ? "up" : "down"),
           card("Retorno vivo", sign(retV) + "%", retV >= 0 ? "up" : "down"),
+          card("Comisiones", p.comisiones ? "-$" + Math.round(p.comisiones).toLocaleString("es") : "—", "down"),
           card("Drawdown máx", p.max_dd_pct + "%", "down"),
           card("Win rate", p.win_rate == null ? "—" : p.win_rate + "%"),
         ].join("");
@@ -285,6 +286,7 @@
       }
 
       // --- Operaciones en curso (activas): dinero, apalancamiento y P&L en vivo ---
+      const costRate = (d.paper && d.paper.cost_rate) || 0.0014;   // comisión round-trip s/ nocional
       const active = (d.setups || []).filter((x) => x.status === "activo");
       $("live-meta").textContent = active.length ? `${active.length} activa(s)` : "";
       const liveEl = $("setups-live");
@@ -325,10 +327,12 @@
           else if (legs < 2) { nextLabel = "TP2 2R"; nextPx = long ? x.entry + 2 * risk : x.entry - 2 * risk; }
           else { nextLabel = "Runner→TP"; nextPx = x.tp; }
           // Asegurado = parciales cerrados + lo que el TRAILING STOP ya garantiza del
-          // runner (si el stop está en ganancia). El trailing bloquea profit extra.
+          // runner (si el stop está en ganancia), NETO de la comisión round-trip.
+          const feeUsd = costRate * (x.paper_notional || 0);
           const rStop = (x.sl_cur != null && risk > 0) ? ((long ? x.sl_cur - x.entry : x.entry - x.sl_cur) / risk) : 0;
           const guaranteedR = realized + remaining * Math.max(0, rStop);
-          const securedUsd = guaranteedR > 0 ? dinero(guaranteedR) : null;
+          const securedNet = (guaranteedR > 0 && dinero(guaranteedR) != null) ? dinero(guaranteedR) - feeUsd : null;
+          const securedUsd = securedNet;
           return `<div style="margin:6px 0 14px">
             <div class="v-title">${x.pair.replace("_", "/")} ${long ? "▲ Long" : "▼ Short"} · ${x.poi_tf}${badge}</div>
             <section class="metric-grid">
@@ -338,9 +342,9 @@
               ${card("Asegurado", securedUsd == null ? "—" : usdCard(securedUsd), legs > 0 ? "up" : "")}
               ${card("Próx. " + nextLabel, px(nextPx))}
               ${card("Apalanc.", x.paper_leverage != null ? x.paper_leverage + "x" : "—")}
-              ${card("Notional", x.paper_notional != null ? "$" + Math.round(x.paper_notional).toLocaleString("es") : "—")}
+              ${card("Comisión", feeUsd ? "-$" + Math.round(feeUsd).toLocaleString("es") : "—", "down")}
               ${card("P&L vivo", usdCard(pnl), cls)}
-              ${card("P&L total", usdCard(dinero(r)), cls)}
+              ${card("P&L total neto", usdCard(dinero(r) != null ? dinero(r) - feeUsd : null), cls)}
             </section>
           </div>`;
         }).join("");

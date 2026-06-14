@@ -150,12 +150,17 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
     eq = peak = capital
     mdd = 0.0
     wins = 0
+    comisiones = 0.0
     curve = []
     for s in closed:
         entry, sl = s.get("entry") or 0.0, s.get("sl") or 0.0
         slf = abs(entry - sl) / entry if entry else 0.0
         if slf <= 0:
             continue
+        # Comisión round-trip sobre el NOCIONAL (cost_rate/SL% en unidades de R). Con SL
+        # ajustado el nocional es grande → la comisión pesa más por trade.
+        cost_usd = (cost_rate / slf) * (risk_pct * eq)
+        comisiones += cost_usd
         net_r = s["result_r"] - cost_rate / slf
         pnl = net_r * (risk_pct * eq)
         eq += pnl
@@ -205,9 +210,11 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         if sl_cur is not None:
             rp = (sl_cur - entry) if long else (entry - sl_cur)
             r_stop = max(0.0, rp / risk)
-        secured_r = realized + rem * r_stop
-        if secured_r > 0:
-            secured_open += secured_r * (risk_pct * eq)
+        # NETO de comisiones: la comisión round-trip se pagará igual al cerrar.
+        slf_o = risk / entry
+        net_r = realized + rem * r_stop - (cost_rate / slf_o if slf_o else 0)
+        if net_r > 0:
+            secured_open += net_r * (risk_pct * eq)
             open_secured_n += 1
     eq_vivo = eq + secured_open
     n = len(curve)
@@ -218,6 +225,8 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         "asegurado_abierto": round(secured_open, 2),
         "abiertos_asegurados": open_secured_n,
         "equity_vivo": round(eq_vivo, 2),
+        "comisiones": round(comisiones, 2),
+        "cost_rate": cost_rate,
         "pnl": round(eq - capital, 2),
         "pnl_vivo": round(eq_vivo - capital, 2),
         "return_pct": round((eq / capital - 1) * 100, 2) if capital else 0.0,
