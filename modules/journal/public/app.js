@@ -297,9 +297,14 @@
           const move = cur ? ((cur - x.entry) / x.entry) * (long ? 1 : -1) : null;
           const remaining = (x.remaining != null) ? x.remaining : 1;
           const realized = x.realized_r || 0;
-          // P&L vivo = solo la porción remanente; En R = asegurado + R no realizada del resto.
+          // 1R en dólares = el riesgo del trade (paper_risk; respaldo: notional × SL%).
+          const riskUsd = (x.paper_risk != null) ? x.paper_risk
+            : (x.paper_notional ? x.paper_notional * slf : null);
+          // P&L vivo = solo la porción remanente; Total = asegurado + no realizado del resto.
           const pnl = (move != null && x.paper_notional) ? move * x.paper_notional * remaining : null;
           const r = (move != null && slf > 0) ? realized + remaining * (move / slf) : null;
+          const dinero = (rv) => (riskUsd != null && rv != null) ? rv * riskUsd : null;   // R → USD
+          const usdCard = (v) => v == null ? "—" : sg(v) + "$" + Math.round(v).toLocaleString("es");
           const cls = r == null ? "" : (r >= 0 ? "up" : "down");
           const badge = x.source === "profe" ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">profe</span>' : "";
           // Plan de parciales + break-even (la estrategia del bot).
@@ -310,19 +315,19 @@
           if (legs < 1) { nextLabel = "TP1 1R"; nextPx = long ? x.entry + risk : x.entry - risk; }
           else if (legs < 2) { nextLabel = "TP2 2R"; nextPx = long ? x.entry + 2 * risk : x.entry - 2 * risk; }
           else { nextLabel = "Runner→TP"; nextPx = x.tp; }
-          const secured = (x.realized_r != null && x.realized_r > 0) ? "+" + x.realized_r + "R" : "—";
+          const securedUsd = (realized > 0) ? dinero(realized) : null;
           return `<div style="margin:6px 0 14px">
             <div class="v-title">${x.pair.replace("_", "/")} ${long ? "▲ Long" : "▼ Short"} · ${x.poi_tf}${badge}</div>
             <section class="metric-grid">
               ${card("Entrada", px(x.entry))}
               ${card("Ahora", cur ? px(cur) : "—")}
               ${card("Parciales", legsTxt, legs > 0 ? "up" : "")}
-              ${card("Asegurado", secured, legs > 0 ? "up" : "")}
+              ${card("Asegurado", securedUsd == null ? "—" : usdCard(securedUsd), legs > 0 ? "up" : "")}
               ${card("Próx. " + nextLabel, px(nextPx))}
               ${card("Apalanc.", x.paper_leverage != null ? x.paper_leverage + "x" : "—")}
               ${card("Notional", x.paper_notional != null ? "$" + Math.round(x.paper_notional).toLocaleString("es") : "—")}
-              ${card("P&L vivo", pnl == null ? "—" : sg(pnl) + "$" + Math.round(pnl).toLocaleString("es"), cls)}
-              ${card("En R", r == null ? "—" : sg(r) + r.toFixed(2) + "R", cls)}
+              ${card("P&L vivo", usdCard(pnl), cls)}
+              ${card("P&L total", usdCard(dinero(r)), cls)}
             </section>
           </div>`;
         }).join("");
