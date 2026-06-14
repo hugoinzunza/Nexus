@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <!-- Colector del Diario: lee Binance desde el Mac mini (IP de Chile) y envía
-         el resultado a Railway. Corre cada 5 minutos. SOLO LECTURA de Binance. -->
+         el resultado a Railway. Corre cada 90 s. SOLO LECTURA de Binance. -->
     <key>Label</key>
     <string>com.hugo.nexus-collector</string>
 
@@ -27,11 +27,11 @@
         <string>/Users/hugh/Nexus/deploy/collector.env</string>
     </dict>
 
-    <!-- Corre al cargar y luego cada 300 s (5 min). -->
+    <!-- Corre al cargar y luego cada 90 s: baja el lag del forward-test en vivo. -->
     <key>RunAtLoad</key>
     <true/>
     <key>StartInterval</key>
-    <integer>300</integer>
+    <integer>90</integer>
 
     <!-- Logs del colector. -->
     <key>StandardOutPath</key>

@@ -43,7 +43,7 @@ cd ~/Nexus
 Debe leer Binance y responder `✓ enviado a Railway: {'ok': True, ...}`. Si falla,
 el log dice por qué (credenciales, permisos, red).
 
-## 3) Instalar el servicio launchd (cada 5 min)
+## 3) Instalar el servicio launchd (cada 90 s)
 
 ```bash
 mkdir -p ~/Nexus/logs
