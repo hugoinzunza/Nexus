@@ -92,12 +92,17 @@ class JournalModule(NexusModule):
             health = ing.get("macmini")
         summary = setups_store.summarize(setups)
         paper = setups_store.paper_account(setups)
+        # Cuenta SELECTIVA en paralelo: solo zonas POI de 4h/1D (el edge robusto del
+        # laboratorio). No anota los setups para no pisar la cuenta completa.
+        paper_selectivo = setups_store.paper_account(
+            setups, selector=setups_store.is_selective, annotate=False)
         # Más recientes primero; tope para no inflar el payload.
         ordered = sorted(setups, key=lambda s: s.get("ts_created", 0), reverse=True)[:200]
         return self._json(200, {
             "has_data": bool(setups),
             "summary": summary,
             "paper": paper,
+            "paper_selectivo": paper_selectivo,
             "setups": ordered,
             "source": source,
             "age_seconds": age,

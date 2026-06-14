@@ -261,6 +261,20 @@
           wrap.hidden = true;
         }
       }
+      // Cuenta SELECTIVA (solo POI 4h/1D) — comparación calidad vs cantidad.
+      const ps = d.paper_selectivo;
+      if (ps) {
+        const sign = (v) => (v > 0 ? "+" : "") + v;
+        $("setups-paper-sel-meta").textContent =
+          `${ps.trades} trades selectivos · vs ${p ? p.trades : "?"} de la completa`;
+        $("setups-paper-sel").innerHTML = [
+          card("Equity", "$" + ps.equity.toLocaleString("es"), ps.pnl >= 0 ? "up" : "down"),
+          card("P&L", "$" + sign(Math.round(ps.pnl)).toLocaleString("es"), ps.pnl >= 0 ? "up" : "down"),
+          card("Retorno", sign(ps.return_pct) + "%", ps.return_pct >= 0 ? "up" : "down"),
+          card("Drawdown máx", ps.max_dd_pct + "%", "down"),
+          card("Win rate", ps.win_rate == null ? "—" : ps.win_rate + "%"),
+        ].join("");
+      }
 
       // --- Operaciones en curso (activas): dinero, apalancamiento y P&L en vivo ---
       const active = (d.setups || []).filter((x) => x.status === "activo");

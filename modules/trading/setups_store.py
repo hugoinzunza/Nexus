@@ -106,18 +106,34 @@ PAPER_RISK_PCT = 0.02       # riesgo por trade (2% del capital, compuesto)
 PAPER_COST_RATE = 0.0014    # comisión 0.05%/lado + slippage 0.02%/fill (round-trip)
 
 
+# Cuenta SELECTIVA: solo setups cuya zona POI nace en timeframe ALTO (4h/1D). El
+# laboratorio de filtros (validado IS/OOS) mostró que son el edge robusto: avgR 0,90
+# vs 0,76, win 85%, PF 7,1. La cuenta completa sigue registrando todo en paralelo.
+SELECTIVE_POI_TFS = ("4h", "1D")
+
+
+def is_selective(s: dict) -> bool:
+    return s.get("poi_tf") in SELECTIVE_POI_TFS
+
+
 def paper_account(setups: list, capital: float = PAPER_CAPITAL,
                   risk_pct: float = PAPER_RISK_PCT,
-                  cost_rate: float = PAPER_COST_RATE) -> dict:
+                  cost_rate: float = PAPER_COST_RATE,
+                  selector=None, annotate: bool = True) -> dict:
     """Cuenta de PAPER TRADING sobre los setups CERRADOS (ganada/perdida): cada
     trade arriesga `risk_pct` del capital vigente (compuesto); el P&L en USD es
     R_neto × riesgo, con R_neto = result_r − costo (costo_R = cost_rate / SL%).
     Devuelve equity final, P&L, retorno %, drawdown máximo y la curva. Es dinero
-    simulado — el bot NO coloca órdenes."""
+    simulado — el bot NO coloca órdenes.
+
+    `selector`: si se da, solo cuenta los setups que lo cumplen (cuenta selectiva).
+    `annotate`: si False, no escribe paper_* en los setups (para no pisar la cuenta
+    completa cuando se calcula una segunda cuenta filtrada)."""
+    keep = selector or (lambda s: True)
     closed = sorted(
         [s for s in setups
          if s["status"] in ("ganada", "perdida")
-         and s.get("result_r") is not None and s.get("ts_closed")],
+         and s.get("result_r") is not None and s.get("ts_closed") and keep(s)],
         key=lambda s: s["ts_closed"])
     eq = peak = capital
     mdd = 0.0
@@ -137,13 +153,14 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         if peak > 0:
             mdd = min(mdd, (eq - peak) / peak)
         # P&L en USD de ESTE trade (riesgo = % del equity vigente) para el registro.
-        s["paper_pnl"] = round(pnl, 2)
-        s["paper_equity"] = round(eq, 2)
+        if annotate:
+            s["paper_pnl"] = round(pnl, 2)
+            s["paper_equity"] = round(eq, 2)
         curve.append({"t": s["ts_closed"], "equity": round(eq, 2)})
     # Sizing de las operaciones ABIERTAS (activas) con el equity vigente: con cuánto
     # se entró (notional), el apalancamiento efectivo y el riesgo. El P&L en vivo lo
     # calcula el frontend con el precio actual.
-    for s in setups:
+    for s in setups if annotate else []:
         if s.get("status") != "activo":
             continue
         entry, sl = s.get("entry") or 0.0, s.get("sl") or 0.0
