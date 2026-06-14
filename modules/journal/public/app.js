@@ -84,12 +84,19 @@
     const sp = d.spot || {};
     if (sp.ok) {
       $("spot-total").innerHTML = `<strong>Valor total aprox:</strong> ${usd(sp.total_value)} USDT`;
-      table($("spot"), ["Activo", "Cantidad", "Valor aprox (USDT)"],
+      const pmt = (v) => v == null ? "—" : Number(v).toLocaleString("es", { maximumFractionDigits: v < 1 ? 6 : 2 });
+      const pnlCell = (h) => h.pnl == null ? "—"
+        : `<span class="${h.pnl >= 0 ? "up" : "down"}">${h.pnl >= 0 ? "+" : ""}${h.pnl.toLocaleString("es", { maximumFractionDigits: 2 })}` +
+          (h.pnl_pct == null ? "" : ` (${h.pnl_pct >= 0 ? "+" : ""}${h.pnl_pct}%)`) + `</span>`;
+      table($("spot"), ["Activo", "Cantidad", "Precio compra", "Precio actual", "Valor (USDT)", "PnL (USDT)"],
         (sp.holdings || []).length ? sp.holdings.map((h) => [
           h.asset + (h.earn ? ' <span class="muted">· Earn</span>' : ""),
           h.qty.toLocaleString("es", { maximumFractionDigits: 8 }),
-          h.value == null ? "—" : h.value.toLocaleString("es", { maximumFractionDigits: 2 })])
-          : [["Sin holdings", "", ""]]);
+          pmt(h.avg_cost),
+          pmt(h.price),
+          h.value == null ? "—" : h.value.toLocaleString("es", { maximumFractionDigits: 2 }),
+          pnlCell(h)])
+          : [["Sin holdings", "", "", "", "", ""]]);
     } else {
       $("spot-total").innerHTML =
         `<span class="bt-note">Spot no disponible: ${sp.error || "sin datos"}.${hint(sp.error)}</span>`;

@@ -142,6 +142,12 @@ def spot_account() -> dict:
     return signed_get(SAPI, "/api/v3/account", {})
 
 
+def spot_trades(symbol: str, limit: int = 1000) -> list:
+    """Historial de trades del usuario para un par spot (ej: SOLUSDT). Para calcular
+    el costo promedio del holding actual. Solo lectura."""
+    return signed_get(SAPI, "/api/v3/myTrades", {"symbol": symbol, "limit": limit})
+
+
 def all_prices() -> dict:
     """Precios públicos (sin firma). Devuelve {symbol: price}. Cacheado 60s."""
     cached = _cache_get("prices", 60)

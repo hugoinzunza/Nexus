@@ -171,6 +171,29 @@ def _price_value(base: str, qty: float, prices: dict):
     return qty * p if p else None
 
 
+def _avg_cost(symbol):
+    """Costo promedio del holding ACTUAL por media móvil sobre el historial de trades
+    (cada compra actualiza el promedio; cada venta baja la cantidad, no el promedio).
+    Devuelve (avg_cost, qty_trades) o (None, 0) si no hay trades."""
+    try:
+        trades = bc.spot_trades(symbol)
+    except Exception:  # noqa: BLE001 - el par puede no existir / sin permiso
+        return None, 0.0
+    if not trades:
+        return None, 0.0
+    qty_pos, avg = 0.0, 0.0
+    for t in sorted(trades, key=lambda x: x.get("time", 0)):
+        price = float(t.get("price", 0))
+        q = float(t.get("qty", 0))
+        if t.get("isBuyer"):
+            new = qty_pos + q
+            avg = (avg * qty_pos + price * q) / new if new > 0 else 0.0
+            qty_pos = new
+        else:
+            qty_pos = max(0.0, qty_pos - q)
+    return (round(avg, 8) if avg > 0 else None), qty_pos
+
+
 def _spot_holdings():
     acct = bc.spot_account()
     prices = bc.all_prices()
@@ -194,8 +217,18 @@ def _spot_holdings():
                 base, earn, value = cand, True, v2
         if value is not None and value < 1:
             continue
+        # Precio actual, costo promedio (del historial de trades USDT) y PnL.
+        cur = prices.get(base + "USDT")
+        avg_cost, pnl, pnl_pct = None, None, None
+        if cur and base not in STABLES:
+            avg_cost, _ = _avg_cost(base + "USDT")
+            if avg_cost:
+                pnl = round((cur - avg_cost) * qty, 2)
+                pnl_pct = round((cur / avg_cost - 1) * 100, 2)
         holdings.append({"asset": base, "earn": earn, "qty": qty,
-                         "value": round(value, 2) if value is not None else None})
+                         "value": round(value, 2) if value is not None else None,
+                         "price": round(cur, 6) if cur else None,
+                         "avg_cost": avg_cost, "pnl": pnl, "pnl_pct": pnl_pct})
         total += value or 0
     holdings.sort(key=lambda x: (x["value"] is None, -(x["value"] or 0)))
     return {"ok": True, "total_value": round(total, 2), "holdings": holdings}
