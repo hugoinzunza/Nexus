@@ -284,8 +284,9 @@
               ctx.lineWidth = 1;
               ctx.strokeRect(x1 + 0.5, top + 0.5, Math.max(1, x2 - x1 - 1), h);
             };
-            drawBox(tr.sl, "234,57,67");    // entrada → SL: riesgo
-            drawBox(tr.tp, "22,199,132");   // entrada → TP: recompensa
+            // En break-even ya no hay riesgo de SL → no dibujamos la caja roja.
+            if (!tr.sl_be) drawBox(tr.sl, "234,57,67");  // entrada → SL: riesgo
+            drawBox(tr.tp, "22,199,132");                 // entrada → TP: recompensa
           });
         }
 
