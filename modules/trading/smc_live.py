@@ -395,6 +395,49 @@ def _fvgs(candles, lookback=80) -> List[Dict]:
     return out[-10:]
 
 
+# FVGs de timeframe alto sobre TODA la historia profunda: imbalances sin llenar que el
+# precio puede ir a buscar (el "análisis superior"/inferior). Multi-TF, no solo la TF
+# seleccionada. El chequeo de llenado es O(n) con arrays de sufijo (mín low / máx high).
+DEEP_FVG_TFS = ("1D", "4h")
+
+
+def deep_fvgs(htf_map: Dict[str, list], last_price: float, max_keep: int = 28) -> List[Dict]:
+    out = []
+    for tf in DEEP_FVG_TFS:
+        c = htf_map.get(tf)
+        n = len(c) if c else 0
+        if n < 5:
+            continue
+        # Sufijos: mínimo low y máximo high desde i en adelante (para saber si se llenó).
+        suf_min = [float("inf")] * (n + 1)
+        suf_max = [float("-inf")] * (n + 1)
+        for i in range(n - 1, -1, -1):
+            suf_min[i] = min(suf_min[i + 1], c[i]["l"])
+            suf_max[i] = max(suf_max[i + 1], c[i]["h"])
+        for bullish in (True, False):
+            for f in smc.find_fvgs(c, 2, n - 1, bullish):
+                idx, lo, hi = f["idx"], f["lo"], f["hi"]
+                if idx + 1 >= n:
+                    continue
+                # Alcista (gap abajo) se llena si el precio bajó a la zona; bajista (gap
+                # arriba) si subió a ella. Solo conservamos las ABIERTAS (sin llenar).
+                filled = (suf_min[idx + 1] <= hi) if bullish else (suf_max[idx + 1] >= lo)
+                if filled:
+                    continue
+                dist = ((lo + hi) / 2 - last_price) / last_price * 100 if last_price else 0.0
+                out.append({"tf": tf, "lo": _q(lo), "hi": _q(hi), "bullish": bullish,
+                            "t": c[idx - 2]["t"], "dist_pct": round(dist, 1)})
+    # Dedup por zona (la historia repite) y nos quedamos con las más cercanas al precio.
+    seen, uniq = set(), []
+    for f in sorted(out, key=lambda x: abs(x["dist_pct"])):
+        zk = (f["tf"], f["lo"], f["hi"])
+        if zk in seen:
+            continue
+        seen.add(zk)
+        uniq.append(f)
+    return uniq[:max_keep]
+
+
 def _pois_for_tf(candles, tf, last_price) -> List[Dict]:
     """POIs detectados en una TF, con estado de mitigación y relación con el precio."""
     n = len(candles)
@@ -620,6 +663,7 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
         "last_price": last_price,
         "range": _range(rng_candles) if sel_candles else None,
         "fvgs": _fvgs(sel_candles) if sel_candles else [],
+        "fvgs_htf": deep_fvgs(htf_map, last_price) if htf_map else [],
         "pois": [],
         "note": "Zonas de interés (contexto), no recomendaciones de compra/venta.",
     }
