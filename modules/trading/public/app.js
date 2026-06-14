@@ -46,6 +46,19 @@
       const ts = src._chart.timeScale();
       const py = (p) => series.priceToCoordinate(p);
       const tx = (tms) => ts.timeToCoordinate(Math.floor(tms / 1000));
+      // X para CUALQUIER tiempo (no solo barras): timeToCoordinate devuelve null en
+      // tiempos que no caen en una vela, y anclar a barras enteras hacía que la caja
+      // del trade colapsara a una línea en timeframes altos (pocas barras desde la
+      // entrada). Interpolamos con el espaciado de barra real → ancho proporcional al
+      // TIEMPO, correcto en cualquier temporalidad. tsec en segundos epoch.
+      const bm = D.barMeta;
+      const xAt = (tsec) => {
+        if (!bm || !bm.interval) return tx(tsec * 1000);
+        const xL = ts.timeToCoordinate(bm.lastT);
+        const xP = ts.timeToCoordinate(bm.lastT - bm.interval);
+        if (xL == null || xP == null) return tx(tsec * 1000);
+        return xL + ((tsec - bm.lastT) / bm.interval) * (xL - xP);
+      };
       target.useMediaCoordinateSpace((scope) => {
         const ctx = scope.context;
         const W = scope.mediaSize.width, H = scope.mediaSize.height;
@@ -252,13 +265,15 @@
         if (show.tpsl && D.trades && D.trades.length) {
           D.trades.forEach((tr) => {
             const yE = py(tr.entry);
-            // Anclas a barras reales (ver loadSMC): tx() de tiempos no-barra da null.
-            let x1 = tr._anchorT ? tx(tr._anchorT * 1000) : null;
-            let x2 = tr._lastT ? tx(tr._lastT * 1000) : null;
+            // Ancho = tiempo real entrada→ahora (xAt interpola entre barras), así la
+            // caja es proporcional en cualquier timeframe y no colapsa a una línea.
+            const t0 = tr.ts_activated || tr.ts_created;
+            let x1 = t0 ? xAt(t0) : null;
+            let x2 = xAt(Date.now() / 1000);          // borde derecho = ahora
             if (x1 == null) x1 = 0;                   // activación fuera de vista por la izq.
             if (x2 == null) x2 = W;
             x1 = Math.max(0, Math.min(x1, W));
-            x2 = Math.max(x1 + 2, Math.min(x2, W));
+            x2 = Math.max(x1 + 6, Math.min(x2, W));   // ancho mínimo 6px → siempre se ve como caja
             const drawBox = (p2, rgb) => {
               const y2 = py(p2);
               if (yE == null || y2 == null) return;
@@ -299,11 +314,12 @@
           // Si el trade está ACTIVO acotamos la banda a una CAJA (barra de activación
           // → última barra), igual que la cajita del trade. Pendiente sigue full.
           let xPlan = 0, xPlanEnd = W;
-          if (activeMatch && activeMatch._anchorT) {
-            const xp = tx(activeMatch._anchorT * 1000);
-            const xe = activeMatch._lastT ? tx(activeMatch._lastT * 1000) : null;
+          if (activeMatch) {
+            const t0 = activeMatch.ts_activated || activeMatch.ts_created;
+            const xp = t0 ? xAt(t0) : null;
+            const xe = xAt(Date.now() / 1000);
             if (xp != null) xPlan = Math.max(0, Math.min(xp, W - 2));
-            if (xe != null) xPlanEnd = Math.max(xPlan + 2, Math.min(xe, W));
+            if (xe != null) xPlanEnd = Math.max(xPlan + 6, Math.min(xe, W));
           }
           const yhi = py(t.entry_hi), ylo = py(t.entry_lo);
           if (yhi != null && ylo != null) {
@@ -796,23 +812,8 @@
       try {
         const sj = await fetch("/m/journal/api/setups").then((r) => (r.ok ? r.json() : null));
         card.trades = ((sj && sj.setups) || []).filter((x) => x.status === "activo" && x.pair === symbol);
-        // timeToCoordinate(ts) devuelve null para tiempos que NO son barras (la
-        // activación y "ahora" casi nunca caen en un borde de 15m), y por eso la
-        // caja salía de borde a borde. Anclamos a barras REALES: la primera barra
-        // >= activación (borde izq.) y la última barra cargada (borde der.).
-        const bars = card.bars || [];
-        if (bars.length) {
-          const lastT = bars[bars.length - 1].time;     // segundos epoch
-          card.trades.forEach((tr) => {
-            const act = (tr.ts_activated || tr.ts_created || 0);
-            let anchor = bars[0].time;
-            for (let i = 0; i < bars.length; i++) {
-              if (bars[i].time >= act) { anchor = bars[i].time; break; }
-            }
-            tr._anchorT = anchor;     // segundos: barra de activación (o 1ª visible)
-            tr._lastT = lastT;        // segundos: última barra (borde derecho)
-          });
-        }
+        // El ancho de la caja lo calcula el primitive con xAt() (interpola por tiempo
+        // real entrada→ahora), así que ya no anclamos a barras acá.
       } catch (e) { /* sin trades activos */ }
       applySMC(card);
       renderSMCPanel(card);
@@ -890,9 +891,14 @@
   }
 
   function pushPrim(card) {
+    const bars = card.bars || [];
+    const barMeta = bars.length
+      ? { lastT: bars[bars.length - 1].time,
+          interval: bars.length > 1 ? bars[bars.length - 1].time - bars[bars.length - 2].time : 900 }
+      : null;
     if (card.smcPrim) card.smcPrim.setData({
       smc: card.smc, ribbon: card.ribbon || [], div: card.div || [],
-      trades: card.trades || [], show: luxShow(),
+      trades: card.trades || [], show: luxShow(), barMeta,
     });
   }
 
