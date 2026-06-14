@@ -362,10 +362,57 @@
       if (!b) return;
       const el = $("setups-bt");
       el.hidden = false;
+      const usd = (v) => "$" + Math.round(v).toLocaleString("es");
+      const yr = (ms) => ms ? new Date(ms).getUTCFullYear() : "?";
       const blk = (t, m) => m ? `<strong>${t}:</strong> ${m.trades} trades · win ${m.win_rate}% · R prom ${m.avg_r} · PF ${pf(m.pf)} · R acum ${m.total_r >= 0 ? "+" : ""}${m.total_r}` : "";
-      el.innerHTML = `<div class="v-title">Backtest de referencia · mismo criterio sobre Binance (anti-repaint, ${b.bars_per_inst || "?"} velas/instrumento)</div>` +
-        `<p class="bt-note">${blk("In-sample", b.in_sample)}<br>${blk("Out-of-sample", b.out_sample)}<br>` +
-        `<span class="muted">${b.note || ""}</span></p>`;
+      const pairs = (b.params && b.params.symbols) ? b.params.symbols.length : Object.keys(b.by_pair || {}).length;
+      // Traducción a plata: la fila más importante para decidir si es aplicable.
+      const EQ = b.equity || {};
+      const eqRow = (label, e) => e ? `<tr><td>${label}</td><td style="text-align:right">${usd(e.capital_final)}</td><td style="text-align:right;color:${e.retorno_pct >= 0 ? "#16c784" : "#ea3943"}">${e.retorno_pct >= 0 ? "+" : ""}${e.retorno_pct}%</td><td style="text-align:right;color:#f5a623">−${e.max_drawdown_pct}%</td>${e.quebro ? '<td style="color:#ea3943">⚠ quebró</td>' : "<td></td>"}</tr>` : "";
+      const cap0 = (EQ.fijo_2pct ? EQ.fijo_2pct.capital_inicial / 1000 : 38);
+      const eqTable = EQ.fijo_2pct ? `
+        <div style="margin-top:8px"><strong>Si tus $${cap0}k hubieran seguido esto (${pairs} pares, ${yr(b.span && b.span.from)}–${yr(b.span && b.span.to)}):</strong></div>
+        <table class="bt-eq" style="width:100%;font-size:12px;margin-top:4px;border-collapse:collapse">
+          <tr style="color:#8a8f98"><td>escenario</td><td style="text-align:right">capital final</td><td style="text-align:right">retorno</td><td style="text-align:right">peor caída</td><td></td></tr>
+          ${eqRow("2% riesgo fijo", EQ.fijo_2pct)}
+          ${eqRow("2% · TP capado 3R", EQ.comp_2pct_cap3R)}
+        </table>
+        <div class="muted" style="margin-top:4px">Capar la ganancia en 3R quiebra la cuenta: el edge vive en dejar correr los winners.</div>` : "";
+      // Sensibilidad al cap: dónde vive el edge.
+      const CS = b.cap_sensitivity || {};
+      const capLine = Object.keys(CS).length
+        ? `<div style="margin-top:8px"><strong>Dónde vive el edge (R promedio si capas la ganancia):</strong> ` +
+          ["sin_tope", "10R", "5R", "3R"].filter((k) => CS[k]).map((k) =>
+            `${k.replace("_", " ")} ${CS[k].avg_r}`).join(" · ") + `</div>` : "";
+      // Por par: ¿generaliza o es de un par?
+      const bp = b.by_pair || {};
+      const pairRows = Object.keys(bp).map((k) =>
+        `<tr><td>${k.replace("_USDT", "")}</td><td style="text-align:right">${bp[k].trades}</td><td style="text-align:right">${bp[k].win_rate}%</td><td style="text-align:right;color:${bp[k].avg_r >= 0 ? "#16c784" : "#ea3943"}">${bp[k].avg_r}</td><td style="text-align:right">${pf(bp[k].pf)}</td><td style="text-align:right">+${bp[k].total_r}R</td></tr>`).join("");
+      const pairTable = pairRows ? `
+        <div style="margin-top:8px"><strong>Por par:</strong></div>
+        <table style="width:100%;font-size:12px;margin-top:4px;border-collapse:collapse">
+          <tr style="color:#8a8f98"><td>par</td><td style="text-align:right">n</td><td style="text-align:right">win</td><td style="text-align:right">R prom</td><td style="text-align:right">PF</td><td style="text-align:right">R acum</td></tr>
+          ${pairRows}
+        </table>` : "";
+      const rk = b.risk ? `<div style="margin-top:8px"><span class="muted">Dureza: peor racha ${b.risk.max_losing_streak} pérdidas seguidas · drawdown ${b.risk.max_drawdown_r}R.</span></div>` : "";
+      // Comparación salida escalonada (scale-out) vs actual.
+      const SO = b.scale_out || {};
+      const soName = { actual: "Actual (100% al TP lejano)", tu_idea: "Scale-out (50/25/25, BE tras TP1)", runner_agres: "Runner agresivo (TP2 en 3R)", be_tardio: "BE tardío (tras TP2)" };
+      const soRows = Object.keys(SO).map((k) => {
+        const s = SO[k];
+        return `<tr><td>${soName[k] || k}</td><td style="text-align:right">${s.win_rate}%</td><td style="text-align:right">${s.avg_r}</td><td style="text-align:right">+${s.total_r}R</td><td style="text-align:right;color:#f5a623">−${s.max_drawdown_pct}%</td><td style="text-align:right">${s.risk ? s.risk.max_losing_streak : "?"}</td><td style="text-align:right;color:${s.retorno_pct >= 0 ? "#16c784" : "#ea3943"}">${usd(s.capital_final)}</td></tr>`;
+      }).join("");
+      const soTable = soRows ? `
+        <div style="margin-top:10px"><strong>Salida escalonada vs actual</strong> <span class="muted">(mismos trades, 2% riesgo fijo desde $${(EQ.fijo_2pct ? EQ.fijo_2pct.capital_inicial / 1000 : 38)}k)</span></div>
+        <table style="width:100%;font-size:12px;margin-top:4px;border-collapse:collapse">
+          <tr style="color:#8a8f98"><td>estrategia</td><td style="text-align:right">win</td><td style="text-align:right">R prom</td><td style="text-align:right">R acum</td><td style="text-align:right">peor caída</td><td style="text-align:right">racha</td><td style="text-align:right">capital final</td></tr>
+          ${soRows}
+        </table>
+        <div class="muted" style="margin-top:4px">El scale-out sube el win rate y baja el drawdown a costa de retorno total. Elige según tu estómago.</div>` : "";
+      el.innerHTML = `<div class="v-title">Backtest de referencia · mismo criterio sobre ${pairs} pares de Binance (anti-repaint, IS/OOS)</div>` +
+        `<p class="bt-note">${blk("In-sample", b.in_sample)}<br>${blk("Out-of-sample", b.out_sample)}<br>${blk("Todo", b.all)}` +
+        eqTable + capLine + soTable + pairTable + rk +
+        `<div style="margin-top:8px"><span class="muted">${b.note || ""}</span></div></p>`;
     }).catch(() => {});
   }
 
