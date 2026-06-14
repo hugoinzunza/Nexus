@@ -22,6 +22,24 @@ from typing import Dict, List
 from . import smc
 from . import strategies
 
+
+def _q(x):
+    """Redondea un PRECIO con decimales según su magnitud. Redondear todo a 2
+    decimales sirve para BTC ($64.235,12) pero COLAPSA precios chicos: DOGE a
+    $0,12 perdía la diferencia entre entrada y SL (riesgo 0 → R:R basura de 36).
+    BTC/ETH quedan idénticos a antes (2 decimales); los baratos ganan precisión."""
+    if not x:
+        return x
+    ax = abs(x)
+    if ax >= 100:
+        return round(x, 2)
+    if ax >= 1:
+        return round(x, 4)
+    if ax >= 0.01:
+        return round(x, 6)
+    return round(x, 8)
+
+
 PIV = 2          # pivote fino para detectar FVG / order blocks (POIs)
 DISP = 1.0
 # Pivote para el DEALING RANGE (Strong High / Weak Low) y los niveles Weak/Strong:
@@ -432,13 +450,13 @@ def _levels(sel_candles, rng, n) -> List[Dict]:
     for s in sorted(sh, key=lambda x: x["confirm_idx"])[-LEVELS_PER_SIDE:]:
         price, idx = s["price"], s["idx"]
         swept = any(sel_candles[k]["h"] > price for k in range(idx + 1, n))
-        out.append({"type": "high", "price": round(price, 2), "t": sel_candles[idx]["t"],
+        out.append({"type": "high", "price": _q(price), "t": sel_candles[idx]["t"],
                     "kind": "strong" if swept else "weak",
                     "label": ("Strong" if swept else "Weak") + " High", "pct": pct(price)})
     for s in sorted(sl, key=lambda x: x["confirm_idx"])[-LEVELS_PER_SIDE:]:
         price, idx = s["price"], s["idx"]
         swept = any(sel_candles[k]["l"] < price for k in range(idx + 1, n))
-        out.append({"type": "low", "price": round(price, 2), "t": sel_candles[idx]["t"],
+        out.append({"type": "low", "price": _q(price), "t": sel_candles[idx]["t"],
                     "kind": "strong" if swept else "weak",
                     "label": ("Strong" if swept else "Weak") + " Low", "pct": pct(price)})
     return out
@@ -471,16 +489,16 @@ def _opposite_liquidity(levels, long, ref, rhi, rlo):
         weak = [l["price"] for l in levels
                 if l["type"] == "high" and l["kind"] == "weak" and l["price"] > ref]
         if weak:
-            return round(min(weak), 2), "Weak High"
+            return _q(min(weak)), "Weak High"
         if rhi and rhi > ref:
-            return round(rhi, 2), "Strong High"   # respaldo: techo del rango
+            return _q(rhi), "Strong High"   # respaldo: techo del rango
         return None
     weak = [l["price"] for l in levels
             if l["type"] == "low" and l["kind"] == "weak" and l["price"] < ref]
     if weak:
-        return round(max(weak), 2), "Weak Low"
+        return _q(max(weak)), "Weak Low"
     if rlo and rlo < ref:
-        return round(rlo, 2), "Weak Low"          # respaldo: piso del rango
+        return _q(rlo), "Weak Low"          # respaldo: piso del rango
     return None
 
 
@@ -534,7 +552,7 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
 
     # 2) Del más cercano al más lejano: SL estructural con techo, TP y filtro R:R >= 2.
     for p, long, mid in cands:
-        entry = round(mid, 2)
+        entry = _q(mid)
         # SL estructural = apenas pasado el extremo del barrido (stop del POI) + buffer.
         buf = entry * SWEEP_BUFFER_PCT
         sl_struct = (p["stop"] - buf) if long else (p["stop"] + buf)
@@ -542,11 +560,11 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
         cap = entry * MAX_SL_PCT
         if risk_struct > cap:               # la estructura exige más de 1,5% → se topa
             risk = cap
-            sl = round(entry - cap if long else entry + cap, 2)
+            sl = _q(entry - cap if long else entry + cap)
             sl_capped = True
         else:
             risk = risk_struct
-            sl = round(sl_struct, 2)
+            sl = _q(sl_struct)
             sl_capped = False
         if risk <= 0:
             continue
@@ -561,14 +579,14 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
             continue                       # no llega a 2R con el SL real → no vale
         # Etiqueta más precisa si el TP coincide con un nivel concreto.
         for l in levels:
-            if round(l["price"], 2) == tp:
+            if _q(l["price"]) == tp:
                 tp_label = l["label"]
                 break
         # Estado: activo si el precio ya está dentro de la zona, sino en vigilancia.
         active = (p["lo"] - tol) <= last_price <= (p["hi"] + tol)
         return {
             "dir": p["dir"], "tf": p["tf"], "state": "activo" if active else "pendiente",
-            "entry": entry, "entry_lo": round(p["lo"], 2), "entry_hi": round(p["hi"], 2),
+            "entry": entry, "entry_lo": _q(p["lo"]), "entry_hi": _q(p["hi"]),
             "sl": sl, "tp": tp, "rr": round(rr, 1), "tp_label": tp_label,
             "sl_pct": round(risk / entry * 100, 2), "sl_capped": sl_capped,
             "dist_pct": p.get("dist_pct", 0.0),
@@ -623,7 +641,7 @@ def analyze(sel_candles, htf_map: Dict[str, list], last_price: float, sel_tf: st
     ladder = below[:8] + above[:4]
     seen_z, pois = set(), []
     for p in draw + ladder:
-        zkey = (p["dir"], p["tf"], round(p["lo"], 2), round(p["hi"], 2))
+        zkey = (p["dir"], p["tf"], _q(p["lo"]), _q(p["hi"]))
         if zkey in seen_z:
             continue
         seen_z.add(zkey)

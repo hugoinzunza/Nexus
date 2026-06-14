@@ -58,6 +58,25 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-even
   max-width: 1100px; margin: 18px auto; padding: 0 24px;
   display: grid; gap: 20px;
 }
+.crypto-bar {
+  max-width: 1100px; margin: 18px auto 0; padding: 0 24px;
+  display: flex; align-items: center; gap: 10px;
+}
+.crypto-bar label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
+}
+#crypto-select {
+  appearance: none; -webkit-appearance: none;
+  background: var(--panel2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 9px 36px 9px 14px; font-size: 15px; font-weight: 600;
+  cursor: pointer; min-width: 150px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23a29bfe' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
+#crypto-select:hover { border-color: var(--accent2); }
+#crypto-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,92,231,.25); }
+.instrument-card[hidden] { display: none; }
 .instrument-card {
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 20px; padding: 18px;
@@ -122,7 +141,7 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-even
    y gráfico más grande, con alto ligado al viewport para ver más velas y detalle.
    Mobile-first intacto: nada de esto aplica bajo 1200px. */
 @media (min-width: 1200px) {
-  .instruments, .disclaimer, .bt { max-width: min(96vw, 1760px); }
+  .instruments, .disclaimer, .bt, .crypto-bar { max-width: min(96vw, 1760px); }
   .instrument-card { padding: 22px 24px; }
   .chart { height: clamp(520px, 60vh, 820px); }
   .signals { grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); }

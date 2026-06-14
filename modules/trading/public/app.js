@@ -15,9 +15,13 @@
   const statusDot = document.getElementById("status-dot");
   const statusText = document.getElementById("status-text");
   const lastUpdateEl = document.getElementById("last-update");
+  const cryptoSelect = document.getElementById("crypto-select");
 
   // Guardamos el estado de cada tarjeta (nodo DOM + último precio) por símbolo.
   const cards = {};
+  // Un solo gráfico visible a la vez: el del símbolo elegido en el selector.
+  let activeSymbol = null;
+  let lastLabels = {};   // símbolo → etiqueta (para poblar el dropdown)
 
   // Temporalidades del selector. Se sobreescriben con lo que diga el backend
   // (api/config); estos son el respaldo por si esa llamada falla.
@@ -606,6 +610,59 @@
     return card;
   }
 
+  // Pausa/reanuda los timers de una tarjeta (las ocultas no consumen red ni CPU).
+  function pauseCard(card) {
+    if (card.refreshTimer) { clearInterval(card.refreshTimer); card.refreshTimer = null; }
+    if (card.smcTimer) { clearInterval(card.smcTimer); card.smcTimer = null; }
+  }
+  function resumeCard(card) {
+    if (!card.refreshTimer) {
+      loadCandles(card.symbol, card);
+      card.refreshTimer = setInterval(() => loadCandles(card.symbol, card), CANDLE_REFRESH_MS);
+    }
+    if (!card.smcTimer) {
+      loadSMC(card.symbol, card);
+      card.smcTimer = setInterval(() => loadSMC(card.symbol, card), SMC_REFRESH_MS);
+    }
+  }
+
+  // Muestra SOLO el gráfico del símbolo elegido; oculta y pausa los demás.
+  function setActiveSymbol(symbol, label) {
+    if (!symbol) return;
+    activeSymbol = symbol;
+    const card = getCard(symbol, label || lastLabels[symbol]);  // se crea visible (ancho OK)
+    Object.values(cards).forEach((c) => {
+      const on = c.symbol === symbol;
+      c.node.hidden = !on;
+      if (on) resumeCard(c); else pauseCard(c);
+    });
+    if (cryptoSelect && cryptoSelect.value !== symbol) cryptoSelect.value = symbol;
+    return card;
+  }
+
+  // Rellena el dropdown con los instrumentos que manda el backend (una vez / al cambiar).
+  function populateSelector(insts) {
+    const names = Object.keys(insts);
+    if (!names.length) return;
+    const sig = names.join(",");
+    if (cryptoSelect.dataset.sig === sig) return;   // sin cambios → no rehacer
+    cryptoSelect.dataset.sig = sig;
+    cryptoSelect.innerHTML = "";
+    names.forEach((name) => {
+      lastLabels[name] = (insts[name] && insts[name].label) || name;
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = lastLabels[name];
+      cryptoSelect.appendChild(opt);
+    });
+    if (!activeSymbol || !insts[activeSymbol]) setActiveSymbol(names[0]);
+    else cryptoSelect.value = activeSymbol;
+  }
+
+  if (cryptoSelect) {
+    cryptoSelect.addEventListener("change", () => setActiveSymbol(cryptoSelect.value));
+  }
+
   // Encuadre por defecto: las últimas ~220 velas (el resto queda para scroll).
   function frameRecent(card) {
     if (!card.chart || !card.bars.length) return;
@@ -696,6 +753,16 @@
 
     // Doble clic sobre el gráfico = reencuadrar las últimas velas (reset).
     card.chartEl.addEventListener("dblclick", () => frameRecent(card));
+  }
+
+  // Decimales del eje de precio según la magnitud (BTC 2 dec; DOGE necesita 6).
+  function applyPriceFormat(card, price) {
+    if (!card.series || !price) return;
+    const ax = Math.abs(price);
+    const prec = ax >= 10 ? 2 : ax >= 1 ? 4 : ax >= 0.1 ? 5 : ax >= 0.01 ? 6 : 8;
+    if (card._pricePrec === prec) return;
+    card._pricePrec = prec;
+    card.series.applyOptions({ priceFormat: { type: "price", precision: prec, minMove: Math.pow(10, -prec) } });
   }
 
   // Actualiza la última vela con el precio en vivo del SSE.
@@ -891,6 +958,7 @@
       time: Math.floor(c.t / 1000), open: c.o, high: c.h, low: c.l, close: c.c,
     }));
     card.barIndex = new Map(card.bars.map((b, i) => [b.time, i]));
+    if (card.bars.length) applyPriceFormat(card, card.bars[card.bars.length - 1].close);
   }
 
   // Pide al backend el tramo RECIENTE y lo carga/fusiona en el gráfico. Conserva
@@ -981,14 +1049,15 @@
     }
 
     const insts = state.instruments || {};
-    Object.keys(insts).forEach((symbol) => {
-      const d = insts[symbol];
-      const card = getCard(symbol, d.label);
-      renderTicker(card, d.ticker);  // fija card.lastPrice
-      renderStats(card, d.ticker);
-      renderSMCStats(card);          // análisis SMC en vivo (reemplaza al libro)
-      liveUpdate(card);              // mueve la última vela con el precio en vivo
-    });
+    populateSelector(insts);         // dropdown de criptos (un solo gráfico a la vez)
+    const d = insts[activeSymbol];
+    if (!d) return;
+    const card = getCard(activeSymbol, d.label);
+    if (card.node.hidden) setActiveSymbol(activeSymbol, d.label);
+    renderTicker(card, d.ticker);    // fija card.lastPrice
+    renderStats(card, d.ticker);
+    renderSMCStats(card);            // análisis SMC en vivo (reemplaza al libro)
+    liveUpdate(card);                // mueve la última vela con el precio en vivo
   }
 
   function renderTicker(card, t) {

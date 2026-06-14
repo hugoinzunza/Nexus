@@ -54,9 +54,15 @@ class TradingModule(NexusModule):
     def __init__(self, context):
         super().__init__(context)
         cfg = self.config
+        # Pares con data EN VIVO (crypto.com los sirve sin geo-block; BNB no está en
+        # crypto.com → queda solo para backtest histórico, fuera de esta lista).
         self.instruments = cfg.get("instruments", [
             {"name": "BTC_USDT", "label": "BTC/USDT", "binance": "BTCUSDT", "market": "futures"},
             {"name": "ETH_USDT", "label": "ETH/USDT", "binance": "ETHUSDT", "market": "futures"},
+            {"name": "SOL_USDT", "label": "SOL/USDT", "binance": "SOLUSDT", "market": "futures"},
+            {"name": "XRP_USDT", "label": "XRP/USDT", "binance": "XRPUSDT", "market": "futures"},
+            {"name": "ADA_USDT", "label": "ADA/USDT", "binance": "ADAUSDT", "market": "futures"},
+            {"name": "DOGE_USDT", "label": "DOGE/USDT", "binance": "DOGEUSDT", "market": "futures"},
         ])
         self._inst_by_name = {i["name"]: i for i in self.instruments}
         self._binance_blocked_until = 0.0   # geo-block de Binance (HTTP 451) recordado

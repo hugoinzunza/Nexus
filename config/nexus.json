@@ -13,7 +13,11 @@
       "ui_default_timeframe": "15m",
       "instruments": [
         { "name": "BTC_USDT", "label": "BTC/USDT", "binance": "BTCUSDT", "market": "futures" },
-        { "name": "ETH_USDT", "label": "ETH/USDT", "binance": "ETHUSDT", "market": "futures" }
+        { "name": "ETH_USDT", "label": "ETH/USDT", "binance": "ETHUSDT", "market": "futures" },
+        { "name": "SOL_USDT", "label": "SOL/USDT", "binance": "SOLUSDT", "market": "futures" },
+        { "name": "XRP_USDT", "label": "XRP/USDT", "binance": "XRPUSDT", "market": "futures" },
+        { "name": "ADA_USDT", "label": "ADA/USDT", "binance": "ADAUSDT", "market": "futures" },
+        { "name": "DOGE_USDT", "label": "DOGE/USDT", "binance": "DOGEUSDT", "market": "futures" }
       ]
     },
     "journal": {
