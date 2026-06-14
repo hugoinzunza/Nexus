@@ -316,7 +316,11 @@
           else if (legs < 1) { nextLabel = "TP1 1R"; nextPx = long ? x.entry + risk : x.entry - risk; }
           else if (legs < 2) { nextLabel = "TP2 2R"; nextPx = long ? x.entry + 2 * risk : x.entry - 2 * risk; }
           else { nextLabel = "Runner→TP"; nextPx = x.tp; }
-          const securedUsd = (realized > 0) ? dinero(realized) : null;
+          // Asegurado = parciales cerrados + lo que el TRAILING STOP ya garantiza del
+          // runner (si el stop está en ganancia). El trailing bloquea profit extra.
+          const rStop = (x.sl_cur != null && risk > 0) ? ((long ? x.sl_cur - x.entry : x.entry - x.sl_cur) / risk) : 0;
+          const guaranteedR = realized + remaining * Math.max(0, rStop);
+          const securedUsd = guaranteedR > 0 ? dinero(guaranteedR) : null;
           return `<div style="margin:6px 0 14px">
             <div class="v-title">${x.pair.replace("_", "/")} ${long ? "▲ Long" : "▼ Short"} · ${x.poi_tf}${badge}</div>
             <section class="metric-grid">
