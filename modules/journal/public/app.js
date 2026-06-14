@@ -310,9 +310,10 @@
           // Plan de parciales + break-even (la estrategia del bot).
           const risk = Math.abs(x.entry - x.sl);
           const legs = x.legs_filled || 0;
-          const legsTxt = (legs >= 2 ? "TP1✓ TP2✓" : legs >= 1 ? "TP1✓ TP2·" : "—") + (x.sl_be ? " · BE" : "");
+          const legsTxt = (legs >= 2 ? "TP1✓ TP2✓" : legs >= 1 ? "TP1✓ TP2·" : "—") + (x.sl_be ? " · BE" : "") + (x.trailing ? " · 🏃trail" : "");
           let nextLabel, nextPx;
-          if (legs < 1) { nextLabel = "TP1 1R"; nextPx = long ? x.entry + risk : x.entry - risk; }
+          if (x.trailing && x.sl_cur != null) { nextLabel = "Trailing stop"; nextPx = x.sl_cur; }
+          else if (legs < 1) { nextLabel = "TP1 1R"; nextPx = long ? x.entry + risk : x.entry - risk; }
           else if (legs < 2) { nextLabel = "TP2 2R"; nextPx = long ? x.entry + 2 * risk : x.entry - 2 * risk; }
           else { nextLabel = "Runner→TP"; nextPx = x.tp; }
           const securedUsd = (realized > 0) ? dinero(realized) : null;
