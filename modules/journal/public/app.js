@@ -261,11 +261,15 @@
           card("Drawdown máx", p.max_dd_pct + "%", "down"),
           card("Win rate", p.win_rate == null ? "—" : p.win_rate + "%"),
         ].join("");
-        // Curva de equity paper (reusa drawEquity, que plotea .pnl desde 0).
+        // Curva de equity paper (reusa drawEquity, que plotea .pnl desde 0). El último
+        // punto es la equity EN VIVO (cerrada + asegurado de trades abiertos), así la
+        // curva sube con lo asegurado antes de que los trades cierren.
         const wrap = $("paper-equity-wrap");
-        if (p.curve && p.curve.length) {
+        const pts = (p.curve || []).map((c) => ({ pnl: c.equity - p.capital_inicial }));
+        if (eqV != null && (sec > 0 || !pts.length)) pts.push({ pnl: eqV - p.capital_inicial });
+        if (pts.length) {
           wrap.hidden = false;
-          drawEquity($("paper-equity-chart"), p.curve.map((c) => ({ pnl: c.equity - p.capital_inicial })));
+          drawEquity($("paper-equity-chart"), pts);
         } else {
           wrap.hidden = true;
         }
@@ -511,4 +515,7 @@
   window.addEventListener("resize", () => { if (lastData) render(lastData); });
   load(false);
   loadSetups();
+  // En vivo: refresca setups + cuenta paper + gráfico + operaciones en curso cada 20s
+  // (el bot persiste el avance de parciales/trailing cada poll en el backend).
+  setInterval(loadSetups, 20000);
 })();
