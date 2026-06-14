@@ -59,6 +59,14 @@
         if (xL == null || xP == null) return tx(tsec * 1000);
         return xL + ((tsec - bm.lastT) / bm.interval) * (xL - xP);
       };
+      // Ancho de UNA barra en px (para un ancho mínimo de caja legible). Un trade recién
+      // activado abarca <1 barra; sin un mínimo decente la caja se ve como una línea.
+      const pxBar = (() => {
+        if (!bm || !bm.interval) return 12;
+        const a = ts.timeToCoordinate(bm.lastT), b = ts.timeToCoordinate(bm.lastT - bm.interval);
+        return (a != null && b != null) ? Math.abs(a - b) : 12;
+      })();
+      const BOX_MIN_W = Math.max(14, pxBar * 3);   // caja siempre ≥ ~3 barras de ancho
       target.useMediaCoordinateSpace((scope) => {
         const ctx = scope.context;
         const W = scope.mediaSize.width, H = scope.mediaSize.height;
@@ -273,7 +281,11 @@
             if (x1 == null) x1 = 0;                   // activación fuera de vista por la izq.
             if (x2 == null) x2 = W;
             x1 = Math.max(0, Math.min(x1, W));
-            x2 = Math.max(x1 + 6, Math.min(x2, W));   // ancho mínimo 6px → siempre se ve como caja
+            x2 = Math.max(0, Math.min(x2, W));
+            // Ancho mínimo legible (~3 barras): un trade recién activado abarca <1 barra;
+            // se ensancha hacia la izquierda manteniendo el borde derecho en "ahora".
+            if (x2 - x1 < BOX_MIN_W) x1 = Math.max(0, x2 - BOX_MIN_W);
+            if (x2 - x1 < 2) x2 = Math.min(W, x1 + BOX_MIN_W);
             const drawBox = (p2, rgb) => {
               const y2 = py(p2);
               if (yE == null || y2 == null) return;
