@@ -184,13 +184,44 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         s["paper_leverage"] = round(risk_pct / slf, 1)
         s["paper_risk"] = round(risk_usd, 2)
         s["paper_equity_base"] = round(eq, 2)
+    # ASEGURADO de trades ABIERTOS: parciales ya tomados + lo que el trailing stop
+    # garantiza del runner (piso que ya no se puede perder). Se suma a la equity en
+    # vivo para que la cuenta refleje las ganancias bloqueadas antes de que cierren.
+    secured_open = 0.0
+    open_secured_n = 0
+    for s in setups:
+        if s.get("status") != "activo" or not keep(s):
+            continue
+        entry, sl0 = s.get("entry") or 0.0, s.get("sl") or 0.0
+        risk = abs(entry - sl0)
+        if risk <= 0 or not entry:
+            continue
+        long = s["dir"] == "long"
+        realized = s.get("realized_r") or 0.0
+        rem = s.get("remaining")
+        rem = rem if rem is not None else 0.0
+        sl_cur = s.get("sl_cur")
+        r_stop = 0.0
+        if sl_cur is not None:
+            rp = (sl_cur - entry) if long else (entry - sl_cur)
+            r_stop = max(0.0, rp / risk)
+        secured_r = realized + rem * r_stop
+        if secured_r > 0:
+            secured_open += secured_r * (risk_pct * eq)
+            open_secured_n += 1
+    eq_vivo = eq + secured_open
     n = len(curve)
     return {
         "capital_inicial": capital,
         "riesgo_pct": round(risk_pct * 100, 1),
         "equity": round(eq, 2),
+        "asegurado_abierto": round(secured_open, 2),
+        "abiertos_asegurados": open_secured_n,
+        "equity_vivo": round(eq_vivo, 2),
         "pnl": round(eq - capital, 2),
+        "pnl_vivo": round(eq_vivo - capital, 2),
         "return_pct": round((eq / capital - 1) * 100, 2) if capital else 0.0,
+        "return_vivo_pct": round((eq_vivo / capital - 1) * 100, 2) if capital else 0.0,
         "max_dd_pct": round(mdd * 100, 1),
         "trades": n,
         "win_rate": round(wins / n * 100, 1) if n else None,

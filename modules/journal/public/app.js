@@ -242,13 +242,21 @@
       // Cuenta PAPER: el forward-test traducido a USD con sizing sano (dinero simulado).
       const p = d.paper;
       if (p) {
+        const sec = p.asegurado_abierto || 0;
+        const eqV = (p.equity_vivo != null) ? p.equity_vivo : p.equity;
+        const pnlV = (p.pnl_vivo != null) ? p.pnl_vivo : p.pnl;
+        const retV = (p.return_vivo_pct != null) ? p.return_vivo_pct : p.return_pct;
         $("setups-paper-meta").textContent =
-          `inicial $${p.capital_inicial.toLocaleString("es")} · ${p.riesgo_pct}% riesgo/trade · ${p.trades} trades`;
+          `inicial $${p.capital_inicial.toLocaleString("es")} · ${p.riesgo_pct}% riesgo/trade · ${p.trades} cerrados`
+          + (sec > 0 ? ` · +$${Math.round(sec).toLocaleString("es")} asegurado en ${p.abiertos_asegurados} abiertos` : "");
         const sign = (v) => (v > 0 ? "+" : "") + v;
+        const usd = (v) => (v < 0 ? "-$" : "+$") + Math.abs(Math.round(v)).toLocaleString("es");
         $("setups-paper").innerHTML = [
-          card("Equity", "$" + p.equity.toLocaleString("es"), p.pnl >= 0 ? "up" : "down"),
-          card("P&L", "$" + sign(Math.round(p.pnl)).toLocaleString("es"), p.pnl >= 0 ? "up" : "down"),
-          card("Retorno", sign(p.return_pct) + "%", p.return_pct >= 0 ? "up" : "down"),
+          card("Equity en vivo", "$" + Math.round(eqV).toLocaleString("es"), pnlV >= 0 ? "up" : "down"),
+          card("P&L en vivo", usd(pnlV), pnlV >= 0 ? "up" : "down"),
+          card("Asegurado (abiertos)", sec > 0 ? "+$" + Math.round(sec).toLocaleString("es") : "—", sec > 0 ? "up" : ""),
+          card("Equity cerrada", "$" + Math.round(p.equity).toLocaleString("es"), p.pnl >= 0 ? "up" : "down"),
+          card("Retorno vivo", sign(retV) + "%", retV >= 0 ? "up" : "down"),
           card("Drawdown máx", p.max_dd_pct + "%", "down"),
           card("Win rate", p.win_rate == null ? "—" : p.win_rate + "%"),
         ].join("");
