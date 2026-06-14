@@ -139,6 +139,17 @@ class JournalModule(NexusModule):
         body = dict(body)
         body["_received_at_ms"] = int(time.time() * 1000)
         dest = SETUPS_INGEST_PATH if subpath == "ingest_setups" else INGEST_PATH
+        prev_setups = None
+        if subpath == "ingest_setups":
+            # Capturamos el estado anterior para detectar transiciones y notificar.
+            old = None
+            if os.path.isfile(dest):
+                try:
+                    with open(dest, "r", encoding="utf-8") as fh:
+                        old = json.load(fh)
+                except Exception:  # noqa: BLE001
+                    old = None
+            prev_setups = (old or {}).get("setups") if isinstance(old, dict) else None
         with self._lock:
             os.makedirs(DATA_DIR, exist_ok=True)
             tmp = dest + ".tmp"
@@ -146,7 +157,67 @@ class JournalModule(NexusModule):
                 json.dump(body, fh, ensure_ascii=False)
             os.replace(tmp, dest)
         self.context.log(f"journal: {subpath} ingerido del colector")
+        if subpath == "ingest_setups" and isinstance(body.get("setups"), list):
+            # El Mac mini es el tracker autoritativo pero no tiene suscripciones push;
+            # las alertas se disparan acá (Railway, donde están las subs) comparando el
+            # estado nuevo contra el anterior. Cierres, parciales y activaciones.
+            try:
+                self._notify_setup_transitions(prev_setups, body["setups"])
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(f"journal: no se pudo notificar transiciones: {exc}")
         return self._json(200, {"ok": True, "received_at_ms": body["_received_at_ms"]})
+
+    @staticmethod
+    def _notify_setup_transitions(prev_setups, new_setups):
+        """Compara setups ingeridos (nuevo vs anterior) y manda push por transiciones:
+        cierre (ganada/perdida), parcial (TP1/TP2) y activación. Solo notifica si el
+        setup ya existía antes (evita spam en el primer ingest)."""
+        if not prev_setups:
+            return  # baseline: no notificamos en el primer ingest
+        try:
+            from core import push
+        except Exception:  # noqa: BLE001
+            return
+        if not push.configurado():
+            return
+        OPEN = ("pendiente", "activo", None)
+
+        def key(s):
+            return s.get("key") or f"{s.get('pair')}:{s.get('ts_created')}"
+
+        prevmap = {key(s): s for s in prev_setups}
+        for s in new_setups:
+            p = prevmap.get(key(s))
+            if p is None:
+                continue  # nuevo: aún sin estado previo que comparar
+            pair = (s.get("pair") or "").replace("_USDT", "").replace("_", "/")
+            d = "Long" if s.get("dir") == "long" else "Short"
+            st = s.get("status")
+            k = key(s)
+            # 1) Cierre
+            if st in ("ganada", "perdida") and p.get("status") in OPEN:
+                r = s.get("result_r")
+                if st == "ganada":
+                    push.notificar(f"✅ {pair} · ganada", f"{pair} {d} cerró +{r}R con parciales.",
+                                   url="/m/trading/", tag=f"setup-{k}-cerrada")
+                else:
+                    push.notificar(f"❌ {pair} · perdida", f"{pair} {d} cerró {r}R.",
+                                   url="/m/trading/", tag=f"setup-{k}-cerrada")
+                continue
+            # 2) Parcial (TP1/TP2 nuevo)
+            if st == "activo" and (s.get("legs_filled") or 0) > (p.get("legs_filled") or 0):
+                legs = s.get("legs_filled") or 0
+                leg = "TP2" if legs >= 2 else "TP1"
+                pct = 50 if legs < 2 else 25
+                push.notificar(f"🎯 {pair} · {leg} alcanzado",
+                               f"{pair} {d}: toma {pct}% en {leg}. Asegurado +{s.get('realized_r')}R · SL a break-even.",
+                               url="/m/trading/", tag=f"setup-{k}-{leg}")
+                continue
+            # 3) Activación (entrada llenada)
+            if st == "activo" and p.get("status") == "pendiente":
+                push.notificar(f"{pair} · entrada llenada",
+                               f"{pair} {d}: el precio entró a la zona. Trade activo (no es señal).",
+                               url="/m/trading/", tag=f"setup-{k}-activo")
 
     # --- Helpers -------------------------------------------------------
     @staticmethod

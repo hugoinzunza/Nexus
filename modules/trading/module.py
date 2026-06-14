@@ -336,7 +336,14 @@ class TradingModule(NexusModule):
     def _alert_transitions(self, label: str, transitions: list) -> None:
         """Push por el ciclo de vida de un setup: entrada llenada (activo), ganada o
         perdida (las del profe se marcan). Reusa core/push como _check_alerts; no-op
-        sin VAPID ni suscripciones."""
+        sin VAPID ni suscripciones.
+
+        Por defecto el push de setups lo dispara la INGESTA (journal, con la data
+        autoritativa del Mac mini y las suscripciones); este tracker NO notifica para
+        no mandar push fantasma de setups locales que no se muestran. Se reactiva con
+        NEXUS_SETUP_PUSH=tracker."""
+        if os.environ.get("NEXUS_SETUP_PUSH", "ingest") != "tracker":
+            return
         if not self.smc_alerts:
             return
         try:
