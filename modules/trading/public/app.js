@@ -1123,15 +1123,29 @@
   }
 
   // --- Análisis SMC en vivo (panel que reemplaza al libro de órdenes) ------
-  // Sesión de trading activa (horas UTC, aprox.): útil para saber el contexto.
+  // Sesión de trading activa. Usa la hora LOCAL de cada plaza (Intl con timeZone →
+  // maneja el horario de verano solo) y respeta fines de semana (sin mercado
+  // tradicional; cripto sigue 24/7). NY = horario NYSE (09:30–16:00 ET).
   function activeSession() {
-    const h = new Date().getUTCHours();
-    const london = h >= 7 && h < 16, ny = h >= 12 && h < 21, asia = h >= 0 && h < 9;
-    if (london && ny) return { label: "Londres + NY (solape)", active: true };
-    if (ny) return { label: "Nueva York", active: true };
-    if (london) return { label: "Londres", active: true };
-    if (asia) return { label: "Asia", active: true };
-    return { label: "Fuera de sesión", active: false };
+    const now = new Date();
+    const inTz = (tz) => {
+      const p = new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short",
+        hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
+      const g = (t) => p.find((x) => x.type === t).value;
+      return { wd: g("weekday"), min: parseInt(g("hour"), 10) * 60 + parseInt(g("minute"), 10) };
+    };
+    const wkday = (z) => z.wd !== "Sat" && z.wd !== "Sun";
+    const lon = inTz("Europe/London"), ny = inTz("America/New_York"), tok = inTz("Asia/Tokyo");
+    const lonOn = wkday(lon) && lon.min >= 8 * 60 && lon.min < 16 * 60 + 30;   // 08:00–16:30
+    const nyOn = wkday(ny) && ny.min >= 9 * 60 + 30 && ny.min < 16 * 60;       // 09:30–16:00 (NYSE)
+    const asiaOn = wkday(tok) && tok.min >= 9 * 60 && tok.min < 15 * 60;       // 09:00–15:00 Tokio
+    if (lonOn && nyOn) return { label: "Londres + NY (solape)", active: true };
+    if (nyOn) return { label: "Nueva York", active: true };
+    if (lonOn) return { label: "Londres", active: true };
+    if (asiaOn) return { label: "Asia", active: true };
+    // Sin sesión: distinguir fin de semana (sin mercado tradicional) de un hueco entre sesiones.
+    const finde = !wkday(ny) && !wkday(lon);
+    return { label: finde ? "Fin de semana · cripto 24/7" : "Fuera de sesión", active: false };
   }
 
   function renderSMCStats(card) {
