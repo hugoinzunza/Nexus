@@ -1093,17 +1093,34 @@
     renderStats(card, d.ticker);
     renderSMCStats(card);            // análisis SMC en vivo (reemplaza al libro)
     liveUpdate(card);                // mueve la última vela con el precio en vivo
-    // Banner de RISK-OFF (guardia de volatilidad): vela anormal → pausa + BE.
+    // Banner de RISK-OFF: vela anormal (volatilidad) o evento de alto impacto → pausa + BE.
     const rb = card.node.querySelector(".risk-banner");
     if (rb) {
       const ro = d.risk_off;
       if (ro && ro.spike) {
         rb.hidden = false;
         rb.textContent = `⚠️ Volatilidad anormal (vela ${ro.ratio}× lo normal) · pausa de entradas y SL a break-even`;
+      } else if (ro && ro.event) {
+        rb.hidden = false;
+        rb.textContent = `📅 ${ro.event.title} inminente · pausa de entradas y SL a break-even`;
       } else {
         rb.hidden = true;
       }
     }
+    // Barra de próximos eventos de alto impacto (calendario económico).
+    renderEventBar(state.calendar);
+  }
+
+  // Próximos eventos de alto impacto (CPI, FOMC, NFP…) con cuenta regresiva.
+  function renderEventBar(calendar) {
+    const bar = document.getElementById("event-bar");
+    if (!bar) return;
+    const evs = (calendar || []).filter((e) => e.in_min >= -10).slice(0, 3);
+    if (!evs.length) { bar.hidden = true; return; }
+    const fmtIn = (m) => m < 0 ? "ahora" : m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`;
+    bar.hidden = false;
+    bar.innerHTML = '<span class="ev-label">📅 Alto impacto:</span> ' + evs.map((e) =>
+      `<span class="ev-item${e.in_min >= 0 && e.in_min <= 60 ? " soon" : ""}">${e.title} <b>en ${fmtIn(e.in_min)}</b></span>`).join("");
   }
 
   function renderTicker(card, t) {

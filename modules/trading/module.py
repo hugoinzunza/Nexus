@@ -25,6 +25,7 @@ from . import cryptocom
 from . import binance
 from . import smc_live
 from . import regime
+from . import news
 from .setups_store import SetupStore
 
 _MOD_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -170,12 +171,22 @@ class TradingModule(NexusModule):
                     if prev:
                         instruments_state[name] = prev
 
+            # Calendario económico: evento de alto impacto inminente (ventana de peligro)
+            # y próximos para el panel. Cacheado en news (30 min), barato por tick.
+            try:
+                event = news.danger_window()
+                calendar = news.upcoming()
+            except Exception:  # noqa: BLE001
+                event, calendar = None, []
+
             self._state = {
                 "updated": int(time.time() * 1000),
                 "version": _APP_VERSION,
                 "upstream_ok": ok,
                 "error": error,
                 "instruments": instruments_state,
+                "calendar": calendar,
+                "event_window": event,
             }
 
             # Indicador SMC + alertas: recalculamos las zonas de POI cada N ticks
@@ -189,25 +200,29 @@ class TradingModule(NexusModule):
                 last = (st.get("ticker") or {}).get("last")
                 if not last:
                     continue
-                # GUARDIA DE VOLATILIDAD: vela anormal (noticia/liquidación) → risk-off.
+                # RISK-OFF: vela anormal (guardia de volatilidad) O evento de alto impacto
+                # inminente (calendario). En ambos: pausa de entradas + BE defensivo.
                 spike = smc_live.volatility_spike(st.get("candles") or [])
-                self._risk_off[name] = spike
-                st["risk_off"] = spike
+                riskoff = spike["spike"] or bool(event)
+                ro = {"spike": spike["spike"], "ratio": spike["ratio"],
+                      "range_pct": spike["range_pct"], "event": event}
+                self._risk_off[name] = ro
+                st["risk_off"] = ro
                 if tick % self.smc_refresh_every == 0 or name not in self._poi_zones:
                     try:
                         self._poi_zones[name] = smc_live.active_pois(self._htf_candles(name), last)
                     except Exception as exc:  # noqa: BLE001
                         self.context.log(f"smc: no se pudieron calcular POIs de {name}: {exc}")
-                    # Genera/registra los planes de planeación (forward-test). En risk-off
-                    # NO se abren entradas nuevas (pausa).
-                    if not spike["spike"]:
+                    # En risk-off NO se abren entradas nuevas (pausa).
+                    if not riskoff:
                         self._record_setups(name, last)
                 # En risk-off: proteger lo abierto moviendo a break-even los ganadores.
-                if spike["spike"]:
+                if riskoff:
                     try:
-                        prot = self._setups.protect_to_be(name, last, time.time(), reason="volatilidad")
+                        reason = ("evento " + event["title"]) if event else "volatilidad"
+                        prot = self._setups.protect_to_be(name, last, time.time(), reason=reason)
                         if not self._risk_off_alerted.get(name):
-                            self._alert_risk_off(inst.get("label", name), spike, prot)
+                            self._alert_risk_off(inst.get("label", name), ro, prot)
                             self._risk_off_alerted[name] = True
                     except Exception as exc:  # noqa: BLE001
                         self.context.log(f"riskoff: {name}: {exc}")
@@ -417,11 +432,18 @@ class TradingModule(NexusModule):
             return
         base = label.split("/")[0]
         n = len(protected or [])
-        body = (f"{base}: vela {spike.get('ratio')}× lo normal ({spike.get('range_pct')}%). "
-                f"Pausa de entradas nuevas" + (f" · {n} trade(s) a break-even." if n else "."))
+        ev = spike.get("event")
+        be = (f" · {n} trade(s) a break-even." if n else ".")
+        if ev:
+            title = f"📅 {base} · evento de alto impacto"
+            body = f"{ev.get('title')} ({ev.get('country')}) inminente. Pausa de entradas{be}"
+            tag = f"riskoff-event-{base}"
+        else:
+            title = f"⚠️ {base} · volatilidad anormal"
+            body = f"vela {spike.get('ratio')}× lo normal ({spike.get('range_pct')}%). Pausa de entradas{be}"
+            tag = f"riskoff-{base}"
         try:
-            push.notificar(title=f"⚠️ {base} · volatilidad anormal",
-                           body=body, url="/m/trading/", tag=f"riskoff-{base}")
+            push.notificar(title=title, body=body, url="/m/trading/", tag=tag)
         except Exception as exc:  # noqa: BLE001
             self.context.log(f"riskoff alerta: {exc}")
 

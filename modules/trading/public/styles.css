@@ -83,6 +83,16 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-even
   color: #ff9aa2; font-size: 13px; font-weight: 500;
 }
 .risk-banner[hidden] { display: none; }
+.event-bar {
+  max-width: 1100px; margin: 10px auto 0; padding: 8px 24px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; font-size: 12.5px;
+}
+.event-bar[hidden] { display: none; }
+.event-bar .ev-label { color: var(--amber); font-weight: 600; }
+.event-bar .ev-item { color: var(--muted); }
+.event-bar .ev-item b { color: var(--text); font-weight: 600; }
+.event-bar .ev-item.soon { color: var(--amber); }
+@media (min-width: 1200px) { .event-bar { max-width: min(96vw, 1760px); } }
 .instrument-card {
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 20px; padding: 18px;
