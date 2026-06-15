@@ -645,6 +645,25 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
     return None
 
 
+def volatility_spike(candles, lookback: int = 20, mult: float = 3.0) -> dict:
+    """Detecta una vela de volatilidad ANORMAL (la 'vela liquidadora' de una noticia,
+    tipo el tweet de Trump): el rango de la vela más reciente (incluida la en formación)
+    supera `mult` veces el rango mediano de las anteriores. Devuelve {spike, ratio, range}.
+    Es la señal de RISK-OFF no programado: pausar entradas y proteger lo abierto."""
+    if not candles or len(candles) < lookback + 2:
+        return {"spike": False, "ratio": 0.0, "range_pct": 0.0}
+    rngs = [c["h"] - c["l"] for c in candles[-(lookback + 1):]]
+    last = rngs[-1]
+    prev = sorted(rngs[:-1])
+    if len(prev) < 5:
+        return {"spike": False, "ratio": 0.0, "range_pct": 0.0}
+    med = prev[len(prev) // 2]
+    ratio = (last / med) if med > 0 else 0.0
+    px = candles[-1].get("c") or 1
+    return {"spike": ratio >= mult, "ratio": round(ratio, 1),
+            "range_pct": round(last / px * 100, 2) if px else 0.0}
+
+
 def active_pois(htf_map: Dict[str, list], last_price: float) -> List[Dict]:
     """POIs válidos (sin mitigar) de 1D/4h/1h. Versión liviana para las alertas."""
     out = []

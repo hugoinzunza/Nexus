@@ -101,6 +101,8 @@ class TradingModule(NexusModule):
         self._smc_cache = {}        # (instrumento, tf) → {"analysis", "ts"}
         self._smc_lock = threading.Lock()
         self._poi_zones = {}        # instrumento → lista de POIs válidos (para alertas)
+        self._risk_off = {}         # instrumento → estado de volatilidad anormal (risk-off)
+        self._risk_off_alerted = {} # instrumento → si ya avisamos este episodio de spike
         self._poi_inside = {}       # instrumento → set de claves de POI con el precio dentro
         self.smc_refresh_every = int(cfg.get("smc_refresh_every", 15))  # cada ~30s
         self.smc_alerts = bool(cfg.get("smc_alerts", True))
@@ -187,13 +189,30 @@ class TradingModule(NexusModule):
                 last = (st.get("ticker") or {}).get("last")
                 if not last:
                     continue
+                # GUARDIA DE VOLATILIDAD: vela anormal (noticia/liquidación) → risk-off.
+                spike = smc_live.volatility_spike(st.get("candles") or [])
+                self._risk_off[name] = spike
+                st["risk_off"] = spike
                 if tick % self.smc_refresh_every == 0 or name not in self._poi_zones:
                     try:
                         self._poi_zones[name] = smc_live.active_pois(self._htf_candles(name), last)
                     except Exception as exc:  # noqa: BLE001
                         self.context.log(f"smc: no se pudieron calcular POIs de {name}: {exc}")
-                    # Genera/registra los planes de las TFs de planeación (forward-test).
-                    self._record_setups(name, last)
+                    # Genera/registra los planes de planeación (forward-test). En risk-off
+                    # NO se abren entradas nuevas (pausa).
+                    if not spike["spike"]:
+                        self._record_setups(name, last)
+                # En risk-off: proteger lo abierto moviendo a break-even los ganadores.
+                if spike["spike"]:
+                    try:
+                        prot = self._setups.protect_to_be(name, last, time.time(), reason="volatilidad")
+                        if not self._risk_off_alerted.get(name):
+                            self._alert_risk_off(inst.get("label", name), spike, prot)
+                            self._risk_off_alerted[name] = True
+                    except Exception as exc:  # noqa: BLE001
+                        self.context.log(f"riskoff: {name}: {exc}")
+                else:
+                    self._risk_off_alerted[name] = False
                 self._check_alerts(name, inst.get("label", name), last)
                 # Seguimiento de los setups abiertos contra el precio en vivo (barato).
                 try:
@@ -384,6 +403,27 @@ class TradingModule(NexusModule):
                                tag=f"setup-{t['key']}-{tag_extra}")
             except Exception as exc:  # noqa: BLE001
                 self.context.log(f"alertas: no se pudo notificar {t['key']}: {exc}")
+
+    def _alert_risk_off(self, label: str, spike: dict, protected: list) -> None:
+        """Push cuando se dispara la guardia de volatilidad (vela anormal): pausa de
+        entradas y cuántos trades se movieron a break-even."""
+        if not self.smc_alerts:
+            return
+        try:
+            from core import push
+        except Exception:  # noqa: BLE001
+            return
+        if not push.configurado():
+            return
+        base = label.split("/")[0]
+        n = len(protected or [])
+        body = (f"{base}: vela {spike.get('ratio')}× lo normal ({spike.get('range_pct')}%). "
+                f"Pausa de entradas nuevas" + (f" · {n} trade(s) a break-even." if n else "."))
+        try:
+            push.notificar(title=f"⚠️ {base} · volatilidad anormal",
+                           body=body, url="/m/trading/", tag=f"riskoff-{base}")
+        except Exception as exc:  # noqa: BLE001
+            self.context.log(f"riskoff alerta: {exc}")
 
     def _record_setups(self, name: str, last: float) -> None:
         """Para cada TF de planeación, si el indicador genera un PLAN válido (tpsl),

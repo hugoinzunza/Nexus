@@ -356,6 +356,37 @@ class SetupStore:
                 self._save()
         return changed
 
+    def protect_to_be(self, pair: str, price: float, now_s: float, reason: str = "volatilidad") -> list:
+        """Defensivo (risk-off): mueve a BREAK-EVEN los trades ACTIVOS de `pair` que
+        están en ganancia, para protegerlos de un evento/vela anormal. Los perdedores
+        siguen con su SL. Devuelve las transiciones (para alertar)."""
+        if not price:
+            return []
+        out = []
+        with self._lock:
+            changed = False
+            for s in self._setups:
+                if s["pair"] != pair or s["status"] != "activo":
+                    continue
+                long = s["dir"] == "long"
+                entry = s.get("entry")
+                if not entry:
+                    continue
+                if not ((price > entry) if long else (price < entry)):
+                    continue                      # no está en ganancia → no se toca
+                cur = s.get("sl_cur", s.get("sl"))
+                if (cur >= entry) if long else (cur <= entry):
+                    continue                      # ya en BE o mejor (trailing) → nada
+                s["sl_cur"] = entry
+                s["sl_be"] = True
+                s["ts_updated"] = int(now_s)
+                changed = True
+                out.append({"type": "protect_be", "pair": pair, "dir": s["dir"],
+                            "key": s["key"], "reason": reason})
+            if changed:
+                self._save()
+        return out
+
     def track(self, pair: str, price: float, now_s: float) -> list:
         """Actualiza los setups ABIERTOS de un par contra el precio en vivo. Devuelve
         las TRANSICIONES ocurridas [{prev, status, ...}] para disparar alertas."""

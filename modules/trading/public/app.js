@@ -1093,6 +1093,17 @@
     renderStats(card, d.ticker);
     renderSMCStats(card);            // análisis SMC en vivo (reemplaza al libro)
     liveUpdate(card);                // mueve la última vela con el precio en vivo
+    // Banner de RISK-OFF (guardia de volatilidad): vela anormal → pausa + BE.
+    const rb = card.node.querySelector(".risk-banner");
+    if (rb) {
+      const ro = d.risk_off;
+      if (ro && ro.spike) {
+        rb.hidden = false;
+        rb.textContent = `⚠️ Volatilidad anormal (vela ${ro.ratio}× lo normal) · pausa de entradas y SL a break-even`;
+      } else {
+        rb.hidden = true;
+      }
+    }
   }
 
   function renderTicker(card, t) {

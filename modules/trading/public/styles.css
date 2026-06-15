@@ -77,6 +77,12 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-even
 #crypto-select:hover { border-color: var(--accent2); }
 #crypto-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,92,231,.25); }
 .instrument-card[hidden] { display: none; }
+.risk-banner {
+  margin: 10px 0 4px; padding: 9px 14px; border-radius: var(--border-radius-md, 8px);
+  background: rgba(234,57,67,0.12); border: 1px solid rgba(234,57,67,0.5);
+  color: #ff9aa2; font-size: 13px; font-weight: 500;
+}
+.risk-banner[hidden] { display: none; }
 .instrument-card {
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 20px; padding: 18px;
