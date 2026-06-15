@@ -104,6 +104,7 @@ class TradingModule(NexusModule):
         self._poi_zones = {}        # instrumento → lista de POIs válidos (para alertas)
         self._risk_off = {}         # instrumento → estado de volatilidad anormal (risk-off)
         self._risk_off_alerted = {} # instrumento → si ya avisamos este episodio de spike
+        self._risk_off_last_alert = {}  # instrumento → ts del último push (cooldown anti-spam)
         self._poi_inside = {}       # instrumento → set de claves de POI con el precio dentro
         self.smc_refresh_every = int(cfg.get("smc_refresh_every", 15))  # cada ~30s
         self.smc_alerts = bool(cfg.get("smc_alerts", True))
@@ -221,9 +222,14 @@ class TradingModule(NexusModule):
                     try:
                         reason = ("evento " + event["title"]) if event else "volatilidad"
                         prot = self._setups.protect_to_be(name, last, time.time(), reason=reason)
-                        if not self._risk_off_alerted.get(name):
+                        # Una alerta por episodio Y con cooldown de 20 min (anti-spam:
+                        # evita el re-buzz si la volatilidad flapea sobre el umbral).
+                        nowt = time.time()
+                        if (not self._risk_off_alerted.get(name)
+                                and nowt - self._risk_off_last_alert.get(name, 0) > 1200):
                             self._alert_risk_off(inst.get("label", name), ro, prot)
                             self._risk_off_alerted[name] = True
+                            self._risk_off_last_alert[name] = nowt
                     except Exception as exc:  # noqa: BLE001
                         self.context.log(f"riskoff: {name}: {exc}")
                 else:

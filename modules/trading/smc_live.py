@@ -645,10 +645,13 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
     return None
 
 
-def volatility_spike(candles, lookback: int = 20, mult: float = 3.0) -> dict:
+def volatility_spike(candles, lookback: int = 20, mult: float = 3.5,
+                     min_range_pct: float = 0.8) -> dict:
     """Detecta una vela de volatilidad ANORMAL (la 'vela liquidadora' de una noticia,
-    tipo el tweet de Trump): el rango de la vela más reciente (incluida la en formación)
-    supera `mult` veces el rango mediano de las anteriores. Devuelve {spike, ratio, range}.
+    tipo el tweet de Trump). Exige DOS condiciones para no dispararse con el ruido de
+    monedas baratas (DOGE en 1m mueve 0,1% y eso NO es liquidación):
+      - relativa: rango de la vela reciente >= `mult` veces el rango mediano previo, y
+      - absoluta: el rango es >= `min_range_pct` % del precio (movimiento real).
     Es la señal de RISK-OFF no programado: pausar entradas y proteger lo abierto."""
     if not candles or len(candles) < lookback + 2:
         return {"spike": False, "ratio": 0.0, "range_pct": 0.0}
@@ -660,8 +663,9 @@ def volatility_spike(candles, lookback: int = 20, mult: float = 3.0) -> dict:
     med = prev[len(prev) // 2]
     ratio = (last / med) if med > 0 else 0.0
     px = candles[-1].get("c") or 1
-    return {"spike": ratio >= mult, "ratio": round(ratio, 1),
-            "range_pct": round(last / px * 100, 2) if px else 0.0}
+    range_pct = (last / px * 100) if px else 0.0
+    spike = ratio >= mult and range_pct >= min_range_pct
+    return {"spike": spike, "ratio": round(ratio, 1), "range_pct": round(range_pct, 2)}
 
 
 def active_pois(htf_map: Dict[str, list], last_price: float) -> List[Dict]:
