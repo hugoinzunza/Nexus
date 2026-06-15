@@ -183,7 +183,11 @@ class JournalModule(NexusModule):
         OPEN = ("pendiente", "activo", None)
 
         def key(s):
-            return s.get("key") or f"{s.get('pair')}:{s.get('ts_created')}"
+            # IDENTIDAD ÚNICA por setup: s["key"] NO es única (varios cerrados comparten
+            # la misma key de zona, p.ej. DOGE redondea la entrada a 0,09). Sin ts_created
+            # el diff confundía un cerrado con el pendiente del mismo key y re-disparaba
+            # "cierre" en cada ingest → spam. ts_created hace única cada operación.
+            return f"{s.get('key') or s.get('pair')}:{s.get('ts_created')}"
 
         prevmap = {key(s): s for s in prev_setups}
         for s in new_setups:
