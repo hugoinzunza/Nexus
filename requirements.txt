@@ -10,3 +10,10 @@ pywebpush==1.14.1
 # sin key, queda inactivo. El SDK se importa de forma perezosa, así que su ausencia
 # no rompe el módulo de trading.
 anthropic==0.109.2
+# Persistencia multi-tenant (Fase multi-usuario): Postgres vía SQLAlchemy 2.0 SYNC
+# (acorde a los handlers síncronos de los módulos) con el driver psycopg3. Solo se usa
+# cuando hay DATABASE_URL en el entorno (Railway/web); el VPS/motor y el modo local sin
+# DB siguen con los stores JSON (backend elegido por presencia de la variable).
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.13
+alembic==1.14.0
