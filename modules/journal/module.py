@@ -23,6 +23,7 @@ import threading
 import time
 
 from core.module_base import NexusModule
+from core import store
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.paths import persist_dir  # noqa: E402
@@ -110,13 +111,7 @@ class JournalModule(NexusModule):
         })
 
     def _read_setups_ingest(self):
-        if not os.path.isfile(SETUPS_INGEST_PATH):
-            return None
-        try:
-            with open(SETUPS_INGEST_PATH, "r", encoding="utf-8") as fh:
-                return json.load(fh)
-        except Exception:  # noqa: BLE001
-            return None
+        return store.read_ingest("setups")
 
     # --- POST (ingesta) ------------------------------------------------
     def api_post(self, subpath, body, headers):
@@ -138,24 +133,14 @@ class JournalModule(NexusModule):
 
         body = dict(body)
         body["_received_at_ms"] = int(time.time() * 1000)
-        dest = SETUPS_INGEST_PATH if subpath == "ingest_setups" else INGEST_PATH
+        kind = "setups" if subpath == "ingest_setups" else "journal"
         prev_setups = None
         if subpath == "ingest_setups":
-            # Capturamos el estado anterior para detectar transiciones y notificar.
-            old = None
-            if os.path.isfile(dest):
-                try:
-                    with open(dest, "r", encoding="utf-8") as fh:
-                        old = json.load(fh)
-                except Exception:  # noqa: BLE001
-                    old = None
-            prev_setups = (old or {}).get("setups") if isinstance(old, dict) else None
+            # Estado anterior (para detectar transiciones y notificar).
+            old = store.read_ingest("setups")
+            prev_setups = old.get("setups") if isinstance(old, dict) else None
         with self._lock:
-            os.makedirs(DATA_DIR, exist_ok=True)
-            tmp = dest + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump(body, fh, ensure_ascii=False)
-            os.replace(tmp, dest)
+            store.write_ingest(kind, body)
         self.context.log(f"journal: {subpath} ingerido del colector")
         if subpath == "ingest_setups" and isinstance(body.get("setups"), list):
             # El Mac mini es el tracker autoritativo pero no tiene suscripciones push;
@@ -229,13 +214,7 @@ class JournalModule(NexusModule):
         return os.environ.get("NEXUS_INGEST_TOKEN", "").strip()
 
     def _read(self):
-        if not os.path.isfile(INGEST_PATH):
-            return None
-        try:
-            with open(INGEST_PATH, "r", encoding="utf-8") as fh:
-                return json.load(fh)
-        except Exception:  # noqa: BLE001
-            return None
+        return store.read_ingest("journal")
 
     @staticmethod
     def _age(data):
@@ -250,7 +229,7 @@ class JournalModule(NexusModule):
 
     def health(self):
         return {"slug": self.slug, "status": "ok",
-                "has_data": os.path.isfile(INGEST_PATH),
+                "has_data": self._read() is not None,
                 "ingest_ready": bool(self._token())}
 
 

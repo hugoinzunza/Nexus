@@ -42,8 +42,26 @@ STATIC_DIR = os.path.join(ROOT, "static")
 hub = Hub(load_config())
 
 
+def _run_db_migrations():
+    """Si hay DATABASE_URL (Railway/web), aplica las migraciones de Alembic al
+    arrancar (idempotente). Sin DB (VPS/motor, local), no hace nada."""
+    from core import db
+    if not db.database_enabled():
+        return
+    try:
+        from alembic import command
+        from alembic.config import Config
+        cfg = Config(os.path.join(ROOT, "alembic.ini"))
+        cfg.set_main_option("script_location", os.path.join(ROOT, "migrations"))
+        command.upgrade(cfg, "head")
+        log("db: migraciones aplicadas (alembic upgrade head)")
+    except Exception as exc:  # noqa: BLE001
+        log(f"db: fallo al migrar: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _run_db_migrations()
     hub.boot()
     push.init(ROOT, log)
     yield

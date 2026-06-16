@@ -32,14 +32,11 @@ _LOG = print
 
 
 def init(root: str, log=print) -> None:
-    """Configura dónde se guardan las suscripciones. Lo llama el lifespan."""
-    global _SUBS_PATH, _LOG
+    """Configura el logging de push. El almacén de suscripciones lo maneja
+    core.store (Postgres si hay DATABASE_URL, si no archivo JSON en persist_dir).
+    Lo llama el lifespan."""
+    global _LOG
     _LOG = log
-    from core.paths import persist_dir
-    data_dir = persist_dir(root)   # volumen de Railway si hay → persiste deploys
-    _SUBS_PATH = os.path.join(data_dir, "push_subs.json")
-    if not os.path.isfile(_SUBS_PATH):
-        _write_all([])
 
 
 # --- Configuración VAPID -------------------------------------------------
@@ -57,20 +54,13 @@ def _vapid_claims() -> dict:
 
 # --- Almacén de suscripciones (archivo JSON) -----------------------------
 def _read_all() -> list:
-    if not _SUBS_PATH or not os.path.isfile(_SUBS_PATH):
-        return []
-    try:
-        with open(_SUBS_PATH, "r", encoding="utf-8") as fh:
-            return json.load(fh)
-    except Exception:  # noqa: BLE001
-        return []
+    from core import store
+    return store.load_push_subs()
 
 
 def _write_all(subs: list) -> None:
-    if not _SUBS_PATH:
-        return
-    with open(_SUBS_PATH, "w", encoding="utf-8") as fh:
-        json.dump(subs, fh, ensure_ascii=False, indent=2)
+    from core import store
+    store.save_push_subs(subs)
 
 
 def guardar_suscripcion(sub: dict) -> int:
