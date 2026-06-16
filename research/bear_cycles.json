@@ -1,0 +1,76 @@
+{
+ "generated": 1781273197533,
+ "source": "bitstamp_btcusd_1d",
+ "cycle_bears": [
+  {
+   "completed": true,
+   "top_date": "2013-12-04",
+   "bottom_date": "2015-01-14",
+   "top_price": 1132.01,
+   "bottom_price": 171.41,
+   "max_drawdown": -0.848579076156571,
+   "dur_days": 406.0,
+   "dur_weeks": 58.0,
+   "rsi_bottom": 49.03172088299959
+  },
+  {
+   "completed": true,
+   "top_date": "2017-12-16",
+   "bottom_date": "2018-12-15",
+   "top_price": 19187.78,
+   "bottom_price": 3179.54,
+   "max_drawdown": -0.834293493046095,
+   "dur_days": 364.0,
+   "dur_weeks": 52.0,
+   "rsi_bottom": 44.666367524170845
+  },
+  {
+   "completed": true,
+   "top_date": "2021-11-08",
+   "bottom_date": "2022-11-21",
+   "top_price": 67559.0,
+   "bottom_price": 15766.0,
+   "max_drawdown": -0.7666336091416391,
+   "dur_days": 378.0,
+   "dur_weeks": 54.0,
+   "rsi_bottom": 40.74285315401691
+  }
+ ],
+ "intra_cycle": [
+  {
+   "completed": true,
+   "top_date": "2013-04-09",
+   "bottom_date": "2013-07-06",
+   "top_price": 229.0,
+   "bottom_price": 66.34,
+   "max_drawdown": -0.7103056768558952,
+   "dur_days": 88.0,
+   "dur_weeks": 12.571428571428571,
+   "rsi_bottom": null
+  }
+ ],
+ "current": {
+  "completed": false,
+  "top_date": "2025-10-06",
+  "bottom_date": "2026-06-06",
+  "top_price": 124728.0,
+  "bottom_price": 60858.64,
+  "max_drawdown": -0.5120691424539798,
+  "dur_days": 243.0,
+  "dur_weeks": 34.714285714285715,
+  "now_price": 63311.77,
+  "now_dd": -0.49240130524020276,
+  "now_days": 249.0
+ },
+ "reference": {
+  "dd_min": -0.848579076156571,
+  "dd_max": -0.7666336091416391,
+  "dd_median": -0.834293493046095,
+  "dur_weeks_min": 52.0,
+  "dur_weeks_max": 58.0,
+  "dur_weeks_median": 54.0,
+  "rsi_bottom_min": 40.74285315401691,
+  "rsi_bottom_max": 49.03172088299959
+ },
+ "rsi_now": 42.60796004401453
+}
