@@ -50,6 +50,15 @@ def _key(pair: str, plan: dict) -> str:
     return f"{pair}:{plan['tf']}:{plan['dir']}:{round(plan['entry_lo'], 2)}"
 
 
+def _zones_overlap(a_lo, a_hi, b_lo, b_hi) -> bool:
+    """¿Se solapan dos zonas [lo, hi]? (intervalos). Dos POIs de la misma dirección
+    cuyas zonas se solapan son la MISMA idea aunque su key difiera (por centavos en el
+    extremo o por otra TF) — abrir ambos sería doble riesgo sobre un mismo SL."""
+    if None in (a_lo, a_hi, b_lo, b_hi):
+        return False
+    return a_lo <= b_hi and b_lo <= a_hi
+
+
 def load_all(path: str = SETUPS_PATH) -> list:
     """Lee los setups del disco (fresco, para el lector del Diario)."""
     try:
@@ -152,20 +161,30 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
     `annotate`: si False, no escribe paper_* en los setups (para no pisar la cuenta
     completa cuando se calcula una segunda cuenta filtrada)."""
     keep = selector or (lambda s: True)
-    eligible = [s for s in setups
-                if s["status"] in ("ganada", "perdida")
-                and s.get("result_r") is not None and s.get("ts_closed") and keep(s)]
-    # GUARDIA DE RE-ENTRADA (histórico): réplica de record() sobre lo ya guardado —
-    # descarta re-entradas a la misma zona (key) dentro del cooldown tras un cierre
-    # previo, para no contar la misma idea varias veces (mismo origen que el spam DOGE).
-    # Deja la 1ª entrada y los re-tests legítimos posteriores al cooldown.
-    eligible.sort(key=lambda s: s.get("ts_created") or s["ts_closed"])
+    eligible = sorted(
+        [s for s in setups
+         if s["status"] in ("ganada", "perdida")
+         and s.get("result_r") is not None and s.get("ts_closed") and keep(s)],
+        key=lambda s: s.get("ts_created") or s["ts_closed"])
+    # COLAPSO HISTÓRICO: réplica de las guardias vivas de record() sobre lo ya guardado,
+    # para que el paper account no cuente la misma idea dos veces. Dos reglas:
+    #  (1) re-entrada: misma key reabierta dentro del cooldown tras cerrar → no cuenta
+    #      (mismo origen que el spam DOGE; deja la 1ª y los re-tests legítimos tardíos);
+    #  (2) anti-solape: mismo par+dir con zona solapada mientras otra seguía ABIERTA
+    #      (concurrente) → no cuenta (mismo origen que el doble-ETH a ~1770).
     last_close, closed = {}, []
     for s in eligible:
+        tcrt = s.get("ts_created") or s["ts_closed"]
+        if any(a["pair"] == s["pair"] and a["dir"] == s["dir"]
+               and (a.get("ts_created") or 0) <= tcrt < (a.get("ts_closed") or 0)
+               and _zones_overlap(s.get("entry_lo"), s.get("entry_hi"),
+                                  a.get("entry_lo"), a.get("entry_hi"))
+               for a in closed):
+            continue                              # (2) solape concurrente con uno ya aceptado
         cd = _REENTRY_COOLDOWN_BARS * _TF_HOURS.get(s.get("poi_tf"), 1.0) * 3600
         lc = last_close.get(s["key"])
-        if lc is not None and (s.get("ts_created") or s["ts_closed"]) - lc < cd:
-            continue
+        if lc is not None and (tcrt - lc) < cd:
+            continue                              # (1) re-entrada dentro del cooldown
         closed.append(s)
         last_close[s["key"]] = s["ts_closed"]
     closed.sort(key=lambda s: s["ts_closed"])
@@ -294,9 +313,7 @@ class SetupStore:
                 # RIESGO sobre un mismo SL (caso ETH: dos long a ~1770, zonas casi idénticas
                 # [1757,1782] vs [1758,1783], keys distintas por $1). Una sola posición por zona.
                 if (s["status"] in _OPEN and s["pair"] == pair and s["dir"] == plan["dir"]
-                        and new_lo is not None and new_hi is not None
-                        and s.get("entry_lo") is not None and s.get("entry_hi") is not None
-                        and new_lo <= s["entry_hi"] and s["entry_lo"] <= new_hi):
+                        and _zones_overlap(new_lo, new_hi, s.get("entry_lo"), s.get("entry_hi"))):
                     return False
                 if s["key"] != k:
                     continue
