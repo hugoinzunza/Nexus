@@ -285,12 +285,23 @@ class SetupStore:
             return False
         k = _key(pair, plan)
         cooldown_s = _REENTRY_COOLDOWN_BARS * _TF_HOURS.get(plan["tf"], 1.0) * 3600
+        new_lo, new_hi = plan.get("entry_lo"), plan.get("entry_hi")
         with self._lock:
             for s in self._setups:
+                # GUARDIA ANTI-SOLAPE: ya hay un setup ABIERTO del mismo par y dirección
+                # cuya zona se SOLAPA con la nueva → es la misma idea aunque la key difiera
+                # (por centavos en el extremo, o por otra TF de POI). Abrir ambos = DOBLE
+                # RIESGO sobre un mismo SL (caso ETH: dos long a ~1770, zonas casi idénticas
+                # [1757,1782] vs [1758,1783], keys distintas por $1). Una sola posición por zona.
+                if (s["status"] in _OPEN and s["pair"] == pair and s["dir"] == plan["dir"]
+                        and new_lo is not None and new_hi is not None
+                        and s.get("entry_lo") is not None and s.get("entry_hi") is not None
+                        and new_lo <= s["entry_hi"] and s["entry_lo"] <= new_hi):
+                    return False
                 if s["key"] != k:
                     continue
                 if s["status"] in _OPEN:
-                    return False  # ya lo estamos siguiendo
+                    return False  # ya lo estamos siguiendo (misma key exacta)
                 # GUARDIA DE RE-ENTRADA: la misma zona cerró hace poco → todavía no se
                 # re-registra (evita contar re-entradas inmediatas como trades nuevos).
                 if (s["status"] in ("ganada", "perdida") and s.get("ts_closed") is not None
