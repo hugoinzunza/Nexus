@@ -31,6 +31,16 @@ _ZONE_BUF = 0.0005
 _EXPIRE_HOURS = {"15m": 24, "1h": 96, "4h": 240, "1D": 720}
 _DEFAULT_EXPIRE_H = 168
 
+# Horas que dura UNA vela de cada TF de POI (para traducir cooldowns a tiempo real).
+_TF_HOURS = {"15m": 0.25, "1h": 1.0, "4h": 4.0, "1D": 24.0}
+# GUARDIA DE RE-ENTRADA: tras CERRAR un setup (ganada/perdida), no re-registrar la MISMA
+# zona (key) hasta que pasen estas velas de su TF de POI. El dedup normal solo bloquea
+# mientras hay uno ABIERTO; sin esta guardia, una zona que stopea se re-registra al
+# instante y el forward-test cuenta re-entradas correlacionadas a la misma zona como
+# trades independientes (la zona BTC se re-registró 6 veces en 27h → sobre-conteo que
+# distorsiona retorno, win rate y equity). Una re-entrada legítima MÁS TARDE sí cuenta.
+_REENTRY_COOLDOWN_BARS = 12
+
 _OPEN = ("pendiente", "activo")
 _CLOSED = ("ganada", "perdida", "anulada")
 
@@ -142,11 +152,23 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
     `annotate`: si False, no escribe paper_* en los setups (para no pisar la cuenta
     completa cuando se calcula una segunda cuenta filtrada)."""
     keep = selector or (lambda s: True)
-    closed = sorted(
-        [s for s in setups
-         if s["status"] in ("ganada", "perdida")
-         and s.get("result_r") is not None and s.get("ts_closed") and keep(s)],
-        key=lambda s: s["ts_closed"])
+    eligible = [s for s in setups
+                if s["status"] in ("ganada", "perdida")
+                and s.get("result_r") is not None and s.get("ts_closed") and keep(s)]
+    # GUARDIA DE RE-ENTRADA (histórico): réplica de record() sobre lo ya guardado —
+    # descarta re-entradas a la misma zona (key) dentro del cooldown tras un cierre
+    # previo, para no contar la misma idea varias veces (mismo origen que el spam DOGE).
+    # Deja la 1ª entrada y los re-tests legítimos posteriores al cooldown.
+    eligible.sort(key=lambda s: s.get("ts_created") or s["ts_closed"])
+    last_close, closed = {}, []
+    for s in eligible:
+        cd = _REENTRY_COOLDOWN_BARS * _TF_HOURS.get(s.get("poi_tf"), 1.0) * 3600
+        lc = last_close.get(s["key"])
+        if lc is not None and (s.get("ts_created") or s["ts_closed"]) - lc < cd:
+            continue
+        closed.append(s)
+        last_close[s["key"]] = s["ts_closed"]
+    closed.sort(key=lambda s: s["ts_closed"])
     eq = peak = capital
     mdd = 0.0
     wins = 0
@@ -262,10 +284,18 @@ class SetupStore:
         if not plan:
             return False
         k = _key(pair, plan)
+        cooldown_s = _REENTRY_COOLDOWN_BARS * _TF_HOURS.get(plan["tf"], 1.0) * 3600
         with self._lock:
             for s in self._setups:
-                if s["key"] == k and s["status"] in _OPEN:
+                if s["key"] != k:
+                    continue
+                if s["status"] in _OPEN:
                     return False  # ya lo estamos siguiendo
+                # GUARDIA DE RE-ENTRADA: la misma zona cerró hace poco → todavía no se
+                # re-registra (evita contar re-entradas inmediatas como trades nuevos).
+                if (s["status"] in ("ganada", "perdida") and s.get("ts_closed") is not None
+                        and (now_s - s["ts_closed"]) < cooldown_s):
+                    return False
             active = plan.get("state") == "activo"
             self._setups.append({
                 "key": k,
