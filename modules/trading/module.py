@@ -26,6 +26,7 @@ from . import binance
 from . import smc_live
 from . import regime
 from . import news
+from . import claude_grader
 from .setups_store import SetupStore
 
 _MOD_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -463,11 +464,32 @@ class TradingModule(NexusModule):
                 analysis = self._smc_analysis(name, tf)
                 plan = analysis.get("tpsl")
                 if plan:
-                    self._setups.record(plan, name, tf, last, time.time())
+                    created = self._setups.record(plan, name, tf, last, time.time())
                     if plan.get("cdc_ok"):
                         self._setups.mark_cdc(name, plan, time.time())
+                    # MODO SOMBRA: Claude gradúa el setup recién creado (no interviene
+                    # la decisión; solo registra una nota para validar a los ~50 trades).
+                    if created and claude_grader.available():
+                        self._grade_in_background(created)
             except Exception as exc:  # noqa: BLE001
                 self.context.log(f"setups: no se pudo registrar {name} {tf}: {exc}")
+
+    def _grade_in_background(self, setup: dict) -> None:
+        """Lanza la graduación de Claude en un hilo (la llamada a la API no debe
+        bloquear el poller). Tolerante a fallos: si algo falla, el setup queda sin
+        grado y la app sigue. El grado se captura al crearse y no se actualiza."""
+        snap = dict(setup)   # snapshot: no compartir el dict vivo del store
+
+        def _run():
+            try:
+                g = claude_grader.grade(snap)
+                if g and self._setups.attach_grade(snap["key"], snap["ts_created"], g):
+                    self.context.log(f"claude(sombra): {snap['pair']} {snap['dir']} "
+                                     f"nota={g.get('grade')} keep={g.get('keep')}")
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(f"claude grader: {exc}")
+
+        threading.Thread(target=_run, daemon=True).start()
 
     @staticmethod
     def _poi_key(poi: dict) -> str:

@@ -325,7 +325,7 @@ class SetupStore:
                         and (now_s - s["ts_closed"]) < cooldown_s):
                     return False
             active = plan.get("state") == "activo"
-            self._setups.append({
+            s_new = {
                 "key": k,
                 "source": source,
                 "ts_created": int(now_s),
@@ -362,9 +362,10 @@ class SetupStore:
                 "result_r": None,
                 "price_at_create": last_price,
                 "ts_updated": int(now_s),
-            })
+            }
+            self._setups.append(s_new)
             self._save()
-            return True
+            return s_new   # el setup creado (para graduarlo en sombra); falsy si no se creó
 
     def add_manual(self, pair: str, direction: str, entry: float, sl: float, tp: float,
                    tf: str = "manual", last_price: float | None = None,
@@ -394,7 +395,7 @@ class SetupStore:
             "regime_ok": None, "cdc_status": None,
         }
         created = self.record(plan, pair, tf, last_price or entry, now_s, source="profe")
-        return {"ok": True, "created": created, "rr": plan["rr"],
+        return {"ok": True, "created": bool(created), "rr": plan["rr"],
                 "status": plan["state"], "sl_pct": round(risk / entry * 100, 2)}
 
     def mark_cdc(self, pair: str, plan: dict, now_s: float) -> bool:
@@ -410,6 +411,27 @@ class SetupStore:
                     s["ts_cdc"] = int(now_s)
                     s["ts_updated"] = int(now_s)
                     changed = True
+            if changed:
+                self._save()
+        return changed
+
+    def attach_grade(self, key: str, ts_created: int, data: dict) -> bool:
+        """Adjunta el GRADO de Claude (modo sombra) al setup identificado por
+        key+ts_created. Se captura AL CREARSE y NO se actualiza después (registro
+        prospectivo, cero look-ahead). No interviene la decisión: es solo metadata
+        para validar el criterio de Claude a los ~50 trades."""
+        changed = False
+        with self._lock:
+            for s in self._setups:
+                if s["key"] == key and s.get("ts_created") == ts_created \
+                        and "claude_grade" not in s:
+                    s["claude_grade"] = data.get("grade")
+                    s["claude_keep"] = data.get("keep")
+                    s["claude_conf"] = data.get("confidence")
+                    s["claude_rationale"] = data.get("rationale")
+                    s["claude_graded_at"] = int(time.time())
+                    changed = True
+                    break
             if changed:
                 self._save()
         return changed

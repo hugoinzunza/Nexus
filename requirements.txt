@@ -5,3 +5,8 @@ fastapi==0.115.0
 uvicorn[standard]==0.32.0
 # Web push (las alertas se implementan más adelante; dejamos el patrón listo).
 pywebpush==1.14.1
+# Graduador SOMBRA de Claude (opcional): gradúa setups para validar su criterio a
+# los ~50 trades. Solo se activa si hay ANTHROPIC_API_KEY (Mac mini); en Railway,
+# sin key, queda inactivo. El SDK se importa de forma perezosa, así que su ausencia
+# no rompe el módulo de trading.
+anthropic==0.109.2
