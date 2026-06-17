@@ -6,7 +6,7 @@
 <title>NexUX · el mercado, en foco</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#f4f5f8;--bg2:#eef0f5;--card:#ffffff;--ink:#12141a;--text:#444a57;--muted:#888e9c;
@@ -16,7 +16,14 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);overflow-x:hidden;
        font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-  .display{font-family:"Space Grotesk","Inter",sans-serif}
+  .display{font-family:"Sora","Inter",sans-serif}
+  /* Wordmark NexUX como protagonista del hero */
+  .hero-brand{display:inline-flex;align-items:center;gap:clamp(10px,1.5vw,18px);
+    font-family:"Sora","Inter",sans-serif;font-weight:800;letter-spacing:-3px;line-height:.9;
+    font-size:clamp(50px,8.5vw,96px);color:var(--ink)}
+  .hero-brand .iso{width:.82em;height:.82em}
+  .hero-brand .ux{background:linear-gradient(120deg,var(--cyan),#16cfe6 60%,var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
   a{text-decoration:none;color:inherit}
   .up{color:var(--green)}.down{color:var(--red)}.am{color:var(--amber)}
   .wrap{max-width:1180px;margin:0 auto;padding:0 clamp(20px,4vw,40px)}
@@ -24,7 +31,7 @@
   /* Marca — lockup compacto (iso + Nex·UX pegados) */
   .brand{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
   .brand .iso{width:26px;height:26px;flex:0 0 auto}
-  .brand .wm{font-family:"Space Grotesk","Inter",sans-serif;font-weight:600;font-size:19px;letter-spacing:-.6px;line-height:1}
+  .brand .wm{font-family:"Sora","Inter",sans-serif;font-weight:700;font-size:19px;letter-spacing:-.6px;line-height:1}
   .brand .wm .ux{color:var(--cyan)}
 
   nav{position:sticky;top:0;z-index:30;background:rgba(244,245,248,.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
@@ -44,7 +51,7 @@
   .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
   .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;letter-spacing:.3px;
            color:var(--accent);background:var(--accent-soft);padding:7px 14px;border-radius:999px}
-  .hero h1{font-family:"Space Grotesk","Inter",sans-serif;font-size:clamp(44px,6.4vw,76px);font-weight:600;letter-spacing:-2.4px;line-height:1.0;margin:22px 0 0;color:var(--ink)}
+  .hero h1{font-family:"Sora","Inter",sans-serif;font-size:clamp(22px,3vw,33px);font-weight:600;letter-spacing:-1px;line-height:1.12;margin:16px 0 0;color:var(--ink)}
   .hero h1 em{font-style:normal;color:var(--accent)}
   .hero p{font-size:clamp(15.5px,1.9vw,18px);line-height:1.62;color:var(--text);max-width:480px;margin:20px 0 0}
   .hero .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
@@ -147,7 +154,8 @@
   <div class="hero-grid">
     <div>
       <span class="eyebrow">● Beta cerrada · por invitación</span>
-      <h1>All signal.<br><em>No noise.</em></h1>
+      <div class="hero-brand"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg>Nex<span class="ux">UX</span></div>
+      <h1>All signal. <em>No noise.</em></h1>
       <p>Indicadores, noticias y fechas clave en tiempo real. Conecta tu exchange
          <b>en solo lectura</b> y suma tu diario de trading: PnL, win rate y tus mejores horarios.</p>
       <div class="cta"><a class="btn primary lg" href="#join">Pedir acceso →</a><a class="btn soft lg" href="#join">Entrar con Google</a></div>
