@@ -52,6 +52,13 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-even
 .back:hover { color: var(--accent); }
 .topbar h1 { font-size: 18px; margin: 0; flex: 1; color: var(--ink); font-weight: 600; letter-spacing: -.4px; }
 .bt-link { font-size: 13px; color: var(--accent); font-weight: 600; }
+/* Acceso al otro módulo (Trading <-> Diario) — mismo lenguaje visual que .alert-btn */
+.nav-pill { display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; color: var(--accent); text-decoration: none;
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px;
+  font-size: 12.5px; font-weight: 600; font-family: inherit; min-height: 36px;
+  white-space: nowrap; transition: background .12s, border-color .12s; }
+.nav-pill:hover { border-color: var(--accent); background: var(--accent-soft, transparent); }
 .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); }
 .dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(10,157,99,.5); }
