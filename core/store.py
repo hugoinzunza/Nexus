@@ -68,21 +68,26 @@ def _ingest_path(kind: str) -> str:
     return os.path.join(DATA_DIR, name)
 
 
-def read_ingest(kind: str) -> Optional[dict]:
+def read_ingest(kind: str, user_id: Optional[int] = None) -> Optional[dict]:
+    """Lee la ingesta de un usuario. `user_id=None` → usuario por defecto (Hugo),
+    para preservar el modo single-tenant local/inerte. En modo DB (Railway) cada
+    usuario ve solo lo suyo. En modo JSON (sin DB) hay un solo archivo (un usuario)."""
     if db.database_enabled():
         from sqlalchemy import select
+        uid = user_id if user_id is not None else default_user_id()
         with db.session() as s:
             row = s.scalar(select(db.IngestedData).where(
-                db.IngestedData.user_id == default_user_id(),
+                db.IngestedData.user_id == uid,
                 db.IngestedData.kind == kind))
             return dict(row.payload) if row else None
     return _json_read(_ingest_path(kind))
 
 
-def write_ingest(kind: str, payload: dict) -> None:
+def write_ingest(kind: str, payload: dict, user_id: Optional[int] = None) -> None:
+    """Escribe la ingesta de un usuario. `user_id=None` → usuario por defecto (Hugo)."""
     if db.database_enabled():
         from sqlalchemy import select
-        uid = default_user_id()
+        uid = user_id if user_id is not None else default_user_id()
         with db.session() as s:
             row = s.scalar(select(db.IngestedData).where(
                 db.IngestedData.user_id == uid, db.IngestedData.kind == kind))
@@ -102,20 +107,21 @@ def _subs_path() -> str:
     return os.path.join(DATA_DIR, "push_subs.json")
 
 
-def load_push_subs() -> List[dict]:
+def load_push_subs(user_id: Optional[int] = None) -> List[dict]:
     if db.database_enabled():
         from sqlalchemy import select
+        uid = user_id if user_id is not None else default_user_id()
         with db.session() as s:
             rows = s.scalars(select(db.PushSubscription).where(
-                db.PushSubscription.user_id == default_user_id())).all()
+                db.PushSubscription.user_id == uid)).all()
             return [r.subscription for r in rows]
     return _json_read(_subs_path()) or []
 
 
-def save_push_subs(subs: List[dict]) -> None:
+def save_push_subs(subs: List[dict], user_id: Optional[int] = None) -> None:
     if db.database_enabled():
         from sqlalchemy import delete
-        uid = default_user_id()
+        uid = user_id if user_id is not None else default_user_id()
         with db.session() as s:
             s.execute(delete(db.PushSubscription).where(
                 db.PushSubscription.user_id == uid))

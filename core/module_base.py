@@ -52,24 +52,27 @@ class NexusModule:
         guess = os.path.join(self.context.module_dir, "public")
         return guess if os.path.isdir(guess) else None
 
-    def api(self, subpath: str, query: dict) -> Optional[Tuple[int, str, bytes]]:
+    def api(self, subpath: str, query: dict, user: Optional[dict] = None) -> Optional[Tuple[int, str, bytes]]:
         """Maneja peticiones GET a /m/<slug>/api/<subpath>.
 
-        Devuelve una tupla (status, content_type, body_bytes) o None si la
-        ruta no existe (el núcleo responderá 404).
+        `user` es el dict de sesión del usuario autenticado (o None si no hay
+        sesión / auth inerte). Los módulos con datos personales deben filtrar
+        por `user["uid"]`. Devuelve (status, content_type, body_bytes) o None si
+        la ruta no existe (el núcleo responderá 404).
         """
         return None
 
-    def api_post(self, subpath: str, body, headers: dict) -> Optional[Tuple[int, str, bytes]]:
+    def api_post(self, subpath: str, body, headers: dict, user: Optional[dict] = None) -> Optional[Tuple[int, str, bytes]]:
         """Maneja peticiones POST a /m/<slug>/api/<subpath>.
 
         `body` es el JSON ya parseado (o None si no vino o no era JSON válido).
-        `headers` es un dict con las cabeceras (claves en minúscula). Devuelve
-        (status, content_type, body_bytes) o None si la ruta no existe.
+        `headers` es un dict con las cabeceras (claves en minúscula). `user` es
+        el dict de sesión (o None). Devuelve (status, content_type, body_bytes)
+        o None si la ruta no existe.
         """
         return None
 
-    def sse(self, subpath: str, query: dict):
+    def sse(self, subpath: str, query: dict, user: Optional[dict] = None):
         """Maneja un stream Server-Sent Events en /m/<slug>/api/<subpath>.
 
         Debe devolver un generador que produzca strings ya formateados como

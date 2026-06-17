@@ -332,9 +332,10 @@ def module_api(slug: str, subpath: str, request: Request):
         return blocked
 
     query = dict(request.query_params)
+    user = auth.current_user(request)
 
     # Primero intentamos un stream SSE.
-    stream = module.sse(subpath, query)
+    stream = module.sse(subpath, query, user=user)
     if stream is not None:
         return StreamingResponse(
             stream,
@@ -346,7 +347,7 @@ def module_api(slug: str, subpath: str, request: Request):
             },
         )
 
-    result = module.api(subpath, query)
+    result = module.api(subpath, query, user=user)
     if result is not None:
         status, ctype, body = result
         return Response(content=body, status_code=status, media_type=ctype)
@@ -366,8 +367,9 @@ async def module_api_post(slug: str, subpath: str, request: Request):
     except Exception:  # noqa: BLE001
         data = None
     headers = {k.lower(): v for k, v in request.headers.items()}
+    user = auth.current_user(request)
 
-    result = module.api_post(subpath, data, headers)
+    result = module.api_post(subpath, data, headers, user=user)
     if result is not None:
         status, ctype, body = result
         return Response(content=body, status_code=status, media_type=ctype)

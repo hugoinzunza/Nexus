@@ -601,7 +601,7 @@ class TradingModule(NexusModule):
         return candles
 
     # --- API HTTP ------------------------------------------------------
-    def api(self, subpath, query):
+    def api(self, subpath, query, user=None):
         if subpath == "dashboard":
             # Centro de mando público (Home): indicadores + mercado + calendario,
             # todo de fuentes reales y cacheado en memoria. Tolerante a fallos.
@@ -760,7 +760,7 @@ class TradingModule(NexusModule):
                 return (200, "application/json; charset=utf-8", fh.read())
         return None
 
-    def api_post(self, subpath, body, headers):
+    def api_post(self, subpath, body, headers, user=None):
         """Carga MANUAL de una entrada del profe al forward-test (paper). NO coloca
         órdenes — solo registra el plan para seguirlo. Auth con NEXUS_INGEST_TOKEN
         si está configurado (igual que la ingesta del Diario)."""
@@ -811,7 +811,7 @@ class TradingModule(NexusModule):
         body = json.dumps({"error": message}, ensure_ascii=False).encode("utf-8")
         return (status, "application/json; charset=utf-8", body)
 
-    def sse(self, subpath, query):
+    def sse(self, subpath, query, user=None):
         if subpath != "stream":
             return None
         return self._stream()

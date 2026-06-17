@@ -48,9 +48,12 @@ class JournalModule(NexusModule):
         self._lock = threading.Lock()
 
     # --- GET -----------------------------------------------------------
-    def api(self, subpath, query):
+    def api(self, subpath, query, user=None):
+        # Diario = datos personales de Binance → SIEMPRE por usuario de la sesión.
+        # Sin sesión (auth inerte / uso local) uid=None → usuario por defecto (Hugo).
+        uid = (user or {}).get("uid")
         if subpath == "status":
-            data = self._read()
+            data = self._read(uid)
             if not data:
                 return self._json(200, {"has_data": False, "waiting": True,
                                         "ingest_ready": bool(self._token())})
@@ -62,7 +65,7 @@ class JournalModule(NexusModule):
                 "lookback_days": data.get("lookback_days"),
             })
         if subpath == "stats":
-            data = self._read()
+            data = self._read(uid)
             if not data:
                 return self._json(200, {"has_data": False, "waiting": True})
             data = dict(data)
@@ -114,7 +117,7 @@ class JournalModule(NexusModule):
         return store.read_ingest("setups")
 
     # --- POST (ingesta) ------------------------------------------------
-    def api_post(self, subpath, body, headers):
+    def api_post(self, subpath, body, headers, user=None):
         if subpath not in ("ingest", "ingest_setups"):
             return None
         token = self._token()
@@ -213,8 +216,8 @@ class JournalModule(NexusModule):
     def _token():
         return os.environ.get("NEXUS_INGEST_TOKEN", "").strip()
 
-    def _read(self):
-        return store.read_ingest("journal")
+    def _read(self, user_id=None):
+        return store.read_ingest("journal", user_id=user_id)
 
     @staticmethod
     def _age(data):
