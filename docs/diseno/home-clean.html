@@ -160,7 +160,25 @@
   .radar-foot{margin-top:14px;font-size:13px;color:var(--muted);text-align:center}
   .radar-foot a{color:var(--accent);font-weight:600}
 
-  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:34px}.grid{grid-template-columns:1fr}.ind{grid-template-columns:repeat(2,1fr)}.nav-links a:not(.btn){display:none}.preview{transform:none}}
+  /* Sentimiento (gauge) + Heatmap */
+  .feat-row{margin-top:22px;display:grid;grid-template-columns:340px 1fr;gap:22px;align-items:start}
+  .gauge{text-align:center;padding:10px 6px 4px}
+  .gauge .g-val{font-family:"Sora","Inter",sans-serif;font-size:48px;font-weight:800;letter-spacing:-1.8px;line-height:1}
+  .gauge .g-label{font-size:14.5px;font-weight:600;color:var(--text);margin-top:4px}
+  .gauge .g-bar{position:relative;height:10px;border-radius:6px;margin:16px 0 7px;
+    background:linear-gradient(90deg,#d8394e,#e0a020 50%,#0a9d63)}
+  .gauge .g-needle{position:absolute;top:-4px;width:3px;height:18px;background:var(--ink);
+    border-radius:2px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+  .gauge .g-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.6px}
+  .heat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
+  .htile{display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-radius:12px;
+    border:1px solid var(--line);text-decoration:none;transition:transform .15s}
+  .htile:hover{transform:translateY(-2px)}
+  .htile .ht-sym{font-family:"Sora","Inter",sans-serif;font-weight:700;color:var(--ink);font-size:15px}
+  .htile .ht-chg{font-size:13px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
+
+  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:34px}.grid{grid-template-columns:1fr}.feat-row{grid-template-columns:1fr}.ind{grid-template-columns:repeat(2,1fr)}.nav-links a:not(.btn){display:none}.preview{transform:none}}
 </style>
 </head>
 <body>
@@ -208,6 +226,17 @@
     <div id="board" class="board-grid"><div class="brow-empty">cargando radar…</div></div>
     <div class="radar-foot">Los <b>planes accionables</b> (entrada, stop, objetivo) viven en tu panel.
       <a href="/login">Entrar →</a></div>
+  </div>
+</section>
+
+<section class="wrap feat-row">
+  <div class="card gauge-card">
+    <div class="hd"><span class="ic">🧭</span><h3>Sentimiento</h3><span class="hint">Fear &amp; Greed</span></div>
+    <div id="fng-gauge" class="gauge"><div class="brow-empty">—</div></div>
+  </div>
+  <div class="card heat-card">
+    <div class="hd"><span class="ic">🔥</span><h3>Mapa de calor · 24h</h3><span class="hint">risk-on / risk-off · toca para abrir Trading</span></div>
+    <div id="heatmap" class="heat-grid"><div class="brow-empty">cargando…</div></div>
   </div>
 </section>
 
@@ -359,6 +388,23 @@ async function loadDashboard(){
   if(mk.length){ $('market').innerHTML=mk.map(m=>{ const up=(m.change_24h||0)>=0;
     return `<div class="row" data-sym="${m.symbol}"><span class="pair">${m.symbol}</span><span class="sp">${spark(up?MK['1']:MK['0'],up?'#0a9d63':'#d8394e')}</span>`
       +`<span class="num">${fmtPx(m.price)}</span><span class="chg ${up?'up':'down'}">${(m.change_24h>0?'+':'')+m.change_24h}%</span></div>`; }).join(''); }
+
+  // Medidor Fear & Greed (gauge visual)
+  const fg=ind.fear_greed, gEl=$('fng-gauge');
+  if(fg&&gEl){ const v=fg.value;
+    const col=v<45?'var(--red)':v<=55?'var(--amber)':'var(--green)';
+    const esMap={'Extreme Fear':'Miedo extremo','Fear':'Miedo','Neutral':'Neutral','Greed':'Codicia','Extreme Greed':'Codicia extrema'};
+    const lab=esMap[fg.label]||fg.label||'';
+    gEl.innerHTML=`<div class="g-val" style="color:${col}">${v}</div><div class="g-label">${lab}</div>`
+      +`<div class="g-bar"><div class="g-needle" style="left:${Math.max(0,Math.min(100,v))}%"></div></div>`
+      +`<div class="g-scale"><span>Miedo</span><span>Codicia</span></div>`; }
+
+  // Heatmap de mercado (24h %): intensidad de color por magnitud del cambio.
+  const hEl=$('heatmap');
+  if(mk.length&&hEl){ hEl.innerHTML=mk.map(m=>{ const c=m.change_24h||0, up=c>=0;
+    const a=Math.min(0.55,Math.abs(c)/8+0.08);
+    const bg=up?`rgba(10,157,99,${a})`:`rgba(216,57,78,${a})`;
+    return `<a class="htile" href="/m/trading/" style="background:${bg}"><span class="ht-sym">${m.symbol}</span><span class="ht-chg">${c>0?'+':''}${c}%</span></a>`; }).join(''); }
 
   // Calendario
   const cal=d.calendar||[];
