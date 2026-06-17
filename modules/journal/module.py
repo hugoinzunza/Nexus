@@ -161,7 +161,8 @@ class JournalModule(NexusModule):
         # Conectar/desconectar exchange: auth por SESIÓN (no por token del colector).
         if subpath in ("connect-exchange", "disconnect-exchange"):
             return self._exchange_post(subpath, body, user)
-        if subpath not in ("ingest", "ingest_setups"):
+        # El resto son endpoints del COLECTOR (VPS), autenticados por token.
+        if subpath not in ("ingest", "ingest_setups", "connections", "connection-status"):
             return None
         token = self._token()
         if not token:
@@ -172,12 +173,26 @@ class JournalModule(NexusModule):
             if auth.lower().startswith("bearer "):
                 provided = auth[7:]
         if not hmac.compare_digest(str(provided), str(token)):
-            self.context.log("journal: ingesta rechazada (token inválido)")
+            self.context.log("journal: petición del colector rechazada (token inválido)")
             return self._json(401, {"error": "token inválido"})
+
+        # Bóveda multi-usuario: el colector pide las conexiones y reporta su verificación.
+        if subpath == "connections":
+            return self._json(200, {"connections": store.list_connections_for_collector()})
+        if subpath == "connection-status":
+            if not isinstance(body, dict) or body.get("user_id") is None or not body.get("status"):
+                return self._json(400, {"error": "se esperaba {user_id, status, detail?}"})
+            store.set_exchange_status(int(body["user_id"]), str(body["status"]),
+                                      body.get("detail"), body.get("exchange", "binance"))
+            return self._json(200, {"ok": True})
+
         if not isinstance(body, dict):
             return self._json(400, {"error": "payload inválido (se esperaba JSON objeto)"})
 
         body = dict(body)
+        # En multi-usuario el colector marca a quién pertenece el payload; sin user_id
+        # → usuario por defecto (colector single-user de Hugo, retrocompatible).
+        ingest_uid = body.pop("user_id", None)
         body["_received_at_ms"] = int(time.time() * 1000)
         kind = "setups" if subpath == "ingest_setups" else "journal"
         prev_setups = None
@@ -186,8 +201,9 @@ class JournalModule(NexusModule):
             old = store.read_ingest("setups")
             prev_setups = old.get("setups") if isinstance(old, dict) else None
         with self._lock:
-            store.write_ingest(kind, body)
-        self.context.log(f"journal: {subpath} ingerido del colector")
+            store.write_ingest(kind, body, user_id=ingest_uid)
+        self.context.log(f"journal: {subpath} ingerido del colector"
+                         + (f" (user {ingest_uid})" if ingest_uid is not None else ""))
         if subpath == "ingest_setups" and isinstance(body.get("setups"), list):
             # El Mac mini es el tracker autoritativo pero no tiene suscripciones push;
             # las alertas se disparan acá (Railway, donde están las subs) comparando el

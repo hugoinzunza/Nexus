@@ -83,13 +83,13 @@ def load_env_file():
 
 
 # --- Construcción del payload (misma lógica que tenía el módulo) ---------
-def build_payload(lookback_days: int) -> dict:
+def build_payload(lookback_days: int, income_path: str = INCOME_PATH) -> dict:
     now = int(time.time() * 1000)
     payload = {"configured": True, "generated_at_ms": now,
                "lookback_days": lookback_days,
                "futures": {"ok": False}, "spot": {"ok": False}}
     try:
-        income = _load_income(now, lookback_days)
+        income = _load_income(now, lookback_days, income_path)
         trades = stats.reconstruct_trades(income)
         payload["futures"] = {
             "ok": True,
@@ -109,12 +109,12 @@ def build_payload(lookback_days: int) -> dict:
     return payload
 
 
-def _load_income(now, lookback_days):
+def _load_income(now, lookback_days, income_path=INCOME_PATH):
     os.makedirs(DATA_DIR, exist_ok=True)
     cached = {"rows": [], "last_time": 0}
-    if os.path.isfile(INCOME_PATH):
+    if os.path.isfile(income_path):
         try:
-            with open(INCOME_PATH, "r", encoding="utf-8") as fh:
+            with open(income_path, "r", encoding="utf-8") as fh:
                 cached = json.load(fh)
         except Exception:  # noqa: BLE001
             cached = {"rows": [], "last_time": 0}
@@ -133,7 +133,7 @@ def _load_income(now, lookback_days):
     cached["rows"].sort(key=lambda x: int(x["time"]))
     cached["rows"] = [r for r in cached["rows"] if int(r["time"]) >= lookback_start]
     cached["last_time"] = cached["rows"][-1]["time"] if cached["rows"] else now
-    with open(INCOME_PATH, "w", encoding="utf-8") as fh:
+    with open(income_path, "w", encoding="utf-8") as fh:
         json.dump(cached, fh)
     return cached["rows"]
 
@@ -245,6 +245,105 @@ def send(payload: dict, url: str, token: str) -> dict:
         return json.load(resp)
 
 
+# --- Colección multi-usuario (Fase C: bóveda) ----------------------------
+def _api_base(ingest_url: str) -> str:
+    """De la URL de ingesta (.../m/journal/api/ingest) saca la base .../m/journal/api."""
+    base = ingest_url.rstrip("/")
+    return base[:-len("/ingest")] if base.endswith("/ingest") else base
+
+
+def _post_json(url: str, payload: dict, token: str) -> dict:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="POST", headers={
+        "Content-Type": "application/json", "X-Nexus-Token": token})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.load(resp)
+
+
+def fetch_connections(api_base: str, token: str) -> list:
+    try:
+        resp = _post_json(api_base + "/connections", {}, token)
+        return resp.get("connections", []) if isinstance(resp, dict) else []
+    except Exception as exc:  # noqa: BLE001
+        log(f"❌ no se pudieron traer las conexiones: {type(exc).__name__}: {exc}")
+        return []
+
+
+def report_status(api_base: str, token: str, user_id: int, status: str, detail=None) -> None:
+    try:
+        _post_json(api_base + "/connection-status",
+                   {"user_id": user_id, "status": status, "detail": detail}, token)
+    except Exception as exc:  # noqa: BLE001
+        log(f"  user {user_id}: no se pudo reportar estado ({status}): {exc}")
+
+
+def collect_connections(ingest_url: str, token: str, lookback: int) -> None:
+    """Itera las conexiones de exchange de los usuarios: descifra la llave con la KEK
+    privada (solo en el VPS), verifica read-only si está pendiente, y colecta por
+    usuario empujando a Railway con su user_id. La llave en claro solo vive en memoria."""
+    try:
+        from core import vault
+    except Exception as exc:  # noqa: BLE001
+        log(f"bóveda: no se pudo importar core.vault ({exc}); omito multi-usuario")
+        return
+    priv = vault.private_pem()
+    if not priv:
+        log("bóveda: sin clave privada (NEXUX_KEK_PRIVATE / ~/.nexus/kek_private.pem); omito multi-usuario")
+        return
+    api_base = _api_base(ingest_url)
+    conns = fetch_connections(api_base, token)
+    if not conns:
+        return
+    log(f"conexiones multi-usuario: {len(conns)}")
+    for c in conns:
+        uid = c.get("user_id")
+        sealed = c.get("sealed")
+        status = c.get("status")
+        if uid is None or not isinstance(sealed, dict):
+            continue
+        try:
+            api_key, api_secret = vault.unseal_credentials(sealed, priv)
+        except Exception:  # noqa: BLE001
+            log(f"  user {uid}: no se pudo descifrar la llave")
+            report_status(api_base, token, uid, "error", "no se pudo descifrar la llave")
+            continue
+        # Verificación read-only (solo si está pendiente): rechaza retiros/transferencias.
+        if status == "pending":
+            ok, detail = bc.verify_read_only(api_key, api_secret)
+            report_status(api_base, token, uid, "active" if ok else "rejected", detail)
+            log(f"  user {uid}: verificación → {'active' if ok else 'rejected'} ({detail})")
+            if not ok:
+                continue
+        # Colecta con la llave del usuario (env-swap; el proceso es secuencial).
+        prev_k = os.environ.get("BINANCE_API_KEY")
+        prev_s = os.environ.get("BINANCE_API_SECRET")
+        os.environ["BINANCE_API_KEY"] = api_key
+        os.environ["BINANCE_API_SECRET"] = api_secret
+        try:
+            income_path = os.path.join(DATA_DIR, f"journal_income_{uid}.json")
+            payload = build_payload(lookback, income_path=income_path)
+            payload["user_id"] = uid
+            send(payload, ingest_url, token)
+            fut_ok = payload["futures"].get("ok")
+            log(f"  user {uid}: futuros ok={fut_ok}, spot ok={payload['spot'].get('ok')} → enviado")
+            if not fut_ok:
+                report_status(api_base, token, uid, "error", payload["futures"].get("error"))
+        except Exception as exc:  # noqa: BLE001
+            log(f"  user {uid}: error colectando: {type(exc).__name__}: {exc}")
+            report_status(api_base, token, uid, "error", str(exc))
+        finally:
+            # Restaura la llave previa (la de Hugo) y borra la del usuario de memoria.
+            if prev_k is not None:
+                os.environ["BINANCE_API_KEY"] = prev_k
+            else:
+                os.environ.pop("BINANCE_API_KEY", None)
+            if prev_s is not None:
+                os.environ["BINANCE_API_SECRET"] = prev_s
+            else:
+                os.environ.pop("BINANCE_API_SECRET", None)
+            del api_key, api_secret
+
+
 def main():
     load_env_file()
     url = os.environ.get("NEXUS_INGEST_URL", "").strip()
@@ -271,6 +370,12 @@ def main():
     # También enviamos el FORWARD-TEST de setups (lo escribe la app del Mac mini con
     # precios Binance). Así nexux.cl muestra el paper-trading real y persistente.
     send_setups(url, token)
+
+    # Multi-usuario (Fase C): colecta las cuentas de los beta que conectaron su Binance.
+    try:
+        collect_connections(url, token, lookback)
+    except Exception as exc:  # noqa: BLE001
+        log(f"❌ error en colección multi-usuario: {type(exc).__name__}: {exc}")
 
 
 def app_health() -> dict:
