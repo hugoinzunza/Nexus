@@ -82,32 +82,22 @@ class Hub:
     _CARD_ACCENTS = {"trading": "violet", "journal": "green"}
 
     def render_landing(self) -> str:
-        cards = []
-        for m in self.modules:
-            accent = self._CARD_ACCENTS.get(m.slug, "cyan")
-            cards.append(f"""
-        <a class="card ac-{accent}" href="/m/{m.slug}/">
-          <div class="card-head">
-            <span class="card-icon">{m.icon}</span>
-            <span class="card-arrow">→</span>
-          </div>
-          <h2>{m.title}</h2>
-          <p>{m.description}</p>
-          <span class="card-tag">/m/{m.slug}</span>
-        </a>""")
-        # Placeholder "próximamente" para dejar ver que la arquitectura suma módulos.
-        cards.append("""
-        <div class="card soon">
-          <div class="card-head"><span class="card-icon">＋</span></div>
-          <h2>Próximamente</h2>
-          <p>Núcleo modular: nuevos módulos se enchufan sin tocar el resto.</p>
-          <span class="card-tag">modules/</span>
-        </div>""")
-        cards_html = "\n".join(cards) if cards else "<p class='empty'>No hay módulos cargados.</p>"
-        return (_LANDING_TEMPLATE
-                .replace("{{CARDS}}", cards_html)
-                .replace("{{N_MODULES}}", str(len(self.modules))))
+        # El landing de producto es el diseño aprobado (docs/diseno/home-clean.html),
+        # cacheado. Si faltara el archivo, cae al template modular antiguo.
+        global _LANDING_CACHE
+        if _LANDING_CACHE is None:
+            try:
+                with open(os.path.join(ROOT, "docs", "diseno", "home-clean.html"),
+                          "r", encoding="utf-8") as fh:
+                    _LANDING_CACHE = fh.read()
+            except Exception:  # noqa: BLE001
+                _LANDING_CACHE = (_LANDING_TEMPLATE
+                                  .replace("{{CARDS}}", "")
+                                  .replace("{{N_MODULES}}", str(len(self.modules))))
+        return _LANDING_CACHE
 
+
+_LANDING_CACHE = None
 
 _LANDING_TEMPLATE = """<!doctype html>
 <html lang="es">
