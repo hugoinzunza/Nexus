@@ -5,6 +5,9 @@ pensado para correr 24/7. **Independiente de ClaudeOS**: no comparten código ni
 
 Responder siempre en **español chileno**, tono cercano y directo.
 
+> 📌 **Última sesión y pendientes:** ver [`docs/SESION_2026-06-17.md`](docs/SESION_2026-06-17.md)
+> (auth activa, login branded, Radar SMC teaser en Home, tema oscuro, etc. + qué falta).
+
 ## REGLA #1 — Todo a GitHub, nada se pierde
 
 GitHub es la **única fuente de verdad**. Hay varias copias de este repo (MacBook de Hugo,
