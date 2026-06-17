@@ -133,7 +133,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
     if (!points || !points.length) {
-      ctx.fillStyle = "#8b93a7"; ctx.font = "13px -apple-system, sans-serif";
+      ctx.fillStyle = "#888e9c"; ctx.font = "13px Inter, -apple-system, sans-serif";
       ctx.fillText("Sin trades fuera de muestra.", 12, cssH / 2);
       return;
     }
@@ -150,21 +150,21 @@
     ctx.font = "10px -apple-system, sans-serif"; ctx.textBaseline = "middle";
     for (let g = 0; g <= 4; g++) {
       const r = lo + (hi - lo) * (g / 4), yy = y(r);
-      ctx.strokeStyle = "rgba(255,255,255,0.05)";
+      ctx.strokeStyle = "rgba(18,20,26,0.06)";
       ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + plotW, yy); ctx.stroke();
-      ctx.fillStyle = "#8b93a7"; ctx.fillText(r.toFixed(0) + "R", padL + plotW + 6, yy);
+      ctx.fillStyle = "#888e9c"; ctx.fillText(r.toFixed(0) + "R", padL + plotW + 6, yy);
     }
     const y0 = y(0);
-    ctx.strokeStyle = "rgba(162,155,254,0.5)"; ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "rgba(108,92,231,0.5)"; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(padL + plotW, y0); ctx.stroke();
     ctx.setLineDash([]);
 
     const lastR = points[points.length - 1].R;
-    const col = lastR >= 0 ? "#16c784" : "#ea3943";
+    const col = lastR >= 0 ? "#0a9d63" : "#d8394e";
     ctx.beginPath();
     points.forEach((p, i) => { const xx = x(i), yy = y(p.R); i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); });
     ctx.lineTo(x(points.length - 1), y0); ctx.lineTo(x(0), y0); ctx.closePath();
-    ctx.fillStyle = lastR >= 0 ? "rgba(22,199,132,0.10)" : "rgba(234,57,67,0.10)"; ctx.fill();
+    ctx.fillStyle = lastR >= 0 ? "rgba(10,157,99,0.10)" : "rgba(216,57,78,0.10)"; ctx.fill();
     ctx.beginPath();
     points.forEach((p, i) => { const xx = x(i), yy = y(p.R); i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); });
     ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.stroke();

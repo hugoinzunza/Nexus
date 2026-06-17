@@ -747,18 +747,18 @@
       autoSize: true,
       // Sin el logo/link de TradingView dentro del canvas; la atribución de
       // Lightweight Charts (Apache-2.0) va en el pie de la página.
-      layout: { background: { color: "transparent" }, textColor: "#8b93a7",
-                fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
+      layout: { background: { color: "transparent" }, textColor: "#888e9c",
+                fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
                 attributionLogo: false },
-      grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
+      grid: { vertLines: { color: "rgba(18,20,26,0.05)" }, horzLines: { color: "rgba(18,20,26,0.05)" } },
       crosshair: { mode: LC.CrosshairMode.Normal },
-      rightPriceScale: { borderColor: "#262b38" },
-      timeScale: { borderColor: "#262b38", timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: "#e6e8ef" },
+      timeScale: { borderColor: "#e6e8ef", timeVisible: true, secondsVisible: false },
       localization: { locale: "es" },
     });
     const series = chart.addSeries(LC.CandlestickSeries, {
-      upColor: "#16c784", downColor: "#ea3943", borderVisible: false,
-      wickUpColor: "#16c784", wickDownColor: "#ea3943",
+      upColor: "#0a9d63", downColor: "#d8394e", borderVisible: false,
+      wickUpColor: "#0a9d63", wickDownColor: "#d8394e",
       priceFormat: { type: "price", precision: 2, minMove: 0.01 },
     });
     const prim = new SMCPrimitive();
