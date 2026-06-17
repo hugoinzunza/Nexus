@@ -152,7 +152,7 @@
 <nav>
   <div class="nav-in">
     <a class="brand" href="#"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg><span class="wm">Nex<span class="ux">UX</span></span></a>
-    <div class="nav-links"><a href="#">Producto</a><a href="#">Seguridad</a><a class="btn soft" href="#join">Entrar</a></div>
+    <div class="nav-links"><a href="#">Producto</a><a href="#">Seguridad</a><a class="btn soft" id="nav-auth" href="/login">Entrar</a></div>
   </div>
 </nav>
 
@@ -163,7 +163,7 @@
       <h1>Menos pantallas.<br><em>Mejores decisiones.</em></h1>
       <p>Indicadores, noticias, eventos económicos y <b>estadísticas reales de tu
          operativa</b> — en un solo dashboard.</p>
-      <div class="cta"><a class="btn primary lg" href="mailto:hugoinzunza@gmail.com?subject=Acceso%20beta%20NexUX">Pedir acceso →</a><a class="btn soft lg" href="#join">Entrar con Google</a></div>
+      <div class="cta"><a class="btn primary lg" href="mailto:hugoinzunza@gmail.com?subject=Acceso%20beta%20NexUX">Pedir acceso →</a><a class="btn soft lg" href="/login">Entrar con Google</a></div>
       <div class="note">Solo lectura · nunca operamos por ti · llaves cifradas</div>
     </div>
     <div class="preview">
@@ -223,7 +223,7 @@
           <div class="c"><div class="k">Win rate</div><div class="v">58%</div></div>
           <div class="ov">🔒</div>
         </div>
-        <a class="btn primary lg" href="#" style="margin-top:16px;width:100%;justify-content:center">Entrar con Google</a>
+        <a class="btn primary lg" href="/login" style="margin-top:16px;width:100%;justify-content:center">Entrar con Google</a>
       </div>
 
       <div class="card">
@@ -358,8 +358,16 @@ async function loadBrief(){
     else $('brief').textContent='El brief con IA se activa al conectar la clave de Claude. Mientras, revisa los indicadores y el calendario de abajo.';
   }catch(e){}
 }
+async function loadMe(){
+  try{ const r=await fetch('/me'); if(!r.ok) return; const d=await r.json();
+    if(d.auth && d.user){ const nm=(d.user.name||d.user.email||'').split(' ')[0];
+      const nav=$('nav-auth'); if(nav){ nav.textContent=nm?('Hola, '+nm):'Mi diario'; nav.href='/m/journal/'; }
+    }
+  }catch(e){}
+}
 loadDashboard();
 loadBrief();
+loadMe();
 setInterval(loadDashboard, 120000);  // refresco cada 2 min (indicadores, noticias, calendario)
 
 // ---- Mercado en TIEMPO REAL (WebSocket directo a Crypto.com) -----------

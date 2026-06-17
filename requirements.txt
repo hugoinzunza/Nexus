@@ -17,3 +17,9 @@ anthropic==0.109.2
 sqlalchemy==2.0.36
 psycopg[binary]==3.2.13
 alembic==1.14.0
+# Auth multi-usuario (Fase funcional): cookie de sesión FIRMADA (no cifrada, no
+# guarda secretos) con itsdangerous. El flujo Google OAuth2 se hace con urllib
+# (stdlib), sin SDK extra. Toda la auth queda INERTE hasta configurar las
+# variables (GOOGLE_CLIENT_ID/SECRET, SESSION_SECRET): sin ellas el sitio
+# funciona como hoy (un usuario, todo abierto).
+itsdangerous==2.2.0

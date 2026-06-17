@@ -27,6 +27,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
+    RedirectResponse,
     Response,
     StreamingResponse,
 )
@@ -34,6 +35,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core.hub import ROOT, Hub, load_config, log
 from core import push
+from core import auth
 
 STATIC_DIR = os.path.join(ROOT, "static")
 
@@ -161,12 +163,95 @@ async def push_test(request: Request):
             "persist_dir": persist_dir(ROOT)}
 
 
+# --- Auth (Google OAuth2) -----------------------------------------------
+# Inerte hasta configurar GOOGLE_CLIENT_ID/SECRET + SESSION_SECRET. Sin eso, el
+# sitio funciona como hoy (un usuario, todo abierto).
+def _base_url(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("host") or request.url.netloc
+    return f"{proto}://{host}"
+
+
+@app.get("/me")
+def whoami(request: Request):
+    u = auth.current_user(request)
+    if not u:
+        return JSONResponse({"auth": True, "user": None})
+    return {"auth": auth.enabled(), "user": {
+        "email": u.get("email"), "name": u.get("name"),
+        "role": u.get("role"), "picture": u.get("picture")}}
+
+
+@app.get("/login")
+def login(request: Request, next: str = "/m/journal/"):
+    if not auth.enabled():
+        return RedirectResponse(url="/", status_code=307)
+    cb = auth.redirect_uri(_base_url(request))
+    state = auth.sign_state({"next": next})
+    return RedirectResponse(url=auth.login_url(state, cb), status_code=307)
+
+
+@app.get("/auth/callback")
+def auth_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    if not auth.enabled():
+        return RedirectResponse(url="/", status_code=307)
+    if error or not code:
+        return RedirectResponse(url="/?login=error", status_code=307)
+    st = auth.read_state(state)
+    if st is None:
+        return RedirectResponse(url="/?login=state", status_code=307)
+    cb = auth.redirect_uri(_base_url(request))
+    try:
+        info = auth.exchange_code(code, cb)
+    except Exception as exc:  # noqa: BLE001
+        log(f"auth: fallo al intercambiar code: {exc}")
+        return RedirectResponse(url="/?login=error", status_code=307)
+    if not info.get("email_verified") or not auth.is_allowed(info.get("email", "")):
+        return RedirectResponse(url="/?login=denied", status_code=307)
+    user = auth.upsert_user(info)
+    nxt = st.get("next") or "/m/journal/"
+    if not nxt.startswith("/"):   # solo rutas internas (anti open-redirect)
+        nxt = "/m/journal/"
+    resp = RedirectResponse(url=nxt, status_code=307)
+    resp.set_cookie(auth.COOKIE, auth.make_cookie(user), max_age=60 * 60 * 24 * 30,
+                    httponly=True, secure=True, samesite="lax", path="/")
+    return resp
+
+
+@app.get("/logout")
+def logout():
+    resp = RedirectResponse(url="/", status_code=307)
+    resp.delete_cookie(auth.COOKIE, path="/")
+    return resp
+
+
+# Slugs que exigen sesión iniciada (datos personales). El resto es público.
+_LOGIN_REQUIRED = {"journal"}
+
+
+def _gate(slug: str, request: Request):
+    """Devuelve una Response si hay que bloquear/redirigir; None si pasa."""
+    if not auth.enabled() or slug not in _LOGIN_REQUIRED:
+        return None
+    if auth.current_user(request) is not None:
+        return None
+    # Página → al login; API → 401 JSON.
+    if request.url.path.startswith(f"/m/{slug}/api/"):
+        return JSONResponse({"error": "no autorizado", "login": "/login"}, status_code=401)
+    nxt = request.url.path
+    return RedirectResponse(url=f"/login?next={nxt}", status_code=307)
+
+
 # --- Módulos -------------------------------------------------------------
 @app.get("/m/{slug}/api/{subpath:path}")
 def module_api(slug: str, subpath: str, request: Request):
     module = hub.modules_by_slug.get(slug)
     if module is None:
         return JSONResponse({"error": f"módulo '{slug}' no encontrado"}, status_code=404)
+
+    blocked = _gate(slug, request)
+    if blocked is not None:
+        return blocked
 
     query = dict(request.query_params)
 
@@ -220,10 +305,14 @@ def module_root_redirect(slug: str):
 
 
 @app.get("/m/{slug}/{relpath:path}")
-def module_static(slug: str, relpath: str):
+def module_static(slug: str, relpath: str, request: Request):
     module = hub.modules_by_slug.get(slug)
     if module is None:
         return JSONResponse({"error": f"módulo '{slug}' no encontrado"}, status_code=404)
+
+    blocked = _gate(slug, request)
+    if blocked is not None:
+        return blocked
 
     public = module.public_dir()
     if not public:

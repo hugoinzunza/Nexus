@@ -50,7 +50,23 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(320), unique=True)
     name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    # Auth (Fase funcional): rol, identidad de Google y rastro de acceso.
+    role: Mapped[str] = mapped_column(String(16), server_default="beta")  # "admin" | "beta"
+    google_sub: Mapped[Optional[str]] = mapped_column(String(64), unique=True, nullable=True)
+    picture: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    last_login: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class Invitation(Base):
+    """Beta cerrada: solo emails con invitación (o el admin) pueden entrar."""
+    __tablename__ = "invitations"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    invited_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    used_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
 
 
 class IngestedData(Base):
