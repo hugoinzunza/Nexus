@@ -153,17 +153,17 @@
     ctx.font = "10px -apple-system, sans-serif"; ctx.textBaseline = "middle";
     for (let g = 0; g <= 4; g++) {
       const v = lo + (hi - lo) * (g / 4), yy = y(v);
-      ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + plotW, yy); ctx.stroke();
-      ctx.fillStyle = "#8b93a7"; ctx.fillText(Math.round(v).toLocaleString("es"), padL + plotW + 6, yy);
+      ctx.strokeStyle = "rgba(18,20,26,0.06)"; ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + plotW, yy); ctx.stroke();
+      ctx.fillStyle = "#888e9c"; ctx.fillText(Math.round(v).toLocaleString("es"), padL + plotW + 6, yy);
     }
     const y0 = y(0);
-    ctx.strokeStyle = "rgba(162,155,254,0.5)"; ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "rgba(108,92,231,0.5)"; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(padL + plotW, y0); ctx.stroke(); ctx.setLineDash([]);
     const last = points[points.length - 1].pnl;
-    const c = last >= 0 ? "#16c784" : "#ea3943";
+    const c = last >= 0 ? "#0a9d63" : "#d8394e";
     ctx.beginPath(); points.forEach((p, i) => { const xx = x(i), yy = y(p.pnl); i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); });
     ctx.lineTo(x(points.length - 1), y0); ctx.lineTo(x(0), y0); ctx.closePath();
-    ctx.fillStyle = last >= 0 ? "rgba(22,199,132,0.10)" : "rgba(234,57,67,0.10)"; ctx.fill();
+    ctx.fillStyle = last >= 0 ? "rgba(10,157,99,0.10)" : "rgba(216,57,78,0.10)"; ctx.fill();
     ctx.beginPath(); points.forEach((p, i) => { const xx = x(i), yy = y(p.pnl); i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); });
     ctx.strokeStyle = c; ctx.lineWidth = 1.6; ctx.stroke();
   }
@@ -184,13 +184,13 @@
     for (let h = 0; h < 24; h++) {
       const v = vals[h];
       const bh = (Math.abs(v) / maxA) * (plotH / 2);
-      ctx.fillStyle = v >= 0 ? "#16c784" : "#ea3943";
+      ctx.fillStyle = v >= 0 ? "#0a9d63" : "#d8394e";
       const xx = padL + h * bw + 1;
       if (v >= 0) ctx.fillRect(xx, y0 - bh, bw - 2, bh);
       else ctx.fillRect(xx, y0, bw - 2, bh);
-      if (h % 3 === 0) { ctx.fillStyle = "#8b93a7"; ctx.fillText(h, padL + h * bw + bw / 2, cssH - 6); }
+      if (h % 3 === 0) { ctx.fillStyle = "#888e9c"; ctx.fillText(h, padL + h * bw + bw / 2, cssH - 6); }
     }
-    ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(padL + plotW, y0); ctx.stroke();
+    ctx.strokeStyle = "rgba(18,20,26,0.12)"; ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(padL + plotW, y0); ctx.stroke();
   }
 
   function prep(canvas) {
@@ -200,7 +200,7 @@
     const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
     return ctx;
   }
-  function empty(ctx, h) { ctx.fillStyle = "#8b93a7"; ctx.font = "13px -apple-system, sans-serif"; ctx.fillText("Sin datos.", 12, h / 2); }
+  function empty(ctx, h) { ctx.fillStyle = "#888e9c"; ctx.font = "13px -apple-system, sans-serif"; ctx.fillText("Sin datos.", 12, h / 2); }
 
   // --- Setups SMC (forward-test) ------------------------------------
   const fmtP = (v) => (v == null ? "—" : v.toLocaleString("es", { maximumFractionDigits: 2 }));
@@ -429,7 +429,7 @@
       const pairs = (b.params && b.params.symbols) ? b.params.symbols.length : Object.keys(b.by_pair || {}).length;
       // Traducción a plata: la fila más importante para decidir si es aplicable.
       const EQ = b.equity || {};
-      const eqRow = (label, e) => e ? `<tr><td>${label}</td><td style="text-align:right">${usd(e.capital_final)}</td><td style="text-align:right;color:${e.retorno_pct >= 0 ? "#16c784" : "#ea3943"}">${e.retorno_pct >= 0 ? "+" : ""}${e.retorno_pct}%</td><td style="text-align:right;color:#f5a623">−${e.max_drawdown_pct}%</td>${e.quebro ? '<td style="color:#ea3943">⚠ quebró</td>' : "<td></td>"}</tr>` : "";
+      const eqRow = (label, e) => e ? `<tr><td>${label}</td><td style="text-align:right">${usd(e.capital_final)}</td><td style="text-align:right;color:${e.retorno_pct >= 0 ? "#0a9d63" : "#d8394e"}">${e.retorno_pct >= 0 ? "+" : ""}${e.retorno_pct}%</td><td style="text-align:right;color:#c98a16">−${e.max_drawdown_pct}%</td>${e.quebro ? '<td style="color:#d8394e">⚠ quebró</td>' : "<td></td>"}</tr>` : "";
       const cap0 = (EQ.fijo_2pct ? EQ.fijo_2pct.capital_inicial / 1000 : 38);
       const eqTable = EQ.fijo_2pct ? `
         <div style="margin-top:8px"><strong>Si tus $${cap0}k hubieran seguido esto (${pairs} pares, ${yr(b.span && b.span.from)}–${yr(b.span && b.span.to)}):</strong></div>
@@ -448,7 +448,7 @@
       // Por par: ¿generaliza o es de un par?
       const bp = b.by_pair || {};
       const pairRows = Object.keys(bp).map((k) =>
-        `<tr><td>${k.replace("_USDT", "")}</td><td style="text-align:right">${bp[k].trades}</td><td style="text-align:right">${bp[k].win_rate}%</td><td style="text-align:right;color:${bp[k].avg_r >= 0 ? "#16c784" : "#ea3943"}">${bp[k].avg_r}</td><td style="text-align:right">${pf(bp[k].pf)}</td><td style="text-align:right">+${bp[k].total_r}R</td></tr>`).join("");
+        `<tr><td>${k.replace("_USDT", "")}</td><td style="text-align:right">${bp[k].trades}</td><td style="text-align:right">${bp[k].win_rate}%</td><td style="text-align:right;color:${bp[k].avg_r >= 0 ? "#0a9d63" : "#d8394e"}">${bp[k].avg_r}</td><td style="text-align:right">${pf(bp[k].pf)}</td><td style="text-align:right">+${bp[k].total_r}R</td></tr>`).join("");
       const pairTable = pairRows ? `
         <div style="margin-top:8px"><strong>Por par:</strong></div>
         <table style="width:100%;font-size:12px;margin-top:4px;border-collapse:collapse">
@@ -461,7 +461,7 @@
       const soName = { actual: "Actual (100% al TP lejano)", tu_idea: "Scale-out (50/25/25, BE tras TP1)", runner_agres: "Runner agresivo (TP2 en 3R)", be_tardio: "BE tardío (tras TP2)" };
       const soRows = Object.keys(SO).map((k) => {
         const s = SO[k];
-        return `<tr><td>${soName[k] || k}</td><td style="text-align:right">${s.win_rate}%</td><td style="text-align:right">${s.avg_r}</td><td style="text-align:right">+${s.total_r}R</td><td style="text-align:right;color:#f5a623">−${s.max_drawdown_pct}%</td><td style="text-align:right">${s.risk ? s.risk.max_losing_streak : "?"}</td><td style="text-align:right;color:${s.retorno_pct >= 0 ? "#16c784" : "#ea3943"}">${usd(s.capital_final)}</td></tr>`;
+        return `<tr><td>${soName[k] || k}</td><td style="text-align:right">${s.win_rate}%</td><td style="text-align:right">${s.avg_r}</td><td style="text-align:right">+${s.total_r}R</td><td style="text-align:right;color:#c98a16">−${s.max_drawdown_pct}%</td><td style="text-align:right">${s.risk ? s.risk.max_losing_streak : "?"}</td><td style="text-align:right;color:${s.retorno_pct >= 0 ? "#0a9d63" : "#d8394e"}">${usd(s.capital_final)}</td></tr>`;
       }).join("");
       const soTable = soRows ? `
         <div style="margin-top:10px"><strong>Salida escalonada vs actual</strong> <span class="muted">(mismos trades, 2% riesgo fijo desde $${(EQ.fijo_2pct ? EQ.fijo_2pct.capital_inicial / 1000 : 38)}k)</span></div>
