@@ -17,7 +17,8 @@ from typing import Optional
 
 from .claude_grader import _resolve_key  # mismo resolutor de key (entorno/env)
 
-MODEL = "claude-opus-4-8"
+MODEL = "claude-opus-4-8"           # brief: cara visible, prosa pulida
+TRANSLATE_MODEL = "claude-haiku-4-5"  # traducir titulares: tarea trivial, 5× más barato
 _TTL = 7200  # 2h: el contexto macro cambia lento
 
 _client = None
@@ -88,7 +89,7 @@ def translate_titles(titles: list) -> dict:
         try:
             numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(todo))
             resp = _client.messages.create(
-                model=MODEL, max_tokens=1200,
+                model=TRANSLATE_MODEL, max_tokens=1200,
                 system=("Traduce al español neutro CADA titular de noticia cripto. "
                         "Si ya está en español, devuélvelo igual. Mantén nombres "
                         "propios y tickers. Responde SOLO la lista numerada, un "
