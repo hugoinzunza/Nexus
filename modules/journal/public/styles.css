@@ -93,3 +93,9 @@ tbody tr:nth-child(even) { background: var(--panel2); }
 .calc-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
 .calc-grid input { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; color: var(--ink); font-size: 15px; width: 100%; box-sizing: border-box; font-family: inherit; }
 .calc-grid input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,92,231,.18); }
+
+/* Desktop ancho: las secciones aprovechan la pantalla; los grids auto-fit y las
+   tablas/gráficos llenan el espacio extra (más columnas, no solo estirado). */
+@media (min-width: 1200px) {
+  .bt, .disclaimer { max-width: min(95vw, 1500px); }
+}

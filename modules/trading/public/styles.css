@@ -98,7 +98,7 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-even
 .event-bar .ev-item { color: var(--muted); }
 .event-bar .ev-item b { color: var(--ink); font-weight: 600; }
 .event-bar .ev-item.soon { color: var(--amber); }
-@media (min-width: 1200px) { .event-bar { max-width: min(96vw, 1760px); } }
+@media (min-width: 1200px) { .event-bar { max-width: min(95vw, 2200px); } }
 .instrument-card {
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 20px; padding: 18px;
@@ -157,7 +157,7 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-even
 .chart-wrap.expanded .goto-now { bottom: 78px; right: 70px; }
 @media (max-width: 760px) { .chart { height: 360px; } }
 @media (min-width: 1200px) {
-  .instruments, .disclaimer, .bt, .crypto-bar { max-width: min(96vw, 1760px); }
+  .instruments, .disclaimer, .bt, .crypto-bar { max-width: min(95vw, 2200px); }
   .instrument-card { padding: 22px 24px; }
   .chart { height: clamp(520px, 60vh, 820px); }
   .signals { grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); }
