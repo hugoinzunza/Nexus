@@ -15,9 +15,11 @@ Tolerante a fallos: si una fuente cae, ese campo va None y el resto sigue. Fundi
 """
 from __future__ import annotations
 
+import email.utils
 import json
 import time
 import urllib.request
+import xml.etree.ElementTree as ET
 
 from . import regime
 from . import news
@@ -29,6 +31,13 @@ _COINS = [("bitcoin", "BTC"), ("ethereum", "ETH"), ("solana", "SOL"),
           ("ripple", "XRP"), ("dogecoin", "DOGE"), ("cardano", "ADA")]
 
 _CACHE = {}   # key -> (ts, value)
+
+# Feeds RSS de noticias cripto (gratis, sin clave, alcanzables desde Railway).
+_FEEDS = [("https://cointelegraph.com/rss", "Cointelegraph"),
+          ("https://decrypt.co/feed", "Decrypt")]
+# Palabras que marcan una noticia como de impacto ALTO (heurística simple).
+_HOT = ("sec", "etf", "fomc", "fed", "rate", "cpi", "inflation", "hack", "lawsuit",
+        "ban", "regulation", "genius", "treasury", "powell", "crash", "liquidat")
 
 
 def _get(url: str, ttl: float, timeout: float = 8.0):
@@ -64,6 +73,58 @@ def _global():
                 "market_cap_24h_pct": round(g["market_cap_change_percentage_24h_usd"], 2)}
     except Exception:  # noqa: BLE001
         return None
+
+
+def _fetch_text(url: str, timeout: float = 10.0):
+    """GET texto crudo (para RSS/XML). None si falla."""
+    try:
+        req = urllib.request.Request(url, headers=_UA)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", "replace")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _news_feed(max_keep: int = 6):
+    """Titulares cripto recientes de los feeds RSS, ordenados por fecha. Cacheado
+    20 min en memoria; tolerante (si un feed cae, sigue con los demás)."""
+    ck = "_news_feed"
+    item = _CACHE.get(ck)
+    if item and (time.time() - item[0]) < 1200:
+        return item[1]
+    out = []
+    now = time.time()
+    for url, source in _FEEDS:
+        raw = _fetch_text(url)
+        if not raw:
+            continue
+        try:
+            root = ET.fromstring(raw)
+        except Exception:  # noqa: BLE001
+            continue
+        for it in root.iter("item"):
+            title = (it.findtext("title") or "").strip()
+            if not title:
+                continue
+            ts = None
+            pub = it.findtext("pubDate")
+            if pub:
+                try:
+                    ts = email.utils.parsedate_to_datetime(pub).timestamp()
+                except Exception:  # noqa: BLE001
+                    ts = None
+            low = title.lower()
+            impact = "high" if any(w in low for w in _HOT) else "med"
+            age_min = int((now - ts) / 60) if ts else None
+            out.append({"title": title, "source": source, "ts": ts,
+                        "age_min": age_min, "impact": impact})
+    # Más recientes primero (los sin fecha al final).
+    out.sort(key=lambda x: x["ts"] or 0, reverse=True)
+    out = out[:max_keep]
+    if out:
+        _CACHE[ck] = (now, out)
+        return out
+    return item[1] if item else []
 
 
 def _markets():
@@ -112,4 +173,5 @@ def get_dashboard() -> dict:
         },
         "market": mk,
         "calendar": cal,
+        "news": _news_feed(),
     }

@@ -612,6 +612,18 @@ class TradingModule(NexusModule):
                 return self._json_error(502, f"no se pudo armar el dashboard: {exc}")
             body = json.dumps(data, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)
+        if subpath == "brief":
+            # Brief de hoy sintetizado por Claude (cacheado ~2h). Si Claude no
+            # está disponible, text=None y el Home usa su brief de respaldo.
+            from . import dashboard as _dash
+            from . import claude_brief as _brief
+            try:
+                data = _dash.get_dashboard()
+                text = _brief.get_brief(data)
+            except Exception:  # noqa: BLE001
+                text = None
+            body = json.dumps({"text": text}, ensure_ascii=False).encode("utf-8")
+            return (200, "application/json; charset=utf-8", body)
         if subpath == "state":
             body = json.dumps(self._state, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)

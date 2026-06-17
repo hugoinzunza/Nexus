@@ -181,9 +181,7 @@
 
       <div class="card brief">
         <div class="hd"><span class="ic">✦</span><h3>Brief de hoy · NexUX AI</h3></div>
-        <p>BTC consolida bajo los $64.2k tras rechazar el premium; el régimen sigue
-           favorable. El catalizador del día es el <b>CPI de las 09:30 ET</b>. SOL es el
-           más fuerte del grupo; DOGE y XRP mantienen estructura bajista.</p>
+        <p id="brief">Sintetizando el contexto de hoy…</p>
         <div class="by">Sintetiza indicadores, noticias y calendario · contexto, no asesoría</div>
       </div>
 
@@ -206,9 +204,7 @@
 
       <div class="card news">
         <div class="hd"><span class="ic">📰</span><h3>Noticias fundamentales</h3></div>
-        <div class="it"><span class="pin hi">ALTO</span><div><div class="ti">La SEC posterga la decisión sobre el ETF de SOL al spot</div><div class="me">CoinDesk · hace 1h</div></div></div>
-        <div class="it"><span class="pin md">MEDIO</span><div><div class="ti">Powell: "la inflación sigue sobre el objetivo, sin prisa por recortar"</div><div class="me">Reuters · hace 3h</div></div></div>
-        <div class="it"><span class="pin md">MEDIO</span><div><div class="ti">$1.2B en opciones de BTC vencen el viernes (max pain $63k)</div><div class="me">Deribit · hace 5h</div></div></div>
+        <div id="news"><div class="it"><div><div class="ti" style="color:var(--muted)">cargando…</div></div></div></div>
       </div>
 
     </div>
@@ -342,8 +338,23 @@ async function loadDashboard(){
     return `<div class="ev"><span class="w"><div class="d">${DAYS[dt.getDay()]}</div><div class="h">${hh}</div></span>`
       +`<div class="b"><div class="t">${e.title}</div><div class="m">${e.in_min!=null?rel(e.in_min)+' · ':''}${e.country||'macro'}</div></div>`
       +`<span class="pin ${hi?'hi':'md'}">${hi?'ALTO':'MEDIO'}</span></div>`; }).join(''); }
+
+  // Noticias fundamentales (RSS)
+  const nw=d.news||[];
+  if(nw.length){ $('news').innerHTML=nw.map(n=>{ const hi=(n.impact||'')==='high';
+    const ago=n.age_min==null?'':(n.age_min<60?'hace '+n.age_min+'m':'hace '+Math.floor(n.age_min/60)+'h');
+    return `<div class="it"><span class="pin ${hi?'hi':'md'}">${hi?'ALTO':'MEDIO'}</span>`
+      +`<div><div class="ti">${n.title}</div><div class="me">${n.source}${ago?' · '+ago:''}</div></div></div>`; }).join(''); }
+}
+
+async function loadBrief(){
+  try{ const r=await fetch('/m/trading/api/brief'); if(!r.ok) return; const d=await r.json();
+    if(d.text) $('brief').textContent=d.text;
+    else $('brief').textContent='El brief con IA se activa al conectar la clave de Claude. Mientras, revisa los indicadores y el calendario de abajo.';
+  }catch(e){}
 }
 loadDashboard();
+loadBrief();
 setInterval(loadDashboard, 120000);  // refresco cada 2 min
 </script>
 </body>
