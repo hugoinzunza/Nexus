@@ -602,6 +602,16 @@ class TradingModule(NexusModule):
 
     # --- API HTTP ------------------------------------------------------
     def api(self, subpath, query):
+        if subpath == "dashboard":
+            # Centro de mando público (Home): indicadores + mercado + calendario,
+            # todo de fuentes reales y cacheado en memoria. Tolerante a fallos.
+            from . import dashboard as _dash
+            try:
+                data = _dash.get_dashboard()
+            except Exception as exc:  # noqa: BLE001
+                return self._json_error(502, f"no se pudo armar el dashboard: {exc}")
+            body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+            return (200, "application/json; charset=utf-8", body)
         if subpath == "state":
             body = json.dumps(self._state, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)

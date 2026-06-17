@@ -190,22 +190,18 @@
       <div class="card">
         <div class="hd"><span class="ic">📊</span><h3>Indicadores</h3><span class="hint">toca para el detalle</span></div>
         <div class="ind">
-          <div class="icell" onclick="openInd('fng')"><div class="k">Fear &amp; Greed</div><div class="v am">38</div><div class="d am">Miedo</div><span class="spark" data-k="fng"></span></div>
-          <div class="icell" onclick="openInd('dom')"><div class="k">Dominancia BTC</div><div class="v">54.2%</div><div class="d up">▲ 0.3%</div><span class="spark" data-k="dom"></span></div>
-          <div class="icell" onclick="openInd('vix')"><div class="k">VIX</div><div class="v" style="color:var(--cyan)">17.8</div><div class="d up">risk-on</div><span class="spark" data-k="vix"></span></div>
-          <div class="icell" onclick="openInd('fund')"><div class="k">Funding</div><div class="v up">+0.011%</div><div class="d" style="color:var(--muted)">long leve</div><span class="spark" data-k="fund"></span></div>
-          <div class="icell" onclick="openInd('mcap')"><div class="k">Market cap</div><div class="v">$2.31T</div><div class="d down">▼ 1.2%</div><span class="spark" data-k="mcap"></span></div>
-          <div class="icell" onclick="openInd('ethbtc')"><div class="k">ETH / BTC</div><div class="v">0.0271</div><div class="d down">▼ 0.5%</div><span class="spark" data-k="ethbtc"></span></div>
+          <div class="icell" onclick="openInd('fng')"><div class="k">Fear &amp; Greed</div><div class="v am" id="i-fng">—</div><div class="d am" id="i-fng-d">—</div><span class="spark" data-k="fng"></span></div>
+          <div class="icell" onclick="openInd('dom')"><div class="k">Dominancia BTC</div><div class="v" id="i-dom">—</div><div class="d" id="i-dom-d">—</div><span class="spark" data-k="dom"></span></div>
+          <div class="icell" onclick="openInd('vix')"><div class="k">VIX</div><div class="v" style="color:var(--cyan)" id="i-vix">—</div><div class="d" id="i-vix-d">—</div><span class="spark" data-k="vix"></span></div>
+          <div class="icell" onclick="openInd('fund')"><div class="k">Funding</div><div class="v" id="i-fund">—</div><div class="d" style="color:var(--muted)" id="i-fund-d">—</div><span class="spark" data-k="fund"></span></div>
+          <div class="icell" onclick="openInd('mcap')"><div class="k">Market cap</div><div class="v" id="i-mcap">—</div><div class="d" id="i-mcap-d">—</div><span class="spark" data-k="mcap"></span></div>
+          <div class="icell" onclick="openInd('ethbtc')"><div class="k">ETH / BTC</div><div class="v" id="i-ethbtc">—</div><div class="d" id="i-ethbtc-d"></div><span class="spark" data-k="ethbtc"></span></div>
         </div>
       </div>
 
       <div class="card">
         <div class="hd"><span class="ic">🔥</span><h3>Mercado</h3><span class="hint">24h</span></div>
-        <div class="row"><span class="pair">BTC</span><span class="sp" data-pair="64,180" data-up="0"></span><span class="num">$64,180</span><span class="chg down">−0.8%</span></div>
-        <div class="row"><span class="pair">ETH</span><span class="sp" data-up="0"></span><span class="num">$1,769</span><span class="chg down">−1.4%</span></div>
-        <div class="row"><span class="pair">SOL</span><span class="sp" data-up="1"></span><span class="num">$73.52</span><span class="chg up">+2.1%</span></div>
-        <div class="row"><span class="pair">XRP</span><span class="sp" data-up="0"></span><span class="num">$1.156</span><span class="chg down">−0.6%</span></div>
-        <div class="row"><span class="pair">DOGE</span><span class="sp" data-up="1"></span><span class="num">$0.0871</span><span class="chg up">+0.4%</span></div>
+        <div id="market"><div class="row"><span class="pair" style="color:var(--muted)">cargando…</span></div></div>
       </div>
 
       <div class="card news">
@@ -231,10 +227,7 @@
 
       <div class="card">
         <div class="hd"><span class="ic">📅</span><h3>Fechas clave</h3></div>
-        <div class="ev"><span class="w"><div class="d">Hoy</div><div class="h">09:30</div></span><div class="b"><div class="t">CPI · EE.UU.</div><div class="m">en 1h 25m · macro</div></div><span class="pin hi">ALTO</span></div>
-        <div class="ev"><span class="w"><div class="d">Mié</div><div class="h">14:00</div></span><div class="b"><div class="t">FOMC · tasas</div><div class="m">2 días · macro</div></div><span class="pin hi">ALTO</span></div>
-        <div class="ev"><span class="w"><div class="d">Jue</div><div class="h">—</div></span><div class="b"><div class="t">Unlock de ARB · $42M</div><div class="m">3 días · cripto</div></div><span class="pin md">MEDIO</span></div>
-        <div class="ev"><span class="w"><div class="d">Vie</div><div class="h">08:00</div></span><div class="b"><div class="t">Vencimiento opciones</div><div class="m">4 días · cripto</div></div><span class="pin md">MEDIO</span></div>
+        <div id="calendar"><div class="ev"><div class="b"><div class="t" style="color:var(--muted)">cargando…</div></div></div></div>
       </div>
 
       <div class="card">
@@ -248,7 +241,7 @@
 </main>
 
 <footer>
-  <div class="disc">⚠️ NexUX es una herramienta informativa de solo lectura. No es asesoría financiera ni recomendación de inversión. El trading conlleva riesgo; las decisiones son tuyas.<br><b>Vista demo:</b> los datos del dashboard son de ejemplo; al conectar tu exchange verás tus datos reales.</div>
+  <div class="disc">⚠️ NexUX es una herramienta informativa de solo lectura. No es asesoría financiera ni recomendación de inversión. El trading conlleva riesgo; las decisiones son tuyas.<br><b>En vivo:</b> indicadores, mercado y calendario económico son datos reales. El panel personal (diario, PnL) es de ejemplo hasta que conectes tu exchange.</div>
   <a class="brand" href="#" style="justify-content:center"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg><span class="wm">Nex<span class="ux">UX</span></span></a>
   <div style="margin-top:8px">nexux.cl</div>
 </footer>
@@ -300,6 +293,58 @@ function openInd(k){const d=IND[k];
   document.getElementById('modal').classList.add('on');}
 function closeInd(){document.getElementById('modal').classList.remove('on')}
 addEventListener('keydown',e=>{if(e.key==='Escape')closeInd()});
+
+// ---- Datos EN VIVO -----------------------------------------------------
+// El Home consume /m/trading/api/dashboard (fuentes públicas, cacheadas en el
+// servidor). Tolerante: si un campo viene null se queda con el guion.
+const $=id=>document.getElementById(id);
+const fmtUsd=n=>{ if(n>=1e12) return '$'+(n/1e12).toFixed(2)+'T';
+  if(n>=1e9) return '$'+(n/1e9).toFixed(1)+'B'; if(n>=1e6) return '$'+(n/1e6).toFixed(0)+'M'; return '$'+n; };
+const fmtPx=n=>{ if(n==null) return '—'; if(n>=1000) return '$'+n.toLocaleString('en-US',{maximumFractionDigits:0});
+  if(n>=1) return '$'+n.toLocaleString('en-US',{maximumFractionDigits:2}); return '$'+n.toFixed(n<0.01?5:4); };
+const pct=n=>(n>0?'▲ ':n<0?'▼ ':'')+(n>0?'+':'')+n+'%';
+const DAYS=['dom','lun','mar','mié','jue','vie','sáb'];
+function rel(min){ if(min<60) return 'en '+min+'m'; const h=Math.floor(min/60),m=min%60;
+  if(h<24) return 'en '+h+'h'+(m?' '+m+'m':''); return 'en '+Math.floor(h/24)+'d'; }
+
+async function loadDashboard(){
+  let d; try{ const r=await fetch('/m/trading/api/dashboard'); if(!r.ok) return; d=await r.json(); }catch(e){ return; }
+  const ind=d.indicators||{};
+  // Fear & Greed
+  if(ind.fear_greed){ $('i-fng').textContent=ind.fear_greed.value;
+    $('i-fng-d').textContent=ind.fear_greed.label||''; if(IND.fng) IND.fng.vl=ind.fear_greed.value+' · '+(ind.fear_greed.label||''); }
+  // Dominancia BTC
+  if(ind.btc_dominance!=null){ $('i-dom').textContent=ind.btc_dominance+'%'; $('i-dom-d').textContent='BTC'; if(IND.dom) IND.dom.vl=ind.btc_dominance+'%'; }
+  // VIX
+  if(ind.vix!=null){ $('i-vix').textContent=ind.vix; const ro=ind.vix<20;
+    $('i-vix-d').textContent=ro?'risk-on':ind.vix<25?'precaución':'risk-off'; $('i-vix-d').className='d '+(ro?'up':'down'); if(IND.vix) IND.vix.vl=String(ind.vix); }
+  // Funding (pendiente vía VPS)
+  if(ind.funding!=null){ const f=(ind.funding*100).toFixed(3); $('i-fund').textContent=(ind.funding>0?'+':'')+f+'%'; }
+  else { $('i-fund').textContent='—'; $('i-fund-d').textContent='pronto'; }
+  // Market cap
+  if(ind.market_cap_usd!=null){ $('i-mcap').textContent=fmtUsd(ind.market_cap_usd);
+    const c=ind.market_cap_24h_pct; if(c!=null){ $('i-mcap-d').textContent=pct(c); $('i-mcap-d').className='d '+(c>=0?'up':'down'); }
+    if(IND.mcap) IND.mcap.vl=fmtUsd(ind.market_cap_usd); }
+  // ETH/BTC
+  if(ind.eth_btc!=null){ $('i-ethbtc').textContent=ind.eth_btc; if(IND.ethbtc) IND.ethbtc.vl=String(ind.eth_btc); }
+
+  // Mercado
+  const mk=d.market||[];
+  if(mk.length){ $('market').innerHTML=mk.map(m=>{ const up=(m.change_24h||0)>=0;
+    return `<div class="row"><span class="pair">${m.symbol}</span><span class="sp">${spark(up?MK['1']:MK['0'],up?'#0a9d63':'#d8394e')}</span>`
+      +`<span class="num">${fmtPx(m.price)}</span><span class="chg ${up?'up':'down'}">${(m.change_24h>0?'+':'')+m.change_24h}%</span></div>`; }).join(''); }
+
+  // Calendario
+  const cal=d.calendar||[];
+  if(cal.length){ $('calendar').innerHTML=cal.slice(0,5).map(e=>{ const dt=new Date(e.ts*1000);
+    const hi=(e.impact||'').toLowerCase()==='high';
+    const hh=dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');
+    return `<div class="ev"><span class="w"><div class="d">${DAYS[dt.getDay()]}</div><div class="h">${hh}</div></span>`
+      +`<div class="b"><div class="t">${e.title}</div><div class="m">${e.in_min!=null?rel(e.in_min)+' · ':''}${e.country||'macro'}</div></div>`
+      +`<span class="pin ${hi?'hi':'md'}">${hi?'ALTO':'MEDIO'}</span></div>`; }).join(''); }
+}
+loadDashboard();
+setInterval(loadDashboard, 120000);  // refresco cada 2 min
 </script>
 </body>
 </html>
