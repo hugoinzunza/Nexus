@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NexUX · Home (centro de mando)</title>
+<style>
+  :root{--bg:#08090e;--panel:rgba(22,26,36,0.55);--line:#222838;--text:#e8ebf2;
+        --muted:#8b93a7;--accent:#6c5ce7;--accent2:#a29bfe;--cyan:#22d3ee;
+        --green:#16c784;--red:#ea3943;--amber:#f0a93b}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  body::before{content:"";position:fixed;inset:0;z-index:-2;background:
+    radial-gradient(720px 440px at 10% -14%,rgba(108,92,231,0.26),transparent 66%),
+    radial-gradient(640px 440px at 92% -8%,rgba(34,211,238,0.12),transparent 70%),var(--bg)}
+  a{text-decoration:none;color:inherit}
+  .ux{color:var(--cyan);text-shadow:0 0 12px rgba(34,211,238,0.45)}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+
+  /* Top bar */
+  nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
+      background:rgba(8,9,14,0.6);border-bottom:1px solid rgba(255,255,255,0.05)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;gap:14px;
+          max-width:1180px;margin:0 auto;padding:13px 22px}
+  .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:17px}
+  .brand .dia{color:var(--accent2);filter:drop-shadow(0 0 10px var(--accent))}
+  .tabs{display:flex;gap:4px}
+  .tabs a{color:var(--muted);font-size:13.5px;font-weight:600;padding:8px 14px;border-radius:999px;transition:.15s}
+  .tabs a.on{color:var(--text);background:rgba(255,255,255,.06)}
+  .tabs a:hover{color:var(--text)}
+  .who{display:flex;align-items:center;gap:10px}
+  .pill{font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.5px;padding:6px 11px;
+        border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .pill.admin{color:var(--accent2);border-color:rgba(108,92,231,.45);background:rgba(108,92,231,.1)}
+  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--cyan));
+          display:grid;place-items:center;font-weight:800;font-size:13px;color:#0a0a0a}
+
+  /* Risk banner */
+  .riskbar{display:flex;align-items:center;gap:10px;justify-content:center;font-size:13px;
+           padding:9px 16px;border-bottom:1px solid rgba(255,255,255,.05);color:var(--muted)}
+  .riskbar .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  .riskbar b{color:var(--text)}
+  .riskbar .sess{margin-left:auto;display:flex;gap:8px}
+  .sess .s{padding:3px 9px;border-radius:999px;font:600 11px/1 ui-monospace,Menlo,monospace;
+           border:1px solid var(--line);color:var(--muted)}
+  .sess .s.live{color:var(--green);border-color:rgba(22,199,132,.5);background:rgba(22,199,132,.1)}
+
+  h2{font-size:14px;font-weight:700;letter-spacing:.3px;margin:0;color:var(--text);
+     display:flex;align-items:center;gap:8px}
+  h2 .ico{font-size:15px}
+  .muted{color:var(--muted)} .sm{font-size:12.5px}
+
+  /* Layout grid */
+  main{padding:20px 0 60px}
+  .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+  .col{display:flex;flex-direction:column;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;
+        backdrop-filter:blur(10px)}
+  .card .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .card .hd a{color:var(--cyan);font-size:12.5px;font-weight:600}
+
+  /* Brief (Claude) */
+  .brief{position:relative;overflow:hidden;border-color:rgba(34,211,238,.35)}
+  .brief::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
+                 background:linear-gradient(90deg,var(--cyan),var(--accent))}
+  .brief .tag{display:inline-flex;align-items:center;gap:7px;font:700 11px/1 ui-monospace,Menlo,monospace;
+              letter-spacing:1px;text-transform:uppercase;color:var(--cyan)}
+  .brief p{margin:12px 0 0;font-size:15px;line-height:1.6;color:var(--text)}
+  .brief .by{margin-top:12px;font-size:11.5px;color:var(--muted)}
+
+  /* Indicators strip */
+  .ind{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);
+       border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .ind .i{background:#0d0f16;padding:14px 15px}
+  .ind .i .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.8px}
+  .ind .i .v{font-size:19px;font-weight:800;margin-top:5px;font-variant-numeric:tabular-nums}
+  .ind .i .d{font-size:11.5px;margin-top:2px}
+  .up{color:var(--green)} .down{color:var(--red)} .vi{color:var(--accent2)} .cy{color:var(--cyan)} .am{color:var(--amber)}
+
+  /* Pairs heatmap */
+  .pairs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .pair{border:1px solid var(--line);border-radius:14px;padding:12px 13px;background:#0d0f16}
+  .pair .t{font-weight:700;font-size:13.5px}
+  .pair .px{font-size:15px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+  .pair .ch{font-size:12px;font-weight:700;margin-top:3px}
+  .pair .bar{height:4px;border-radius:99px;background:#1a2030;margin-top:9px;overflow:hidden}
+  .pair .bar i{display:block;height:100%;border-radius:99px}
+
+  /* Calendar / key dates */
+  .ev{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid rgba(255,255,255,.05)}
+  .ev:first-child{border-top:0}
+  .ev .when{min-width:62px;text-align:center}
+  .ev .when .d{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .ev .when .h{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+  .ev .body{flex:1}
+  .ev .body .ti{font-size:13.5px;font-weight:600}
+  .ev .body .me{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .imp{font:700 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.5px;text-transform:uppercase;
+       padding:4px 7px;border-radius:6px}
+  .imp.hi{color:var(--red);background:rgba(234,57,67,.14)}
+  .imp.md{color:var(--amber);background:rgba(240,169,59,.14)}
+  .cd{font:700 11px/1 ui-monospace,Menlo,monospace;color:var(--cyan)}
+
+  /* News feed */
+  .nw{display:flex;gap:10px;padding:11px 0;border-top:1px solid rgba(255,255,255,.05)}
+  .nw:first-child{border-top:0}
+  .nw .ti{font-size:13px;line-height:1.4}
+  .nw .me{font-size:11px;color:var(--muted);margin-top:3px}
+
+  /* Your snapshot */
+  .you{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+       border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px}
+  .you .c{background:#0d0f16;padding:13px 14px}
+  .you .c .k{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.8px}
+  .you .c .v{font-size:18px;font-weight:800;margin-top:4px}
+  .pos{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;padding:7px 0}
+  .pos .s{font:700 9.5px/1 ui-monospace;padding:3px 6px;border-radius:5px}
+  .pos .s.l{color:var(--green);background:rgba(22,199,132,.14)}
+  .pos .s.sh{color:var(--red);background:rgba(234,57,67,.14)}
+
+  /* POI snapshot */
+  .poi{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-size:12.5px;
+       border-top:1px solid rgba(255,255,255,.05)}
+  .poi:first-child{border-top:0}
+  .zone{font:700 11px/1 ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:6px;
+        color:var(--cyan);background:rgba(34,211,238,.1)}
+
+  /* Barra inferior (solo móvil) — nav tipo app, al alcance del pulgar */
+  .botnav{display:none}
+  @media(max-width:900px){
+    .grid{grid-template-columns:1fr}.ind{grid-template-columns:repeat(2,1fr)}
+    .pairs{grid-template-columns:repeat(2,1fr)} .tabs{display:none}
+    .wrap{padding:0 16px} main{padding-bottom:86px}
+    .botnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;justify-content:space-around;
+            background:rgba(8,9,14,.92);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+            padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+    .botnav a{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);
+              font-size:10px;font-weight:600;padding:6px 12px}
+    .botnav a.on{color:var(--cyan)} .botnav a .ic{font-size:19px}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <a class="brand" href="#"><span class="dia">◆</span> Nex<span class="ux">UX</span></a>
+    <div class="tabs">
+      <a class="on" href="#">Home</a>
+      <a href="#">Diario</a>
+      <a href="#">Co-piloto</a>
+      <a href="#">Laboratorio</a>
+    </div>
+    <div class="who">
+      <span class="pill admin">CEO · Admin</span>
+      <span class="avatar">H</span>
+    </div>
+  </div>
+</nav>
+
+<div class="riskbar">
+  <span class="dot"></span> Mercado <b>risk-on</b> · VIX 17.8 · sin eventos de alto impacto en 6h
+  <span class="sess">
+    <span class="s">Asia</span><span class="s live">Londres ●</span><span class="s">NY</span>
+  </span>
+</div>
+
+<main class="wrap">
+  <div class="grid">
+
+    <!-- Columna principal -->
+    <div class="col">
+
+      <!-- Brief de Claude -->
+      <div class="card brief">
+        <span class="tag">🧠 Brief de hoy · por NexUX AI</span>
+        <p>BTC consolida bajo los $64.2k tras rechazar el premium; el régimen sigue
+           favorable (VIX bajo, ADX en tendencia). <b>Ojo con el CPI de las 09:30 ET</b> —
+           es el catalizador del día y el guardia de volatilidad pausará entradas alrededor.
+           DOGE y XRP muestran estructura bajista intacta; SOL es el más fuerte del grupo.</p>
+        <div class="by">Generado 08:05 · sintetiza indicadores, noticias y calendario · contexto, no asesoría</div>
+      </div>
+
+      <!-- Indicadores -->
+      <div class="card">
+        <div class="hd"><h2><span class="ico">📊</span> Indicadores</h2><a href="#">Detalle →</a></div>
+        <div class="ind">
+          <div class="i"><div class="k">Fear &amp; Greed</div><div class="v am">38</div><div class="d am">Miedo</div></div>
+          <div class="i"><div class="k">Dominancia BTC</div><div class="v">54.2%</div><div class="d up">▲ 0.3%</div></div>
+          <div class="i"><div class="k">VIX (risk)</div><div class="v cy">17.8</div><div class="d up">risk-on</div></div>
+          <div class="i"><div class="k">Funding (perp)</div><div class="v up">+0.011%</div><div class="d muted">sesgo long leve</div></div>
+          <div class="i"><div class="k">Market cap 24h</div><div class="v">$2.31T</div><div class="d down">▼ 1.2%</div></div>
+          <div class="i"><div class="k">ETH / BTC</div><div class="v">0.0271</div><div class="d down">▼ 0.5%</div></div>
+        </div>
+      </div>
+
+      <!-- Mapa de pares -->
+      <div class="card">
+        <div class="hd"><h2><span class="ico">🔥</span> Tus pares</h2><a href="#">Co-piloto →</a></div>
+        <div class="pairs">
+          <div class="pair"><div class="t">BTC</div><div class="px">$64.180</div><div class="ch down">−0.8%</div><div class="bar"><i style="width:42%;background:var(--red)"></i></div></div>
+          <div class="pair"><div class="t">ETH</div><div class="px">$1.769</div><div class="ch down">−1.4%</div><div class="bar"><i style="width:34%;background:var(--red)"></i></div></div>
+          <div class="pair"><div class="t">SOL</div><div class="px">$73.52</div><div class="ch up">+2.1%</div><div class="bar"><i style="width:72%;background:var(--green)"></i></div></div>
+          <div class="pair"><div class="t">XRP</div><div class="px">$1.156</div><div class="ch down">−0.6%</div><div class="bar"><i style="width:46%;background:var(--red)"></i></div></div>
+          <div class="pair"><div class="t">DOGE</div><div class="px">$0.0871</div><div class="ch up">+0.4%</div><div class="bar"><i style="width:55%;background:var(--green)"></i></div></div>
+          <div class="pair"><div class="t">ADA</div><div class="px">$0.166</div><div class="ch down">−0.9%</div><div class="bar"><i style="width:40%;background:var(--red)"></i></div></div>
+        </div>
+      </div>
+
+      <!-- Noticias fundamentales -->
+      <div class="card">
+        <div class="hd"><h2><span class="ico">📰</span> Noticias fundamentales</h2><a href="#">Ver todas →</a></div>
+        <div class="nw"><span class="imp hi">Alto</span><div><div class="ti">La SEC posterga la decisión sobre el ETF de SOL al spot</div><div class="me">CoinDesk · hace 1h</div></div></div>
+        <div class="nw"><span class="imp md">Medio</span><div><div class="ti">Powell: "la inflación sigue por encima del objetivo, sin prisa por recortar"</div><div class="me">Reuters · hace 3h</div></div></div>
+        <div class="nw"><span class="imp md">Medio</span><div><div class="ti">$1.2B en opciones de BTC vencen el viernes (max pain $63k)</div><div class="me">Deribit · hace 5h</div></div></div>
+      </div>
+
+    </div>
+
+    <!-- Columna lateral -->
+    <div class="col">
+
+      <!-- Tu resumen -->
+      <div class="card">
+        <div class="hd"><h2><span class="ico">💼</span> Tu resumen</h2><a href="#">Diario →</a></div>
+        <div class="you">
+          <div class="c"><div class="k">PnL hoy</div><div class="v up">+$182</div></div>
+          <div class="c"><div class="k">PnL 30d</div><div class="v up">+$4.182</div></div>
+        </div>
+        <div class="pos"><span><span class="s l">LONG</span> SOL/USDT</span><b class="up">+$96</b></div>
+        <div class="pos"><span><span class="s sh">SHORT</span> ETH/USDT</span><b class="down">−$24</b></div>
+      </div>
+
+      <!-- Fechas clave -->
+      <div class="card">
+        <div class="hd"><h2><span class="ico">📅</span> Fechas clave</h2><a href="#">Calendario →</a></div>
+        <div class="ev"><div class="when"><div class="d">Hoy</div><div class="h">09:30</div></div>
+          <div class="body"><div class="ti">CPI · EE.UU.</div><div class="me"><span class="cd">en 1h 25m</span> · macro</div></div><span class="imp hi">Alto</span></div>
+        <div class="ev"><div class="when"><div class="d">Mié</div><div class="h">14:00</div></div>
+          <div class="body"><div class="ti">FOMC · decisión de tasas</div><div class="me">en 2 días · macro</div></div><span class="imp hi">Alto</span></div>
+        <div class="ev"><div class="when"><div class="d">Jue</div><div class="h">—</div></div>
+          <div class="body"><div class="ti">Unlock de ARB · $42M</div><div class="me">en 3 días · cripto</div></div><span class="imp md">Medio</span></div>
+        <div class="ev"><div class="when"><div class="d">Vie</div><div class="h">08:00</div></div>
+          <div class="body"><div class="ti">Vencimiento opciones BTC/ETH</div><div class="me">en 4 días · cripto</div></div><span class="imp md">Medio</span></div>
+      </div>
+
+      <!-- Co-piloto snapshot -->
+      <div class="card">
+        <div class="hd"><h2><span class="ico">📈</span> Co-piloto</h2><a href="#">Abrir →</a></div>
+        <div class="poi"><span><b>BTC</b> · short @ 64.235</span><span class="zone">premium</span></div>
+        <div class="poi"><span><b>SOL</b> · long @ 71.40</span><span class="zone">descuento</span></div>
+        <div class="poi"><span><b>XRP</b> · short @ 1.18</span><span class="zone">premium</span></div>
+        <div style="margin-top:10px;font-size:11.5px" class="muted">3 zonas activas cerca del precio · guardia de volatilidad OK</div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- Nav inferior (solo móvil) -->
+<div class="botnav">
+  <a class="on" href="#"><span class="ic">🏠</span>Home</a>
+  <a href="#"><span class="ic">📒</span>Diario</a>
+  <a href="#"><span class="ic">📈</span>Co-piloto</a>
+  <a href="#"><span class="ic">🧪</span>Lab</a>
+</div>
+
+</body>
+</html>

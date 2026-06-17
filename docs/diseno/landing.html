@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NexUX · Tu trading, sin mentiras</title>
+<style>
+  :root{
+    --bg:#08090e; --panel:rgba(22,26,36,0.55); --line:#222838; --text:#e8ebf2;
+    --muted:#8b93a7; --accent:#6c5ce7; --accent2:#a29bfe; --cyan:#22d3ee;
+    --green:#16c784; --red:#ea3943;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;
+       overflow-x:hidden}
+  body::before{content:"";position:fixed;inset:0;z-index:-2;background:
+    radial-gradient(760px 460px at 12% -12%,rgba(108,92,231,0.34),transparent 66%),
+    radial-gradient(680px 460px at 88% -8%,rgba(34,211,238,0.16),transparent 70%),
+    radial-gradient(980px 620px at 50% 114%,rgba(108,92,231,0.12),transparent 70%),var(--bg)}
+  body::after{content:"";position:fixed;inset:0;z-index:-1;opacity:.4;
+    background-image:linear-gradient(rgba(255,255,255,0.04) 1px,transparent 1px),
+                    linear-gradient(90deg,rgba(255,255,255,0.04) 1px,transparent 1px);
+    background-size:46px 46px;
+    -webkit-mask-image:radial-gradient(ellipse at 50% 12%,#000,transparent 72%);
+            mask-image:radial-gradient(ellipse at 50% 12%,#000,transparent 72%)}
+  .ux{color:var(--cyan);text-shadow:0 0 12px rgba(34,211,238,0.45)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  a{text-decoration:none}
+
+  /* Nav */
+  nav{position:sticky;top:0;z-index:10;backdrop-filter:blur(10px);
+      background:rgba(8,9,14,0.55);border-bottom:1px solid rgba(255,255,255,0.05)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;gap:14px;
+          max-width:1080px;margin:0 auto;padding:15px 24px}
+  .brand{display:inline-flex;align-items:center;gap:9px;color:var(--text);
+         font-weight:800;letter-spacing:.5px;font-size:17px}
+  .brand .dia{color:var(--accent2);filter:drop-shadow(0 0 10px var(--accent))}
+  .nav-links{display:flex;align-items:center;gap:6px}
+  .nav-links a{color:var(--muted);font-size:13.5px;font-weight:600;padding:9px 14px;
+               border-radius:999px;border:1px solid transparent;transition:.15s}
+  .nav-links a:hover{color:var(--text);border-color:var(--line)}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:14px;
+       padding:11px 20px;border-radius:999px;transition:transform .15s,box-shadow .15s,border-color .15s}
+  .btn.primary{color:#fff;background:linear-gradient(135deg,var(--accent),#5848c9);
+               box-shadow:0 12px 30px -12px rgba(108,92,231,0.85)}
+  .btn.primary:hover{transform:translateY(-2px);box-shadow:0 16px 40px -12px rgba(108,92,231,1)}
+  .btn.ghost{color:var(--text);border:1px solid var(--line);background:rgba(22,26,36,0.5)}
+  .btn.ghost:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .btn.lg{padding:14px 28px;font-size:15px}
+
+  /* Hero */
+  .hero{text-align:center;padding:72px 0 18px}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font:600 11.5px/1 ui-monospace,Menlo,monospace;
+          letter-spacing:2.4px;text-transform:uppercase;color:var(--accent2);padding:8px 16px;
+          border:1px solid rgba(108,92,231,0.4);border-radius:999px;background:rgba(108,92,231,0.10)}
+  .kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--green);
+               box-shadow:0 0 0 0 rgba(22,199,132,.6);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(22,199,132,.5)}70%{box-shadow:0 0 0 8px rgba(22,199,132,0)}100%{box-shadow:0 0 0 0 rgba(22,199,132,0)}}
+  h1{font-size:clamp(40px,8.2vw,76px);font-weight:850;letter-spacing:-2.5px;line-height:1.04;margin:26px 0 0}
+  h1 .grad{background:linear-gradient(100deg,#fff 6%,var(--accent2) 44%,var(--accent) 70%,var(--cyan));
+           -webkit-background-clip:text;background-clip:text;color:transparent;
+           filter:drop-shadow(0 10px 38px rgba(108,92,231,.4))}
+  .sub{color:var(--muted);max-width:600px;margin:20px auto 0;font-size:clamp(15.5px,2.4vw,18px);line-height:1.55}
+  .sub b{color:var(--text);font-weight:600}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:32px}
+  .trust-row{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:22px;
+             color:var(--muted);font-size:12.5px}
+  .trust-row span{display:inline-flex;align-items:center;gap:6px}
+  .trust-row b{color:var(--text)}
+
+  /* Mock dashboard preview */
+  .preview{margin:46px auto 0;max-width:860px;border:1px solid var(--line);border-radius:20px;
+           background:var(--panel);backdrop-filter:blur(12px);overflow:hidden;
+           box-shadow:0 40px 90px -40px rgba(0,0,0,.9)}
+  .preview .bar{display:flex;gap:7px;padding:13px 16px;border-bottom:1px solid var(--line)}
+  .preview .bar i{width:11px;height:11px;border-radius:50%;background:#2a3142;display:inline-block}
+  .pv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line)}
+  .pv-cell{background:#0d0f16;padding:18px 16px}
+  .pv-cell .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:1px}
+  .pv-cell .v{font-size:22px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums}
+  .pv-cell .v.green{color:var(--green)} .pv-cell .v.vi{color:var(--accent2)}
+  .pv-chart{background:#0d0f16;padding:18px 16px;height:140px;position:relative}
+  .pv-chart svg{width:100%;height:100%}
+
+  /* Section */
+  section{padding:56px 0}
+  .eyebrow{text-align:center;color:var(--cyan);font:700 12px/1 ui-monospace,Menlo,monospace;
+           letter-spacing:2px;text-transform:uppercase}
+  h2{text-align:center;font-size:clamp(26px,4.2vw,38px);font-weight:820;letter-spacing:-1px;margin:12px 0 0}
+  .lead{text-align:center;color:var(--muted);max-width:560px;margin:14px auto 0;font-size:15.5px;line-height:1.55}
+
+  /* Steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;
+        backdrop-filter:blur(8px)}
+  .step .num{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:800;
+             background:rgba(108,92,231,.16);color:var(--accent2);border:1px solid rgba(108,92,231,.35)}
+  .step h3{margin:14px 0 6px;font-size:17px}
+  .step p{margin:0;color:var(--muted);font-size:14px;line-height:1.5}
+
+  /* Pillars */
+  .pillars{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:40px}
+  .pillar{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:22px;
+          padding:28px;overflow:hidden;backdrop-filter:blur(10px)}
+  .pillar::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
+                  background:linear-gradient(90deg,var(--accent),var(--cyan))}
+  .pillar .ic{font-size:30px}
+  .pillar h3{margin:12px 0 8px;font-size:21px;letter-spacing:-.3px}
+  .pillar p{margin:0 0 14px;color:var(--muted);font-size:14.5px;line-height:1.55}
+  .pillar ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+  .pillar li{display:flex;gap:9px;color:var(--text);font-size:14px}
+  .pillar li::before{content:"›";color:var(--cyan);font-weight:800}
+  .badge{display:inline-block;font:600 10.5px/1 ui-monospace,Menlo,monospace;letter-spacing:1px;
+         text-transform:uppercase;color:var(--muted);border:1px solid var(--line);
+         padding:5px 9px;border-radius:999px;margin-top:14px}
+
+  /* Trust */
+  .trust{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+  .tcard{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;text-align:center}
+  .tcard .ic{font-size:26px}
+  .tcard h3{margin:10px 0 6px;font-size:16px}
+  .tcard p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
+
+  /* CTA band */
+  .band{margin:20px auto 0;text-align:center;border:1px solid rgba(108,92,231,.4);border-radius:24px;
+        padding:48px 28px;background:radial-gradient(600px 300px at 50% -20%,rgba(108,92,231,.22),transparent 70%),var(--panel);
+        backdrop-filter:blur(10px)}
+  .band h2{margin:0}
+  .band p{color:var(--muted);max-width:520px;margin:14px auto 0;font-size:15px}
+
+  footer{text-align:center;color:var(--muted);font-size:12.5px;padding:48px 24px 40px;
+         border-top:1px solid rgba(255,255,255,.05);margin-top:56px}
+  footer .disc{max-width:620px;margin:0 auto 14px;line-height:1.6;opacity:.85}
+
+  @media(max-width:760px){
+    .pv-grid{grid-template-columns:repeat(2,1fr)}
+    .steps,.pillars,.trust{grid-template-columns:1fr}
+    .nav-links a:not(.btn){display:none}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <a class="brand" href="#"><span class="dia">◆</span> Nex<span class="ux">UX</span></a>
+    <div class="nav-links">
+      <a href="#como">Cómo funciona</a>
+      <a href="#piezas">Qué incluye</a>
+      <a href="#seguridad">Seguridad</a>
+      <a class="btn ghost" href="#entrar">Entrar</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero wrap">
+  <span class="kicker"><span class="dot"></span> Beta cerrada · por invitación</span>
+  <h1>Tu trading,<br><span class="grad">sin mentiras.</span></h1>
+  <p class="sub">Conecta tu exchange <b>en solo-lectura</b> y NexUX reconstruye tu
+    <b>diario honesto</b>: PnL real, win rate, tus mejores y peores horarios — más un
+    <b>co-piloto SMC en vivo</b> para leer el mercado.</p>
+  <div class="cta">
+    <a class="btn primary lg" href="#entrar">Pedir acceso a la beta →</a>
+    <a class="btn ghost lg" href="#como">Ver cómo funciona</a>
+  </div>
+  <div class="trust-row">
+    <span>🔒 <b>Solo lectura</b> · nunca operamos por ti</span>
+    <span>🔑 Llaves <b>cifradas</b></span>
+    <span>📊 Datos <b>reales</b> de Binance</span>
+  </div>
+
+  <!-- Preview del diario -->
+  <div class="preview">
+    <div class="bar"><i></i><i></i><i></i></div>
+    <div class="pv-grid">
+      <div class="pv-cell"><div class="k">PnL neto</div><div class="v green">+$4.182</div></div>
+      <div class="pv-cell"><div class="k">Win rate</div><div class="v">58%</div></div>
+      <div class="pv-cell"><div class="k">Profit factor</div><div class="v vi">1.9</div></div>
+      <div class="pv-cell"><div class="k">Mejor sesión</div><div class="v">NY</div></div>
+    </div>
+    <div class="pv-chart">
+      <svg viewBox="0 0 600 140" preserveAspectRatio="none">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#16c784" stop-opacity=".35"/>
+          <stop offset="1" stop-color="#16c784" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,120 L60,112 L120,118 L180,96 L240,100 L300,74 L360,80 L420,52 L480,58 L540,34 L600,22"
+              fill="none" stroke="#16c784" stroke-width="2.5"/>
+        <path d="M0,120 L60,112 L120,118 L180,96 L240,100 L300,74 L360,80 L420,52 L480,58 L540,34 L600,22 L600,140 L0,140 Z"
+              fill="url(#g)"/>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<section id="como" class="wrap">
+  <div class="eyebrow">Cómo funciona</div>
+  <h2>De tus trades a la verdad, en 3 pasos</h2>
+  <div class="steps">
+    <div class="step"><div class="num">1</div><h3>Conecta tu Binance</h3>
+      <p>Pegas una API key <b>solo-lectura</b>. Verificamos que no pueda retirar ni
+         operar — si puede, la rechazamos. Cero riesgo sobre tu dinero.</p></div>
+    <div class="step"><div class="num">2</div><h3>Reconstruimos tu diario</h3>
+      <p>NexUX lee tu historial y arma tus estadísticas reales, netas de comisiones y
+         funding. Tú no haces nada más.</p></div>
+    <div class="step"><div class="num">3</div><h3>Miras la verdad</h3>
+      <p>PnL, win rate, profit factor, rachas, y tus mejores/peores pares, sesiones,
+         días y horas. Más el co-piloto SMC en vivo.</p></div>
+  </div>
+</section>
+
+<section id="piezas" class="wrap">
+  <div class="eyebrow">Qué incluye</div>
+  <h2>Dos piezas, una sola fuente de verdad</h2>
+  <div class="pillars">
+    <div class="pillar">
+      <div class="ic">📒</div>
+      <h3>Diario honesto</h3>
+      <p>Tus números reales de Binance (Futuros + Spot), solo-lectura. Sin maquillaje.</p>
+      <ul>
+        <li>PnL neto, win rate, profit factor, rachas</li>
+        <li>Desglose por par, sesión, día y hora</li>
+        <li>Curva de equity y posiciones abiertas</li>
+        <li>Holdings spot valorizados</li>
+      </ul>
+    </div>
+    <div class="pillar">
+      <div class="ic">📈</div>
+      <h3>Co-piloto SMC</h3>
+      <p>Estructura de mercado en vivo para acompañar tus decisiones — <b>contexto, no
+         asesoría</b>.</p>
+      <ul>
+        <li>Zonas de interés (POI) multi-timeframe</li>
+        <li>Estructura, premium/discount, régimen</li>
+        <li>Velas + libro en tiempo real</li>
+        <li>Guardia de volatilidad (risk-off)</li>
+      </ul>
+      <span class="badge">Informativo · NexUX no opera por ti</span>
+    </div>
+  </div>
+</section>
+
+<section id="seguridad" class="wrap">
+  <div class="eyebrow">Seguridad</div>
+  <h2>Tu dinero no se toca. Punto.</h2>
+  <p class="lead">NexUX está diseñado solo-lectura. No coloca órdenes, no transfiere,
+     no retira — ni puede.</p>
+  <div class="trust">
+    <div class="tcard"><div class="ic">🔒</div><h3>Solo lectura</h3>
+      <p>Rechazamos cualquier llave que pueda operar o retirar. Verificado al conectar.</p></div>
+    <div class="tcard"><div class="ic">🔑</div><h3>Llaves cifradas</h3>
+      <p>Cifrado de sobre. La web nunca ve tus llaves; se descifran solo para leer tu cuenta.</p></div>
+    <div class="tcard"><div class="ic">🧾</div><h3>Tú mandas</h3>
+      <p>Desconecta tu exchange cuando quieras. Tus datos son tuyos.</p></div>
+  </div>
+</section>
+
+<section id="entrar" class="wrap">
+  <div class="band">
+    <div class="eyebrow">Beta cerrada</div>
+    <h2>Estamos construyendo NexUX con traders</h2>
+    <p>La beta es por invitación, con gente que sabe de trading y nos ayuda a afinarlo.
+       ¿Te interesa? Pide tu acceso.</p>
+    <div class="cta">
+      <a class="btn primary lg" href="#">Entrar con Google</a>
+      <a class="btn ghost lg" href="#">Pedir invitación</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p class="disc">⚠️ NexUX es una herramienta informativa de <b>solo lectura</b>. No es
+    asesoría financiera ni recomendación de inversión. El trading conlleva riesgo;
+    las decisiones son tuyas.</p>
+  <div><span class="brand"><span class="dia">◆</span> Nex<span class="ux">UX</span></span> · nexux.cl</div>
+</footer>
+
+</body>
+</html>

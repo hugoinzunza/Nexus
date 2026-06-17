@@ -108,6 +108,19 @@ def service_worker():
                         headers={"Cache-Control": "no-cache"})
 
 
+# --- Previews de diseño (mockups; se quitan al integrarse al producto) ---
+@app.get("/preview/{name}", response_class=HTMLResponse)
+def design_preview(name: str):
+    # Whitelist (sin path traversal): solo los mockups del rediseño.
+    if name not in ("landing", "home", "home-public"):
+        return HTMLResponse("preview no encontrado", status_code=404)
+    path = os.path.join(ROOT, "docs", "diseno", f"{name}.html")
+    if not os.path.isfile(path):
+        return HTMLResponse("preview no encontrado", status_code=404)
+    with open(path, "r", encoding="utf-8") as fh:
+        return HTMLResponse(fh.read())
+
+
 # --- Web push (preparado; las alertas se implementan más adelante) -------
 @app.get("/api/push/public-key")
 def push_public_key():

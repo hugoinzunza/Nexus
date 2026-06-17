@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NexUX · El pulso del mercado + tu diario honesto</title>
+<style>
+  :root{--bg:#08090e;--panel:rgba(22,26,36,0.55);--line:#222838;--text:#e8ebf2;
+        --muted:#8b93a7;--accent:#6c5ce7;--accent2:#a29bfe;--cyan:#22d3ee;
+        --green:#16c784;--red:#ea3943;--amber:#f0a93b}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  body::before{content:"";position:fixed;inset:0;z-index:-2;background:
+    radial-gradient(740px 460px at 10% -14%,rgba(108,92,231,0.30),transparent 66%),
+    radial-gradient(640px 440px at 92% -8%,rgba(34,211,238,0.14),transparent 70%),var(--bg)}
+  a{text-decoration:none;color:inherit}
+  .ux{color:var(--cyan);text-shadow:0 0 12px rgba(34,211,238,0.45)}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+
+  nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
+      background:rgba(8,9,14,0.6);border-bottom:1px solid rgba(255,255,255,0.05)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;gap:14px;
+          max-width:1180px;margin:0 auto;padding:13px 22px}
+  .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:17px}
+  .brand .dia{color:var(--accent2);filter:drop-shadow(0 0 10px var(--accent))}
+  .btn{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:13.5px;
+       padding:10px 18px;border-radius:999px;transition:.15s}
+  .btn.primary{color:#fff;background:linear-gradient(135deg,var(--accent),#5848c9);
+               box-shadow:0 10px 26px -12px rgba(108,92,231,.85)}
+  .btn.primary:hover{transform:translateY(-2px)}
+  .btn.ghost{color:var(--text);border:1px solid var(--line)}
+  .btn.ghost:hover{border-color:var(--accent)}
+  .btn.lg{padding:13px 24px;font-size:14.5px}
+  .nav-r{display:flex;gap:8px}
+
+  /* Intro / qué es NexUX */
+  .intro{text-align:center;padding:54px 0 6px}
+  .kick{display:inline-flex;align-items:center;gap:8px;font:600 11px/1 ui-monospace,Menlo,monospace;
+        letter-spacing:2.2px;text-transform:uppercase;color:var(--accent2);padding:7px 15px;
+        border:1px solid rgba(108,92,231,.4);border-radius:999px;background:rgba(108,92,231,.1)}
+  .kick .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+  .intro h1{font-size:clamp(34px,6.4vw,60px);font-weight:850;letter-spacing:-2px;line-height:1.06;margin:22px 0 0}
+  .intro h1 .g{background:linear-gradient(100deg,#fff 8%,var(--accent2) 46%,var(--cyan));
+               -webkit-background-clip:text;background-clip:text;color:transparent}
+  .intro p{color:var(--muted);max-width:600px;margin:18px auto 0;font-size:clamp(15px,2.3vw,17.5px);line-height:1.55}
+  .intro p b{color:var(--text);font-weight:600}
+  .intro .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+  .intro .note{margin-top:16px;color:var(--muted);font-size:12.5px}
+
+  .riskbar{display:flex;align-items:center;gap:10px;justify-content:center;font-size:13px;
+           padding:10px 16px;margin-top:30px;border:1px solid var(--line);border-radius:14px;
+           background:var(--panel);color:var(--muted);flex-wrap:wrap}
+  .riskbar .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  .riskbar b{color:var(--text)}
+  .riskbar .sess{margin-left:auto;display:flex;gap:8px}
+  .sess .s{padding:3px 9px;border-radius:999px;font:600 11px/1 ui-monospace,Menlo,monospace;border:1px solid var(--line);color:var(--muted)}
+  .sess .s.live{color:var(--green);border-color:rgba(22,199,132,.5);background:rgba(22,199,132,.1)}
+
+  h2{font-size:14px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px}
+  .muted{color:var(--muted)}
+  main{padding:18px 0 60px}
+  .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+  .col{display:flex;flex-direction:column;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;backdrop-filter:blur(10px)}
+  .card .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .card .hd .lock{font-size:11px;color:var(--muted)}
+
+  .brief{position:relative;overflow:hidden;border-color:rgba(34,211,238,.35)}
+  .brief::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--cyan),var(--accent))}
+  .brief .tag{font:700 11px/1 ui-monospace,Menlo,monospace;letter-spacing:1px;text-transform:uppercase;color:var(--cyan)}
+  .brief p{margin:12px 0 0;font-size:15px;line-height:1.6}
+  .brief .by{margin-top:12px;font-size:11.5px;color:var(--muted)}
+
+  .ind{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .ind .i{background:#0d0f16;padding:14px 15px}
+  .ind .i .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.8px}
+  .ind .i .v{font-size:19px;font-weight:800;margin-top:5px;font-variant-numeric:tabular-nums}
+  .ind .i .d{font-size:11.5px;margin-top:2px}
+  .up{color:var(--green)}.down{color:var(--red)}.cy{color:var(--cyan)}.am{color:var(--amber)}
+
+  .pairs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .pair{border:1px solid var(--line);border-radius:14px;padding:12px 13px;background:#0d0f16}
+  .pair .t{font-weight:700;font-size:13.5px}.pair .px{font-size:15px;font-weight:800;margin-top:3px}
+  .pair .ch{font-size:12px;font-weight:700;margin-top:3px}
+  .pair .bar{height:4px;border-radius:99px;background:#1a2030;margin-top:9px;overflow:hidden}
+  .pair .bar i{display:block;height:100%;border-radius:99px}
+
+  .ev{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid rgba(255,255,255,.05)}
+  .ev:first-child{border-top:0}
+  .ev .when{min-width:58px;text-align:center}
+  .ev .when .d{font-size:11px;color:var(--muted);text-transform:uppercase}.ev .when .h{font-size:14px;font-weight:800}
+  .ev .body{flex:1}.ev .body .ti{font-size:13.5px;font-weight:600}.ev .body .me{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .imp{font:700 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.5px;text-transform:uppercase;padding:4px 7px;border-radius:6px}
+  .imp.hi{color:var(--red);background:rgba(234,57,67,.14)}.imp.md{color:var(--amber);background:rgba(240,169,59,.14)}
+  .cd{font:700 11px/1 ui-monospace,Menlo,monospace;color:var(--cyan)}
+
+  .nw{display:flex;gap:10px;padding:11px 0;border-top:1px solid rgba(255,255,255,.05)}.nw:first-child{border-top:0}
+  .nw .ti{font-size:13px;line-height:1.4}.nw .me{font-size:11px;color:var(--muted);margin-top:3px}
+
+  /* Conversión: lo que ganas al conectar (reemplaza el panel personal) */
+  .join{position:relative;overflow:hidden;border-color:rgba(108,92,231,.45);
+        background:radial-gradient(380px 200px at 50% -30%,rgba(108,92,231,.22),transparent 70%),var(--panel)}
+  .join .ic{font-size:26px}.join h3{margin:10px 0 6px;font-size:17px}
+  .join p{margin:0 0 14px;color:var(--muted);font-size:13.5px;line-height:1.55}
+  .join .blur{filter:blur(5px);opacity:.5;pointer-events:none;user-select:none}
+  .you{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:12px}
+  .you .c{background:#0d0f16;padding:11px 12px}.you .c .k{color:var(--muted);font-size:10px;text-transform:uppercase}.you .c .v{font-size:17px;font-weight:800;margin-top:4px}
+
+  .poi{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-size:12.5px;border-top:1px solid rgba(255,255,255,.05)}.poi:first-child{border-top:0}
+  .zone{font:700 11px/1 ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:6px;color:var(--cyan);background:rgba(34,211,238,.1)}
+
+  footer{text-align:center;color:var(--muted);font-size:12.5px;padding:46px 22px 40px;border-top:1px solid rgba(255,255,255,.05);margin-top:48px}
+  footer .disc{max-width:620px;margin:0 auto 14px;line-height:1.6;opacity:.85}
+
+  @media(max-width:900px){.grid{grid-template-columns:1fr}.ind,.pairs{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <a class="brand" href="#"><span class="dia">◆</span> Nex<span class="ux">UX</span></a>
+    <div class="nav-r">
+      <a class="btn ghost" href="#join">Pedir invitación</a>
+      <a class="btn primary" href="#join">Entrar</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Qué es NexUX -->
+<header class="intro wrap">
+  <span class="kick"><span class="dot"></span> Beta cerrada · por invitación</span>
+  <h1>El pulso del mercado,<br><span class="g">y tu diario honesto.</span></h1>
+  <p><b>NexUX</b> reúne en un solo lugar los <b>indicadores</b>, las <b>noticias
+     fundamentales</b> y las <b>fechas clave</b> que mueven el mercado — y cuando
+     conectas tu exchange <b>(solo lectura)</b>, suma tu <b>diario de trading real</b>:
+     PnL, win rate y tus mejores horarios.</p>
+  <div class="cta">
+    <a class="btn primary lg" href="#join">Pedir acceso a la beta →</a>
+    <a class="btn ghost lg" href="#join">Entrar con Google</a>
+  </div>
+  <div class="note">🔒 Solo lectura · nunca operamos por ti · llaves cifradas</div>
+
+  <div class="riskbar">
+    <span class="dot"></span> Mercado <b>risk-on</b> · VIX 17.8 · sin eventos de alto impacto en 6h
+    <span class="sess"><span class="s">Asia</span><span class="s live">Londres ●</span><span class="s">NY</span></span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+    <div class="col">
+
+      <div class="card brief">
+        <span class="tag">🧠 Brief de hoy · por NexUX AI</span>
+        <p>BTC consolida bajo los $64.2k tras rechazar el premium; el régimen sigue
+           favorable (VIX bajo, ADX en tendencia). <b>Ojo con el CPI de las 09:30 ET</b> —
+           es el catalizador del día. SOL es el más fuerte del grupo; DOGE y XRP con
+           estructura bajista intacta.</p>
+        <div class="by">Generado 08:05 · sintetiza indicadores, noticias y calendario · contexto, no asesoría</div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>📊 Indicadores</h2></div>
+        <div class="ind">
+          <div class="i"><div class="k">Fear &amp; Greed</div><div class="v am">38</div><div class="d am">Miedo</div></div>
+          <div class="i"><div class="k">Dominancia BTC</div><div class="v">54.2%</div><div class="d up">▲ 0.3%</div></div>
+          <div class="i"><div class="k">VIX (risk)</div><div class="v cy">17.8</div><div class="d up">risk-on</div></div>
+          <div class="i"><div class="k">Funding (perp)</div><div class="v up">+0.011%</div><div class="d muted">sesgo long leve</div></div>
+          <div class="i"><div class="k">Market cap 24h</div><div class="v">$2.31T</div><div class="d down">▼ 1.2%</div></div>
+          <div class="i"><div class="k">ETH / BTC</div><div class="v">0.0271</div><div class="d down">▼ 0.5%</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>🔥 Mercado</h2></div>
+        <div class="pairs">
+          <div class="pair"><div class="t">BTC</div><div class="px">$64.180</div><div class="ch down">−0.8%</div><div class="bar"><i style="width:42%;background:var(--red)"></i></div></div>
+          <div class="pair"><div class="t">ETH</div><div class="px">$1.769</div><div class="ch down">−1.4%</div><div class="bar"><i style="width:34%;background:var(--red)"></i></div></div>
+          <div class="pair"><div class="t">SOL</div><div class="px">$73.52</div><div class="ch up">+2.1%</div><div class="bar"><i style="width:72%;background:var(--green)"></i></div></div>
+          <div class="pair"><div class="t">XRP</div><div class="px">$1.156</div><div class="ch down">−0.6%</div><div class="bar"><i style="width:46%;background:var(--red)"></i></div></div>
+          <div class="pair"><div class="t">DOGE</div><div class="px">$0.0871</div><div class="ch up">+0.4%</div><div class="bar"><i style="width:55%;background:var(--green)"></i></div></div>
+          <div class="pair"><div class="t">ADA</div><div class="px">$0.166</div><div class="ch down">−0.9%</div><div class="bar"><i style="width:40%;background:var(--red)"></i></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>📰 Noticias fundamentales</h2></div>
+        <div class="nw"><span class="imp hi">Alto</span><div><div class="ti">La SEC posterga la decisión sobre el ETF de SOL al spot</div><div class="me">CoinDesk · hace 1h</div></div></div>
+        <div class="nw"><span class="imp md">Medio</span><div><div class="ti">Powell: "la inflación sigue por encima del objetivo, sin prisa por recortar"</div><div class="me">Reuters · hace 3h</div></div></div>
+        <div class="nw"><span class="imp md">Medio</span><div><div class="ti">$1.2B en opciones de BTC vencen el viernes (max pain $63k)</div><div class="me">Deribit · hace 5h</div></div></div>
+      </div>
+
+    </div>
+
+    <div class="col">
+
+      <!-- Conexión: lo que ganas (panel personal "bloqueado") -->
+      <div class="card join" id="join">
+        <div class="ic">💼</div>
+        <h3>Tu diario, aquí</h3>
+        <p>Conecta tu Binance (solo lectura) y verás <b>tu</b> PnL, win rate y posiciones
+           en este mismo lugar.</p>
+        <div class="blur">
+          <div class="you"><div class="c"><div class="k">PnL hoy</div><div class="v up">+$182</div></div><div class="c"><div class="k">Win rate</div><div class="v">58%</div></div></div>
+        </div>
+        <a class="btn primary lg" href="#" style="margin-top:14px;width:100%;justify-content:center">Entrar con Google</a>
+        <div class="muted" style="font-size:11.5px;margin-top:10px;text-align:center">Beta por invitación · sin compromiso</div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>📅 Fechas clave</h2></div>
+        <div class="ev"><div class="when"><div class="d">Hoy</div><div class="h">09:30</div></div><div class="body"><div class="ti">CPI · EE.UU.</div><div class="me"><span class="cd">en 1h 25m</span> · macro</div></div><span class="imp hi">Alto</span></div>
+        <div class="ev"><div class="when"><div class="d">Mié</div><div class="h">14:00</div></div><div class="body"><div class="ti">FOMC · decisión de tasas</div><div class="me">en 2 días · macro</div></div><span class="imp hi">Alto</span></div>
+        <div class="ev"><div class="when"><div class="d">Jue</div><div class="h">—</div></div><div class="body"><div class="ti">Unlock de ARB · $42M</div><div class="me">en 3 días · cripto</div></div><span class="imp md">Medio</span></div>
+        <div class="ev"><div class="when"><div class="d">Vie</div><div class="h">08:00</div></div><div class="body"><div class="ti">Vencimiento opciones BTC/ETH</div><div class="me">en 4 días · cripto</div></div><span class="imp md">Medio</span></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>📈 Co-piloto SMC</h2></div>
+        <div class="poi"><span><b>BTC</b> · short @ 64.235</span><span class="zone">premium</span></div>
+        <div class="poi"><span><b>SOL</b> · long @ 71.40</span><span class="zone">descuento</span></div>
+        <div class="poi"><span><b>XRP</b> · short @ 1.18</span><span class="zone">premium</span></div>
+        <div class="muted" style="margin-top:10px;font-size:11.5px">Zonas de interés en vivo · contexto, no asesoría</div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<footer>
+  <p class="disc">⚠️ NexUX es una herramienta informativa de <b>solo lectura</b>. No es
+    asesoría financiera ni recomendación de inversión. El trading conlleva riesgo;
+    las decisiones son tuyas.</p>
+  <div><span class="brand"><span class="dia">◆</span> Nex<span class="ux">UX</span></span> · nexux.cl</div>
+</footer>
+
+</body>
+</html>
