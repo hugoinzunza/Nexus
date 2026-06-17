@@ -139,6 +139,27 @@
   .modal .lvls{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
   .modal .lv{font-size:12px;font-weight:600;padding:7px 11px;border:1px solid var(--line);border-radius:9px;color:var(--text);background:#fafbfc}
 
+  /* Radar SMC multi-activo (teaser, sin entradas) */
+  .radar-wrap{margin-top:30px}
+  .card.radar{padding:22px 24px}
+  .board-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:12px;margin-top:6px}
+  .brow-empty{color:var(--muted);font-size:14px;padding:10px}
+  .btile{border:1px solid var(--line);border-radius:14px;padding:14px 15px;background:var(--bg2,#eef0f5);
+         display:flex;flex-direction:column;gap:8px}
+  .btile .bt-top{display:flex;align-items:baseline;gap:8px}
+  .btile .bsym{font-family:"Sora","Inter",sans-serif;font-weight:700;color:var(--ink);font-size:16px;letter-spacing:-.4px}
+  .btile .bpx{margin-left:auto;font-size:13px;color:var(--text);font-variant-numeric:tabular-nums}
+  .btile .bchg{font-size:12px;font-weight:650;font-variant-numeric:tabular-nums}
+  .btile .bbias{font-size:13px;font-weight:600;color:var(--muted)}
+  .btile .bbias.up{color:var(--green)}.btile .bbias.down{color:var(--red)}
+  .btile .bstate{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .btile .bdot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  .btile.has-setup{border-color:var(--accent);background:var(--accent-soft)}
+  .btile .lockcta{margin-left:auto;font-size:12px;color:var(--accent);font-weight:700;text-decoration:none;white-space:nowrap}
+  .btile .lockcta:hover{text-decoration:underline}
+  .radar-foot{margin-top:14px;font-size:13px;color:var(--muted);text-align:center}
+  .radar-foot a{color:var(--accent);font-weight:600}
+
   @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:34px}.grid{grid-template-columns:1fr}.ind{grid-template-columns:repeat(2,1fr)}.nav-links a:not(.btn){display:none}.preview{transform:none}}
 </style>
 </head>
@@ -179,6 +200,16 @@
     </div>
   </div>
 </header>
+
+<section class="wrap radar-wrap">
+  <div class="card radar">
+    <div class="hd"><span class="ic">🎯</span><h3>Radar SMC · multi-activo</h3>
+      <span class="hint">estado del mercado en vivo · contexto, no asesoría</span></div>
+    <div id="board" class="board-grid"><div class="brow-empty">cargando radar…</div></div>
+    <div class="radar-foot">Los <b>planes accionables</b> (entrada, stop, objetivo) viven en tu panel.
+      <a href="/login">Entrar →</a></div>
+  </div>
+</section>
 
 <main class="wrap">
   <div class="grid">
@@ -231,12 +262,6 @@
         <div id="calendar"><div class="ev"><div class="b"><div class="t" style="color:var(--muted)">cargando…</div></div></div></div>
       </div>
 
-      <div class="card">
-        <div class="hd"><span class="ic">📈</span><h3>Co-piloto SMC</h3></div>
-        <div class="row"><span class="pair" style="min-width:auto;flex:1">BTC · short</span><span class="zone">premium</span></div>
-        <div class="row"><span class="pair" style="min-width:auto;flex:1">SOL · long</span><span class="zone">descuento</span></div>
-        <div class="row"><span class="pair" style="min-width:auto;flex:1">XRP · short</span><span class="zone">premium</span></div>
-      </div>
     </div>
   </div>
 </main>
@@ -374,10 +399,38 @@ async function loadMe(){
     document.querySelectorAll('a[href="/login"]').forEach(a=>{ a.href='/m/journal/'; a.textContent='Ir a mi diario →'; });
   }catch(e){}
 }
+// Radar SMC multi-activo (teaser): estado de mercado por moneda, SIN entradas.
+async function loadBoard(){
+  try{
+    const r=await fetch('/m/trading/api/board'); if(!r.ok) return;
+    const d=await r.json(); const el=$('board'); if(!el||!Array.isArray(d.rows)) return;
+    el.innerHTML=d.rows.map(row=>{
+      const chg=row.change_24h!=null?((row.change_24h>=0?'+':'')+row.change_24h.toFixed(1)+'%'):'';
+      const chgcls=(row.change_24h>=0)?'up':'down';
+      let bias='—',biascls='';
+      if(row.bias){ biascls=row.bias.discount?'up':'down';
+        bias=(row.bias.discount?'Descuento':'Premium')+' · '+(row.bias.pct>=0?'+':'')+row.bias.pct+'% vs EQ'; }
+      const reg=row.regime_ok===true?'var(--green)':row.regime_ok===false?'var(--amber)':'var(--muted)';
+      let state='Sin zona cerca',hasSetup=false;
+      if(row.setup==='active'){ state='● Setup activo'; hasSetup=true; }
+      else if(row.setup==='watching'){ state='⏳ Setup en vigilancia'; hasSetup=true; }
+      else if(row.poi){ state='POI '+row.poi.tf+' '+(row.poi.discount?'descuento':'premium')+
+        (row.poi.dist_pct!=null?' · '+(row.poi.dist_pct>0?'+':'')+row.poi.dist_pct+'%':''); }
+      const lock=hasSetup?'<a class="lockcta" href="/login">🔒 ver plan</a>':'';
+      return `<div class="btile ${hasSetup?'has-setup':''}">
+        <div class="bt-top"><span class="bsym">${row.symbol}</span><span class="bpx">${fmtPx(row.price)}</span><span class="bchg ${chgcls}">${chg}</span></div>
+        <div class="bbias ${biascls}">${bias}</div>
+        <div class="bstate"><span class="bdot" style="background:${reg}"></span>${state}${lock}</div>
+      </div>`;
+    }).join('');
+  }catch(e){}
+}
 loadDashboard();
 loadBrief();
 loadMe();
+loadBoard();
 setInterval(loadDashboard, 120000);  // refresco cada 2 min (indicadores, noticias, calendario)
+setInterval(loadBoard, 120000);      // radar SMC cada 2 min
 
 // ---- Mercado en TIEMPO REAL (WebSocket directo a Crypto.com) -----------
 // El navegador se conecta solito al stream público (sin clave, sin costo de

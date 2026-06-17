@@ -701,6 +701,45 @@ class TradingModule(NexusModule):
             body = json.dumps({"instrument": instrument, **analysis},
                               ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)
+        if subpath == "board":
+            # Tablero multi-activo para el Home (PÚBLICO) en modo TEASER: estado de
+            # mercado por moneda que engancha (sesgo, régimen, si hay setup), pero
+            # SIN los números accionables (entry/SL/TP). Eso es el producto pagado:
+            # ni siquiera se envían al navegador. El que quiera el plan → registro.
+            tf = "1h" if "1h" in self.ui_timeframes else self.ui_default_timeframe
+            insts_state = (self._state or {}).get("instruments", {})
+            rows = []
+            for inst in self.instruments:
+                name = inst["name"]
+                base = name.split("_")[0]
+                tk = (insts_state.get(name) or {}).get("ticker") or {}
+                row = {"symbol": base, "label": inst.get("label", base),
+                       "price": tk.get("last"), "change_24h": tk.get("change"),
+                       "bias": None, "regime_ok": None, "setup": "none",
+                       "poi": None, "locked": False}
+                try:
+                    a = self._smc_analysis(name, tf)
+                except Exception:  # noqa: BLE001
+                    rows.append(row); continue
+                rng = a.get("range") or {}
+                eq, last = rng.get("eq"), row["price"]
+                if eq and last:
+                    row["bias"] = {"discount": last < eq,
+                                   "pct": round((last - eq) / eq * 100, 2)}
+                row["regime_ok"] = (a.get("regime") or {}).get("ok")
+                t = a.get("tpsl")
+                if t:                                   # hay plan → locked (no se envía)
+                    row["locked"] = True
+                    row["setup"] = "active" if t.get("state") == "activo" else "watching"
+                pois = a.get("active_pois") or []
+                if pois:
+                    near = min(pois, key=lambda p: abs(p.get("dist_pct", 999)))
+                    row["poi"] = {"tf": near.get("tf"), "discount": near.get("discount"),
+                                  "dist_pct": near.get("dist_pct")}
+                rows.append(row)
+            body = json.dumps({"timeframe": tf, "rows": rows},
+                              ensure_ascii=False).encode("utf-8")
+            return (200, "application/json; charset=utf-8", body)
         if subpath == "backtest":
             if not os.path.isfile(_BACKTEST_PATH):
                 return self._json_error(404, "todavía no hay resultados de backtest; corre "
