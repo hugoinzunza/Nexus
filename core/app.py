@@ -182,8 +182,26 @@ def whoami(request: Request):
         "role": u.get("role"), "picture": u.get("picture")}}
 
 
-@app.get("/login")
+LOGIN_PAGE = os.path.join(ROOT, "core", "login.html")
+
+
+@app.get("/login", response_class=HTMLResponse)
 def login(request: Request, next: str = "/m/journal/"):
+    # Auth inerte → no hay nada que loguear: a la portada.
+    if not auth.enabled():
+        return RedirectResponse(url="/", status_code=307)
+    # Ya con sesión → directo a su destino (no mostramos el login de nuevo).
+    if auth.current_user(request):
+        dest = next if next.startswith("/") else "/m/journal/"
+        return RedirectResponse(url=dest, status_code=307)
+    # Sin sesión → pantalla de acceso branded (el botón salta a /auth/google).
+    with open(LOGIN_PAGE, "r", encoding="utf-8") as fh:
+        return HTMLResponse(fh.read(), headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/auth/google")
+def auth_google(request: Request, next: str = "/m/journal/"):
+    """Inicia el flujo OAuth con Google (lo que antes hacía /login directo)."""
     if not auth.enabled():
         return RedirectResponse(url="/", status_code=307)
     cb = auth.redirect_uri(_base_url(request))
@@ -196,18 +214,18 @@ def auth_callback(request: Request, code: str = "", state: str = "", error: str 
     if not auth.enabled():
         return RedirectResponse(url="/", status_code=307)
     if error or not code:
-        return RedirectResponse(url="/?login=error", status_code=307)
+        return RedirectResponse(url="/login?e=error", status_code=307)
     st = auth.read_state(state)
     if st is None:
-        return RedirectResponse(url="/?login=state", status_code=307)
+        return RedirectResponse(url="/login?e=state", status_code=307)
     cb = auth.redirect_uri(_base_url(request))
     try:
         info = auth.exchange_code(code, cb)
     except Exception as exc:  # noqa: BLE001
         log(f"auth: fallo al intercambiar code: {exc}")
-        return RedirectResponse(url="/?login=error", status_code=307)
+        return RedirectResponse(url="/login?e=error", status_code=307)
     if not info.get("email_verified") or not auth.is_allowed(info.get("email", "")):
-        return RedirectResponse(url="/?login=denied", status_code=307)
+        return RedirectResponse(url="/login?e=denied", status_code=307)
     user = auth.upsert_user(info)
     nxt = st.get("next") or "/m/journal/"
     if not nxt.startswith("/"):   # solo rutas internas (anti open-redirect)
