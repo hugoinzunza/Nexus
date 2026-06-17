@@ -138,7 +138,7 @@ async def push_test(request: Request):
     if not token or not hmac.compare_digest(str(provided), str(token)):
         return JSONResponse({"error": "no autorizado"}, status_code=401)
     enviados, errores = push.notificar(
-        title="🔔 Nexus · prueba",
+        title="🔔 NexUX · prueba",
         body="Si ves esto, las alertas SMC funcionan. (mensaje de prueba)",
         url="/m/trading/", tag="nexus-test")
     from core.paths import persist_dir
