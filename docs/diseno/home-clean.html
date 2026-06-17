@@ -362,6 +362,9 @@ async function loadMe(){
   try{ const r=await fetch('/me'); if(!r.ok) return; const d=await r.json();
     if(d.auth && d.user){ const nm=(d.user.name||d.user.email||'').split(' ')[0];
       const nav=$('nav-auth'); if(nav){ nav.textContent=nm?('Hola, '+nm):'Mi diario'; nav.href='/m/journal/'; }
+      if(d.user.role==='admin'){ const links=document.querySelector('.nav-links');
+        if(links && !document.getElementById('nav-admin')){ const a=document.createElement('a');
+          a.id='nav-admin'; a.href='/admin'; a.textContent='Admin'; links.insertBefore(a, nav); } }
     }
   }catch(e){}
 }

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5f8">
+  <title>NexUX · Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f4f5f8;--card:#fff;--ink:#12141a;--text:#444a57;--muted:#888e9c;
+      --line:#e6e8ef;--accent:#6c5ce7;--cyan:#0aa6bd;--green:#0a9d63;--red:#d8394e;--amber:#c98a16}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:"Inter",-apple-system,BlinkMacSystemFont,sans-serif;-webkit-font-smoothing:antialiased}
+    h1,h2{font-family:"Sora","Inter",sans-serif;color:var(--ink);letter-spacing:-.4px}
+    header{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--line);
+      position:sticky;top:0;background:rgba(244,245,248,.85);backdrop-filter:blur(16px);z-index:5}
+    .back{color:var(--ink);text-decoration:none;font-weight:700;font-family:"Sora","Inter",sans-serif}
+    .back .ux{color:var(--cyan)} header h1{font-size:18px;margin:0;flex:1;font-weight:600}
+    .who{font-size:13px;color:var(--muted)} .who a{color:var(--accent);text-decoration:none;margin-left:10px}
+    main{max-width:880px;margin:22px auto;padding:0 22px;display:grid;gap:22px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;
+      box-shadow:0 12px 36px -22px rgba(18,20,26,.30)}
+    .card h2{margin:0 0 4px;font-size:18px} .sub{color:var(--muted);font-size:13px;margin:0 0 16px}
+    .invite{display:flex;gap:10px;flex-wrap:wrap}
+    input[type=email]{flex:1;min-width:200px;background:#fff;border:1px solid var(--line);border-radius:10px;
+      padding:11px 13px;font-size:15px;color:var(--ink);font-family:inherit}
+    input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,92,231,.18)}
+    .btn{cursor:pointer;border:0;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:600;
+      font-family:inherit;color:#fff;background:linear-gradient(135deg,var(--accent),#574bc8)}
+    .btn:disabled{opacity:.5;cursor:default}
+    .msg{font-size:13px;margin-top:10px;min-height:18px}
+    .msg.ok{color:var(--green)} .msg.err{color:var(--red)}
+    table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+    th,td{text-align:left;padding:10px 8px;border-top:1px solid var(--line)}
+    th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-top:0}
+    .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px}
+    .pill.admin{color:var(--accent);background:#efedfd} .pill.beta{color:var(--cyan);background:#e3f6f9}
+    .pill.used{color:var(--green);background:rgba(10,157,99,.10)}
+    .pill.pend{color:var(--amber);background:rgba(201,138,22,.10)}
+    .x{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:8px;color:var(--muted);
+      padding:5px 10px;font-size:12px;font-family:inherit} .x:hover{border-color:var(--red);color:var(--red)}
+    .empty{color:var(--muted);font-size:13px;padding:10px 8px}
+  </style>
+</head>
+<body>
+  <header>
+    <a class="back" href="/">← Nex<span class="ux">UX</span></a>
+    <h1>Panel de administración</h1>
+    <span class="who" id="who"></span>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Invitar a la beta</h2>
+      <p class="sub">Solo los emails invitados (más el tuyo, admin) pueden iniciar sesión.</p>
+      <form class="invite" id="inv-form">
+        <input type="email" id="inv-email" placeholder="persona@email.com" required>
+        <button class="btn" type="submit">Invitar</button>
+      </form>
+      <div class="msg" id="inv-msg"></div>
+      <table id="inv-table"><thead><tr><th>Email</th><th>Estado</th><th>Invitado</th><th></th></tr></thead>
+        <tbody id="inv-body"></tbody></table>
+    </section>
+    <section class="card">
+      <h2>Usuarios registrados</h2>
+      <p class="sub">Quién ha entrado y con qué rol.</p>
+      <table id="usr-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Último acceso</th></tr></thead>
+        <tbody id="usr-body"></tbody></table>
+    </section>
+  </main>
+  <script>
+    const $=id=>document.getElementById(id);
+    const fmt=s=>{ if(!s) return '—'; try{ return new Date(s).toLocaleDateString('es',{day:'2-digit',month:'short',year:'2-digit'}); }catch(e){ return '—'; } };
+    async function me(){ try{ const r=await fetch('/me'); const d=await r.json();
+      if(d.user) $('who').innerHTML=`${d.user.email} · <span class="pill admin">${d.user.role}</span> <a href="/logout">salir</a>`; }catch(e){} }
+    async function loadInv(){ const r=await fetch('/api/admin/invitations'); if(!r.ok) return; const d=await r.json();
+      const b=$('inv-body'); if(!d.invitations.length){ b.innerHTML='<tr><td colspan="4" class="empty">Aún no hay invitaciones.</td></tr>'; return; }
+      b.innerHTML=d.invitations.map(i=>`<tr><td>${i.email}</td>`
+        +`<td>${i.used_at?'<span class="pill used">activa</span>':'<span class="pill pend">pendiente</span>'}</td>`
+        +`<td>${fmt(i.created_at)}</td><td style="text-align:right"><button class="x" onclick="delInv(${i.id})">quitar</button></td></tr>`).join(''); }
+    async function loadUsr(){ const r=await fetch('/api/admin/users'); if(!r.ok) return; const d=await r.json();
+      const b=$('usr-body'); if(!d.users.length){ b.innerHTML='<tr><td colspan="3" class="empty">Sin usuarios todavía.</td></tr>'; return; }
+      b.innerHTML=d.users.map(u=>`<tr><td>${u.name||u.email}<br><span style="color:var(--muted);font-size:12px">${u.email}</span></td>`
+        +`<td><span class="pill ${u.role}">${u.role}</span></td><td>${fmt(u.last_login)}</td></tr>`).join(''); }
+    async function delInv(id){ if(!confirm('¿Quitar esta invitación?')) return;
+      await fetch('/api/admin/invitations/'+id,{method:'DELETE'}); loadInv(); }
+    $('inv-form').addEventListener('submit',async e=>{ e.preventDefault();
+      const email=$('inv-email').value.trim(); const m=$('inv-msg'); m.textContent=''; m.className='msg';
+      const r=await fetch('/api/admin/invitations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+      const d=await r.json();
+      if(d.ok){ m.textContent='Invitado: '+d.email; m.className='msg ok'; $('inv-email').value=''; loadInv(); }
+      else { m.textContent=d.error||'no se pudo invitar'; m.className='msg err'; } });
+    me(); loadInv(); loadUsr();
+  </script>
+</body>
+</html>

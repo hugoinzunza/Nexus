@@ -166,6 +166,53 @@ def is_allowed(email: str) -> bool:
         return inv is not None
 
 
+def list_invitations() -> list:
+    """Invitaciones existentes (para el panel admin)."""
+    from sqlalchemy import select
+    with db.session() as s:
+        rows = s.scalars(select(db.Invitation).order_by(db.Invitation.created_at.desc())).all()
+        return [{"id": r.id, "email": r.email,
+                 "created_at": r.created_at.isoformat() if r.created_at else None,
+                 "used_at": r.used_at.isoformat() if r.used_at else None} for r in rows]
+
+
+def add_invitation(email: str, by_uid: Optional[int]) -> dict:
+    """Invita un email a la beta. Idempotente (no duplica). Devuelve {ok, error}."""
+    email = (email or "").lower().strip()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        return {"ok": False, "error": "email inválido"}
+    if email == ADMIN_EMAIL.lower():
+        return {"ok": False, "error": "el admin no necesita invitación"}
+    from sqlalchemy import select
+    with db.session() as s:
+        exists = s.scalar(select(db.Invitation).where(db.Invitation.email == email))
+        if exists:
+            return {"ok": False, "error": "ya estaba invitado"}
+        s.add(db.Invitation(email=email, invited_by=by_uid))
+        return {"ok": True, "email": email}
+
+
+def delete_invitation(inv_id: int) -> bool:
+    from sqlalchemy import select
+    with db.session() as s:
+        inv = s.scalar(select(db.Invitation).where(db.Invitation.id == inv_id))
+        if inv is None:
+            return False
+        s.delete(inv)
+        return True
+
+
+def list_users() -> list:
+    """Usuarios registrados (para que el admin vea quién entró)."""
+    from sqlalchemy import select
+    with db.session() as s:
+        rows = s.scalars(select(db.User).order_by(db.User.created_at.desc())).all()
+        return [{"id": r.id, "email": r.email, "name": r.name, "role": r.role,
+                 "picture": r.picture,
+                 "last_login": r.last_login.isoformat() if r.last_login else None}
+                for r in rows]
+
+
 def upsert_user(userinfo: dict) -> dict:
     """Crea/actualiza el usuario tras un login válido y devuelve el dict de sesión.
     Marca la invitación como usada. Asigna rol admin al email admin."""

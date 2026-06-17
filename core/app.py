@@ -225,6 +225,66 @@ def logout():
     return resp
 
 
+# --- Panel de administración (solo admin, solo con auth activa) -----------
+ADMIN_PAGE = os.path.join(ROOT, "core", "admin.html")
+
+
+def _require_admin(request: Request):
+    """None si es admin con auth activa; si no, la Response de rechazo.
+    Con auth INERTE el panel NO está disponible (evita admin público)."""
+    if not auth.enabled():
+        return JSONResponse({"error": "el panel de admin requiere el login configurado"},
+                            status_code=404)
+    if not auth.is_admin(auth.current_user(request)):
+        return JSONResponse({"error": "solo administradores"}, status_code=403)
+    return None
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request):
+    if not auth.enabled():
+        return RedirectResponse(url="/", status_code=307)
+    if not auth.is_admin(auth.current_user(request)):
+        return RedirectResponse(url="/login?next=/admin", status_code=307)
+    with open(ADMIN_PAGE, "r", encoding="utf-8") as fh:
+        return HTMLResponse(fh.read(), headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/admin/invitations")
+def admin_list_invitations(request: Request):
+    blocked = _require_admin(request)
+    if blocked is not None:
+        return blocked
+    return {"invitations": auth.list_invitations()}
+
+
+@app.post("/api/admin/invitations")
+async def admin_add_invitation(request: Request):
+    blocked = _require_admin(request)
+    if blocked is not None:
+        return blocked
+    data = await request.json()
+    me = auth.current_user(request)
+    res = auth.add_invitation((data or {}).get("email", ""), me.get("uid") if me else None)
+    return JSONResponse(res, status_code=200 if res.get("ok") else 400)
+
+
+@app.delete("/api/admin/invitations/{inv_id}")
+def admin_delete_invitation(inv_id: int, request: Request):
+    blocked = _require_admin(request)
+    if blocked is not None:
+        return blocked
+    return {"ok": auth.delete_invitation(inv_id)}
+
+
+@app.get("/api/admin/users")
+def admin_list_users(request: Request):
+    blocked = _require_admin(request)
+    if blocked is not None:
+        return blocked
+    return {"users": auth.list_users()}
+
+
 # Slugs que exigen sesión iniciada (datos personales). El resto es público.
 _LOGIN_REQUIRED = {"journal"}
 
