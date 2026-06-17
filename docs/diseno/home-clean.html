@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NexUX · el mercado, en foco</title>
+<meta name="theme-color" content="#f4f5f8">
+<!-- Tema (claro por defecto): aplica antes de pintar para evitar parpadeo -->
+<script>(function(){try{var t=localStorage.getItem('nexux-theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -178,6 +181,34 @@
   .htile .ht-sym{font-family:"Sora","Inter",sans-serif;font-weight:700;color:var(--ink);font-size:15px}
   .htile .ht-chg{font-size:13px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
 
+  /* ===== Tema oscuro (default claro; se activa con data-theme="dark") ===== */
+  :root[data-theme="dark"]{
+    --bg:#0b0d12;--bg2:#13161e;--card:#171b24;--ink:#e9ecf3;--text:#aeb6c6;--muted:#818b9d;
+    --line:#262c39;--line2:#313847;
+    --accent:#8276ff;--accent2:#b3aaff;--accent-soft:rgba(124,108,240,.18);
+    --cyan:#26d6f0;--cyan-soft:rgba(38,214,240,.13);--green:#1bc98a;--red:#f0556a;--amber:#e0a83a}
+  :root[data-theme="dark"] nav{background:rgba(11,13,18,.85)}
+  :root[data-theme="dark"] .nav-links a:hover{background:#222838}
+  :root[data-theme="dark"] .btn.soft{background:#222838;color:var(--ink)}
+  :root[data-theme="dark"] .btn.soft:hover{background:#2b3242}
+  :root[data-theme="dark"] .preview .top{background:#12151d}
+  :root[data-theme="dark"] .preview .top i{background:#3a4151}
+  :root[data-theme="dark"] .preview .pc,
+  :root[data-theme="dark"] .preview .chart{background:#171b24}
+  :root[data-theme="dark"] .brief{background:linear-gradient(135deg,#181c26,#15151f)}
+  :root[data-theme="dark"] .icell,
+  :root[data-theme="dark"] .miniyou .c{background:#12151d}
+  :root[data-theme="dark"] .pin.hi{background:rgba(240,85,106,.16)}
+  :root[data-theme="dark"] .pin.md{background:rgba(224,168,58,.16)}
+  :root[data-theme="dark"] .join{background:linear-gradient(160deg,#181c26,#1a1830)}
+  :root[data-theme="dark"] .miniyou .ov{background:rgba(13,16,22,.55)}
+  :root[data-theme="dark"] .modal .m{background:#171b24}
+  :root[data-theme="dark"] .modal .x{background:#222838}
+  :root[data-theme="dark"] .modal .chart,
+  :root[data-theme="dark"] .modal .lv{background:#12151d}
+  /* botón de tema */
+  #theme-toggle{font-size:15px;line-height:1;padding:9px 12px}
+
   @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:34px}.grid{grid-template-columns:1fr}.feat-row{grid-template-columns:1fr}.ind{grid-template-columns:repeat(2,1fr)}.nav-links a:not(.btn){display:none}.preview{transform:none}}
 </style>
 </head>
@@ -191,7 +222,7 @@
 <nav>
   <div class="nav-in">
     <a class="brand" href="#"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg><span class="wm">Nex<span class="ux">UX</span></span></a>
-    <div class="nav-links"><a class="btn soft" href="/m/trading/">Trading</a><a class="btn soft" href="/m/journal/">Diario</a><a class="btn soft" id="nav-auth" href="/login">Entrar</a></div>
+    <div class="nav-links"><a class="btn soft" href="/m/trading/">Trading</a><a class="btn soft" href="/m/journal/">Diario</a><button class="btn soft" id="theme-toggle" type="button" title="Tema claro/oscuro" aria-label="Cambiar tema">🌙</button><a class="btn soft" id="nav-auth" href="/login">Entrar</a></div>
   </div>
 </nav>
 
@@ -471,6 +502,17 @@ async function loadBoard(){
     }).join('');
   }catch(e){}
 }
+// Tema claro/oscuro (default claro; recuerda la elección en este dispositivo)
+(function(){ var b=document.getElementById('theme-toggle'); if(!b) return;
+  var mc=document.querySelector('meta[name="theme-color"]');
+  function sync(){ var d=document.documentElement.getAttribute('data-theme')==='dark';
+    b.textContent=d?'☀️':'🌙'; if(mc) mc.setAttribute('content', d?'#0b0d12':'#f4f5f8'); }
+  sync();
+  b.addEventListener('click', function(){
+    var d=document.documentElement.getAttribute('data-theme')==='dark';
+    var t=d?'light':'dark'; document.documentElement.setAttribute('data-theme', t);
+    try{ localStorage.setItem('nexux-theme', t); }catch(e){} sync(); });
+})();
 loadDashboard();
 loadBrief();
 loadMe();
