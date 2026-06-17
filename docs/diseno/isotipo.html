@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NexUX · Isotipo (conceptos)</title>
+<style>
+  :root{--bg:#06070d;--panel:rgba(22,26,36,.55);--line:#222838;--text:#e8ebf2;--muted:#8b93a7;
+        --accent:#6c5ce7;--accent2:#a29bfe;--cyan:#22d3ee}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;background:
+    radial-gradient(700px 440px at 12% -12%,rgba(108,92,231,.26),transparent 66%),
+    radial-gradient(620px 420px at 90% -6%,rgba(34,211,238,.13),transparent 70%),var(--bg)}
+  .wrap{max-width:1100px;margin:0 auto;padding:40px 24px 70px}
+  h1{font-size:30px;font-weight:850;letter-spacing:-1px;margin:0}
+  .ux{color:var(--cyan);text-shadow:0 0 12px rgba(34,211,238,.45)}
+  .sub{color:var(--muted);margin:8px 0 34px;font-size:14.5px}
+
+  .row{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .opt{background:var(--panel);border:1px solid rgba(255,255,255,.06);border-radius:22px;
+       padding:26px 22px;backdrop-filter:blur(10px);
+       box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 30px 60px -40px rgba(0,0,0,.85)}
+  .opt h3{margin:0 0 4px;font-size:16px}
+  .opt .desc{color:var(--muted);font-size:12.5px;line-height:1.5;min-height:54px}
+
+  /* tile ícono de app */
+  .tile{width:104px;height:104px;border-radius:24px;display:grid;place-items:center;margin:18px auto 16px;
+        background:linear-gradient(160deg,#12131c,#0a0b12);border:1px solid rgba(255,255,255,.07);
+        box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 18px 40px -18px rgba(0,0,0,.9)}
+  .tile svg{width:60px;height:60px;filter:drop-shadow(0 4px 14px rgba(108,92,231,.5))}
+
+  /* lockup wordmark */
+  .lock{display:flex;align-items:center;justify-content:center;gap:11px;padding:14px 0;
+        border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)}
+  .lock svg{width:30px;height:30px}
+  .lock .wm{font-weight:800;font-size:22px;letter-spacing:.3px}
+
+  /* fila de tamaños (favicon test) */
+  .sizes{display:flex;align-items:center;gap:16px;justify-content:center;padding-top:16px;color:var(--muted)}
+  .sizes svg{display:block}
+  .sizes .lbl{font:600 10px/1 ui-monospace,Menlo,monospace}
+
+  .note{color:var(--muted);font-size:13px;margin-top:30px;line-height:1.6}
+  .note b{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Nex<span class="ux">UX</span> · isotipo</h1>
+  <p class="sub">3 conceptos de marca gráfica. Cada uno como ícono de app, en el wordmark, y en tamaños chicos (favicon).</p>
+
+  <!-- defs de degradados compartidos -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="gv" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#b3aaff"/><stop offset="1" stop-color="#6c5ce7"/></linearGradient>
+      <linearGradient id="gc" x1="1" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#34e0f5"/><stop offset="1" stop-color="#119bb8"/></linearGradient>
+      <linearGradient id="gdiag" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fff"/><stop offset="42%" stop-color="#a29bfe"/>
+        <stop offset="72%" stop-color="#6c5ce7"/><stop offset="100%" stop-color="#22d3ee"/></linearGradient>
+    </defs>
+  </svg>
+
+  <div class="row">
+
+    <!-- A · X-Nexus -->
+    <div class="opt">
+      <h3>A · X-Nexus</h3>
+      <div class="desc">Dos trazos que se cruzan (violeta + cyan). El "X" de NexUX, el cruce/conexión, y un cruce de tendencia. Mi recomendación.</div>
+      <div class="tile">
+        <svg viewBox="0 0 100 100">
+          <path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/>
+          <path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/>
+          <circle cx="50" cy="50" r="5.5" fill="#0a0b12"/>
+          <circle cx="50" cy="50" r="3" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="lock">
+        <svg viewBox="0 0 100 100">
+          <path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/>
+          <path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/>
+          <circle cx="50" cy="50" r="5.5" fill="#0a0b12"/><circle cx="50" cy="50" r="3" fill="#fff"/>
+        </svg>
+        <span class="wm">Nex<span class="ux">UX</span></span>
+      </div>
+      <div class="sizes">
+        <span><svg width="40" height="40" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg></span>
+        <span><svg width="24" height="24" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="14" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="14" stroke-linecap="round" fill="none"/></svg></span>
+        <span><svg width="16" height="16" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="16" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="16" stroke-linecap="round" fill="none"/></svg></span>
+        <span class="lbl">favicon</span>
+      </div>
+    </div>
+
+    <!-- B · Nodo-Nexus -->
+    <div class="opt">
+      <h3>B · Nodo-Nexus</h3>
+      <div class="desc">Un nodo central con conexiones — la idea de "nexo"/red. Más techy/abstracto.</div>
+      <div class="tile">
+        <svg viewBox="0 0 100 100">
+          <g stroke="url(#gv)" stroke-width="5" stroke-linecap="round">
+            <line x1="50" y1="50" x2="50" y2="22"/><line x1="50" y1="50" x2="76" y2="65"/><line x1="50" y1="50" x2="24" y2="65"/>
+          </g>
+          <circle cx="50" cy="22" r="8" fill="url(#gc)"/>
+          <circle cx="76" cy="65" r="8" fill="url(#gc)"/>
+          <circle cx="24" cy="65" r="8" fill="url(#gc)"/>
+          <circle cx="50" cy="50" r="9" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="lock">
+        <svg viewBox="0 0 100 100">
+          <g stroke="url(#gv)" stroke-width="5" stroke-linecap="round"><line x1="50" y1="50" x2="50" y2="22"/><line x1="50" y1="50" x2="76" y2="65"/><line x1="50" y1="50" x2="24" y2="65"/></g>
+          <circle cx="50" cy="22" r="8" fill="url(#gc)"/><circle cx="76" cy="65" r="8" fill="url(#gc)"/><circle cx="24" cy="65" r="8" fill="url(#gc)"/><circle cx="50" cy="50" r="9" fill="#fff"/>
+        </svg>
+        <span class="wm">Nex<span class="ux">UX</span></span>
+      </div>
+      <div class="sizes">
+        <span><svg width="40" height="40" viewBox="0 0 100 100"><g stroke="url(#gv)" stroke-width="5" stroke-linecap="round"><line x1="50" y1="50" x2="50" y2="22"/><line x1="50" y1="50" x2="76" y2="65"/><line x1="50" y1="50" x2="24" y2="65"/></g><circle cx="50" cy="22" r="8" fill="url(#gc)"/><circle cx="76" cy="65" r="8" fill="url(#gc)"/><circle cx="24" cy="65" r="8" fill="url(#gc)"/><circle cx="50" cy="50" r="9" fill="#fff"/></svg></span>
+        <span><svg width="24" height="24" viewBox="0 0 100 100"><g stroke="url(#gv)" stroke-width="6" stroke-linecap="round"><line x1="50" y1="50" x2="50" y2="22"/><line x1="50" y1="50" x2="76" y2="65"/><line x1="50" y1="50" x2="24" y2="65"/></g><circle cx="50" cy="22" r="10" fill="url(#gc)"/><circle cx="76" cy="65" r="10" fill="url(#gc)"/><circle cx="24" cy="65" r="10" fill="url(#gc)"/><circle cx="50" cy="50" r="11" fill="#fff"/></svg></span>
+        <span><svg width="16" height="16" viewBox="0 0 100 100"><circle cx="50" cy="22" r="13" fill="url(#gc)"/><circle cx="76" cy="65" r="13" fill="url(#gc)"/><circle cx="24" cy="65" r="13" fill="url(#gc)"/><circle cx="50" cy="50" r="14" fill="#fff"/></svg></span>
+        <span class="lbl">favicon</span>
+      </div>
+    </div>
+
+    <!-- C · Diamante refinado -->
+    <div class="opt">
+      <h3>C · Diamante refinado</h3>
+      <div class="desc">Evolución premium del ◆ actual: faceta + degradado. Continuidad con lo que ya tienes.</div>
+      <div class="tile">
+        <svg viewBox="0 0 100 100">
+          <polygon points="50,14 86,50 50,86 14,50" fill="url(#gdiag)"/>
+          <polygon points="50,14 86,50 50,50 14,50" fill="#fff" opacity=".16"/>
+          <polygon points="50,14 86,50 50,86 14,50" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="lock">
+        <svg viewBox="0 0 100 100">
+          <polygon points="50,14 86,50 50,86 14,50" fill="url(#gdiag)"/>
+          <polygon points="50,14 86,50 50,50 14,50" fill="#fff" opacity=".16"/>
+        </svg>
+        <span class="wm">Nex<span class="ux">UX</span></span>
+      </div>
+      <div class="sizes">
+        <span><svg width="40" height="40" viewBox="0 0 100 100"><polygon points="50,14 86,50 50,86 14,50" fill="url(#gdiag)"/><polygon points="50,14 86,50 50,50 14,50" fill="#fff" opacity=".16"/></svg></span>
+        <span><svg width="24" height="24" viewBox="0 0 100 100"><polygon points="50,14 86,50 50,86 14,50" fill="url(#gdiag)"/></svg></span>
+        <span><svg width="16" height="16" viewBox="0 0 100 100"><polygon points="50,10 90,50 50,90 10,50" fill="url(#gdiag)"/></svg></span>
+        <span class="lbl">favicon</span>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="note"><b>Mi recomendación: A (X-Nexus).</b> Es el que más carga el nombre
+    (el X de Ne<b>X</b>UX), funciona a tamaño favicon, y usa tus dos colores de marca.
+    Dime cuál te late — o mezclamos ideas — y lo dejo definitivo (favicon, ícono PWA,
+    y reemplazando el ◆ en el wordmark de toda la app).</p>
+</div>
+</body>
+</html>
