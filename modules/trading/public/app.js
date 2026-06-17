@@ -120,17 +120,21 @@
         // Etiqueta tipo "pill" (fondo oscuro redondeado) para que el texto se lea
         // sobre velas y cajas — estilo LuxAlgo. opts.right ancla al borde derecho.
         const pill = (y, text, color, opts = {}) => {
-          ctx.font = opts.font || "9.5px -apple-system, sans-serif";
+          // Etiqueta legible: chip oscuro + punto de color (conserva el significado)
+          // + texto BLANCO en negrita (alto contraste, antes era color sobre oscuro).
+          ctx.font = opts.font || "600 10.5px -apple-system, sans-serif";
           ctx.textBaseline = "top";
-          const w = ctx.measureText(text).width + 10;
+          const w = ctx.measureText(text).width + 19;   // espacio para el punto
           let px = opts.x != null ? opts.x : 6;
           if (opts.right) px = W - w - 6;
           px = Math.max(2, Math.min(px, W - w - 2));
-          ctx.fillStyle = "rgba(9,11,17,0.82)";
+          ctx.fillStyle = "rgba(9,11,17,0.9)";
           if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px, y, w, 15, 4); ctx.fill(); }
           else ctx.fillRect(px, y, w, 15);
-          ctx.fillStyle = color;
-          ctx.fillText(text, px + 5, y + 3.5);
+          ctx.fillStyle = color;                          // punto de color a la izquierda
+          ctx.beginPath(); ctx.arc(px + 8, y + 7.5, 2.6, 0, 6.2832); ctx.fill();
+          ctx.fillStyle = "#fff";                         // texto blanco
+          ctx.fillText(text, px + 14, y + 3.2);
         };
         // --- Overlay SMC (siempre): premium/descuento, FVG, POIs ---
         // Premium/descuento como lo dibuja LuxAlgo: TRES BANDAS discretas dentro
