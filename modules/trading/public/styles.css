@@ -400,3 +400,7 @@ tbody tr.hl td { font-weight: 600; }
     padding-bottom: calc(22px + env(safe-area-inset-bottom)); animation: sheet-in .2s ease; }
   @keyframes sheet-in { from { transform: translateY(100%); } to { transform: none; } }
 }
+
+/* --- Tema oscuro: overrides de fondos blancos fijos ------------------ */
+:root[data-theme="dark"] .chart-legend { background: rgba(20,24,32,0.82); }
+:root[data-theme="dark"] .goto-now { background: rgba(20,24,32,0.92); }

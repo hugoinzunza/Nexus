@@ -1,0 +1,23 @@
+/* Tema oscuro central de NexUX.
+   Default CLARO: cada página define su paleta clara en :root. Acá van solo los
+   overrides oscuros, que ganan por especificidad cuando <html data-theme="dark">.
+   El tema se aplica antes de pintar con un script inline en el <head> (sin
+   parpadeo); este archivo solo aporta los colores y el botón. */
+:root[data-theme="dark"]{
+  --bg:#0b0d12; --bg2:#13161e;
+  --card:#171b24; --panel:#171b24; --panel2:#12151d; --chart-bg:#0b0d12;
+  --ink:#e9ecf3; --text:#aeb6c6; --muted:#818b9d;
+  --line:#262c39; --line2:#313847;
+  --accent:#8276ff; --accent2:#b3aaff; --accent-soft:rgba(124,108,240,.18);
+  --cyan:#26d6f0; --cyan-soft:rgba(38,214,240,.13);
+  --green:#1bc98a; --red:#f0556a; --red-soft:rgba(240,85,106,.14); --amber:#e0a83a;
+}
+
+/* Botón de tema: si la página trae uno en su barra (#theme-toggle) se cablea solo;
+   si no, theme.js inyecta uno flotante (.theme-fab). */
+#theme-toggle{cursor:pointer}
+.theme-fab{position:fixed;right:16px;bottom:16px;z-index:200;width:44px;height:44px;
+  border-radius:50%;border:1px solid var(--line);background:var(--card,var(--panel));
+  color:var(--ink);font-size:18px;line-height:1;display:grid;place-items:center;
+  box-shadow:0 10px 26px -10px rgba(0,0,0,.45)}
+.theme-fab:hover{transform:scale(1.05)}

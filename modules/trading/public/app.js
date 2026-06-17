@@ -772,10 +772,11 @@
       layout: { background: { color: "transparent" }, textColor: "#888e9c",
                 fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
                 attributionLogo: false },
-      grid: { vertLines: { color: "rgba(18,20,26,0.05)" }, horzLines: { color: "rgba(18,20,26,0.05)" } },
+      // Grilla y bordes en gris NEUTRO (translúcido): se ven bien en claro y oscuro.
+      grid: { vertLines: { color: "rgba(130,140,160,0.12)" }, horzLines: { color: "rgba(130,140,160,0.12)" } },
       crosshair: { mode: LC.CrosshairMode.Normal },
-      rightPriceScale: { borderColor: "#e6e8ef" },
-      timeScale: { borderColor: "#e6e8ef", timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: "rgba(130,140,160,0.28)" },
+      timeScale: { borderColor: "rgba(130,140,160,0.28)", timeVisible: true, secondsVisible: false },
       localization: { locale: "es" },
     });
     const series = chart.addSeries(LC.CandlestickSeries, {
