@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>NexUX · el mercado, en claro</title>
+<title>NexUX · el mercado, en foco</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#f4f5f8;--bg2:#eef0f5;--card:#ffffff;--ink:#12141a;--text:#444a57;--muted:#888e9c;
@@ -12,8 +15,8 @@
     --green:#0a9d63;--red:#d8394e;--amber:#c98a16}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);overflow-x:hidden;
-       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-  .serif{font-family:"Iowan Old Style","Palatino Linotype",Georgia,"Times New Roman",serif}
+       font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  .display{font-family:"Space Grotesk","Inter",sans-serif}
   a{text-decoration:none;color:inherit}
   .up{color:var(--green)}.down{color:var(--red)}.am{color:var(--amber)}
   .wrap{max-width:1180px;margin:0 auto;padding:0 clamp(20px,4vw,40px)}
@@ -21,7 +24,7 @@
   /* Marca — lockup compacto (iso + Nex·UX pegados) */
   .brand{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
   .brand .iso{width:26px;height:26px;flex:0 0 auto}
-  .brand .wm{font-weight:750;font-size:19px;letter-spacing:-.5px;line-height:1}
+  .brand .wm{font-family:"Space Grotesk","Inter",sans-serif;font-weight:600;font-size:19px;letter-spacing:-.6px;line-height:1}
   .brand .wm .ux{color:var(--cyan)}
 
   nav{position:sticky;top:0;z-index:30;background:rgba(244,245,248,.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
@@ -41,8 +44,8 @@
   .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
   .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;letter-spacing:.3px;
            color:var(--accent);background:var(--accent-soft);padding:7px 14px;border-radius:999px}
-  .hero h1{font-size:clamp(38px,5.2vw,60px);font-weight:600;letter-spacing:-1.8px;line-height:1.07;margin:22px 0 0;color:var(--ink)}
-  .hero h1 em{font-style:italic;color:var(--accent)}
+  .hero h1{font-family:"Space Grotesk","Inter",sans-serif;font-size:clamp(44px,6.4vw,76px);font-weight:600;letter-spacing:-2.4px;line-height:1.0;margin:22px 0 0;color:var(--ink)}
+  .hero h1 em{font-style:normal;color:var(--accent)}
   .hero p{font-size:clamp(15.5px,1.9vw,18px);line-height:1.62;color:var(--text);max-width:480px;margin:20px 0 0}
   .hero .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
   .hero .note{margin-top:16px;color:var(--muted);font-size:13px}
@@ -144,7 +147,7 @@
   <div class="hero-grid">
     <div>
       <span class="eyebrow">● Beta cerrada · por invitación</span>
-      <h1 class="serif">El mercado completo,<br><em>en una sola vista.</em></h1>
+      <h1>El mercado,<br><em>en foco.</em></h1>
       <p>Indicadores, noticias y fechas clave en tiempo real. Conecta tu exchange
          <b>en solo lectura</b> y suma tu diario de trading: PnL, win rate y tus mejores horarios.</p>
       <div class="cta"><a class="btn primary lg" href="#join">Pedir acceso →</a><a class="btn soft lg" href="#join">Entrar con Google</a></div>
@@ -170,7 +173,7 @@
 
       <div class="card brief">
         <div class="hd"><span class="ic">✦</span><h3>Brief de hoy · NexUX AI</h3></div>
-        <p class="serif">BTC consolida bajo los $64.2k tras rechazar el premium; el régimen sigue
+        <p>BTC consolida bajo los $64.2k tras rechazar el premium; el régimen sigue
            favorable. El catalizador del día es el <b>CPI de las 09:30 ET</b>. SOL es el
            más fuerte del grupo; DOGE y XRP mantienen estructura bajista.</p>
         <div class="by">Sintetiza indicadores, noticias y calendario · contexto, no asesoría</div>
