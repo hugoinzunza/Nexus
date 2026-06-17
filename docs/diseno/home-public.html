@@ -3,124 +3,156 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>NexUX · El pulso del mercado + tu diario honesto</title>
+<title>NexUX · El centro de mando de tu trading</title>
 <style>
-  :root{--bg:#08090e;--panel:rgba(22,26,36,0.55);--line:#222838;--text:#e8ebf2;
-        --muted:#8b93a7;--accent:#6c5ce7;--accent2:#a29bfe;--cyan:#22d3ee;
-        --green:#16c784;--red:#ea3943;--amber:#f0a93b}
+  :root{--bg:#06070d;--panel-a:rgba(28,33,46,.55);--panel-b:rgba(15,18,27,.55);
+        --line:rgba(255,255,255,.07);--text:#eef1f7;--muted:#8b93a7;
+        --accent:#6c5ce7;--accent2:#a29bfe;--cyan:#22d3ee;--green:#16c784;--red:#ea3943;--amber:#f0a93b}
   *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-       background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+       background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden;letter-spacing:.1px}
   body::before{content:"";position:fixed;inset:0;z-index:-2;background:
-    radial-gradient(740px 460px at 10% -14%,rgba(108,92,231,0.30),transparent 66%),
-    radial-gradient(640px 440px at 92% -8%,rgba(34,211,238,0.14),transparent 70%),var(--bg)}
+    radial-gradient(820px 520px at 8% -16%,rgba(108,92,231,.30),transparent 64%),
+    radial-gradient(720px 480px at 94% -8%,rgba(34,211,238,.14),transparent 68%),var(--bg)}
+  /* grano sutil premium */
+  body::after{content:"";position:fixed;inset:0;z-index:-1;opacity:.035;pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
   a{text-decoration:none;color:inherit}
-  .ux{color:var(--cyan);text-shadow:0 0 12px rgba(34,211,238,0.45)}
-  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+  .ux{color:var(--cyan);text-shadow:0 0 12px rgba(34,211,238,.45)}
+  .iso{width:30px;height:30px;flex:0 0 auto;filter:drop-shadow(0 3px 10px rgba(108,92,231,.5))}
+  .wrap{max-width:1340px;margin:0 auto;padding:0 clamp(18px,4vw,44px)}
 
-  nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
-      background:rgba(8,9,14,0.6);border-bottom:1px solid rgba(255,255,255,0.05)}
+  nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(14px);
+      background:rgba(6,7,13,.62);border-bottom:1px solid var(--line)}
   .nav-in{display:flex;align-items:center;justify-content:space-between;gap:14px;
-          max-width:1180px;margin:0 auto;padding:13px 22px}
-  .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:17px}
-  .brand .dia{color:var(--accent2);filter:drop-shadow(0 0 10px var(--accent))}
+          max-width:1340px;margin:0 auto;padding:13px clamp(18px,4vw,44px)}
+  .brand{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:.2px}
   .btn{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:13.5px;
-       padding:10px 18px;border-radius:999px;transition:.15s}
+       padding:10px 19px;border-radius:999px;transition:transform .16s,box-shadow .16s,border-color .16s}
   .btn.primary{color:#fff;background:linear-gradient(135deg,var(--accent),#5848c9);
-               box-shadow:0 10px 26px -12px rgba(108,92,231,.85)}
-  .btn.primary:hover{transform:translateY(-2px)}
+               box-shadow:0 12px 30px -14px rgba(108,92,231,.9)}
+  .btn.primary:hover{transform:translateY(-2px);box-shadow:0 18px 42px -14px rgba(108,92,231,1)}
   .btn.ghost{color:var(--text);border:1px solid var(--line)}
-  .btn.ghost:hover{border-color:var(--accent)}
-  .btn.lg{padding:13px 24px;font-size:14.5px}
+  .btn.ghost:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .btn.lg{padding:14px 26px;font-size:15px}
   .nav-r{display:flex;gap:8px}
 
-  /* Intro / qué es NexUX */
-  .intro{text-align:center;padding:54px 0 6px}
+  .intro{text-align:center;padding:clamp(48px,8vw,84px) 0 8px}
   .kick{display:inline-flex;align-items:center;gap:8px;font:600 11px/1 ui-monospace,Menlo,monospace;
-        letter-spacing:2.2px;text-transform:uppercase;color:var(--accent2);padding:7px 15px;
+        letter-spacing:2.4px;text-transform:uppercase;color:var(--accent2);padding:8px 16px;
         border:1px solid rgba(108,92,231,.4);border-radius:999px;background:rgba(108,92,231,.1)}
   .kick .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
-  .intro h1{font-size:clamp(34px,6.4vw,60px);font-weight:850;letter-spacing:-2px;line-height:1.06;margin:22px 0 0}
-  .intro h1 .g{background:linear-gradient(100deg,#fff 8%,var(--accent2) 46%,var(--cyan));
-               -webkit-background-clip:text;background-clip:text;color:transparent}
-  .intro p{color:var(--muted);max-width:600px;margin:18px auto 0;font-size:clamp(15px,2.3vw,17.5px);line-height:1.55}
+  .intro h1{font-size:clamp(38px,7vw,72px);font-weight:860;letter-spacing:-2.6px;line-height:1.04;margin:24px 0 0}
+  .intro h1 .g{background:linear-gradient(100deg,#fff 6%,var(--accent2) 44%,var(--accent) 68%,var(--cyan));
+               -webkit-background-clip:text;background-clip:text;color:transparent;
+               filter:drop-shadow(0 12px 40px rgba(108,92,231,.4))}
+  .intro p{color:var(--muted);max-width:640px;margin:20px auto 0;font-size:clamp(15.5px,2.2vw,18px);line-height:1.6}
   .intro p b{color:var(--text);font-weight:600}
-  .intro .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+  .intro .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:28px}
   .intro .note{margin-top:16px;color:var(--muted);font-size:12.5px}
 
   .riskbar{display:flex;align-items:center;gap:10px;justify-content:center;font-size:13px;
-           padding:10px 16px;margin-top:30px;border:1px solid var(--line);border-radius:14px;
-           background:var(--panel);color:var(--muted);flex-wrap:wrap}
+           padding:11px 18px;margin-top:34px;border:1px solid var(--line);border-radius:14px;
+           background:linear-gradient(180deg,var(--panel-a),var(--panel-b));color:var(--muted);flex-wrap:wrap;backdrop-filter:blur(10px)}
   .riskbar .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
   .riskbar b{color:var(--text)}
   .riskbar .sess{margin-left:auto;display:flex;gap:8px}
   .sess .s{padding:3px 9px;border-radius:999px;font:600 11px/1 ui-monospace,Menlo,monospace;border:1px solid var(--line);color:var(--muted)}
   .sess .s.live{color:var(--green);border-color:rgba(22,199,132,.5);background:rgba(22,199,132,.1)}
 
-  h2{font-size:14px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px}
+  h2{font-size:14.5px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px;letter-spacing:.2px}
   .muted{color:var(--muted)}
-  main{padding:18px 0 60px}
-  .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
-  .col{display:flex;flex-direction:column;gap:16px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;backdrop-filter:blur(10px)}
-  .card .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-  .card .hd .lock{font-size:11px;color:var(--muted)}
+  main{padding:20px 0 70px}
+  .grid{display:grid;grid-template-columns:1.7fr 1fr;gap:18px}
+  .col{display:flex;flex-direction:column;gap:18px}
+  .card{background:linear-gradient(180deg,var(--panel-a),var(--panel-b));border:1px solid var(--line);
+        border-radius:20px;padding:20px;backdrop-filter:blur(12px);
+        box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 34px 64px -42px rgba(0,0,0,.9)}
+  .card .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}
+  .card .hd .hint{font-size:11px;color:var(--muted)}
 
-  .brief{position:relative;overflow:hidden;border-color:rgba(34,211,238,.35)}
+  .brief{position:relative;overflow:hidden;border-color:rgba(34,211,238,.3)}
   .brief::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--cyan),var(--accent))}
   .brief .tag{font:700 11px/1 ui-monospace,Menlo,monospace;letter-spacing:1px;text-transform:uppercase;color:var(--cyan)}
-  .brief p{margin:12px 0 0;font-size:15px;line-height:1.6}
-  .brief .by{margin-top:12px;font-size:11.5px;color:var(--muted)}
+  .brief p{margin:13px 0 0;font-size:15.5px;line-height:1.62}
+  .brief .by{margin-top:13px;font-size:11.5px;color:var(--muted)}
 
   .ind{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
-  .ind .i{background:#0d0f16;padding:14px 15px}
+  .ind .i{background:#0c0e16;padding:15px 16px;cursor:pointer;transition:background .15s;position:relative}
+  .ind .i:hover{background:#11141f}
+  .ind .i::after{content:"↗";position:absolute;top:12px;right:13px;color:var(--muted);font-size:12px;opacity:0;transition:.15s}
+  .ind .i:hover::after{opacity:.7}
   .ind .i .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.8px}
-  .ind .i .v{font-size:19px;font-weight:800;margin-top:5px;font-variant-numeric:tabular-nums}
+  .ind .i .v{font-size:20px;font-weight:800;margin-top:5px;font-variant-numeric:tabular-nums}
   .ind .i .d{font-size:11.5px;margin-top:2px}
   .up{color:var(--green)}.down{color:var(--red)}.cy{color:var(--cyan)}.am{color:var(--amber)}
 
-  .pairs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .pair{border:1px solid var(--line);border-radius:14px;padding:12px 13px;background:#0d0f16}
+  .pairs{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+  .pair{border:1px solid var(--line);border-radius:14px;padding:13px 14px;background:#0c0e16}
   .pair .t{font-weight:700;font-size:13.5px}.pair .px{font-size:15px;font-weight:800;margin-top:3px}
   .pair .ch{font-size:12px;font-weight:700;margin-top:3px}
   .pair .bar{height:4px;border-radius:99px;background:#1a2030;margin-top:9px;overflow:hidden}
   .pair .bar i{display:block;height:100%;border-radius:99px}
 
-  .ev{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid rgba(255,255,255,.05)}
-  .ev:first-child{border-top:0}
-  .ev .when{min-width:58px;text-align:center}
-  .ev .when .d{font-size:11px;color:var(--muted);text-transform:uppercase}.ev .when .h{font-size:14px;font-weight:800}
+  .ev{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}.ev:first-child{border-top:0}
+  .ev .when{min-width:56px;text-align:center}.ev .when .d{font-size:11px;color:var(--muted);text-transform:uppercase}.ev .when .h{font-size:14px;font-weight:800}
   .ev .body{flex:1}.ev .body .ti{font-size:13.5px;font-weight:600}.ev .body .me{font-size:11.5px;color:var(--muted);margin-top:2px}
   .imp{font:700 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.5px;text-transform:uppercase;padding:4px 7px;border-radius:6px}
   .imp.hi{color:var(--red);background:rgba(234,57,67,.14)}.imp.md{color:var(--amber);background:rgba(240,169,59,.14)}
   .cd{font:700 11px/1 ui-monospace,Menlo,monospace;color:var(--cyan)}
-
-  .nw{display:flex;gap:10px;padding:11px 0;border-top:1px solid rgba(255,255,255,.05)}.nw:first-child{border-top:0}
+  .nw{display:flex;gap:10px;padding:11px 0;border-top:1px solid var(--line)}.nw:first-child{border-top:0}
   .nw .ti{font-size:13px;line-height:1.4}.nw .me{font-size:11px;color:var(--muted);margin-top:3px}
 
-  /* Conversión: lo que ganas al conectar (reemplaza el panel personal) */
-  .join{position:relative;overflow:hidden;border-color:rgba(108,92,231,.45);
-        background:radial-gradient(380px 200px at 50% -30%,rgba(108,92,231,.22),transparent 70%),var(--panel)}
-  .join .ic{font-size:26px}.join h3{margin:10px 0 6px;font-size:17px}
+  .join{position:relative;overflow:hidden;border-color:rgba(108,92,231,.4);
+        background:radial-gradient(420px 220px at 50% -30%,rgba(108,92,231,.24),transparent 70%),linear-gradient(180deg,var(--panel-a),var(--panel-b))}
+  .join .ic{font-size:26px}.join h3{margin:10px 0 6px;font-size:18px}
   .join p{margin:0 0 14px;color:var(--muted);font-size:13.5px;line-height:1.55}
-  .join .blur{filter:blur(5px);opacity:.5;pointer-events:none;user-select:none}
-  .you{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:12px}
-  .you .c{background:#0d0f16;padding:11px 12px}.you .c .k{color:var(--muted);font-size:10px;text-transform:uppercase}.you .c .v{font-size:17px;font-weight:800;margin-top:4px}
-
-  .poi{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-size:12.5px;border-top:1px solid rgba(255,255,255,.05)}.poi:first-child{border-top:0}
+  .join .blur{filter:blur(5px);opacity:.55;pointer-events:none;user-select:none}
+  .you{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .you .c{background:#0c0e16;padding:11px 12px}.you .c .k{color:var(--muted);font-size:10px;text-transform:uppercase}.you .c .v{font-size:17px;font-weight:800;margin-top:4px}
+  .poi{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-size:12.5px;border-top:1px solid var(--line)}.poi:first-child{border-top:0}
   .zone{font:700 11px/1 ui-monospace,Menlo,monospace;padding:3px 7px;border-radius:6px;color:var(--cyan);background:rgba(34,211,238,.1)}
 
-  footer{text-align:center;color:var(--muted);font-size:12.5px;padding:46px 22px 40px;border-top:1px solid rgba(255,255,255,.05);margin-top:48px}
-  footer .disc{max-width:620px;margin:0 auto 14px;line-height:1.6;opacity:.85}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;padding:48px 22px 40px;border-top:1px solid var(--line);margin-top:52px}
+  footer .disc{max-width:640px;margin:0 auto 14px;line-height:1.6;opacity:.85}
+  footer .brand{justify-content:center;font-size:15px}
+
+  /* Modal de indicador */
+  .modal{position:fixed;inset:0;z-index:60;display:none}
+  .modal.on{display:block}
+  .modal .bg{position:absolute;inset:0;background:rgba(4,5,10,.72);backdrop-filter:blur(4px)}
+  .modal .card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(540px,92vw);
+    max-height:88vh;overflow:auto;background:linear-gradient(180deg,#13161f,#0c0e16);border:1px solid var(--line);
+    border-radius:22px;padding:24px;box-shadow:0 40px 90px -30px rgba(0,0,0,.95)}
+  .modal .x{position:absolute;top:16px;right:16px;width:30px;height:30px;border-radius:9px;border:1px solid var(--line);
+    background:transparent;color:var(--muted);cursor:pointer;font-size:14px}
+  .modal .x:hover{color:var(--text);border-color:var(--accent)}
+  .modal .mh .nm{font-size:18px;font-weight:800;letter-spacing:-.3px}
+  .modal .mh .vl{font-size:28px;font-weight:850;margin-top:4px;font-variant-numeric:tabular-nums}
+  .modal .mh .tg{font-size:12px;color:var(--muted);margin-top:2px}
+  .modal .chart{margin:18px 0;border:1px solid var(--line);border-radius:14px;background:#0a0b12;padding:10px}
+  .modal .interp h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--cyan)}
+  .modal .interp p{margin:0 0 10px;font-size:14px;line-height:1.6;color:var(--text)}
+  .modal .interp .lvls{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .modal .interp .lv{font:600 11px/1 ui-monospace,Menlo,monospace;padding:6px 10px;border-radius:8px;border:1px solid var(--line);color:var(--muted)}
 
   @media(max-width:900px){.grid{grid-template-columns:1fr}.ind,.pairs{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
 
+<!-- isotipo X-NexUX (defs) -->
+<svg width="0" height="0" style="position:absolute"><defs>
+  <linearGradient id="gv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b3aaff"/><stop offset="1" stop-color="#6c5ce7"/></linearGradient>
+  <linearGradient id="gc" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34e0f5"/><stop offset="1" stop-color="#119bb8"/></linearGradient>
+</defs></svg>
+
 <nav>
   <div class="nav-in">
-    <a class="brand" href="#"><span class="dia">◆</span> Nex<span class="ux">UX</span></a>
+    <a class="brand" href="#">
+      <svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/><circle cx="50" cy="50" r="5.5" fill="#06070d"/><circle cx="50" cy="50" r="3" fill="#fff"/></svg>
+      Nex<span class="ux">UX</span>
+    </a>
     <div class="nav-r">
       <a class="btn ghost" href="#join">Pedir invitación</a>
       <a class="btn primary" href="#join">Entrar</a>
@@ -128,14 +160,13 @@
   </div>
 </nav>
 
-<!-- Qué es NexUX -->
 <header class="intro wrap">
   <span class="kick"><span class="dot"></span> Beta cerrada · por invitación</span>
-  <h1>El pulso del mercado,<br><span class="g">y tu diario honesto.</span></h1>
-  <p><b>NexUX</b> reúne en un solo lugar los <b>indicadores</b>, las <b>noticias
-     fundamentales</b> y las <b>fechas clave</b> que mueven el mercado — y cuando
-     conectas tu exchange <b>(solo lectura)</b>, suma tu <b>diario de trading real</b>:
-     PnL, win rate y tus mejores horarios.</p>
+  <h1>El centro de mando<br><span class="g">de tu trading.</span></h1>
+  <p><b>NexUX</b> reúne los <b>indicadores</b>, las <b>noticias fundamentales</b> y las
+     <b>fechas clave</b> del mercado en un solo lugar — y al conectar tu exchange
+     <b>(solo lectura)</b>, suma tu <b>diario de trading profesional</b>: PnL, win rate
+     y tus mejores horarios.</p>
   <div class="cta">
     <a class="btn primary lg" href="#join">Pedir acceso a la beta →</a>
     <a class="btn ghost lg" href="#join">Entrar con Google</a>
@@ -162,14 +193,14 @@
       </div>
 
       <div class="card">
-        <div class="hd"><h2>📊 Indicadores</h2></div>
+        <div class="hd"><h2>📊 Indicadores</h2><span class="hint">toca uno para ver gráfico + cómo se interpreta</span></div>
         <div class="ind">
-          <div class="i"><div class="k">Fear &amp; Greed</div><div class="v am">38</div><div class="d am">Miedo</div></div>
-          <div class="i"><div class="k">Dominancia BTC</div><div class="v">54.2%</div><div class="d up">▲ 0.3%</div></div>
-          <div class="i"><div class="k">VIX (risk)</div><div class="v cy">17.8</div><div class="d up">risk-on</div></div>
-          <div class="i"><div class="k">Funding (perp)</div><div class="v up">+0.011%</div><div class="d muted">sesgo long leve</div></div>
-          <div class="i"><div class="k">Market cap 24h</div><div class="v">$2.31T</div><div class="d down">▼ 1.2%</div></div>
-          <div class="i"><div class="k">ETH / BTC</div><div class="v">0.0271</div><div class="d down">▼ 0.5%</div></div>
+          <div class="i" onclick="openInd('fng')"><div class="k">Fear &amp; Greed</div><div class="v am">38</div><div class="d am">Miedo</div></div>
+          <div class="i" onclick="openInd('dom')"><div class="k">Dominancia BTC</div><div class="v">54.2%</div><div class="d up">▲ 0.3%</div></div>
+          <div class="i" onclick="openInd('vix')"><div class="k">VIX (risk)</div><div class="v cy">17.8</div><div class="d up">risk-on</div></div>
+          <div class="i" onclick="openInd('fund')"><div class="k">Funding (perp)</div><div class="v up">+0.011%</div><div class="d muted">sesgo long leve</div></div>
+          <div class="i" onclick="openInd('mcap')"><div class="k">Market cap 24h</div><div class="v">$2.31T</div><div class="d down">▼ 1.2%</div></div>
+          <div class="i" onclick="openInd('ethbtc')"><div class="k">ETH / BTC</div><div class="v">0.0271</div><div class="d down">▼ 0.5%</div></div>
         </div>
       </div>
 
@@ -195,16 +226,11 @@
     </div>
 
     <div class="col">
-
-      <!-- Conexión: lo que ganas (panel personal "bloqueado") -->
       <div class="card join" id="join">
         <div class="ic">💼</div>
         <h3>Tu diario, aquí</h3>
-        <p>Conecta tu Binance (solo lectura) y verás <b>tu</b> PnL, win rate y posiciones
-           en este mismo lugar.</p>
-        <div class="blur">
-          <div class="you"><div class="c"><div class="k">PnL hoy</div><div class="v up">+$182</div></div><div class="c"><div class="k">Win rate</div><div class="v">58%</div></div></div>
-        </div>
+        <p>Conecta tu Binance (solo lectura) y verás <b>tu</b> PnL, win rate y posiciones en este mismo lugar.</p>
+        <div class="blur"><div class="you"><div class="c"><div class="k">PnL hoy</div><div class="v up">+$182</div></div><div class="c"><div class="k">Win rate</div><div class="v">58%</div></div></div></div>
         <a class="btn primary lg" href="#" style="margin-top:14px;width:100%;justify-content:center">Entrar con Google</a>
         <div class="muted" style="font-size:11.5px;margin-top:10px;text-align:center">Beta por invitación · sin compromiso</div>
       </div>
@@ -224,7 +250,6 @@
         <div class="poi"><span><b>XRP</b> · short @ 1.18</span><span class="zone">premium</span></div>
         <div class="muted" style="margin-top:10px;font-size:11.5px">Zonas de interés en vivo · contexto, no asesoría</div>
       </div>
-
     </div>
   </div>
 </main>
@@ -233,8 +258,67 @@
   <p class="disc">⚠️ NexUX es una herramienta informativa de <b>solo lectura</b>. No es
     asesoría financiera ni recomendación de inversión. El trading conlleva riesgo;
     las decisiones son tuyas.</p>
-  <div><span class="brand"><span class="dia">◆</span> Nex<span class="ux">UX</span></span> · nexux.cl</div>
+  <div class="brand"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg> Nex<span class="ux">UX</span> · nexux.cl</div>
 </footer>
 
+<!-- Modal de indicador -->
+<div class="modal" id="modal">
+  <div class="bg" onclick="closeInd()"></div>
+  <div class="card">
+    <button class="x" onclick="closeInd()">✕</button>
+    <div class="mh"><div class="nm" id="m-nm"></div><div class="vl" id="m-vl"></div><div class="tg" id="m-tg"></div></div>
+    <div class="chart" id="m-chart"></div>
+    <div class="interp"><h4>Cómo se interpreta</h4><p id="m-interp"></p><div class="lvls" id="m-lvls"></div></div>
+  </div>
+</div>
+
+<script>
+function chart(pts,color){
+  const w=480,h=150,max=Math.max(...pts),min=Math.min(...pts),rng=(max-min)||1,step=w/(pts.length-1);
+  const xy=pts.map((v,i)=>[i*step,h-((v-min)/rng)*(h-22)-12]);
+  const line=xy.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:150px;display:block">
+    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".34"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <path d="${line} L${w},${h} L0,${h} Z" fill="url(#cg)"/><path d="${line}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
+}
+const IND={
+  fng:{nm:"Fear & Greed Index",vl:"38 · Miedo",tg:"Sentimiento del mercado cripto",color:"#f0a93b",
+    pts:[72,68,55,49,52,44,38,30,35,38],
+    interp:"Mide el sentimiento del mercado de 0 (miedo extremo) a 100 (codicia extrema). Es un indicador <b>contrarian</b>: el miedo extremo suele coincidir con suelos (oportunidad), y la codicia extrema con techos (cautela). En 38 (miedo), el mercado está temeroso — históricamente más cerca de zonas de compra que de venta.",
+    lvls:["0–25 Miedo extremo · posible suelo","25–55 Miedo/Neutral","55–75 Codicia","75–100 Codicia extrema · cautela"]},
+  dom:{nm:"Dominancia de BTC",vl:"54.2%",tg:"% del market cap total que es Bitcoin",color:"#a29bfe",
+    pts:[51,51.5,52,52.4,53,53.2,53.8,54,54.1,54.2],
+    interp:"Qué porción del mercado es BTC. <b>Subiendo</b> = el dinero rota hacia Bitcoin (defensivo, las alts suelen sufrir). <b>Bajando</b> = capital fluye a altcoins ('alt season'). Útil para decidir si pesar más BTC o alts.",
+    lvls:["▲ Sube → BTC fuerte, alts débiles","▼ Baja → posible alt season"]},
+  vix:{nm:"VIX · índice del miedo",vl:"17.8",tg:"Volatilidad esperada del S&P 500 (riesgo global)",color:"#22d3ee",
+    pts:[14,15,16,22,19,17,18,16,17.5,17.8],
+    interp:"El 'índice del miedo' de la bolsa de EE.UU. Mide cuánto riesgo/estrés percibe el mercado. <b>Bajo (&lt;20)</b> = calma, ambiente <b>risk-on</b> — favorable para activos de riesgo como cripto. <b>Alto (&gt;25–30)</b> = aversión al riesgo, <b>risk-off</b> — la cripto suele caer. NexUX lo usa en su guardia de volatilidad para pausar entradas.",
+    lvls:["<20 Calma · risk-on","20–25 Precaución","25–30 Estrés","30+ Pánico · risk-off"]},
+  fund:{nm:"Funding rate (perpetuos)",vl:"+0.011%",tg:"Tasa que pagan los futuros perpetuos",color:"#16c784",
+    pts:[0.004,0.006,0.009,0.012,0.008,0.01,0.013,0.009,0.011,0.011],
+    interp:"Pago periódico entre longs y shorts en perpetuos. <b>Positivo</b> = los longs pagan a los shorts (sesgo alcista; muy positivo = sobrecalentamiento y riesgo de 'long squeeze'). <b>Negativo</b> = shorts pagan (sesgo bajista). Los extremos suelen anticipar reversiones.",
+    lvls:["+ Positivo → longs pagan (alcista)","− Negativo → shorts pagan (bajista)","Extremos → riesgo de squeeze"]},
+  mcap:{nm:"Market cap total",vl:"$2.31T",tg:"Capitalización total del mercado cripto",color:"#a29bfe",
+    pts:[2.40,2.42,2.38,2.35,2.37,2.33,2.34,2.30,2.32,2.31],
+    interp:"El tamaño total del mercado cripto y su cambio 24h. Es el termómetro macro del sector: <b>subiendo</b> entra dinero, <b>bajando</b> sale. Da el contexto general antes de mirar un par puntual.",
+    lvls:["▲ Sube → entra capital","▼ Baja → sale capital"]},
+  ethbtc:{nm:"ETH / BTC",vl:"0.0271",tg:"Fuerza relativa de Ethereum vs Bitcoin",color:"#22d3ee",
+    pts:[0.0285,0.0282,0.028,0.0278,0.0276,0.0274,0.0273,0.0272,0.0271,0.0271],
+    interp:"Cuánto vale ETH medido en BTC. <b>Subiendo</b> = ETH (y normalmente las alts) le ganan a BTC — apetito por riesgo. <b>Bajando</b> = BTC lidera, las alts pierden fuerza. Es un buen termómetro del apetito por altcoins.",
+    lvls:["▲ Sube → alts fuertes","▼ Baja → BTC lidera"]},
+};
+function openInd(k){
+  const d=IND[k];
+  document.getElementById('m-nm').textContent=d.nm;
+  document.getElementById('m-vl').textContent=d.vl;
+  document.getElementById('m-tg').textContent=d.tg;
+  document.getElementById('m-chart').innerHTML=chart(d.pts,d.color);
+  document.getElementById('m-interp').innerHTML=d.interp;
+  document.getElementById('m-lvls').innerHTML=d.lvls.map(l=>`<span class="lv">${l}</span>`).join('');
+  document.getElementById('modal').classList.add('on');
+}
+function closeInd(){document.getElementById('modal').classList.remove('on')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeInd()});
+</script>
 </body>
 </html>
