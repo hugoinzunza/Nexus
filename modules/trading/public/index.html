@@ -80,7 +80,7 @@
       </div>
 
       <!-- Plan vigente destacado: entrada / stop / objetivo a la vista -->
-      <div class="plan-card" hidden>
+      <div class="plan-card" data-info="plan" hidden>
         <div class="plan-main">
           <span class="plan-dir">—</span>
           <span class="plan-rr">R:R —</span>
@@ -97,11 +97,11 @@
 
       <!-- Análisis SMC en vivo (reemplaza al libro: más útil para planear) -->
       <div class="signals smc-stats">
-        <div class="sig"><span class="k">Régimen (VIX + ADX)</span><span class="v smc-regime">—</span></div>
-        <div class="sig"><span class="k">Sesgo (premium/descuento)</span><span class="v smc-bias">—</span></div>
-        <div class="sig"><span class="k">Estructura (dealing range)</span><span class="v smc-struct">—</span></div>
-        <div class="sig"><span class="k">Sesión activa</span><span class="v smc-session">—</span></div>
-        <div class="sig"><span class="k">POI más cercano</span><span class="v smc-poi-near">—</span></div>
+        <div class="sig" data-info="regimen"><span class="k">Régimen (VIX + ADX)</span><span class="v smc-regime">—</span></div>
+        <div class="sig" data-info="sesgo"><span class="k">Sesgo (premium/descuento)</span><span class="v smc-bias">—</span></div>
+        <div class="sig" data-info="estructura"><span class="k">Estructura (dealing range)</span><span class="v smc-struct">—</span></div>
+        <div class="sig" data-info="sesion"><span class="k">Sesión activa</span><span class="v smc-session">—</span></div>
+        <div class="sig" data-info="poi"><span class="k">POI más cercano</span><span class="v smc-poi-near">—</span></div>
       </div>
 
       <div class="smc-panel">
@@ -116,6 +116,18 @@
       </div>
     </section>
   </template>
+
+  <!-- Hoja de explicación de indicadores (se abre al tocar un indicador) -->
+  <div class="info-modal" id="info-modal" hidden>
+    <div class="info-backdrop" data-close></div>
+    <div class="info-sheet" role="dialog" aria-modal="true" aria-labelledby="info-title">
+      <div class="info-head">
+        <h3 class="info-title" id="info-title">—</h3>
+        <button class="info-x" type="button" data-close aria-label="Cerrar">✕</button>
+      </div>
+      <div class="info-body"></div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

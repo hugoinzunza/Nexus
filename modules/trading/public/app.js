@@ -183,7 +183,11 @@
           ctx.fillStyle = g; ctx.fillRect(x, top, W - x, h);
           ctx.strokeStyle = `rgba(${col},0.3)`; ctx.lineWidth = 1;
           ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
-          if (h > 10) pill(placeR(top + h / 2 - 7), f.bullish ? "FVG ▲" : "FVG ▼",
+          // Etiqueta SIEMPRE visible: antes se ocultaba si la caja quedaba fina
+          // (<10px), por eso "desaparecía" al hacer zoom/mover. Se ancla al centro
+          // de la caja y se mantiene dentro del canvas (clamp) para no salirse.
+          const fy = Math.max(2, Math.min(top + h / 2 - 7, H - 17));
+          pill(placeR(fy), f.bullish ? "FVG ▲" : "FVG ▼",
             f.bullish ? "#a29bfe" : "#f5a623", { right: true });
         });
         // POI / order blocks: nacen en su vela de confirmación y se extienden a
@@ -1378,6 +1382,54 @@
       btn.disabled = false;
     });
   }
+
+  // --- Hoja de explicación de indicadores (tocar un indicador para abrir) ---
+  const INFO = {
+    regimen: { title: "Régimen (VIX + ADX)", body:
+      `<p><b>¿Conviene operar ahora?</b> Un semáforo que combina dos medidas para filtrar entradas.</p>
+       <p><b>VIX</b> — el "índice del miedo" de la bolsa de EE.UU., usado como termómetro del riesgo global. Bajo (≤25) = calma; alto = nervios.</p>
+       <p><b>ADX</b> — fuerza de la tendencia. Sobre 25 = hay dirección clara; bajo 25 = mercado lateral, sin rumbo.</p>
+       <p><span class="tag up">✓ favorable</span> = VIX bajo + ADX alto → terreno para operar. <span class="tag down">✕ desfavorable</span> = el plan igual se muestra, pero el sistema sugiere no entrar.</p>` },
+    sesgo: { title: "Sesgo (premium / descuento)", body:
+      `<p><b>¿El precio está caro o barato</b> dentro del rango actual?</p>
+       <p>Se mide contra el <b>equilibrio (50%)</b> del dealing range. Sobre el 50% = <span class="tag down">premium</span> (caro) → se buscan <b>cortos</b>. Bajo el 50% = <span class="tag up">descuento</span> (barato) → se buscan <b>largos</b>.</p>
+       <p>El % indica qué tan lejos del equilibrio está: mientras más extremo, más sentido tiene buscar la operación a favor del rango.</p>` },
+    estructura: { title: "Estructura (dealing range)", body:
+      `<p>El <b>dealing range</b> es el "campo de juego" del precio, definido por dos extremos:</p>
+       <p><b>Strong High (SH)</b> — el techo que el precio defendió con fuerza.<br><b>Weak Low (WL)</b> — un piso débil que probablemente vaya a buscar (liquidez por barrer).</p>
+       <p>Dentro de este rango se calculan premium y descuento. Si el rango cambia, cambian todas las referencias.</p>` },
+    sesion: { title: "Sesión activa", body:
+      `<p>Qué <b>sesión de mercado</b> está abierta: Asia, Londres, Nueva York o el <b>solape Londres+NY</b>.</p>
+       <p>El grueso del volumen y los movimientos limpios ocurre en <b>Londres, NY y su solape</b>. Fuera de sesión o en fin de semana el movimiento suele ser ruidoso — conviene exigirle más a las entradas.</p>` },
+    poi: { title: "POI más cercano", body:
+      `<p>El <b>POI (Point of Interest)</b> más próximo al precio: una zona institucional —order block / FVG— donde el sistema espera una reacción.</p>
+       <p>Muestra su <b>temporalidad</b> (1h/4h/1D) y si está en <span class="tag up">descuento</span> (largos) o <span class="tag down">premium</span> (cortos). La <b>distancia (%)</b> dice cuán cerca está el precio de tocarlo.</p>
+       <p>Los POIs de <b>4h/1D</b> son los más confiables: ahí el laboratorio encontró el edge más robusto.</p>` },
+    plan: { title: "Plan vigente", body:
+      `<p>Un <b>escenario</b> que arma el sistema cuando hay una entrada con buena relación riesgo/beneficio. <b>No es una orden</b> — es contexto.</p>
+       <p><b>Entrada</b> = la zona donde tendría sentido entrar (un POI). <b>Stop</b> = dónde se invalida la idea. <b>Objetivo</b> = a dónde apunta (normalmente un Weak High/Low por barrer).</p>
+       <p><b>R:R</b> = cuántas veces el beneficio supera al riesgo. <b>Distancia a entrada</b> = cuánto falta para que el precio llegue a la zona.</p>
+       <p><b>CDC</b> (cambio de carácter) = la confirmación que el sistema espera antes de dar el plan por "activo": que la estructura gire a favor en la zona. Mientras tanto queda <b>⏳ en vigilancia</b>.</p>` },
+  };
+  function setupInfo() {
+    const modal = document.getElementById("info-modal");
+    if (!modal) return;
+    const titleEl = modal.querySelector(".info-title");
+    const bodyEl = modal.querySelector(".info-body");
+    const close = () => { modal.hidden = true; document.body.style.overflow = ""; };
+    const open = (key) => {
+      const it = INFO[key]; if (!it) return;
+      titleEl.textContent = it.title; bodyEl.innerHTML = it.body;
+      modal.hidden = false; document.body.style.overflow = "hidden";
+    };
+    document.addEventListener("click", (e) => {
+      if (e.target.closest("[data-close]")) { close(); return; }
+      const trg = e.target.closest("[data-info]");
+      if (trg && !modal.contains(trg)) open(trg.getAttribute("data-info"));
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !modal.hidden) close(); });
+  }
+  setupInfo();
 
   init();
 })();

@@ -368,3 +368,35 @@ tbody tr.hl td { font-weight: 600; }
 .plan-note { font-size: 12.5px; color: var(--muted); }
 .plan-note:empty { display: none; }
 @media (max-width: 560px) { .plan-levels { grid-template-columns: repeat(2, 1fr); } }
+
+/* --- Indicadores clickeables + hoja de explicación --------------------- */
+.sig[data-info], .plan-card[data-info] { cursor: pointer; position: relative; }
+.sig[data-info] .k::after { content: " ⓘ"; color: var(--muted); font-size: 10.5px; opacity: .7; }
+.sig[data-info]:hover { border-color: var(--accent); }
+.plan-card[data-info]:hover { box-shadow: 0 1px 3px rgba(16,18,30,.06), 0 22px 46px -26px rgba(108,92,231,.5); }
+
+.info-modal { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; }
+.info-modal[hidden] { display: none; }
+.info-backdrop { position: absolute; inset: 0; background: rgba(16,18,30,.45); backdrop-filter: blur(2px); }
+.info-sheet { position: relative; background: var(--card, #fff); border: 1px solid var(--line);
+  border-radius: 18px; width: min(92vw, 460px); max-height: 80vh; overflow-y: auto;
+  padding: 22px 24px; box-shadow: 0 30px 70px -24px rgba(16,18,30,.5); animation: info-in .16s ease; }
+@keyframes info-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.info-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.info-title { font-family: "Sora","Inter",sans-serif; font-size: 18px; font-weight: 700; color: var(--ink); margin: 0; letter-spacing: -.3px; }
+.info-x { border: none; background: #eef0f5; color: var(--text); width: 30px; height: 30px; border-radius: 8px;
+  cursor: pointer; font-size: 14px; flex: 0 0 auto; }
+.info-x:hover { background: #e2e5ee; color: var(--ink); }
+.info-body { font-size: 14.5px; line-height: 1.6; color: var(--text); }
+.info-body p { margin: 0 0 12px; }
+.info-body b { color: var(--ink); font-weight: 600; }
+.info-body .tag { display: inline-block; font-weight: 600; font-size: 12.5px; padding: 1px 7px; border-radius: 6px; }
+.info-body .tag.up { background: rgba(10,157,99,.12); color: var(--green); }
+.info-body .tag.down { background: rgba(216,57,78,.12); color: var(--red); }
+/* En móvil: hoja inferior (bottom sheet) */
+@media (max-width: 560px) {
+  .info-modal { align-items: flex-end; }
+  .info-sheet { width: 100%; max-width: none; border-radius: 18px 18px 0 0; max-height: 85vh;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom)); animation: sheet-in .2s ease; }
+  @keyframes sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+}
