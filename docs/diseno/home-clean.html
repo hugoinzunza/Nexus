@@ -152,7 +152,7 @@
 <nav>
   <div class="nav-in">
     <a class="brand" href="#"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg><span class="wm">Nex<span class="ux">UX</span></span></a>
-    <div class="nav-links"><a href="#">Producto</a><a href="#">Seguridad</a><a class="btn soft" id="nav-auth" href="/login">Entrar</a></div>
+    <div class="nav-links"><a class="btn soft" href="/m/trading/">Trading</a><a class="btn soft" href="/m/journal/">Diario</a><a class="btn soft" id="nav-auth" href="/login">Entrar</a></div>
   </div>
 </nav>
 
@@ -360,12 +360,18 @@ async function loadBrief(){
 }
 async function loadMe(){
   try{ const r=await fetch('/me'); if(!r.ok) return; const d=await r.json();
-    if(d.auth && d.user){ const nm=(d.user.name||d.user.email||'').split(' ')[0];
-      const nav=$('nav-auth'); if(nav){ nav.textContent=nm?('Hola, '+nm):'Mi diario'; nav.href='/m/journal/'; }
-      if(d.user.role==='admin'){ const links=document.querySelector('.nav-links');
-        if(links && !document.getElementById('nav-admin')){ const a=document.createElement('a');
-          a.id='nav-admin'; a.href='/admin'; a.textContent='Admin'; links.insertBefore(a, nav); } }
-    }
+    if(!(d.auth && d.user)) return;
+    const nm=(d.user.name||d.user.email||'').split(' ')[0];
+    const links=document.querySelector('.nav-links');
+    const nav=$('nav-auth');
+    // El botón de la derecha pasa a ser "Salir" (logout).
+    if(nav){ nav.textContent='Salir'; nav.href='/logout'; nav.title=nm?('Conectado como '+nm):''; }
+    // Admin (solo admin) como pill, antes de Salir.
+    if(d.user.role==='admin' && links && !document.getElementById('nav-admin')){
+      const a=document.createElement('a'); a.id='nav-admin'; a.className='btn soft'; a.href='/admin'; a.textContent='Admin';
+      links.insertBefore(a, nav); }
+    // Los CTA de "Entrar con Google" del cuerpo → llevan a su diario.
+    document.querySelectorAll('a[href="/login"]').forEach(a=>{ a.href='/m/journal/'; a.textContent='Ir a mi diario →'; });
   }catch(e){}
 }
 loadDashboard();
