@@ -33,8 +33,11 @@ _COINS = [("bitcoin", "BTC"), ("ethereum", "ETH"), ("solana", "SOL"),
 _CACHE = {}   # key -> (ts, value)
 
 # Feeds RSS de noticias cripto (gratis, sin clave, alcanzables desde Railway).
-_FEEDS = [("https://cointelegraph.com/rss", "Cointelegraph"),
-          ("https://decrypt.co/feed", "Decrypt")]
+# (url, fuente, idioma). Los "es" salen ya en español; los "en" se traducen con
+# Claude en la capa de endpoint (cacheado, tolerante).
+_FEEDS = [("https://decrypt.co/es/feed", "Decrypt", "es"),
+          ("https://es.beincrypto.com/feed/", "BeInCrypto", "es"),
+          ("https://cointelegraph.com/rss", "Cointelegraph", "en")]
 # Palabras que marcan una noticia como de impacto ALTO (heurística simple).
 _HOT = ("sec", "etf", "fomc", "fed", "rate", "cpi", "inflation", "hack", "lawsuit",
         "ban", "regulation", "genius", "treasury", "powell", "crash", "liquidat")
@@ -94,7 +97,7 @@ def _news_feed(max_keep: int = 6):
         return item[1]
     out = []
     now = time.time()
-    for url, source in _FEEDS:
+    for url, source, lang in _FEEDS:
         raw = _fetch_text(url)
         if not raw:
             continue
@@ -116,8 +119,8 @@ def _news_feed(max_keep: int = 6):
             low = title.lower()
             impact = "high" if any(w in low for w in _HOT) else "med"
             age_min = int((now - ts) / 60) if ts else None
-            out.append({"title": title, "source": source, "ts": ts,
-                        "age_min": age_min, "impact": impact})
+            out.append({"title": title, "source": source, "lang": lang,
+                        "ts": ts, "age_min": age_min, "impact": impact})
     # Más recientes primero (los sin fecha al final).
     out.sort(key=lambda x: x["ts"] or 0, reverse=True)
     out = out[:max_keep]

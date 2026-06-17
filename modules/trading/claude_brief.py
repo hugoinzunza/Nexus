@@ -11,6 +11,7 @@ Diseño defensivo (igual que claude_grader):
 """
 from __future__ import annotations
 
+import re
 import time
 from typing import Optional
 
@@ -70,6 +71,42 @@ def _context(dash: dict) -> str:
     if nw:
         lines.append("Titulares: " + " | ".join(n["title"] for n in nw[:5]))
     return "\n".join(lines)
+
+
+_tr_cache: dict = {}  # título original -> traducción al español (persistente)
+
+
+def translate_titles(titles: list) -> dict:
+    """Traduce al español los títulos dados (los que ya estén en español se
+    devuelven igual). Cacheado por título: solo llama a Claude por los nuevos.
+    Tolerante: si Claude no está o falla, devuelve el original sin romper."""
+    titles = [t for t in titles if t]
+    if not titles:
+        return {}
+    todo = [t for t in titles if t not in _tr_cache]
+    if todo and available():
+        try:
+            numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(todo))
+            resp = _client.messages.create(
+                model=MODEL, max_tokens=1200,
+                system=("Traduce al español neutro CADA titular de noticia cripto. "
+                        "Si ya está en español, devuélvelo igual. Mantén nombres "
+                        "propios y tickers. Responde SOLO la lista numerada, un "
+                        "título por línea, sin comentarios."),
+                messages=[{"role": "user", "content": numbered}],
+            )
+            text = "".join(b.text for b in resp.content
+                           if getattr(b, "type", "") == "text")
+            for line in text.splitlines():
+                m = re.match(r"^\s*(\d+)[.)]\s*(.+)$", line.strip())
+                if not m:
+                    continue
+                idx = int(m.group(1)) - 1
+                if 0 <= idx < len(todo):
+                    _tr_cache[todo[idx]] = m.group(2).strip()
+        except Exception:  # noqa: BLE001
+            pass
+    return {t: _tr_cache.get(t, t) for t in titles}
 
 
 def get_brief(dash: dict) -> Optional[str]:
