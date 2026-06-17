@@ -96,8 +96,13 @@
   .row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}.row:last-child{border-bottom:0}
   .row .pair{font-weight:650;color:var(--ink);min-width:54px}
   .row .sp{flex:1;height:26px}
-  .row .num{font-variant-numeric:tabular-nums;font-weight:600;min-width:74px;text-align:right}
+  .row .num{font-variant-numeric:tabular-nums;font-weight:600;min-width:74px;text-align:right;transition:color .15s,background .15s;border-radius:5px;padding:1px 3px}
+  .row .num.fu{color:#0a9d63;background:rgba(10,157,99,.12)}
+  .row .num.fd{color:#d8394e;background:rgba(216,57,78,.12)}
   .row .chg{font-variant-numeric:tabular-nums;font-weight:650;min-width:58px;text-align:right}
+  .livedot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#9aa0ab;margin-left:7px;vertical-align:middle}
+  .livedot.on{background:#0a9d63;box-shadow:0 0 0 0 rgba(10,157,99,.5);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(10,157,99,.45)}70%{box-shadow:0 0 0 6px rgba(10,157,99,0)}100%{box-shadow:0 0 0 0 rgba(10,157,99,0)}}
 
   .news .it{display:flex;gap:13px;padding:14px 0;border-bottom:1px solid var(--line)}.news .it:last-child{border-bottom:0}
   .news .ti{font-size:14.5px;line-height:1.45;color:var(--ink)}.news .me{font-size:12px;color:var(--muted);margin-top:4px}
@@ -198,7 +203,7 @@
       </div>
 
       <div class="card">
-        <div class="hd"><span class="ic">🔥</span><h3>Mercado</h3><span class="hint">24h</span></div>
+        <div class="hd"><span class="ic">🔥</span><h3>Mercado</h3><span class="hint" id="mk-live">24h<span class="livedot" id="mk-dot"></span></span></div>
         <div id="market"><div class="row"><span class="pair" style="color:var(--muted)">cargando…</span></div></div>
       </div>
 
@@ -327,7 +332,7 @@ async function loadDashboard(){
   // Mercado
   const mk=d.market||[];
   if(mk.length){ $('market').innerHTML=mk.map(m=>{ const up=(m.change_24h||0)>=0;
-    return `<div class="row"><span class="pair">${m.symbol}</span><span class="sp">${spark(up?MK['1']:MK['0'],up?'#0a9d63':'#d8394e')}</span>`
+    return `<div class="row" data-sym="${m.symbol}"><span class="pair">${m.symbol}</span><span class="sp">${spark(up?MK['1']:MK['0'],up?'#0a9d63':'#d8394e')}</span>`
       +`<span class="num">${fmtPx(m.price)}</span><span class="chg ${up?'up':'down'}">${(m.change_24h>0?'+':'')+m.change_24h}%</span></div>`; }).join(''); }
 
   // Calendario
@@ -355,7 +360,48 @@ async function loadBrief(){
 }
 loadDashboard();
 loadBrief();
-setInterval(loadDashboard, 120000);  // refresco cada 2 min
+setInterval(loadDashboard, 120000);  // refresco cada 2 min (indicadores, noticias, calendario)
+
+// ---- Mercado en TIEMPO REAL (WebSocket directo a Crypto.com) -----------
+// El navegador se conecta solito al stream público (sin clave, sin costo de
+// servidor). Si el WS no levanta, el refresco REST de arriba mantiene los
+// precios. Reconexión con backoff; responde al heartbeat para no caerse.
+const WS_SYMS=['BTC','ETH','SOL','XRP','DOGE','ADA'];
+const lastPx={};
+let ws=null, wsTry=0, wsTimer=null;
+function setDot(on){ const d=$('mk-dot'); if(d) d.className='livedot'+(on?' on':''); }
+function applyTick(sym, price, chgFrac){
+  const row=document.querySelector(`.row[data-sym="${sym}"]`); if(!row) return;
+  const num=row.querySelector('.num'), chg=row.querySelector('.chg');
+  if(num){ const prev=lastPx[sym];
+    num.textContent=fmtPx(price);
+    if(prev!=null && price!==prev){ const up=price>prev; num.classList.remove('fu','fd');
+      void num.offsetWidth; num.classList.add(up?'fu':'fd');
+      setTimeout(()=>num.classList.remove('fu','fd'), 700); }
+    lastPx[sym]=price; }
+  if(chg && chgFrac!=null){ const p=+(chgFrac*100).toFixed(1); const up=p>=0;
+    chg.textContent=(p>0?'+':'')+p+'%'; chg.className='chg '+(up?'up':'down'); }
+}
+function wsConnect(){
+  try{ ws=new WebSocket('wss://stream.crypto.com/exchange/v1/market'); }catch(e){ return wsRetry(); }
+  ws.onopen=()=>{ wsTry=0;
+    ws.send(JSON.stringify({id:1,method:'subscribe',params:{channels:WS_SYMS.map(s=>`ticker.${s}_USDT`)}})); };
+  ws.onmessage=ev=>{ let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    if(m.method==='public/heartbeat'){ ws.send(JSON.stringify({id:m.id,method:'public/respond-heartbeat'})); return; }
+    const res=m.result||{};
+    if(res.channel==='ticker'){ setDot(true);
+      (res.data||[]).forEach(r=>{ const sym=(r.i||'').replace('_USDT',''); applyTick(sym, +r.a, r.c==null?null:+r.c); }); }
+  };
+  ws.onclose=()=>{ setDot(false); wsRetry(); };
+  ws.onerror=()=>{ try{ws.close();}catch(e){} };
+}
+function wsRetry(){ clearTimeout(wsTimer); const wait=Math.min(30000, 2000*Math.pow(2,wsTry++));
+  wsTimer=setTimeout(wsConnect, wait); }
+// Solo conectamos cuando la pestaña está visible (ahorra batería/datos en móvil).
+function wsManage(){ if(document.hidden){ if(ws){ try{ws.close();}catch(e){} ws=null; } }
+  else if(!ws || ws.readyState>1){ wsTry=0; wsConnect(); } }
+document.addEventListener('visibilitychange', wsManage);
+wsConnect();
 </script>
 </body>
 </html>
