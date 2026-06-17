@@ -229,7 +229,21 @@
 
         // --- Capa LuxAlgo: niveles Weak/Strong con % ---
         if (show.levels && smc.levels) {
-          smc.levels.forEach((lv) => {
+          // Menos ruido: niveles FUERTES (estructura) + el WEAK más cercano al
+          // precio por lado. Antes se dibujaban todos y se encimaban.
+          const ref = smc.last_price || (smc.range && smc.range.eq);
+          let lvs = smc.levels;
+          if (ref) {
+            const pick = (isHigh) => {
+              const side = smc.levels.filter((l) => (l.type === "high") === isHigh);
+              const strong = side.filter((l) => l.kind !== "weak");
+              const weak = side.filter((l) => l.kind === "weak")
+                .sort((a, b) => Math.abs(a.price - ref) - Math.abs(b.price - ref)).slice(0, 1);
+              return strong.concat(weak);
+            };
+            lvs = pick(true).concat(pick(false));
+          }
+          lvs.forEach((lv) => {
             const y = py(lv.price); if (y == null) return;
             const high = lv.type === "high";
             const col = high ? "#ea3943" : "#16c784";
@@ -856,18 +870,22 @@
     // Niveles de liquidez y equilibrio como price lines (se alinean solas).
     card.priceLines.forEach((pl) => card.series.removePriceLine(pl));
     card.priceLines = [];
-    const addLine = (price, color, title) => {
+    const addLine = (price, color, title, labelBg) => {
       if (!price) return;
       card.priceLines.push(card.series.createPriceLine({
         price, color, lineWidth: 1, lineStyle: LC.LineStyle.Dashed,
         axisLabelVisible: true, title,
+        // Etiqueta del eje: fondo saturado + texto blanco (legible). Antes el
+        // color claro de la línea hacía de fondo con texto de bajo contraste.
+        axisLabelColor: labelBg || color,
+        axisLabelTextColor: "#ffffff",
       }));
     };
     const rng = card.smc && card.smc.range;
     if (rng) {
-      addLine(rng.strong_high, "#ea3943", "Strong High");
-      addLine(rng.weak_low, "#16c784", "Weak Low");
-      addLine(rng.eq, "#a29bfe", "EQ 50%");
+      addLine(rng.strong_high, "#ea3943", "Strong High", "#c0212f");
+      addLine(rng.weak_low, "#16c784", "Weak Low", "#0a8c58");
+      addLine(rng.eq, "#a29bfe", "EQ 50%", "#5a4bc4");
     }
     pushPrim(card);
   }
@@ -1217,20 +1235,32 @@
       set(".smc-poi-near", "POI " + p.tf + " " + (p.discount ? "desc." : "prem.") + " · " +
         (p.dist_pct > 0 ? "+" : "") + p.dist_pct + "%" + here, p.discount ? "up" : "down");
     } else set(".smc-poi-near", "sin POI válido cerca");
-    // Setup vigente (plan TP/SL), con su confirmación CDC (cambio de carácter).
+    // Plan vigente DESTACADO (entrada / stop / objetivo a la vista).
     const t = smc && smc.tpsl;
-    if (t) {
-      const est = t.state === "activo" ? "● activo" : "⏳ en vigilancia";
-      const reg = t.regime_ok === false ? " · ⚠ fuera de régimen" : "";
-      const cdc = t.cdc_status === "confirmado" ? " · ✓ CDC confirmado"
-        : t.cdc_status === "vencido" ? " · ✕ CDC venció sin confirmar"
-        : t.cdc_status ? " · ⏳ esperando CDC" : "";
-      const slTxt = (typeof t.sl_pct === "number")
-        ? " · SL −" + t.sl_pct.toFixed(1) + "%" + (t.sl_capped ? " (tope, excede estructura)" : "") : "";
-      set(".smc-setup", "Plan " + t.tf + " " + (t.dir === "long" ? "▲ largo" : "▼ corto") +
-        " · R:R " + t.rr + slTxt + " · " + est + reg + cdc, t.regime_ok === false ? "" : (t.dir === "long" ? "up" : "down"));
-    } else set(".smc-setup", "sin plan en " + card.timeframe +
-      " (sin R:R≥2 ahora) · los planes salen sobre todo en 1h/4h");
+    const planEl = n.querySelector(".plan-card");
+    if (planEl) {
+      if (t && t.entry) {
+        planEl.hidden = false;
+        const long = t.dir === "long";
+        planEl.classList.toggle("long", long);
+        planEl.classList.toggle("short", !long);
+        const est = t.state === "activo" ? "● activo" : "⏳ en vigilancia";
+        const reg = t.regime_ok === false ? " · ⚠ fuera de régimen" : "";
+        const q = (s, v) => { const e = planEl.querySelector(s); if (e) e.textContent = v; };
+        q(".plan-dir", (long ? "▲ Largo" : "▼ Corto") + " · " + t.tf);
+        q(".plan-rr", "R:R " + t.rr);
+        q(".plan-state", est + reg);
+        q(".plan-entry", fmtPrice(t.entry));
+        q(".plan-sl", fmtPrice(t.sl) + (typeof t.sl_pct === "number" ? " · −" + t.sl_pct.toFixed(1) + "%" : ""));
+        q(".plan-tp", fmtPrice(t.tp) + (t.tp_label ? " · " + t.tp_label : ""));
+        q(".plan-dist", typeof t.dist_pct === "number" ? (t.dist_pct > 0 ? "+" : "") + t.dist_pct + "%" : "—");
+        q(".plan-cdc", t.cdc_status === "confirmado" ? "✓ CDC confirmado — el cambio de carácter validó el plan"
+          : t.cdc_status === "vencido" ? "✕ El CDC venció sin confirmar"
+          : t.cdc_status ? "⏳ Esperando confirmación (CDC) antes de activar" : "");
+      } else {
+        planEl.hidden = true;
+      }
+    }
   }
 
   // --- Panel "POIs activos" ------------------------------------------
