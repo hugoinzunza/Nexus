@@ -112,7 +112,7 @@ def service_worker():
 @app.get("/preview/{name}", response_class=HTMLResponse)
 def design_preview(name: str):
     # Whitelist (sin path traversal): solo los mockups del rediseño.
-    if name not in ("landing", "home", "home-public", "isotipo"):
+    if name not in ("landing", "home", "home-public", "home-clean", "isotipo"):
         return HTMLResponse("preview no encontrado", status_code=404)
     path = os.path.join(ROOT, "docs", "diseno", f"{name}.html")
     if not os.path.isfile(path):

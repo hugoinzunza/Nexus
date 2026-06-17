@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NexUX · claridad para operar mejor</title>
+<style>
+  :root{
+    --bg:#f5f6f8;--card:#ffffff;--ink:#13151b;--text:#454b58;--muted:#8b909c;
+    --line:#e7e9ef;--line2:#dfe2e9;
+    --accent:#6c5ce7;--accent-soft:#efedfd;--cyan:#0bafc6;
+    --green:#0a9d63;--red:#d8394e;--amber:#c98a16}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);overflow-x:hidden;
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Iowan Old Style","Palatino Linotype",Georgia,"Times New Roman",serif}
+  a{text-decoration:none;color:inherit}
+  .ux{color:var(--cyan)}
+  .iso{width:28px;height:28px;flex:0 0 auto}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 clamp(20px,4vw,40px)}
+  .up{color:var(--green)}.down{color:var(--red)}.am{color:var(--amber)}
+
+  nav{position:sticky;top:0;z-index:30;background:rgba(245,246,248,.82);backdrop-filter:blur(14px);
+      border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:1180px;margin:0 auto;padding:15px clamp(20px,4vw,40px)}
+  .brand{display:inline-flex;align-items:center;gap:10px;font-weight:750;font-size:19px;color:var(--ink);letter-spacing:-.2px}
+  .nav-links{display:flex;align-items:center;gap:6px}
+  .nav-links a{color:var(--text);font-size:14px;font-weight:550;padding:9px 14px;border-radius:10px}
+  .nav-links a:hover{background:#eceef3}
+  .btn{display:inline-flex;align-items:center;gap:7px;font-weight:650;font-size:14px;padding:11px 20px;border-radius:11px;transition:.15s}
+  .btn.primary{color:#fff;background:var(--ink)}
+  .btn.primary:hover{background:#000;transform:translateY(-1px)}
+  .btn.soft{color:var(--ink);background:#eceef3}
+  .btn.soft:hover{background:#e3e6ec}
+  .btn.lg{padding:14px 26px;font-size:15px}
+
+  /* Hero editorial */
+  .hero{text-align:center;padding:clamp(56px,9vw,104px) 0 16px;max-width:820px;margin:0 auto}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;letter-spacing:.4px;
+           color:var(--accent);background:var(--accent-soft);padding:7px 14px;border-radius:999px}
+  .hero h1{font-size:clamp(40px,6.6vw,68px);font-weight:600;letter-spacing:-1.6px;line-height:1.08;margin:24px 0 0;color:var(--ink)}
+  .hero h1 em{font-style:italic;color:var(--accent)}
+  .hero p{font-size:clamp(16px,2.2vw,19px);line-height:1.6;color:var(--text);max-width:600px;margin:22px auto 0}
+  .hero .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:30px}
+  .hero .note{margin-top:18px;color:var(--muted);font-size:13px}
+
+  /* status (sutil) */
+  .status{display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;margin-top:30px;color:var(--muted);font-size:13px}
+  .status .seg{display:inline-flex;align-items:center;gap:7px}.status b{color:var(--ink);font-weight:650}
+  .status .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+
+  section{padding:30px 0}
+  .lbl{font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin:0 0 16px}
+
+  .grid{display:grid;grid-template-columns:1.6fr 1fr;gap:22px;align-items:start}
+  .col{display:flex;flex-direction:column;gap:22px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;
+        box-shadow:0 1px 2px rgba(16,18,30,.04),0 14px 40px -28px rgba(16,18,30,.28)}
+  .card .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .card h3{margin:0;font-size:16px;font-weight:650;color:var(--ink)}
+  .card .hint{font-size:12.5px;color:var(--muted)}
+
+  .brief p{margin:0;font-size:16px;line-height:1.65;color:var(--ink)}
+  .brief .tag{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent)}
+  .brief .by{margin-top:14px;font-size:12.5px;color:var(--muted)}
+
+  .ind{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .icell{border:1px solid var(--line);border-radius:14px;padding:16px;cursor:pointer;transition:.15s;background:#fcfcfd}
+  .icell:hover{border-color:var(--line2);box-shadow:0 10px 26px -20px rgba(16,18,30,.4);transform:translateY(-2px)}
+  .icell .k{font-size:12px;color:var(--muted);font-weight:550}
+  .icell .v{font-size:24px;font-weight:700;margin-top:8px;letter-spacing:-.5px;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .icell .d{font-size:12.5px;margin-top:4px;font-weight:600}
+
+  .row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .pair{font-weight:650;color:var(--ink)}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .news .it{display:flex;gap:13px;padding:14px 0;border-bottom:1px solid var(--line)}.news .it:last-child{border-bottom:0}
+  .news .ti{font-size:14.5px;line-height:1.45;color:var(--ink)}.news .me{font-size:12px;color:var(--muted);margin-top:4px}
+  .pin{font-size:10px;font-weight:700;letter-spacing:.5px;padding:4px 8px;border-radius:6px;height:fit-content}
+  .pin.hi{color:var(--red);background:#fdeaec}.pin.md{color:var(--amber);background:#fbf2dd}
+
+  .ev{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--line)}.ev:last-child{border-bottom:0}
+  .ev .w{min-width:54px;text-align:center}.ev .w .d{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600}.ev .w .h{font-size:15px;font-weight:700;color:var(--ink);margin-top:2px}
+  .ev .b{flex:1}.ev .b .t{font-size:14px;font-weight:600;color:var(--ink)}.ev .b .m{font-size:12px;color:var(--muted);margin-top:2px}
+
+  .join{background:linear-gradient(180deg,#fff,#fbfbfe);border-color:var(--line2)}
+  .join h3{font-size:18px;margin:0 0 8px}.join p{margin:0 0 16px;color:var(--text);font-size:14px;line-height:1.55}
+  .miniyou{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .miniyou .c{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fcfcfd}
+  .miniyou .k{font-size:11px;color:var(--muted);font-weight:550}.miniyou .v{font-size:20px;font-weight:700;margin-top:6px;color:var(--ink)}
+  .lock{position:relative}.lock .ov{position:absolute;inset:0;display:grid;place-items:center;background:rgba(255,255,255,.6);backdrop-filter:blur(2px);border-radius:12px;font-size:18px}
+
+  .zone{font-size:12px;font-weight:650;color:var(--accent);background:var(--accent-soft);padding:4px 9px;border-radius:7px}
+
+  footer{border-top:1px solid var(--line);margin-top:46px;padding:34px 0 48px;color:var(--muted);font-size:13px;text-align:center}
+  footer .disc{max-width:640px;margin:0 auto 16px;line-height:1.6}
+  footer .b{display:inline-flex;align-items:center;gap:8px;font-weight:750;color:var(--ink)}
+
+  /* modal claro */
+  .modal{position:fixed;inset:0;z-index:60;display:none}.modal.on{display:block}
+  .modal .bg{position:absolute;inset:0;background:rgba(20,22,30,.32)}
+  .modal .m{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,93vw);max-height:88vh;overflow:auto;
+            background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 40px 90px -30px rgba(16,18,30,.4)}
+  .modal .x{position:absolute;top:18px;right:18px;width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer}
+  .modal .x:hover{color:var(--ink);background:#f3f4f7}
+  .modal .nm{font-size:18px;font-weight:700;color:var(--ink)}.modal .vl{font-size:30px;font-weight:700;letter-spacing:-.8px;margin-top:6px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .modal .tg{font-size:13px;color:var(--muted);margin-top:5px}
+  .modal .chart{margin:18px 0;border:1px solid var(--line);border-radius:14px;background:#fafbfc;padding:10px}
+  .modal h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--accent)}
+  .modal .interp{font-size:14.5px;line-height:1.62;color:var(--text)}.modal .interp b{color:var(--ink)}
+  .modal .lvls{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .modal .lv{font-size:12px;font-weight:600;padding:7px 11px;border:1px solid var(--line);border-radius:9px;color:var(--text);background:#fafbfc}
+
+  @media(max-width:900px){.grid{grid-template-columns:1fr}.ind{grid-template-columns:repeat(2,1fr)}.nav-links a:not(.btn){display:none}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <linearGradient id="gv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b80ff"/><stop offset="1" stop-color="#6c5ce7"/></linearGradient>
+  <linearGradient id="gc" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1fc3d8"/><stop offset="1" stop-color="#0b96ad"/></linearGradient>
+</defs></svg>
+
+<nav>
+  <div class="nav-in">
+    <a class="brand" href="#"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg> Nex<span class="ux">UX</span></a>
+    <div class="nav-links">
+      <a href="#">Producto</a><a href="#">Seguridad</a>
+      <a class="btn soft" href="#join">Entrar</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero wrap">
+  <span class="eyebrow">● Beta cerrada · por invitación</span>
+  <h1 class="serif">Claridad para<br><em>operar mejor.</em></h1>
+  <p>NexUX reúne los indicadores, las noticias y las fechas clave del mercado en un
+     solo lugar — y al conectar tu exchange <b>en solo lectura</b>, suma tu diario de
+     trading real: PnL, win rate y tus mejores horarios.</p>
+  <div class="cta">
+    <a class="btn primary lg" href="#join">Pedir acceso →</a>
+    <a class="btn soft lg" href="#join">Entrar con Google</a>
+  </div>
+  <div class="note">Solo lectura · nunca operamos por ti · llaves cifradas</div>
+  <div class="status">
+    <span class="seg"><span class="dot"></span> Mercado <b>risk-on</b></span>
+    <span class="seg">VIX <b>17.8</b></span>
+    <span class="seg">Sesión <b>Londres</b></span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+    <div class="col">
+
+      <div class="card brief">
+        <div class="tag">Brief de hoy · NexUX AI</div>
+        <p class="serif" style="margin-top:12px">BTC consolida bajo los $64.2k tras rechazar el premium; el régimen sigue
+           favorable. El catalizador del día es el <b>CPI de las 09:30 ET</b>. SOL es el
+           más fuerte del grupo; DOGE y XRP mantienen estructura bajista.</p>
+        <div class="by">Sintetiza indicadores, noticias y calendario · contexto, no asesoría</div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>Indicadores</h3><span class="hint">toca uno para el detalle</span></div>
+        <div class="ind">
+          <div class="icell" onclick="openInd('fng')"><div class="k">Fear &amp; Greed</div><div class="v am">38</div><div class="d am">Miedo</div></div>
+          <div class="icell" onclick="openInd('dom')"><div class="k">Dominancia BTC</div><div class="v">54.2%</div><div class="d up">▲ 0.3%</div></div>
+          <div class="icell" onclick="openInd('vix')"><div class="k">VIX</div><div class="v" style="color:var(--cyan)">17.8</div><div class="d up">risk-on</div></div>
+          <div class="icell" onclick="openInd('fund')"><div class="k">Funding</div><div class="v up">+0.011%</div><div class="d" style="color:var(--muted)">long leve</div></div>
+          <div class="icell" onclick="openInd('mcap')"><div class="k">Market cap</div><div class="v">$2.31T</div><div class="d down">▼ 1.2%</div></div>
+          <div class="icell" onclick="openInd('ethbtc')"><div class="k">ETH / BTC</div><div class="v">0.0271</div><div class="d down">▼ 0.5%</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>Mercado</h3><span class="hint">24h</span></div>
+        <div class="row"><span class="pair">BTC</span><span class="num">$64,180</span><span class="num down">−0.8%</span></div>
+        <div class="row"><span class="pair">ETH</span><span class="num">$1,769</span><span class="num down">−1.4%</span></div>
+        <div class="row"><span class="pair">SOL</span><span class="num">$73.52</span><span class="num up">+2.1%</span></div>
+        <div class="row"><span class="pair">XRP</span><span class="num">$1.156</span><span class="num down">−0.6%</span></div>
+        <div class="row"><span class="pair">DOGE</span><span class="num">$0.0871</span><span class="num up">+0.4%</span></div>
+      </div>
+
+      <div class="card news">
+        <div class="hd"><h3>Noticias fundamentales</h3></div>
+        <div class="it"><span class="pin hi">ALTO</span><div><div class="ti">La SEC posterga la decisión sobre el ETF de SOL al spot</div><div class="me">CoinDesk · hace 1h</div></div></div>
+        <div class="it"><span class="pin md">MEDIO</span><div><div class="ti">Powell: "la inflación sigue sobre el objetivo, sin prisa por recortar"</div><div class="me">Reuters · hace 3h</div></div></div>
+        <div class="it"><span class="pin md">MEDIO</span><div><div class="ti">$1.2B en opciones de BTC vencen el viernes (max pain $63k)</div><div class="me">Deribit · hace 5h</div></div></div>
+      </div>
+
+    </div>
+
+    <div class="col">
+
+      <div class="card join" id="join">
+        <h3>Tu diario, aquí</h3>
+        <p>Conecta tu Binance en solo lectura y verás tu PnL, win rate y posiciones en este mismo lugar.</p>
+        <div class="miniyou lock">
+          <div class="c"><div class="k">PnL hoy</div><div class="v up">+$182</div></div>
+          <div class="c"><div class="k">Win rate</div><div class="v">58%</div></div>
+          <div class="ov">🔒</div>
+        </div>
+        <a class="btn primary lg" href="#" style="margin-top:16px;width:100%;justify-content:center">Entrar con Google</a>
+        <div style="text-align:center;color:var(--muted);font-size:12px;margin-top:10px">Beta por invitación · sin compromiso</div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>Fechas clave</h3></div>
+        <div class="ev"><span class="w"><div class="d">Hoy</div><div class="h">09:30</div></span><div class="b"><div class="t">CPI · EE.UU.</div><div class="m">en 1h 25m · macro</div></div><span class="pin hi">ALTO</span></div>
+        <div class="ev"><span class="w"><div class="d">Mié</div><div class="h">14:00</div></span><div class="b"><div class="t">FOMC · tasas</div><div class="m">2 días · macro</div></div><span class="pin hi">ALTO</span></div>
+        <div class="ev"><span class="w"><div class="d">Jue</div><div class="h">—</div></span><div class="b"><div class="t">Unlock de ARB · $42M</div><div class="m">3 días · cripto</div></div><span class="pin md">MEDIO</span></div>
+        <div class="ev"><span class="w"><div class="d">Vie</div><div class="h">08:00</div></span><div class="b"><div class="t">Vencimiento opciones</div><div class="m">4 días · cripto</div></div><span class="pin md">MEDIO</span></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>Co-piloto SMC</h3></div>
+        <div class="row"><span class="pair">BTC · short</span><span class="zone">premium</span></div>
+        <div class="row"><span class="pair">SOL · long</span><span class="zone">descuento</span></div>
+        <div class="row"><span class="pair">XRP · short</span><span class="zone">premium</span></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="disc">⚠️ NexUX es una herramienta informativa de solo lectura. No es asesoría financiera ni recomendación de inversión. El trading conlleva riesgo; las decisiones son tuyas.</div>
+  <div class="b"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg> Nex<span class="ux">UX</span> · nexux.cl</div>
+</footer>
+
+<div class="modal" id="modal">
+  <div class="bg" onclick="closeInd()"></div>
+  <div class="m">
+    <button class="x" onclick="closeInd()">✕</button>
+    <div class="nm" id="m-nm"></div><div class="vl" id="m-vl"></div><div class="tg" id="m-tg"></div>
+    <div class="chart" id="m-chart"></div>
+    <h4>Cómo se interpreta</h4><div class="interp" id="m-interp"></div><div class="lvls" id="m-lvls"></div>
+  </div>
+</div>
+
+<script>
+function chart(pts,color){
+  const w=500,h=150,max=Math.max(...pts),min=Math.min(...pts),rng=(max-min)||1,step=w/(pts.length-1);
+  const xy=pts.map((v,i)=>[i*step,h-((v-min)/rng)*(h-22)-12]);
+  const line=xy.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:150px;display:block">
+    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".22"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <path d="${line} L${w},${h} L0,${h} Z" fill="url(#cg)"/><path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+}
+const IND={
+  fng:{nm:"Fear & Greed Index",vl:"38 · Miedo",tg:"Sentimiento del mercado cripto (0–100)",color:"#c98a16",pts:[72,68,55,49,52,44,38,30,35,38],
+    interp:"Mide el sentimiento de 0 (miedo extremo) a 100 (codicia extrema). Es <b>contrarian</b>: el miedo extremo suele coincidir con suelos; la codicia, con techos. En 38 el mercado teme — históricamente más cerca de compra que de venta.",
+    lvls:["0–25 Miedo extremo · posible suelo","25–55 Miedo/Neutral","55–75 Codicia","75–100 Codicia extrema"]},
+  dom:{nm:"Dominancia de BTC",vl:"54.2%",tg:"% del market cap total que es Bitcoin",color:"#6c5ce7",pts:[51,51.5,52,52.4,53,53.2,53.8,54,54.1,54.2],
+    interp:"Qué porción del mercado es BTC. <b>Subiendo</b> = dinero rota a Bitcoin (alts débiles). <b>Bajando</b> = capital fluye a altcoins ('alt season').",
+    lvls:["▲ BTC fuerte, alts débiles","▼ posible alt season"]},
+  vix:{nm:"VIX · índice del miedo",vl:"17.8",tg:"Volatilidad esperada del S&P 500",color:"#0bafc6",pts:[14,15,16,22,19,17,18,16,17.5,17.8],
+    interp:"El 'índice del miedo' de la bolsa. <b>Bajo (&lt;20)</b> = calma, <b>risk-on</b>, favorable para cripto. <b>Alto (&gt;25–30)</b> = aversión al riesgo, <b>risk-off</b>. NexUX lo usa en su guardia de volatilidad.",
+    lvls:["<20 Calma · risk-on","20–25 Precaución","25–30 Estrés","30+ Pánico · risk-off"]},
+  fund:{nm:"Funding rate (perpetuos)",vl:"+0.011%",tg:"Tasa que pagan los futuros perpetuos",color:"#0a9d63",pts:[0.004,0.006,0.009,0.012,0.008,0.01,0.013,0.009,0.011,0.011],
+    interp:"Pago entre longs y shorts. <b>Positivo</b> = longs pagan (alcista; muy alto = sobrecalentamiento). <b>Negativo</b> = shorts pagan (bajista). Los extremos anticipan reversiones.",
+    lvls:["+ longs pagan (alcista)","− shorts pagan (bajista)","extremos → squeeze"]},
+  mcap:{nm:"Market cap total",vl:"$2.31T",tg:"Capitalización total del mercado cripto",color:"#6c5ce7",pts:[2.40,2.42,2.38,2.35,2.37,2.33,2.34,2.30,2.32,2.31],
+    interp:"El tamaño total del mercado y su cambio 24h. Termómetro macro: <b>sube</b> entra dinero, <b>baja</b> sale.",
+    lvls:["▲ entra capital","▼ sale capital"]},
+  ethbtc:{nm:"ETH / BTC",vl:"0.0271",tg:"Fuerza relativa de Ethereum vs Bitcoin",color:"#0bafc6",pts:[0.0285,0.0282,0.028,0.0278,0.0276,0.0274,0.0273,0.0272,0.0271,0.0271],
+    interp:"Cuánto vale ETH en BTC. <b>Subiendo</b> = ETH y alts le ganan a BTC. <b>Bajando</b> = BTC lidera. Termómetro del apetito por alts.",
+    lvls:["▲ alts fuertes","▼ BTC lidera"]},
+};
+function openInd(k){const d=IND[k];
+  document.getElementById('m-nm').textContent=d.nm;document.getElementById('m-vl').textContent=d.vl;
+  document.getElementById('m-tg').textContent=d.tg;document.getElementById('m-chart').innerHTML=chart(d.pts,d.color);
+  document.getElementById('m-interp').innerHTML=d.interp;
+  document.getElementById('m-lvls').innerHTML=d.lvls.map(l=>`<span class="lv">${l}</span>`).join('');
+  document.getElementById('modal').classList.add('on');}
+function closeInd(){document.getElementById('modal').classList.remove('on')}
+addEventListener('keydown',e=>{if(e.key==='Escape')closeInd()});
+</script>
+</body>
+</html>
