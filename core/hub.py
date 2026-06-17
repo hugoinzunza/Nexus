@@ -1,4 +1,4 @@
-"""El hub de Nexux: ciclo de vida de los módulos y estado del sistema.
+"""El hub de NexUX: ciclo de vida de los módulos y estado del sistema.
 
 Antes esta clase también levantaba un servidor HTTP propio (http.server). Ahora
 el servidor es FastAPI + uvicorn (ver `core/app.py`); el hub se ocupa solo de:
@@ -42,7 +42,7 @@ class Hub:
 
     # ------------------------------------------------------------------
     def boot(self) -> None:
-        log("⚡ Arrancando Nexux…")
+        log("⚡ Arrancando NexUX…")
         modules_root = os.path.join(ROOT, "modules")
         self.modules = load_modules(modules_root, self.config, log)
         self.modules_by_slug = {m.slug: m for m in self.modules}
@@ -54,7 +54,7 @@ class Hub:
                 log(f"⚠️  el módulo '{module.slug}' falló al arrancar: {exc}")
 
         log("─" * 52)
-        log(f"🌐 Nexux listo · {len(self.modules)} módulo(s) cargado(s)")
+        log(f"🌐 NexUX listo · {len(self.modules)} módulo(s) cargado(s)")
         for m in self.modules:
             log(f"   {m.icon}  {m.title:<16} → /m/{m.slug}/")
         log("─" * 52)
@@ -65,13 +65,13 @@ class Hub:
                 module.stop()
             except Exception:  # noqa: BLE001
                 pass
-        log("Nexux detenido. ¡Hasta la próxima!")
+        log("NexUX detenido. ¡Hasta la próxima!")
 
     # ------------------------------------------------------------------
     def health(self) -> dict:
         uptime = (datetime.now() - self.started_at).total_seconds()
         return {
-            "name": "Nexux",
+            "name": "NexUX",
             "status": "ok",
             "uptime_seconds": round(uptime, 1),
             "modules": [m.health() for m in self.modules],
@@ -115,14 +115,14 @@ _LANDING_TEMPLATE = """<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#08090e">
-  <meta name="description" content="Nexux · el hub personal de Hugo">
-  <title>Nexux · Hub personal</title>
+  <meta name="description" content="NexUX · el hub personal de Hugo">
+  <title>NexUX · Hub personal</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Nexux">
+  <meta name="apple-mobile-web-app-title" content="NexUX">
   <style>
     :root { --bg:#08090e; --panel:rgba(22,26,36,0.6); --line:#222838; --text:#e8ebf2;
             --muted:#8b93a7; --accent:#6c5ce7; --accent2:#a29bfe; --cyan:#22d3ee;
@@ -152,6 +152,8 @@ _LANDING_TEMPLATE = """<!doctype html>
     .brand { display:inline-flex; align-items:center; gap:9px; text-decoration:none;
              font-weight:800; letter-spacing:.5px; color:var(--text); font-size:16px; }
     .brand .dia { color:var(--accent2); filter:drop-shadow(0 0 10px var(--accent)); }
+    /* Marca NexUX: el "UX" resaltado en cyan (guiño a "user experience"). */
+    .ux { color:var(--cyan); text-shadow:0 0 12px rgba(34,211,238,0.45); }
     .nav .links { display:flex; gap:8px; }
     .nav .links a { color:var(--muted); text-decoration:none; font-size:13px; font-weight:600;
            padding:8px 14px; border-radius:999px; border:1px solid transparent;
@@ -234,7 +236,7 @@ _LANDING_TEMPLATE = """<!doctype html>
 </head>
 <body>
   <nav class="nav">
-    <a class="brand" href="/"><span class="dia">◆</span> NEXUX</a>
+    <a class="brand" href="/"><span class="dia">◆</span> NEX<span class="ux">UX</span></a>
     <div class="links">
       <a href="/m/trading/">Trading</a>
       <a href="/m/journal/">Diario</a>
@@ -243,7 +245,7 @@ _LANDING_TEMPLATE = """<!doctype html>
   <header class="hero">
     <span class="kicker"><span class="pulse"></span> Sistema en línea</span>
     <h1 class="logo">El mercado,<br>bajo control.</h1>
-    <p class="tagline"><b>Nexux</b> es el co-piloto personal de Hugo: estructura SMC en vivo,
+    <p class="tagline"><b>Nex<span class="ux">UX</span></b> es el co-piloto personal de Hugo: estructura SMC en vivo,
       filtros validados por backtest y un diario que mide cada hipótesis con datos reales.</p>
     <div class="cta">
       <a class="btn primary" href="/m/trading/">Abrir Trading →</a>

@@ -1,5 +1,5 @@
 /* Estilos del dashboard de trading. Tema oscuro, sin frameworks.
-   Paleta Nexux: fondo profundo casi negro con glow violeta/cian ambiental,
+   Paleta NexUX: fondo profundo casi negro con glow violeta/cian ambiental,
    paneles "glass" y acentos violeta (#6c5ce7) + cian (#22d3ee). */
 :root {
   --bg: #0a0c11;
@@ -24,7 +24,7 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
-/* Glow ambiental (mismo lenguaje visual que la portada de Nexux). */
+/* Glow ambiental (mismo lenguaje visual que la portada de NexUX). */
 body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
     radial-gradient(900px 420px at 18% -6%, rgba(108,92,231,0.16), transparent 70%),

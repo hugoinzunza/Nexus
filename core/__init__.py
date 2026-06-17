@@ -1,4 +1,4 @@
-"""Núcleo (hub) de Nexux.
+"""Núcleo (hub) de NexUX.
 
 Este paquete contiene el corazón del sistema: el servidor HTTP, el cargador
 de módulos y el contrato base que todo módulo debe cumplir. La idea es que el

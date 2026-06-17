@@ -12,7 +12,7 @@ en vivo:
 Es forward-test honesto: un plan solo cuenta como ganada/perdida si el precio
 REALMENTE entró a la zona de entrada. Persiste en disco (JSON) para acumular en el
 tiempo. El archivo vive en data/ (efímero en Railway entre despliegues, permanente
-en el Mac mini, donde el autostart corre Nexux de forma continua)."""
+en el Mac mini, donde el autostart corre NexUX de forma continua)."""
 from __future__ import annotations
 
 import json
