@@ -49,6 +49,15 @@ h1, h2, h3, .bt-h, .card h2 { font-family: "Sora", "Inter", sans-serif; letter-s
 .connect .perms { list-style: none; padding: 0; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
 .connect .perms li { font-size: 13px; }
 .connect .perms .ok { color: var(--green); font-weight: 600; }
+/* Onboarding: conectar Binance (Fase B) */
+.conn-steps { margin: 12px 0 16px; padding-left: 20px; color: var(--text); font-size: 13.5px; line-height: 1.55; }
+.conn-steps li { margin: 4px 0; }
+.conn-form { display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
+.conn-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.conn-form input { font: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--panel2); color: var(--ink); }
+.conn-form input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,92,231,.18); }
+.conn-form .tf-btn { align-self: flex-start; margin-top: 2px; }
 .connect .perms .bad { color: var(--red); font-weight: 600; }
 .card.err { border-color: rgba(216,57,78,.35); background: rgba(216,57,78,.05); }
 .muted { color: var(--muted); }

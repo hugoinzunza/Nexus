@@ -94,11 +94,11 @@ def public_get(base: str, path: str, params: dict = None):
     return _request(url, {})
 
 
-def signed_get(base: str, path: str, params: dict = None):
-    """GET firmado de lectura. Lee las credenciales del entorno en cada llamada."""
-    key, secret = _keys()
+def signed_get_with_keys(base: str, path: str, key: str, secret: str, params: dict = None):
+    """GET firmado de lectura con credenciales EXPLÍCITAS (multi-usuario: el colector
+    del VPS pasa la llave descifrada de cada usuario). No toca el entorno."""
     if not key or not secret:
-        raise BinanceError("sin credenciales (BINANCE_API_KEY / BINANCE_API_SECRET)")
+        raise BinanceError("sin credenciales")
     p = dict(params or {})
     p["timestamp"] = int(time.time() * 1000)
     p["recvWindow"] = RECV_WINDOW
@@ -106,6 +106,44 @@ def signed_get(base: str, path: str, params: dict = None):
     sig = hmac.new(secret.encode("utf-8"), qs.encode("utf-8"), hashlib.sha256).hexdigest()
     url = f"{base}{path}?{qs}&signature={sig}"
     return _request(url, {"X-MBX-APIKEY": key})
+
+
+def signed_get(base: str, path: str, params: dict = None):
+    """GET firmado de lectura. Lee las credenciales del entorno en cada llamada."""
+    key, secret = _keys()
+    if not key or not secret:
+        raise BinanceError("sin credenciales (BINANCE_API_KEY / BINANCE_API_SECRET)")
+    return signed_get_with_keys(base, path, key, secret, params)
+
+
+# --- Verificación de la llave (Fase B: conectar exchange) ----------------
+def verify_read_only(api_key: str, api_secret: str) -> tuple:
+    """Verifica una API key de Binance al conectarla. Devuelve (ok: bool, detail: str).
+
+    Frontera de seguridad: RECHAZA si la llave permite **retirar o transferir**
+    fondos (lo único que puede sacar dinero de la cuenta). El permiso de futuros se
+    TOLERA porque Binance exige "Enable Futures" para *leer* datos de futuros (no lo
+    separa de trading); NexUX nunca opera. La propia llamada es una lectura real que
+    valida que la llave funciona.
+    """
+    try:
+        r = signed_get_with_keys(SAPI, "/sapi/v1/account/apiRestrictions",
+                                 api_key, api_secret)
+    except BinanceError as exc:
+        return False, f"no se pudo validar la llave: {exc}"
+    peligrosos = []
+    if r.get("enableWithdrawals"):
+        peligrosos.append("retiros")
+    if r.get("enableInternalTransfer"):
+        peligrosos.append("transferencias internas")
+    if r.get("permitsUniversalTransfer"):
+        peligrosos.append("transferencias universales")
+    if peligrosos:
+        return (False, "La llave permite " + " y ".join(peligrosos) +
+                ". Por seguridad solo se aceptan llaves SIN permiso de retiro/transferencia.")
+    if not r.get("enableReading", True):
+        return False, "La llave no tiene permiso de lectura habilitado."
+    return True, "Llave verificada (solo lectura, sin retiros)."
 
 
 # --- Futuros USDⓈ-M -----------------------------------------------------

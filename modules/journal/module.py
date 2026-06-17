@@ -74,6 +74,9 @@ class JournalModule(NexusModule):
             return self._json(200, data)
         if subpath == "setups":
             return self._setups_response()
+        if subpath == "exchange-status":
+            # store devuelve "unsupported" sin DB (local), "none" si no hay conexión.
+            return self._json(200, store.exchange_status(uid if uid is not None else -1))
         return None
 
     # --- Setups SMC (forward-test) -------------------------------------
@@ -116,8 +119,48 @@ class JournalModule(NexusModule):
     def _read_setups_ingest(self):
         return store.read_ingest("setups")
 
+    # --- Conexión de exchange (bóveda, Fase B) -------------------------
+    def _exchange_post(self, subpath, body, user):
+        """Conecta/desconecta el exchange del usuario de la sesión. La llave se
+        cifra (sobre) ANTES de tocar disco; el plaintext nunca se loguea ni se
+        guarda. La verificación read-only la hace el colector del VPS (Railway no
+        alcanza a Binance por geo)."""
+        from core import vault
+        uid = (user or {}).get("uid")
+        if uid is None:
+            return self._json(401, {"error": "necesitas iniciar sesión"})
+        if subpath == "disconnect-exchange":
+            store.delete_exchange_connection(uid)
+            return self._json(200, {"ok": True, "status": "none"})
+        # connect-exchange
+        if not vault.vault_ready():
+            return self._json(503, {"error": "la bóveda no está configurada (falta NEXUX_KEK_PUBLIC)"})
+        if not isinstance(body, dict):
+            return self._json(400, {"error": "payload inválido"})
+        api_key = str(body.get("api_key") or "").strip()
+        api_secret = str(body.get("api_secret") or "").strip()
+        if not api_key or not api_secret:
+            return self._json(400, {"error": "faltan la API key y el secret"})
+        if len(api_key) < 16 or len(api_secret) < 16:
+            return self._json(400, {"error": "la API key o el secret no parecen válidos"})
+        try:
+            sealed = vault.seal_credentials(api_key, api_secret, vault.public_pem())
+        except Exception:  # noqa: BLE001
+            return self._json(500, {"error": "no se pudo cifrar la llave"})
+        # A partir de aquí solo manejamos ciphertext.
+        del api_key, api_secret
+        store.save_exchange_connection(uid, sealed)
+        self.context.log(f"journal: conexión de exchange guardada y cifrada (user {uid}, pending)")
+        return self._json(200, {
+            "ok": True, "status": "pending",
+            "message": "Llave guardada y cifrada. La verificación de solo-lectura "
+                       "se hace en el motor; en un par de minutos verás el estado."})
+
     # --- POST (ingesta) ------------------------------------------------
     def api_post(self, subpath, body, headers, user=None):
+        # Conectar/desconectar exchange: auth por SESIÓN (no por token del colector).
+        if subpath in ("connect-exchange", "disconnect-exchange"):
+            return self._exchange_post(subpath, body, user)
         if subpath not in ("ingest", "ingest_setups"):
             return None
         token = self._token()

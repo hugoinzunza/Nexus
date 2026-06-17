@@ -24,15 +24,60 @@
     setStatus("cargando…");
     fetch("api/status").then((r) => r.json()).then((st) => {
       if (!st.has_data) {
-        $("waiting").hidden = false; $("panel").hidden = true;
-        setStatus("esperando colector", "bad");
-        $("waiting-detail").textContent = st.ingest_ready
-          ? "La ingesta está lista en el servidor; falta que el colector del Mac mini envíe el primer dato."
-          : "Falta configurar NEXUS_INGEST_TOKEN en Railway para habilitar la ingesta.";
+        // Sin datos: ¿es un usuario que aún no conecta su Binance, o uno conectado
+        // esperando el primer envío? Lo decide el estado de su conexión.
+        fetch("api/exchange-status").then((r) => r.json())
+          .then((ex) => showNoData(st, ex))
+          .catch(() => showNoData(st, { status: "unknown" }));
         return;
       }
+      $("onboarding").hidden = true;
       fetch("api/stats").then((r) => r.json()).then(render);
     }).catch(() => setStatus("error de red", "bad"));
+  }
+
+  function showNoData(st, ex) {
+    $("panel").hidden = true;
+    const status = (ex && ex.status) || "unknown";
+    // Sin conexión (o rechazada) → onboarding para conectar Binance.
+    if (status === "none" || status === "rejected") {
+      $("waiting").hidden = true;
+      $("onboarding").hidden = false;
+      setStatus(status === "rejected" ? "llave rechazada" : "conecta tu Binance", "bad");
+      $("ex-msg").textContent = status === "rejected"
+        ? ("La llave anterior fue rechazada" + (ex.detail ? ": " + ex.detail : "") + ". Conecta una de solo lectura.")
+        : "";
+      return;
+    }
+    // Conectada (pending/active) o modo sin cuentas → esperando datos del motor.
+    $("onboarding").hidden = true;
+    $("waiting").hidden = false;
+    setStatus(status === "pending" ? "verificando llave" : "esperando colector", "bad");
+    $("waiting-detail").textContent = status === "pending"
+      ? "Tu llave se está verificando en el motor (VPS). En un par de minutos, si es de solo lectura, empezarán a llegar tus datos."
+      : (status === "active"
+          ? "Llave verificada. Esperando el primer envío del colector."
+          : (st.ingest_ready
+              ? "La ingesta está lista; falta que el colector envíe el primer dato."
+              : "Falta configurar la ingesta (NEXUS_INGEST_TOKEN) en el servidor."));
+  }
+
+  function connectExchange() {
+    const key = $("ex-key").value.trim(), secret = $("ex-secret").value.trim();
+    if (!key || !secret) { $("ex-msg").textContent = "Pega la API key y el secret."; return; }
+    $("ex-submit").disabled = true; $("ex-msg").textContent = "Cifrando y guardando…";
+    fetch("api/connect-exchange", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: key, api_secret: secret }),
+    }).then((r) => r.json().then((j) => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        $("ex-submit").disabled = false;
+        // No dejar el secret en el DOM más de lo necesario.
+        $("ex-key").value = ""; $("ex-secret").value = "";
+        if (!ok) { $("ex-msg").textContent = j.error || "No se pudo conectar."; return; }
+        $("ex-msg").textContent = j.message || "Llave guardada y cifrada.";
+        setTimeout(() => load(true), 1800);
+      }).catch(() => { $("ex-submit").disabled = false; $("ex-msg").textContent = "Error de red."; });
   }
 
   function render(d) {
@@ -519,6 +564,7 @@
   calc();
 
   $("refresh").addEventListener("click", () => { load(true); loadSetups(); });
+  { const b = $("ex-submit"); if (b) b.addEventListener("click", connectExchange); }
   window.addEventListener("resize", () => { if (lastData) render(lastData); });
   load(false);
   loadSetups();

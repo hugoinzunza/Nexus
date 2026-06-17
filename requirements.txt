@@ -23,3 +23,7 @@ alembic==1.14.0
 # variables (GOOGLE_CLIENT_ID/SECRET, SESSION_SECRET): sin ellas el sitio
 # funciona como hoy (un usuario, todo abierto).
 itsdangerous==2.2.0
+# Bóveda (Fase B: conectar exchange): cifrado de sobre AES-256-GCM + RSA-OAEP para
+# guardar las API keys de Binance. La pública cifra en Railway; la privada (solo en el
+# VPS) descifra. Ya venía transitiva (pywebpush); ahora es dependencia directa.
+cryptography>=42.0,<50.0

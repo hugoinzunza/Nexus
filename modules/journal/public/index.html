@@ -70,6 +70,27 @@
     <div class="table-wrap"><table id="setups-table"></table></div>
   </section>
 
+  <!-- Onboarding: conectar Binance (solo lectura) -->
+  <section id="onboarding" class="card connect" hidden>
+    <h2>Conecta tu Binance</h2>
+    <p>Tu Diario es privado: muestra <strong>solo tu cuenta</strong>. Para verlo, conecta
+       una API key de Binance <strong>de solo lectura</strong> (sin permiso de retiro). La
+       llave se guarda <strong>cifrada</strong>; solo el motor (VPS) la usa para leer, esta
+       web nunca la ve en claro.</p>
+    <ol class="conn-steps">
+      <li>En Binance: <strong>Account → API Management → Create API</strong> (System generated).</li>
+      <li>Permisos: deja <strong>Enable Reading</strong> (y <strong>Enable Futures</strong> si operas futuros).
+          <strong>No</strong> habilites retiros ni transferencias.</li>
+      <li>Copia la <strong>API Key</strong> y la <strong>Secret Key</strong> y pégalas aquí.</li>
+    </ol>
+    <div class="conn-form">
+      <label>API Key<input id="ex-key" type="text" autocomplete="off" spellcheck="false" placeholder="API key"></label>
+      <label>Secret Key<input id="ex-secret" type="password" autocomplete="off" spellcheck="false" placeholder="Secret key"></label>
+      <button id="ex-submit" class="tf-btn" type="button">Conectar</button>
+    </div>
+    <p class="bt-note" id="ex-msg"></p>
+  </section>
+
   <!-- Estado: esperando datos del colector -->
   <section id="waiting" class="card connect" hidden>
     <h2>Esperando datos del colector</h2>

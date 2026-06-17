@@ -133,3 +133,87 @@ def save_push_subs(subs: List[dict], user_id: Optional[int] = None) -> None:
         return
     with _LOCK:
         _json_atomic_write(_subs_path(), subs, indent=2)
+
+
+# --- Conexiones a exchange (bóveda, Fase B) ------------------------------
+# Solo en modo DB (Railway). En modo local/sin-DB no aplica: el motor usa su
+# propia key del entorno (single-tenant), no la bóveda multi-usuario.
+def save_exchange_connection(user_id: int, sealed: dict, exchange: str = "binance") -> None:
+    """Guarda (o reemplaza) el sobre cifrado de un usuario. Queda en 'pending':
+    el colector del VPS la verificará (read-only) y la pasará a 'active'/'rejected'."""
+    if not db.database_enabled():
+        raise RuntimeError("la bóveda requiere base de datos (DATABASE_URL)")
+    from sqlalchemy import select
+    from datetime import datetime
+    with db.session() as s:
+        row = s.scalar(select(db.ExchangeConnection).where(
+            db.ExchangeConnection.user_id == user_id,
+            db.ExchangeConnection.exchange == exchange))
+        if row is None:
+            s.add(db.ExchangeConnection(user_id=user_id, exchange=exchange,
+                                        sealed=sealed, status="pending"))
+        else:
+            row.sealed = sealed
+            row.status = "pending"
+            row.status_detail = None
+            row.last_verified_at = None
+            row.updated_at = datetime.utcnow()
+
+
+def exchange_status(user_id: int, exchange: str = "binance") -> dict:
+    """Estado de la conexión para el frontend. NUNCA devuelve el sobre ni la llave."""
+    if not db.database_enabled():
+        return {"connected": False, "status": "unsupported", "detail": None}
+    from sqlalchemy import select
+    with db.session() as s:
+        row = s.scalar(select(db.ExchangeConnection).where(
+            db.ExchangeConnection.user_id == user_id,
+            db.ExchangeConnection.exchange == exchange))
+        if row is None:
+            return {"connected": False, "status": "none", "detail": None}
+        return {"connected": row.status == "active", "status": row.status,
+                "detail": row.status_detail, "exchange": row.exchange,
+                "updated_at_ms": int(row.updated_at.timestamp() * 1000) if row.updated_at else None}
+
+
+def delete_exchange_connection(user_id: int, exchange: str = "binance") -> bool:
+    if not db.database_enabled():
+        return False
+    from sqlalchemy import delete
+    with db.session() as s:
+        res = s.execute(delete(db.ExchangeConnection).where(
+            db.ExchangeConnection.user_id == user_id,
+            db.ExchangeConnection.exchange == exchange))
+        return (res.rowcount or 0) > 0
+
+
+def list_connections_for_collector() -> List[dict]:
+    """Para el colector del VPS: conexiones a verificar/colectar (incluye el sobre).
+    Devuelve pending (a verificar) y active (a colectar)."""
+    if not db.database_enabled():
+        return []
+    from sqlalchemy import select
+    with db.session() as s:
+        rows = s.scalars(select(db.ExchangeConnection).where(
+            db.ExchangeConnection.status.in_(("pending", "active", "error")))).all()
+        return [{"id": r.id, "user_id": r.user_id, "exchange": r.exchange,
+                 "sealed": dict(r.sealed), "status": r.status} for r in rows]
+
+
+def set_exchange_status(user_id: int, status: str, detail: Optional[str] = None,
+                        exchange: str = "binance") -> None:
+    """El colector marca el resultado de la verificación/colección."""
+    if not db.database_enabled():
+        return
+    from sqlalchemy import select
+    from datetime import datetime
+    with db.session() as s:
+        row = s.scalar(select(db.ExchangeConnection).where(
+            db.ExchangeConnection.user_id == user_id,
+            db.ExchangeConnection.exchange == exchange))
+        if row is None:
+            return
+        row.status = status
+        row.status_detail = detail
+        row.last_verified_at = datetime.utcnow()
+        row.updated_at = datetime.utcnow()

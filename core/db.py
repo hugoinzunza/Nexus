@@ -93,6 +93,32 @@ class PushSubscription(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class ExchangeConnection(Base):
+    """Conexión read-only a un exchange, por usuario (Fase B: bóveda).
+
+    Guarda SOLO ciphertext (cifrado de sobre): la web (Railway) cifra con la clave
+    pública de la KEK; el colector (VPS) descifra con la privada. Railway nunca ve
+    la llave en claro ni puede descifrar (defensa en profundidad).
+
+    `status`: pending (recién conectada, falta verificar en el VPS) | active
+    (verificada read-only y colectando) | rejected (la llave permite retiro/trading
+    o es inválida) | error (fallo transitorio). La verificación la hace el colector
+    porque Binance bloquea a Railway por geo (451)."""
+    __tablename__ = "exchange_connections"
+    __table_args__ = (UniqueConstraint("user_id", "exchange", name="uq_exchange_user"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    exchange: Mapped[str] = mapped_column(String(32), server_default="binance")
+    sealed: Mapped[dict] = mapped_column(JSONB)   # {v, wrapped_key, nonce, ct} base64
+    status: Mapped[str] = mapped_column(String(16), server_default="pending")
+    status_detail: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    last_verified_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        server_default=func.now(), onupdate=func.now())
+
+
 _engine = None
 _Session = None
 
