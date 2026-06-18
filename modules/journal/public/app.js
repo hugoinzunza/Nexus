@@ -336,6 +336,7 @@
           card("Equity", "$" + ps.equity.toLocaleString("es"), ps.pnl >= 0 ? "up" : "down"),
           card("P&L", "$" + sign(Math.round(ps.pnl)).toLocaleString("es"), ps.pnl >= 0 ? "up" : "down"),
           card("Retorno", sign(ps.return_pct) + "%", ps.return_pct >= 0 ? "up" : "down"),
+          card("Comisiones", ps.comisiones ? "-$" + Math.round(ps.comisiones).toLocaleString("es") : "—", "down"),
           card("Drawdown máx", ps.max_dd_pct + "%", "down"),
           card("Win rate", ps.win_rate == null ? "—" : ps.win_rate + "%"),
         ].join("");
@@ -444,7 +445,7 @@
         return open ? '<span class="muted">⏳</span>' : '<span class="down">✕</span>';
       };
       const SETUP_HEADERS = ["Fecha", "Par", "TF", "Dir", "Entrada", "SL", "TP", "R:R", "Régimen", "CDC", "Estado", "Resultado", "P&L"];
-      const setupRow = (x) => [
+      const setupRow = (x, pnlField = "paper_pnl") => [
         dt(x.ts_created),
         x.pair.replace("_", "/") + (x.source === "profe" ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">profe</span>' : ""),
         x.poi_tf,
@@ -457,7 +458,7 @@
         cdcCell(x),
         `<span class="${STATUS_CLS[x.status] || ""}">${STATUS_LABEL[x.status] || x.status}</span>`,
         x.result_r == null ? "—" : `<span class="${x.result_r > 0 ? "up" : "down"}">${x.result_r > 0 ? "+" : ""}${x.result_r}R</span>`,
-        x.paper_pnl == null ? "—" : `<span class="${x.paper_pnl >= 0 ? "up" : "down"}">${x.paper_pnl >= 0 ? "+" : ""}$${Math.round(x.paper_pnl).toLocaleString("es")}</span>`,
+        x[pnlField] == null ? "—" : `<span class="${x[pnlField] >= 0 ? "up" : "down"}">${x[pnlField] >= 0 ? "+" : ""}$${Math.round(x[pnlField]).toLocaleString("es")}</span>`,
       ];
       const rows = (d.setups || []).map(setupRow);
       table($("setups-table"), SETUP_HEADERS,
@@ -467,7 +468,7 @@
       const selList = (d.setups || []).filter((x) => x.selective);
       $("setups-sel-count").textContent = selList.length ? `· ${selList.length}` : "";
       table($("setups-sel-table"), SETUP_HEADERS,
-        selList.length ? selList.map(setupRow)
+        selList.length ? selList.map((x) => setupRow(x, "paper_pnl_sel"))
           : [["Aún no hay operaciones selectivas (POI 4h/1D + premium/descuento + R:R≥5).", "", "", "", "", "", "", "", "", "", "", "", ""]]);
     }).catch(() => {});
 

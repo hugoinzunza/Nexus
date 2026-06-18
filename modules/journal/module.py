@@ -102,7 +102,7 @@ class JournalModule(NexusModule):
         # Cuenta SELECTIVA en paralelo: solo zonas POI de 4h/1D (el edge robusto del
         # laboratorio). No anota los setups para no pisar la cuenta completa.
         paper_selectivo = setups_store.paper_account(
-            setups, selector=setups_store.is_selective, annotate=False)
+            setups, selector=setups_store.is_selective, annotate=True, tag="_sel")
         # Más recientes primero; tope para no inflar el payload.
         ordered = sorted(setups, key=lambda s: s.get("ts_created", 0), reverse=True)[:200]
         # Marca cuáles entran en la cuenta SELECTIVA (POI 4h/1D + premium/descuento +

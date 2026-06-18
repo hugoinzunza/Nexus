@@ -150,7 +150,7 @@ def is_selective(s: dict) -> bool:
 def paper_account(setups: list, capital: float = PAPER_CAPITAL,
                   risk_pct: float = PAPER_RISK_PCT,
                   cost_rate: float = PAPER_COST_RATE,
-                  selector=None, annotate: bool = True) -> dict:
+                  selector=None, annotate: bool = True, tag: str = "") -> dict:
     """Cuenta de PAPER TRADING sobre los setups CERRADOS (ganada/perdida): cada
     trade arriesga `risk_pct` del capital vigente (compuesto); el P&L en USD es
     R_neto × riesgo, con R_neto = result_r − costo (costo_R = cost_rate / SL%).
@@ -212,13 +212,15 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
             mdd = min(mdd, (eq - peak) / peak)
         # P&L en USD de ESTE trade (riesgo = % del equity vigente) para el registro.
         if annotate:
-            s["paper_pnl"] = round(pnl, 2)
-            s["paper_equity"] = round(eq, 2)
+            s["paper_pnl" + tag] = round(pnl, 2)
+            s["paper_equity" + tag] = round(eq, 2)
         curve.append({"t": s["ts_closed"], "equity": round(eq, 2)})
     # Sizing de las operaciones ABIERTAS (activas) con el equity vigente: con cuánto
     # se entró (notional), el apalancamiento efectivo y el riesgo. El P&L en vivo lo
     # calcula el frontend con el precio actual.
-    for s in setups if annotate else []:
+    # El sizing de operaciones abiertas (notional/leverage/riesgo) lo anota SOLO la
+    # cuenta completa (tag==""), para no pisarlo con la base de la cuenta selectiva.
+    for s in (setups if (annotate and not tag) else []):
         if s.get("status") != "activo":
             continue
         entry, sl = s.get("entry") or 0.0, s.get("sl") or 0.0
