@@ -458,7 +458,11 @@
         cdcCell(x),
         `<span class="${STATUS_CLS[x.status] || ""}">${STATUS_LABEL[x.status] || x.status}</span>`,
         x.result_r == null ? "—" : `<span class="${x.result_r > 0 ? "up" : "down"}">${x.result_r > 0 ? "+" : ""}${x.result_r}R</span>`,
-        x[pnlField] == null ? "—" : `<span class="${x[pnlField] >= 0 ? "up" : "down"}">${x[pnlField] >= 0 ? "+" : ""}$${Math.round(x[pnlField]).toLocaleString("es")}</span>`,
+        x[pnlField] == null
+          ? ((x.status === "ganada" || x.status === "perdida")
+              ? '<span class="muted" title="Re-entrada de una zona ya contada: no se cuenta en la cuenta para no duplicar la misma idea (anti-spam).">no cuenta</span>'
+              : "—")
+          : `<span class="${x[pnlField] >= 0 ? "up" : "down"}">${x[pnlField] >= 0 ? "+" : ""}$${Math.round(x[pnlField]).toLocaleString("es")}</span>`,
       ];
       const rows = (d.setups || []).map(setupRow);
       table($("setups-table"), SETUP_HEADERS,
