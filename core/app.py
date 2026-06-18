@@ -123,6 +123,14 @@ def design_preview(name: str):
         return HTMLResponse(fh.read())
 
 
+# --- Legal (términos + privacidad + disclaimer "no es asesoría") ---------
+@app.get("/legal", response_class=HTMLResponse)
+def legal():
+    path = os.path.join(ROOT, "core", "legal.html")
+    with open(path, "r", encoding="utf-8") as fh:
+        return HTMLResponse(fh.read(), headers={"Cache-Control": "no-cache"})
+
+
 # --- Web push (preparado; las alertas se implementan más adelante) -------
 @app.get("/api/push/public-key")
 def push_public_key():

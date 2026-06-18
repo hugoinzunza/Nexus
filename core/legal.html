@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5f8">
+  <script>(function(){try{var t=localStorage.getItem('nexux-theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <title>NexUX · Términos y Privacidad</title>
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    :root{ --bg:#f4f5f8; --card:#fff; --ink:#12141a; --text:#444a57; --muted:#888e9c;
+      --line:#e6e8ef; --accent:#6c5ce7; --cyan:#0aa6bd; --amber:#c98a16; }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      -webkit-font-smoothing:antialiased;line-height:1.6}
+    .top{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line);
+      position:sticky;top:0;background:rgba(244,245,248,.9);backdrop-filter:blur(14px);
+      padding-top:calc(16px + env(safe-area-inset-top,0px))}
+    .back{color:var(--ink);text-decoration:none;font-weight:700;font-family:"Sora",sans-serif}
+    .wrap{max-width:760px;margin:0 auto;padding:28px 22px 80px}
+    h1{font-family:"Sora",sans-serif;color:var(--ink);font-size:26px;letter-spacing:-.5px;margin:6px 0 4px}
+    h2{font-family:"Sora",sans-serif;color:var(--ink);font-size:18px;margin:30px 0 8px}
+    p,li{font-size:14.5px;color:var(--text)}
+    .upd{color:var(--muted);font-size:13px;margin:0 0 22px}
+    .disc{background:rgba(201,138,22,.10);border:1px solid rgba(201,138,22,.35);border-radius:12px;
+      padding:14px 16px;margin:18px 0;color:var(--ink);font-size:14px}
+    .disc b{color:var(--amber)}
+    ul{padding-left:20px;margin:8px 0}
+    li{margin:5px 0}
+    a{color:var(--accent)}
+    .foot{color:var(--muted);font-size:12.5px;margin-top:34px;border-top:1px solid var(--line);padding-top:16px}
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a class="back" href="/">← Nex<span style="color:#0aa6bd">UX</span></a>
+    <span style="font-weight:600;color:var(--ink)">Términos y Privacidad</span>
+  </header>
+  <main class="wrap">
+    <h1>Términos de uso y Privacidad</h1>
+    <p class="upd">Última actualización: 18 de junio de 2026 · Beta cerrada</p>
+
+    <div class="disc">
+      <b>NexUX no es asesoría financiera.</b> Es una herramienta informativa y de
+      <b>solo lectura</b> sobre los mercados: observa y muestra información (indicadores,
+      contexto, estadísticas de tu propia cuenta). <b>No es una recomendación de inversión</b>,
+      no constituye asesoría financiera, contable ni legal, y <b>nunca ejecuta operaciones ni
+      mueve o retira fondos</b>. El trading conlleva riesgo de pérdida; las decisiones y sus
+      consecuencias son exclusivamente tuyas.
+    </div>
+
+    <h2>1. Qué es NexUX</h2>
+    <p>NexUX es un hub personal de análisis de mercado y diario de trading. Muestra contexto
+      técnico (estructura, zonas de interés, calendario macro) y, si conectas tu exchange,
+      estadísticas de solo lectura de tu cuenta. Está en <b>beta cerrada</b> por invitación y
+      puede cambiar, fallar o discontinuarse sin previo aviso.</p>
+
+    <h2>2. Solo lectura — nunca operamos</h2>
+    <ul>
+      <li>NexUX <b>solo lee</b> datos de mercado y de tu cuenta. No coloca órdenes, no transfiere
+        ni retira dinero, en ninguna circunstancia.</li>
+      <li>Solo se aceptan llaves de API de <b>solo lectura</b>. Al conectar, el sistema
+        <b>rechaza</b> cualquier llave con permiso de retiro o transferencia.</li>
+      <li>El laboratorio y el forward-test son <b>simulaciones (paper)</b>; los resultados
+        históricos no garantizan resultados futuros.</li>
+    </ul>
+
+    <h2>3. Tus datos y cómo los protegemos</h2>
+    <ul>
+      <li><b>Identidad:</b> al entrar con Google guardamos tu correo, nombre y foto de perfil,
+        solo para identificarte y dar acceso a la beta.</li>
+      <li><b>Llaves de exchange:</b> se guardan <b>cifradas</b> (cifrado de sobre). El servidor
+        web nunca las ve en claro; solo el motor las descifra en memoria para <b>leer</b> tu
+        cuenta. Nunca se registran en logs ni se comparten con terceros.</li>
+      <li><b>Datos de trading:</b> tu PnL, posiciones e historial de solo lectura se usan para
+        construir tu diario y son privados de tu cuenta.</li>
+      <li><b>No vendemos ni compartimos</b> tus datos con terceros.</li>
+    </ul>
+
+    <h2>4. Desconectar y eliminar</h2>
+    <p>Puedes <b>desconectar tu exchange</b> en cualquier momento desde el Diario (se borra la
+      llave cifrada). Para eliminar tu cuenta y tus datos, escríbenos y los borramos.</p>
+
+    <h2>5. Sin garantías</h2>
+    <p>NexUX se ofrece "tal cual", sin garantías de disponibilidad, exactitud ni resultados.
+      Los datos pueden estar incompletos, retrasados o ser incorrectos. No nos hacemos
+      responsables de pérdidas derivadas del uso de la herramienta.</p>
+
+    <h2>6. Contacto</h2>
+    <p>Dudas sobre estos términos o tus datos: <a href="mailto:hugoinzunza@gmail.com">hugoinzunza@gmail.com</a>.</p>
+
+    <p class="foot">Al usar NexUX y conectar tu exchange, aceptas estos términos.
+      <a href="/">Volver al inicio</a></p>
+  </main>
+</body>
+</html>
