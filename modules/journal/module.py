@@ -162,7 +162,7 @@ class JournalModule(NexusModule):
         if subpath in ("connect-exchange", "disconnect-exchange"):
             return self._exchange_post(subpath, body, user)
         # El resto son endpoints del COLECTOR (VPS), autenticados por token.
-        if subpath not in ("ingest", "ingest_setups", "connections", "connection-status"):
+        if subpath not in ("ingest", "ingest_setups", "connections", "connection-status", "vault-check"):
             return None
         token = self._token()
         if not token:
@@ -175,6 +175,16 @@ class JournalModule(NexusModule):
         if not hmac.compare_digest(str(provided), str(token)):
             self.context.log("journal: petición del colector rechazada (token inválido)")
             return self._json(401, {"error": "token inválido"})
+
+        # Diagnóstico de la bóveda: ¿está la clave pública configurada y cuál es su
+        # huella? (solo el hash, NUNCA la clave). Sirve para confirmar que la pública de
+        # Railway coincide con la privada del VPS antes de que alguien conecte.
+        if subpath == "vault-check":
+            import hashlib
+            from core import vault
+            pub = vault.public_pem()
+            fp = hashlib.sha256(pub.encode("utf-8")).hexdigest()[:16] if pub else None
+            return self._json(200, {"vault_ready": bool(pub), "pub_fp": fp})
 
         # Bóveda multi-usuario: el colector pide las conexiones y reporta su verificación.
         if subpath == "connections":
