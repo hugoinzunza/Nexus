@@ -443,7 +443,8 @@
         const open = x.status === "pendiente" || x.status === "activo";
         return open ? '<span class="muted">⏳</span>' : '<span class="down">✕</span>';
       };
-      const rows = (d.setups || []).map((x) => [
+      const SETUP_HEADERS = ["Fecha", "Par", "TF", "Dir", "Entrada", "SL", "TP", "R:R", "Régimen", "CDC", "Estado", "Resultado", "P&L"];
+      const setupRow = (x) => [
         dt(x.ts_created),
         x.pair.replace("_", "/") + (x.source === "profe" ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">profe</span>' : ""),
         x.poi_tf,
@@ -457,10 +458,17 @@
         `<span class="${STATUS_CLS[x.status] || ""}">${STATUS_LABEL[x.status] || x.status}</span>`,
         x.result_r == null ? "—" : `<span class="${x.result_r > 0 ? "up" : "down"}">${x.result_r > 0 ? "+" : ""}${x.result_r}R</span>`,
         x.paper_pnl == null ? "—" : `<span class="${x.paper_pnl >= 0 ? "up" : "down"}">${x.paper_pnl >= 0 ? "+" : ""}$${Math.round(x.paper_pnl).toLocaleString("es")}</span>`,
-      ]);
-      table($("setups-table"),
-        ["Fecha", "Par", "TF", "Dir", "Entrada", "SL", "TP", "R:R", "Régimen", "CDC", "Estado", "Resultado", "P&L"],
+      ];
+      const rows = (d.setups || []).map(setupRow);
+      table($("setups-table"), SETUP_HEADERS,
         rows.length ? rows : [["Aún no se registran setups. Aparecen cuando el indicador genera un plan válido (R:R≥2).", "", "", "", "", "", "", "", "", "", "", "", ""]]);
+      // Operaciones SELECTIVAS: el mismo registro pero solo las que cumplen la config
+      // óptima (POI 4h/1D + premium/descuento + R:R≥5), marcadas por el backend.
+      const selList = (d.setups || []).filter((x) => x.selective);
+      $("setups-sel-count").textContent = selList.length ? `· ${selList.length}` : "";
+      table($("setups-sel-table"), SETUP_HEADERS,
+        selList.length ? selList.map(setupRow)
+          : [["Aún no hay operaciones selectivas (POI 4h/1D + premium/descuento + R:R≥5).", "", "", "", "", "", "", "", "", "", "", "", ""]]);
     }).catch(() => {});
 
     // Backtest histórico de referencia (mismo criterio sobre datos de Binance).

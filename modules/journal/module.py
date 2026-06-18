@@ -105,6 +105,10 @@ class JournalModule(NexusModule):
             setups, selector=setups_store.is_selective, annotate=False)
         # Más recientes primero; tope para no inflar el payload.
         ordered = sorted(setups, key=lambda s: s.get("ts_created", 0), reverse=True)[:200]
+        # Marca cuáles entran en la cuenta SELECTIVA (POI 4h/1D + premium/descuento +
+        # R:R≥5) para poder listarlos aparte en el Diario, igual que la cuenta completa.
+        for s in ordered:
+            s["selective"] = setups_store.is_selective(s)
         return self._json(200, {
             "has_data": bool(setups),
             "summary": summary,
