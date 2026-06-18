@@ -103,8 +103,11 @@ tbody tr:nth-child(even) { background: var(--panel2); }
   .m-v { font-size: 18px; }
   th, td { padding: 8px 9px; }
   /* La barra superior envuelve en móvil: fila 1 = volver + título; fila 2 = accesos.
-     Antes los botones se desbordaban a la derecha y quedaban fuera de pantalla. */
-  .topbar { flex-wrap: wrap; gap: 8px 10px; padding-top: 12px; padding-bottom: 12px; }
+     Antes los botones se desbordaban a la derecha y quedaban fuera de pantalla.
+     OJO: conservar el safe-area-inset-top (notch / Dynamic Island) en la PWA de iOS;
+     un padding-top plano lo borra y la barra queda mal posicionada en la app. */
+  .topbar { flex-wrap: wrap; gap: 8px 10px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: 12px; }
   .topbar h1 { font-size: 16px; }
   .topbar .status { margin-left: auto; }
 }
