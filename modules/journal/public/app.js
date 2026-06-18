@@ -464,7 +464,15 @@
               : "—")
           : `<span class="${x[pnlField] >= 0 ? "up" : "down"}">${x[pnlField] >= 0 ? "+" : ""}$${Math.round(x[pnlField]).toLocaleString("es")}</span>`,
       ];
-      const rows = (d.setups || []).map(setupRow);
+      // Oculta del registro las re-entradas de la misma zona que la cuenta DEDUPLICA
+      // (cerradas sin P&L): no aportan y hacían ruido. Quedan las contadas y las
+      // pendientes/activas. (Nota: pasar pnlField explícito; .map(setupRow) le daría el índice.)
+      const allClosed = (d.setups || []).filter((x) => x.status === "ganada" || x.status === "perdida");
+      const collapsed = allClosed.filter((x) => x.paper_pnl == null).length;
+      const visible = (d.setups || []).filter(
+        (x) => !((x.status === "ganada" || x.status === "perdida") && x.paper_pnl == null));
+      const rows = visible.map((x) => setupRow(x, "paper_pnl"));
+      $("reg-meta").textContent = collapsed ? `· ${collapsed} re-entradas agrupadas` : "";
       table($("setups-table"), SETUP_HEADERS,
         rows.length ? rows : [["Aún no se registran setups. Aparecen cuando el indicador genera un plan válido (R:R≥2).", "", "", "", "", "", "", "", "", "", "", "", ""]]);
       // Operaciones SELECTIVAS: el mismo registro pero solo las que cumplen la config
