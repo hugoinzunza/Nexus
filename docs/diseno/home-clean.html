@@ -390,8 +390,10 @@ const fmtPx=n=>{ if(n==null) return '—'; if(n>=1000) return '$'+n.toLocaleStri
   if(n>=1) return '$'+n.toLocaleString('en-US',{maximumFractionDigits:2}); return '$'+n.toFixed(n<0.01?5:4); };
 const pct=n=>(n>0?'▲ ':n<0?'▼ ':'')+(n>0?'+':'')+n+'%';
 const DAYS=['dom','lun','mar','mié','jue','vie','sáb'];
-function rel(min){ if(min<60) return 'en '+min+'m'; const h=Math.floor(min/60),m=min%60;
-  if(h<24) return 'en '+h+'h'+(m?' '+m+'m':''); return 'en '+Math.floor(h/24)+'d'; }
+function rel(min){ const p=min<0, a=Math.abs(min); let s;
+  if(a<60) s=a+'m'; else { const h=Math.floor(a/60),m=a%60;
+    s = h<24 ? (h+'h'+(m?' '+m+'m':'')) : (Math.floor(h/24)+'d'); }
+  return (p?'hace ':'en ')+s; }
 
 async function loadDashboard(){
   let d; try{ const r=await fetch('/m/trading/api/dashboard'); if(!r.ok) return; d=await r.json(); }catch(e){ return; }
@@ -445,6 +447,7 @@ async function loadDashboard(){
     return `<div class="ev"><span class="w"><div class="d">${DAYS[dt.getDay()]}</div><div class="h">${hh}</div></span>`
       +`<div class="b"><div class="t">${e.title}</div><div class="m">${e.in_min!=null?rel(e.in_min)+' · ':''}${e.country||'macro'}</div></div>`
       +`<span class="pin ${hi?'hi':'md'}">${hi?'ALTO':'MEDIO'}</span></div>`; }).join(''); }
+  else { $('calendar').innerHTML='<div class="ev"><div class="b"><div class="t" style="color:var(--muted)">Sin eventos de alto impacto esta semana.</div></div></div>'; }
 
   // Noticias fundamentales (RSS)
   const nw=d.news||[];

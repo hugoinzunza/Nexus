@@ -14,8 +14,11 @@ import time
 import urllib.request
 
 _FEED = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-_CACHE = {"ts": 0.0, "events": []}
+_RAW_CACHE = {"ts": 0.0, "raw": None}   # feed crudo cacheado (se filtra por llamada)
 _CACHE_TTL = 1800  # 30 min
+
+# Economías mayores: para el panel "Fechas clave" del Home (no solo USD).
+_MAJORS = ("USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "NZD")
 
 
 def _parse_ts(s):
@@ -33,18 +36,24 @@ def _fetch():
         return json.loads(r.read().decode("utf-8"))
 
 
-def all_events(impact=("High",), countries=("USD",)):
-    """Eventos del feed filtrados por impacto/país. Cacheado 30 min; ante error
-    devuelve el último bueno (o vacío)."""
+def _raw():
+    """Feed crudo cacheado 30 min (se filtra por llamada). Ante error, el último bueno."""
     now = time.time()
-    if now - _CACHE["ts"] < _CACHE_TTL and _CACHE["events"]:
-        return _CACHE["events"]
+    if now - _RAW_CACHE["ts"] < _CACHE_TTL and _RAW_CACHE["raw"] is not None:
+        return _RAW_CACHE["raw"]
     try:
         raw = _fetch()
     except Exception:  # noqa: BLE001
-        return _CACHE["events"]
+        return _RAW_CACHE["raw"] or []
+    _RAW_CACHE.update(ts=now, raw=raw)
+    return raw
+
+
+def all_events(impact=("High",), countries=("USD",)):
+    """Eventos del feed filtrados por impacto/país (orden cronológico). Cachea el feed
+    crudo, así distintos filtros no se pisan."""
     evs = []
-    for e in raw or []:
+    for e in _raw() or []:
         if impact and e.get("impact") not in impact:
             continue
         if countries and e.get("country") not in countries:
@@ -56,15 +65,31 @@ def all_events(impact=("High",), countries=("USD",)):
                     "impact": e.get("impact"), "ts": int(ts),
                     "forecast": e.get("forecast"), "previous": e.get("previous")})
     evs.sort(key=lambda x: x["ts"])
-    _CACHE.update(ts=now, events=evs)
     return evs
 
 
 def upcoming(max_keep=12):
-    """Próximos eventos de alto impacto (y los de la última hora) para el panel."""
+    """Próximos eventos de alto impacto USD (y los de la última hora) para el motor
+    de riesgo y la barra de la página de Trading."""
     now = time.time()
     out = [dict(e, in_min=round((e["ts"] - now) / 60)) for e in all_events() if e["ts"] > now - 3600]
     return out[:max_keep]
+
+
+def week_key_events(max_keep=8):
+    """Fechas clave de la SEMANA para el panel del Home: alto impacto de economías
+    mayores (no solo USD), recientes (últimas 24 h) + próximos, en orden cronológico.
+    A diferencia de upcoming() (solo USD futuros, para el motor), esto da contexto
+    macro aunque el gran evento de la semana ya haya pasado, así el panel no queda vacío."""
+    evs = all_events(impact=("High",), countries=_MAJORS)
+    if not evs:
+        return []
+    now = time.time()
+    window = [e for e in evs if e["ts"] > now - 24 * 3600]
+    if not window:
+        # Ya pasó todo (fin de semana): muestra los últimos de la semana como contexto.
+        window = evs[-3:]
+    return [dict(e, in_min=round((e["ts"] - now) / 60)) for e in window][:max_keep]
 
 
 def danger_window(before_min=20, after_min=10):

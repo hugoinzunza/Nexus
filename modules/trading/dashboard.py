@@ -160,7 +160,7 @@ def get_dashboard() -> dict:
     except Exception:  # noqa: BLE001
         vix = None
     try:
-        cal = news.upcoming(max_keep=8)
+        cal = news.week_key_events(max_keep=8)
     except Exception:  # noqa: BLE001
         cal = []
     return {
