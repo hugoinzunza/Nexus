@@ -237,12 +237,22 @@ def _spot_holdings():
 # --- Envío a Railway -----------------------------------------------------
 def send(payload: dict, url: str, token: str) -> dict:
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, method="POST", headers={
-        "Content-Type": "application/json",
-        "X-Nexus-Token": token,
-    })
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.load(resp)
+    # Reintentos ante blips de red / redeploy de Railway (que tarda ~30-120s). Si
+    # aun así falla, el próximo ciclo (90s) reenvía el snapshot actual (idempotente).
+    last = None
+    for intento in range(3):
+        try:
+            req = urllib.request.Request(url, data=data, method="POST", headers={
+                "Content-Type": "application/json",
+                "X-Nexus-Token": token,
+            })
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return json.load(resp)
+        except Exception as exc:  # noqa: BLE001 - reintenta y propaga el último
+            last = exc
+            if intento < 2:
+                time.sleep(3 * (intento + 1))
+    raise last
 
 
 # --- Colección multi-usuario (Fase C: bóveda) ----------------------------

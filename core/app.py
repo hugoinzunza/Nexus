@@ -58,7 +58,10 @@ def _run_db_migrations():
         command.upgrade(cfg, "head")
         log("db: migraciones aplicadas (alembic upgrade head)")
     except Exception as exc:  # noqa: BLE001
-        log(f"db: fallo al migrar: {exc}")
+        # Fallar el arranque a propósito: es preferible un deploy caído y visible
+        # (Railway reintenta) que servir con un esquema de DB desfasado en silencio.
+        log(f"db: FALLO al migrar, abortando arranque: {exc}")
+        raise
 
 
 @asynccontextmanager
