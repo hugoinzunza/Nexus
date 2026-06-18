@@ -649,6 +649,7 @@
   function setStatus(state) {
     statusDot.className = "dot";
     if (state === "ok") { statusDot.classList.add("ok"); statusText.textContent = "en vivo"; }
+    else if (state === "stale") { statusText.textContent = "feed caído · datos retrasados"; }  // dot ámbar (sin clase)
     else if (state === "bad") { statusDot.classList.add("bad"); statusText.textContent = "error de datos"; }
     else { statusText.textContent = "conectando…"; }
   }
@@ -1104,7 +1105,7 @@
   function render(state) {
     checkVersion(state.version);
     if (state.upstream_ok) setStatus("ok");
-    else if (Object.keys(state.instruments || {}).length) setStatus("bad");
+    else if (Object.keys(state.instruments || {}).length) setStatus("stale");
 
     if (state.updated) {
       lastUpdateEl.textContent = new Date(state.updated).toLocaleTimeString("es");
