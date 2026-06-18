@@ -525,6 +525,13 @@ class SetupStore:
                 return [{"type": "closed"}]
             return []
 
+        # Entradas MANUALES (profe): se siguen TAL CUAL su plan — TP o SL completo,
+        # SIN parciales ni break-even. La idea del forward-test del profe es comparar
+        # SU gestión (aguantar a TP/SL, SL ancho) contra la nuestra (SMC escalonada);
+        # aplicarle nuestras parciales lo cerraba antes de tiempo en break-even.
+        if s.get("sel_tf") == "manual" or s.get("source") == "profe":
+            return SetupStore._update_simple(s, price, now_s)
+
         # --- Activo: plan de salida ESCALONADA (parciales) + break-even ---
         entry, sl0, rr = s["entry"], s["sl"], float(s["rr"])
         risk = abs(entry - sl0)
