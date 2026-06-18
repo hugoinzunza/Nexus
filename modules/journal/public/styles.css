@@ -102,6 +102,11 @@ tbody tr:nth-child(even) { background: var(--panel2); }
   .bt { padding: 0 14px; }
   .m-v { font-size: 18px; }
   th, td { padding: 8px 9px; }
+  /* La barra superior envuelve en móvil: fila 1 = volver + título; fila 2 = accesos.
+     Antes los botones se desbordaban a la derecha y quedaban fuera de pantalla. */
+  .topbar { flex-wrap: wrap; gap: 8px 10px; padding-top: 12px; padding-bottom: 12px; }
+  .topbar h1 { font-size: 16px; }
+  .topbar .status { margin-left: auto; }
 }
 
 /* Calculadora de posición */
