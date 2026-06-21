@@ -18,13 +18,15 @@ from typing import List, Tuple
 
 from .backtest import session_of
 
-COMMISSION = 0.0005   # 0.05% por lado
-SLIPPAGE = 0.0002     # 0.02% por fill
+MAKER = 0.0002        # 0.02% por lado — orden LÍMITE (entrada en POI, TP)
+COMMISSION = 0.0005   # 0.05% por lado — orden MARKET (SL/señal): taker
+SLIPPAGE = 0.0002     # 0.02% por fill market
 
 
 def simulate(candles: List[dict], signals: List[Tuple], symbol: str, timeframe: str,
              strategy: str, max_hold: int = 96, min_stop_frac: float = 0.0015,
              commission: float = COMMISSION, slippage: float = SLIPPAGE,
+             maker: float = MAKER,
              exit_at=None, allow_immediate_reentry: bool = False) -> List[dict]:
     """Simula las señales. `exit_at` (set opcional de índices) cierra la posición
     al cierre de esa vela (p.ej. señal opuesta), con prioridad para stop/TP si
@@ -69,15 +71,20 @@ def simulate(candles: List[dict], signals: List[Tuple], symbol: str, timeframe: 
                 outcome, exit_level, exit_idx = "signal", c["c"], m
                 break
 
+        # Maker-aware: la entrada es límite en la zona POI (maker, sin slippage). El TP
+        # (win) también es límite (maker); el SL/señal/tiempo es market (taker + slippage).
+        won = outcome == "win"
         if short:
-            entry_fill = entry * (1 - slippage)
-            exit_fill = exit_level * (1 + slippage) if outcome != "win" else exit_level
+            entry_fill = entry
+            exit_fill = exit_level if won else exit_level * (1 + slippage)
             pnl = entry_fill - exit_fill
         else:
-            entry_fill = entry * (1 + slippage)
-            exit_fill = exit_level * (1 - slippage) if outcome != "win" else exit_level
+            entry_fill = entry
+            exit_fill = exit_level if won else exit_level * (1 - slippage)
             pnl = exit_fill - entry_fill
-        net = pnl - commission * (entry_fill + exit_fill)
+        entry_comm = maker * entry_fill
+        exit_comm = (maker if won else commission) * exit_fill
+        net = pnl - (entry_comm + exit_comm)
         r_mult = net / risk
 
         trades.append({

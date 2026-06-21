@@ -122,7 +122,22 @@ def summarize(setups: list) -> dict:
 # antes de arriesgar real.
 PAPER_CAPITAL = 38000.0     # capital inicial (USD) — el de Hugo en Binance
 PAPER_RISK_PCT = 0.02       # riesgo por trade (2% del capital, compuesto)
-PAPER_COST_RATE = 0.0014    # comisión 0.05%/lado + slippage 0.02%/fill (round-trip)
+PAPER_COST_RATE = 0.0014    # (legacy/override) comisión taker ambos lados + slippage
+# Modelo de costo MAKER-AWARE (real para SMC): la entrada es una orden LÍMITE en la
+# zona POI (maker), el TP también (maker); solo el SL es market (taker) + slippage.
+PAPER_MAKER_FEE = 0.0002    # 0.02%/lado (orden límite)
+PAPER_TAKER_FEE = 0.0005    # 0.05%/lado (orden market: SL/trailing)
+PAPER_SLIPPAGE = 0.0002     # 0.02% por fill market
+
+
+def _cost_fraction(won: bool, override=None) -> float:
+    """Costo round-trip como fracción del nocional. Entrada siempre maker; salida
+    maker si ganó (TP límite) o taker+slippage si perdió (SL market). `override`
+    fuerza un cost_rate plano (para análisis de sensibilidad)."""
+    if override is not None:
+        return override
+    exit_cost = PAPER_MAKER_FEE if won else (PAPER_TAKER_FEE + PAPER_SLIPPAGE)
+    return PAPER_MAKER_FEE + exit_cost
 
 
 # Cuenta SELECTIVA = la config ÓPTIMA del laboratorio (validada IS/OOS): zona POI de
@@ -149,7 +164,7 @@ def is_selective(s: dict) -> bool:
 
 def paper_account(setups: list, capital: float = PAPER_CAPITAL,
                   risk_pct: float = PAPER_RISK_PCT,
-                  cost_rate: float = PAPER_COST_RATE,
+                  cost_rate=None,
                   selector=None, annotate: bool = True, tag: str = "") -> dict:
     """Cuenta de PAPER TRADING sobre los setups CERRADOS (ganada/perdida): cada
     trade arriesga `risk_pct` del capital vigente (compuesto); el P&L en USD es
@@ -198,11 +213,13 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         slf = abs(entry - sl) / entry if entry else 0.0
         if slf <= 0:
             continue
-        # Comisión round-trip sobre el NOCIONAL (cost_rate/SL% en unidades de R). Con SL
+        # Comisión round-trip sobre el NOCIONAL (costo_R = cost_frac/SL%). Maker-aware:
+        # ganada = TP límite (maker), perdida = SL market (taker+slippage). Con SL
         # ajustado el nocional es grande → la comisión pesa más por trade.
-        cost_usd = (cost_rate / slf) * (risk_pct * eq)
+        cf = _cost_fraction(s["result_r"] > 0, override=cost_rate)
+        cost_usd = (cf / slf) * (risk_pct * eq)
         comisiones += cost_usd
-        net_r = s["result_r"] - cost_rate / slf
+        net_r = s["result_r"] - cf / slf
         pnl = net_r * (risk_pct * eq)
         eq += pnl
         if s["result_r"] > 0:
@@ -253,9 +270,11 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         if sl_cur is not None:
             rp = (sl_cur - entry) if long else (entry - sl_cur)
             r_stop = max(0.0, rp / risk)
-        # NETO de comisiones: la comisión round-trip se pagará igual al cerrar.
+        # NETO de comisiones: la comisión round-trip se pagará igual al cerrar (en
+        # ganancia → salida maker).
         slf_o = risk / entry
-        net_r = realized + rem * r_stop - (cost_rate / slf_o if slf_o else 0)
+        cf_o = _cost_fraction(True, override=cost_rate)
+        net_r = realized + rem * r_stop - (cf_o / slf_o if slf_o else 0)
         if net_r > 0:
             secured_open += net_r * (risk_pct * eq)
             open_secured_n += 1
@@ -269,7 +288,7 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         "abiertos_asegurados": open_secured_n,
         "equity_vivo": round(eq_vivo, 2),
         "comisiones": round(comisiones, 2),
-        "cost_rate": cost_rate,
+        "cost_rate": round(_cost_fraction(False, override=cost_rate), 5),  # conservador (taker) para P&L de abiertos
         "pnl": round(eq - capital, 2),
         "pnl_vivo": round(eq_vivo - capital, 2),
         "return_pct": round((eq / capital - 1) * 100, 2) if capital else 0.0,
