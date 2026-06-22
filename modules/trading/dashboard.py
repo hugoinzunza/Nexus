@@ -147,6 +147,65 @@ def _markets():
     return out or None
 
 
+def _macro_band(score: float) -> str:
+    if score < 25:
+        return "Risk-off fuerte"
+    if score < 42:
+        return "Risk-off"
+    if score <= 58:
+        return "Neutral"
+    if score <= 75:
+        return "Risk-on"
+    return "Risk-on fuerte"
+
+
+def _macro_thermometer(ind: dict) -> dict | None:
+    """Sintetiza los indicadores en UNA sola lectura risk-off ↔ risk-on
+    (0 = aversión total, 100 = apetito total). Snapshot honesto: solo entran al
+    promedio los datos que llegaron en vivo; cada driver aporta un sub-puntaje
+    0–100 y un peso. Es contexto público (anzuelo), no una señal accionable.
+    """
+    drivers = []   # (nombre, sub-puntaje 0–100, peso, etiqueta corta)
+
+    fg = ind.get("fear_greed")
+    if fg and fg.get("value") is not None:
+        v = max(0.0, min(100.0, float(fg["value"])))
+        tag = "codicia" if v >= 55 else "miedo" if v < 45 else "neutral"
+        drivers.append(("Fear & Greed", v, 1.0, tag))
+
+    vix = ind.get("vix")
+    if vix is not None:
+        # VIX bajo = calma = risk-on. 12 → 100, 35 → 0 (lineal, recortado).
+        s = max(0.0, min(100.0, (35.0 - vix) / (35.0 - 12.0) * 100.0))
+        tag = "calma" if vix < 20 else "estrés" if vix > 25 else "precaución"
+        drivers.append(("VIX", s, 1.0, tag))
+
+    mc = ind.get("market_cap_24h_pct")
+    if mc is not None:
+        # ±5% en 24h satura la escala.
+        s = max(0.0, min(100.0, 50.0 + mc * 10.0))
+        tag = "entra" if mc > 0.3 else "sale" if mc < -0.3 else "plano"
+        drivers.append(("Capital 24h", s, 0.8, tag))
+
+    fund = ind.get("funding")
+    if fund is not None:
+        # ±0.05%/8h satura. Positivo = longs pagan = sesgo alcista.
+        s = max(0.0, min(100.0, 50.0 + fund * 100000.0))
+        tag = "alcista" if fund > 0 else "bajista" if fund < 0 else "plano"
+        drivers.append(("Funding", s, 0.6, tag))
+
+    if not drivers:
+        return None
+    total_w = sum(w for _, _, w, _ in drivers)
+    score = round(sum(s * w for _, s, w, _ in drivers) / total_w)
+    return {
+        "score": score,
+        "label": _macro_band(score),
+        "drivers": [{"name": n, "score": round(s), "tag": t}
+                    for n, s, _, t in drivers],
+    }
+
+
 def get_dashboard() -> dict:
     """Snapshot completo del centro de mando con datos reales."""
     g = _global() or {}
@@ -163,17 +222,19 @@ def get_dashboard() -> dict:
         cal = news.week_key_events(max_keep=8)
     except Exception:  # noqa: BLE001
         cal = []
+    indicators = {
+        "fear_greed": _fear_greed(),
+        "btc_dominance": g.get("btc_dominance"),
+        "market_cap_usd": g.get("market_cap_usd"),
+        "market_cap_24h_pct": g.get("market_cap_24h_pct"),
+        "vix": round(vix, 1) if vix is not None else None,
+        "eth_btc": eth_btc,
+        "funding": None,   # pendiente (Binance vía VPS)
+    }
+    indicators["macro"] = _macro_thermometer(indicators)
     return {
         "generated_at_ms": int(time.time() * 1000),
-        "indicators": {
-            "fear_greed": _fear_greed(),
-            "btc_dominance": g.get("btc_dominance"),
-            "market_cap_usd": g.get("market_cap_usd"),
-            "market_cap_24h_pct": g.get("market_cap_24h_pct"),
-            "vix": round(vix, 1) if vix is not None else None,
-            "eth_btc": eth_btc,
-            "funding": None,   # pendiente (Binance vía VPS)
-        },
+        "indicators": indicators,
         "market": mk,
         "calendar": cal,
         "news": _news_feed(),

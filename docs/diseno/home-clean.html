@@ -186,6 +186,27 @@
   .htile .ht-sym{font-family:"Sora","Inter",sans-serif;font-weight:700;color:var(--ink);font-size:15px}
   .htile .ht-chg{font-size:13px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
 
+  /* Termómetro macro (síntesis risk-off ↔ risk-on) */
+  .macro-wrap{margin-top:22px}
+  .macro{display:grid;grid-template-columns:190px 1fr;gap:26px;align-items:center}
+  .macro .m-read{text-align:center}
+  .macro .m-score{font-family:"Sora","Inter",sans-serif;font-size:54px;font-weight:800;letter-spacing:-2px;line-height:1}
+  .macro .m-label{font-size:15px;font-weight:700;margin-top:4px}
+  .macro .m-bar{position:relative;height:12px;border-radius:7px;margin:6px 0 6px;
+    background:linear-gradient(90deg,#d8394e,#e0a020 50%,#0a9d63)}
+  .macro .m-needle{position:absolute;top:-5px;width:3px;height:22px;background:var(--ink);
+    border-radius:2px;transform:translateX(-50%);box-shadow:0 0 0 2px var(--card)}
+  .macro .m-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.6px}
+  .macro .m-drivers{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .macro .m-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);
+    border-radius:999px;padding:6px 12px;font-size:12.5px;background:var(--bg2,#eef0f5)}
+  .macro .m-chip b{font-weight:650;color:var(--ink)}
+  .macro .m-chip .mc-tag{color:var(--muted)}
+  .macro .m-chip .mc-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .macro .m-note{font-size:12px;color:var(--muted);margin-top:12px}
+  @media(max-width:680px){.macro{grid-template-columns:1fr;gap:16px}}
+
   /* ===== Tema oscuro (default claro; se activa con data-theme="dark") ===== */
   :root[data-theme="dark"]{
     --bg:#0b0d12;--bg2:#13161e;--card:#171b24;--ink:#e9ecf3;--text:#aeb6c6;--muted:#818b9d;
@@ -262,6 +283,14 @@
     <div id="board" class="board-grid"><div class="brow-empty">cargando radar…</div></div>
     <div class="radar-foot">Los <b>planes accionables</b> (entrada, stop, objetivo) viven en tu panel.
       <a href="/login">Entrar →</a></div>
+  </div>
+</section>
+
+<section class="wrap macro-wrap">
+  <div class="card macro-card">
+    <div class="hd"><span class="ic">🌡️</span><h3>Termómetro macro</h3>
+      <span class="hint">risk-off ↔ risk-on · síntesis en vivo · contexto, no asesoría</span></div>
+    <div id="macro" class="macro"><div class="brow-empty">calculando…</div></div>
   </div>
 </section>
 
@@ -420,6 +449,18 @@ async function loadDashboard(){
     if(IND.mcap) IND.mcap.vl=fmtUsd(ind.market_cap_usd); }
   // ETH/BTC
   if(ind.eth_btc!=null){ $('i-ethbtc').textContent=ind.eth_btc; if(IND.ethbtc) IND.ethbtc.vl=String(ind.eth_btc); }
+
+  // Termómetro macro (síntesis risk-off ↔ risk-on)
+  const mac=ind.macro, mEl=$('macro');
+  if(mac&&mEl){ const sc=mac.score;
+    const colOf=s=>s<42?'var(--red)':s<=58?'var(--amber)':'var(--green)';
+    const chips=(mac.drivers||[]).map(x=>
+      `<span class="m-chip"><span class="mc-dot" style="background:${colOf(x.score)}"></span><b>${x.name}</b> <span class="mc-tag">${x.tag}</span></span>`).join('');
+    mEl.innerHTML=`<div class="m-read"><div class="m-score" style="color:${colOf(sc)}">${sc}</div><div class="m-label" style="color:${colOf(sc)}">${mac.label}</div></div>`
+      +`<div class="m-body"><div class="m-bar"><div class="m-needle" style="left:${Math.max(0,Math.min(100,sc))}%"></div></div>`
+      +`<div class="m-scale"><span>Risk-off</span><span>Neutral</span><span>Risk-on</span></div>`
+      +`<div class="m-drivers">${chips}</div>`
+      +`<div class="m-note">Combina Fear &amp; Greed, VIX, capital 24h y funding en una sola lectura. Es contexto del mercado, no una señal accionable.</div></div>`; }
 
   // Mercado
   const mk=d.market||[];
