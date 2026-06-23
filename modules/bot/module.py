@@ -48,7 +48,7 @@ class BotModule(NexusModule):
             # El estado incluye balance/posiciones reales → exige sesión cuando la
             # auth está activa (Railway). En local/VPS (auth inerte) pasa.
             from core import auth
-            if auth.enabled() and not user:
+            if auth.enabled() and not (user and auth.is_admin(user)):
                 return self._json(401, {"error": "no autorizado", "login": "/login"})
             return self._state_response()
         return None

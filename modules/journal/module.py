@@ -264,10 +264,10 @@ class JournalModule(NexusModule):
                 r = s.get("result_r")
                 if st == "ganada":
                     push.notificar(f"✅ {pair} · ganada", f"{pair} {d} cerró +{r}R con parciales.",
-                                   url="/m/trading/", tag=f"setup-{k}-cerrada")
+                                   url="/m/bot/", tag=f"setup-{k}-cerrada")
                 else:
                     push.notificar(f"❌ {pair} · perdida", f"{pair} {d} cerró {r}R.",
-                                   url="/m/trading/", tag=f"setup-{k}-cerrada")
+                                   url="/m/bot/", tag=f"setup-{k}-cerrada")
                 continue
             # 2) Parcial (TP1/TP2 nuevo)
             if st == "activo" and (s.get("legs_filled") or 0) > (p.get("legs_filled") or 0):
@@ -276,13 +276,13 @@ class JournalModule(NexusModule):
                 pct = 50 if legs < 2 else 25
                 push.notificar(f"🎯 {pair} · {leg} alcanzado",
                                f"{pair} {d}: toma {pct}% en {leg}. Asegurado +{s.get('realized_r')}R · SL a break-even.",
-                               url="/m/trading/", tag=f"setup-{k}-{leg}")
+                               url="/m/bot/", tag=f"setup-{k}-{leg}")
                 continue
             # 3) Activación (entrada llenada)
             if st == "activo" and p.get("status") == "pendiente":
                 push.notificar(f"{pair} · entrada llenada",
                                f"{pair} {d}: el precio entró a la zona. Trade activo (no es señal).",
-                               url="/m/trading/", tag=f"setup-{k}-activo")
+                               url="/m/bot/", tag=f"setup-{k}-activo")
 
     # --- Helpers -------------------------------------------------------
     @staticmethod

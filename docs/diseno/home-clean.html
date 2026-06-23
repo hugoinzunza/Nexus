@@ -521,6 +521,10 @@ async function loadMe(){
     if(d.user.role==='admin' && links && !document.getElementById('nav-admin')){
       const a=document.createElement('a'); a.id='nav-admin'; a.className='btn soft'; a.href='/admin'; a.textContent='Admin';
       links.insertBefore(a, nav); }
+    // NexUX BOT (operación real): acceso SOLO admin, tras login. No aparece público.
+    if(d.user.role==='admin' && links && !document.getElementById('nav-bot')){
+      const b=document.createElement('a'); b.id='nav-bot'; b.className='btn soft'; b.href='/m/bot/'; b.textContent='🤖 BOT';
+      links.insertBefore(b, nav); }
     // Los CTA de "Entrar con Google" del cuerpo → llevan a su diario.
     document.querySelectorAll('a[href="/login"]').forEach(a=>{ a.href='/m/journal/'; a.textContent='Ir a mi diario →'; });
   }catch(e){}

@@ -462,7 +462,7 @@ class TradingModule(NexusModule):
             else:
                 continue  # anulada / otras: no alertamos
             try:
-                push.notificar(title=title, body=body, url="/m/trading/",
+                push.notificar(title=title, body=body, url="/m/bot/",
                                tag=f"setup-{t['key']}-{tag_extra}")
             except Exception as exc:  # noqa: BLE001
                 self.context.log(f"alertas: no se pudo notificar {t['key']}: {exc}")

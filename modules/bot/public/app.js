@@ -106,6 +106,7 @@ function trades(data) {
 async function load() {
   try {
     const r = await fetch("/m/bot/api/state", { cache: "no-store" });
+    if (r.status === 401) { location.href = "/login"; return; }
     const data = await r.json();
     header(data); cards(data); position(data); orders(data); trades(data);
   } catch (e) {
