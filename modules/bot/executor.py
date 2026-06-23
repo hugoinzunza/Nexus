@@ -142,8 +142,13 @@ class BotExecutor:
         if os.path.exists(KILL_FILE):
             self.log(f"bot: KILL-SWITCH activo → no abre {symbol}")
             return
-        if self.cfg.get("one_position_at_a_time", True) and self._has_open():
-            self.log(f"bot: {symbol} SALTADO (ya hay una posición abierta — regla de colisión)")
+        open_trades = [x for x in self.store.all() if x["status"] == "abierta"]
+        max_pos = int(self.cfg.get("max_positions", 1))
+        if len(open_trades) >= max_pos:
+            self.log(f"bot: {symbol} saltado ({len(open_trades)}/{max_pos} posiciones abiertas)")
+            return
+        if any(x["symbol"] == symbol for x in open_trades):
+            self.log(f"bot: {symbol} saltado (ya hay posición abierta en {symbol})")
             return
         if self._daily_loss_hit():
             self.log(f"bot: tope de pérdida diaria alcanzado → congelado, no abre {symbol}")
@@ -192,6 +197,14 @@ class BotExecutor:
         mode = "live" if self.live else "dry"
         entry_price = px
         if mode == "live":
+            margin_needed = (px * qty) / leverage if leverage else px * qty
+            try:
+                avail = cli.balance_usdt().get("available", 0.0)
+                if avail < margin_needed * 1.02:
+                    self.log(f"bot: {symbol} saltado (margen insuficiente: req≈{margin_needed:.0f}, disp {avail:.0f})")
+                    return
+            except Exception:  # noqa: BLE001
+                pass
             cli.set_leverage(symbol, leverage)
             resp = cli.market_order(symbol, side, qty, client_id=self._cid(sid, "o"))
             entry_price = float(resp.get("avgPrice") or 0) or px
