@@ -110,8 +110,46 @@ class BotSync:
         out.sort(key=lambda x: (x["status"] != "pendiente", -(x.get("ts_created") or 0)))
         return out
 
+    # --- reconciliación (red de seguridad) -----------------------------
+    def reconcile(self) -> None:
+        """Cierra posiciones REALES de pares del bot que ya no tienen un setup ABIERTO
+        en el diario (huérfanas): el setup cerró pero la posición quedó viva (p.ej. por
+        divergencia de feed o un cierre que no se reflejó). Backup del cierre normal."""
+        cli = self.executor.client()
+        if not cli or not self.executor.live:
+            return
+        from modules.trading.setups_store import load_all
+        open_syms = set()
+        for s in load_all():
+            if s.get("status") in ("pendiente", "activo"):
+                open_syms.add((s.get("pair") or "").replace("_", "").upper())
+        pairs = set(self.executor.cfg.get("pairs", []))
+        for p in cli.positions():
+            sym = p["symbol"]
+            if sym not in pairs or sym in open_syms:
+                continue
+            side = "SELL" if p["side"] == "LONG" else "BUY"
+            cli.market_order(sym, side, cli.round_qty(sym, p["qty"]), reduce_only=True,
+                             client_id="nxrec" + str(int(time.time()))[-7:])
+            try:
+                cli.cancel_all_orders(sym)
+            except Exception:  # noqa: BLE001
+                pass
+            px = cli.mark_price(sym)
+            for t in self.executor.store.all():
+                if t["symbol"] == sym and t["status"] == "abierta":
+                    self.executor.store.close_trade(
+                        t["setup_id"], round(px, 8), result_r=None,
+                        fee_usd=round(px * p["qty"] * t.get("fee_rate", 0.0005), 4))
+                    break
+            self.log(f"bot: 🔧 reconciliación cerró posición huérfana {sym} (sin setup abierto en el diario)")
+
     # --- ciclo ---------------------------------------------------------
     def push_and_pull(self) -> None:
+        try:
+            self.reconcile()
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"bot-sync: reconciliación falló: {exc}")
         url, token = self._ingest_url(), self._token()
         if not url or not token:
             return
