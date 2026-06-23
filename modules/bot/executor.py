@@ -208,11 +208,10 @@ class BotExecutor:
             cli.set_leverage(symbol, leverage)
             resp = cli.market_order(symbol, side, qty, client_id=self._cid(sid, "o"))
             entry_price = float(resp.get("avgPrice") or 0) or px
-            try:  # stop de respaldo: si el bot cae, Binance cierra la posición
-                cli.stop_market(symbol, "SELL" if side == "BUY" else "BUY", sl,
-                                client_id=self._cid(sid, "s"))
-            except Exception as exc:  # noqa: BLE001
-                self.log(f"bot: ⚠️ no se pudo poner stop de respaldo en {symbol}: {exc}")
+            # NOTA: esta subcuenta NO admite STOP_MARKET por API (-4120 "use Algo Order
+            # API"). El SL lo gestiona el BOT: cuando el diario detecta que el precio tocó
+            # el SL (track→"closed"), el ejecutor cierra a mercado. Mientras el VPS esté
+            # arriba (systemd Restart=always) la posición queda protegida.
 
         entry_fee = entry_price * qty * float(self.cfg.get("fee_rate", 0.0005))
         self.store.open_trade({
