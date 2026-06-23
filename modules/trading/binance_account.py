@@ -133,12 +133,17 @@ class BinanceFutures:
                 continue
             if wanted and r.get("symbol") not in wanted:
                 continue
+            lev = int(float(r.get("leverage", 0) or 0))
+            notional = abs(float(r.get("notional", 0) or 0))
             out.append({
                 "symbol": r.get("symbol"),
                 "side": "LONG" if amt > 0 else "SHORT",
                 "qty": abs(amt),
                 "entry": float(r.get("entryPrice", 0) or 0),
-                "leverage": int(float(r.get("leverage", 0) or 0)),
+                "mark": float(r.get("markPrice", 0) or 0),
+                "notional": round(notional, 2),
+                "margin": round(notional / lev, 2) if lev else 0.0,
+                "leverage": lev,
                 "unrealized_pnl": float(r.get("unRealizedProfit", 0) or 0),
                 "liq_price": float(r.get("liquidationPrice", 0) or 0),
             })

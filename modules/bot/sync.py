@@ -82,7 +82,33 @@ class BotSync:
             "account": account, "positions": positions, "open_orders": orders,
             "summary": ex.store.summary(),
             "trades": sorted(ex.store.all(), key=lambda t: t.get("opened_at", 0), reverse=True),
+            "watching": self._watching(),
         }
+
+    def _watching(self) -> list:
+        """Setups del diario EN VIGILANCIA (pendientes/activos) en los pares del bot:
+        lo que el bot está esperando que se active para operar."""
+        try:
+            from modules.trading.setups_store import load_all
+        except Exception:  # noqa: BLE001
+            return []
+        pairs = set(self.executor.cfg.get("pairs", []))
+        out = []
+        for s in load_all():
+            if s.get("status") not in ("pendiente", "activo"):
+                continue
+            sym = (s.get("pair") or "").replace("_", "").upper()
+            if pairs and sym not in pairs:
+                continue
+            out.append({
+                "pair": s.get("pair"), "dir": s.get("dir"), "status": s.get("status"),
+                "entry": s.get("entry"), "entry_lo": s.get("entry_lo"),
+                "entry_hi": s.get("entry_hi"), "sl": s.get("sl"), "tp": s.get("tp"),
+                "rr": s.get("rr"), "poi_tf": s.get("poi_tf"), "source": s.get("source"),
+                "ts_created": s.get("ts_created"),
+            })
+        out.sort(key=lambda x: (x["status"] != "pendiente", -(x.get("ts_created") or 0)))
+        return out
 
     # --- ciclo ---------------------------------------------------------
     def push_and_pull(self) -> None:

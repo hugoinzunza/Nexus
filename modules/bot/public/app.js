@@ -65,12 +65,34 @@ function position(data) {
       <div class="pos-grid">
         <div><span>Qty</span>${fmt(p.qty, 4)}</div>
         <div><span>Entrada</span>${fmt(p.entry)}</div>
+        <div><span>Precio actual</span>${p.mark ? fmt(p.mark) : "—"}</div>
         <div><span>uPnL</span><b class="${up>=0?'pos':'neg'}">${signed(up)}</b></div>
+        <div><span>Notional</span>${p.notional != null ? fmt(p.notional) : "—"}</div>
+        <div><span>Margen</span>${p.margin != null ? fmt(p.margin) : "—"}</div>
+        <div><span>Apalancamiento</span>${p.leverage ? p.leverage + "x" : "—"}</div>
         <div><span>Liq.</span>${p.liq_price ? fmt(p.liq_price) : "—"}</div>
       </div>
       <button class="btn btn-danger sm" onclick="cmd('close','${p.symbol}')">✋ Cerrar posición ahora</button>
     </div>`;
   }).join("");
+}
+
+function watching(data) {
+  const ws = data.watching || [];
+  if (!ws.length) { $("watching").innerHTML = `<p class="muted">Nada en vigilancia en BTC/ETH ahora.</p>`; return; }
+  $("watching").innerHTML = `<div class="table-wrap"><table><thead><tr>
+    <th>Par</th><th>Dir</th><th>Estado</th><th>Zona entrada</th><th>SL</th><th>TP</th><th>R:R</th><th>TF</th></tr></thead><tbody>` +
+    ws.map(w => {
+      const zona = (w.entry_lo && w.entry_hi && w.entry_lo !== w.entry_hi)
+        ? `${fmt(w.entry_lo)}–${fmt(w.entry_hi)}` : fmt(w.entry);
+      const stCls = w.status === "activo" ? "abierta" : "dry";
+      return `<tr>
+        <td>${pairLabel(w.pair)}</td>
+        <td><span class="pill ${w.dir}">${w.dir === "long" ? "LONG" : "SHORT"}</span></td>
+        <td><span class="pill ${stCls}">${w.status}</span></td>
+        <td>${zona}</td><td>${fmt(w.sl)}</td><td>${fmt(w.tp)}</td>
+        <td>${w.rr ? fmt(w.rr, 1) : "—"}</td><td>${w.poi_tf || "—"}</td></tr>`;
+    }).join("") + `</tbody></table></div>`;
 }
 
 function orders(data) {
@@ -108,7 +130,7 @@ async function load() {
     const r = await fetch("/m/bot/api/state", { cache: "no-store" });
     if (r.status === 401) { location.href = "/login"; return; }
     const data = await r.json();
-    header(data); cards(data); position(data); orders(data); trades(data);
+    header(data); cards(data); position(data); watching(data); orders(data); trades(data);
   } catch (e) {
     $("rows").innerHTML = `<tr><td colspan="9" class="empty">No se pudo cargar: ${e}</td></tr>`;
   }
