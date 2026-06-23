@@ -510,6 +510,15 @@ class TradingModule(NexusModule):
                 plan = analysis.get("tpsl")
                 if plan:
                     created = self._setups.record(plan, name, tf, last, time.time())
+                    # Si NACE ya activo (precio en zona al detectarlo) no hay transición
+                    # pendiente→activo que el bot escuche → disparamos su apertura a mano.
+                    if created and created.get("status") == "activo" and self._bot_executor:
+                        self._bot_executor.on_transitions(name, [{
+                            "type": "activated", "pair": created["pair"], "dir": created["dir"],
+                            "key": created["key"], "ts_created": created["ts_created"],
+                            "entry": created.get("entry"), "sl": created.get("sl"),
+                            "tp": created.get("tp"), "source": created.get("source"),
+                        }], last)
                     if plan.get("cdc_ok"):
                         self._setups.mark_cdc(name, plan, time.time())
                     # MODO SOMBRA: Claude gradúa el setup recién creado (no interviene

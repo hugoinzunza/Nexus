@@ -29,7 +29,7 @@
       "base_equity": 450.0,
       "risk_pct": 0.02,
       "pairs": ["BTCUSDT", "ETHUSDT"],
-      "max_leverage": 20,
+      "max_leverage": 5,
       "max_positions": 2,
       "max_notional_per_order": 4000.0,
       "max_daily_loss_pct": 5.0,
