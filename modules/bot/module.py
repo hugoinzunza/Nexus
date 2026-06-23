@@ -88,10 +88,15 @@ class BotModule(NexusModule):
             body = dict(body)
             body["_received_at_ms"] = int(time.time() * 1000)
             with self._lock:
+                prev = self._read_state()
                 self._write_json(STATE_PATH, body)
                 cmds = self._read_json(COMMANDS_PATH, [])
                 if cmds:
                     self._write_json(COMMANDS_PATH, [])
+            try:
+                self._notify_bot_ops(prev, body)
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(f"bot: no se pudo notificar operación: {exc}")
             return self._json(200, {"ok": True, "commands": cmds})
 
         if subpath == "command":
@@ -109,6 +114,38 @@ class BotModule(NexusModule):
                 self._write_json(COMMANDS_PATH, cmds)
             return self._json(200, {"ok": True, "queued": cmd})
         return None
+
+    @staticmethod
+    def _notify_bot_ops(prev, new):
+        """Push por OPERACIONES REALES del bot (no setups del diario): apertura y
+        cierre. Compara el libro anterior vs el nuevo (snapshot del VPS). Corre en
+        Railway, donde están las suscripciones. Solo notifica el bot (a /m/bot/)."""
+        if not prev:
+            return  # baseline: no notificar en el primer snapshot
+        try:
+            from core import push
+        except Exception:  # noqa: BLE001
+            return
+        if not push.configurado():
+            return
+        prev_trades = {t["setup_id"]: t for t in (prev.get("trades") or [])}
+        for t in new.get("trades") or []:
+            sid = t.get("setup_id")
+            p = prev_trades.get(sid)
+            pair = (t.get("pair") or t.get("symbol") or "").replace("_USDT", "").replace("USDT", "")
+            d = "Long" if t.get("dir") == "long" else "Short"
+            if p is None and t.get("status") == "abierta":
+                push.notificar(
+                    f"🟢 BOT abrió {pair} {d}",
+                    f"{pair} {d} {t.get('leverage')}x · entrada {t.get('entry_price')} · notional {t.get('notional')} USDT.",
+                    url="/m/bot/", tag=f"bot-open-{sid}")
+            elif p is not None and p.get("status") == "abierta" and t.get("status") == "cerrada":
+                pnl = t.get("pnl_usd") or 0.0
+                emo = "✅" if pnl >= 0 else "❌"
+                push.notificar(
+                    f"{emo} BOT cerró {pair} {d}",
+                    f"{pair} {d} cerró · P&L {pnl:+.2f} USD.",
+                    url="/m/bot/", tag=f"bot-close-{sid}")
 
     # --- helpers -------------------------------------------------------
     def _read_state(self):
