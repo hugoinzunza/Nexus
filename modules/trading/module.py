@@ -404,6 +404,8 @@ class TradingModule(NexusModule):
             return
         if not push.configurado():
             return
+        if not self.config.get("context_alerts", False):
+            return  # solo notificamos operaciones del bot; POI/contexto en off
         for poi in zones:
             if self._poi_key(poi) in newly:
                 zona = "descuento" if poi["discount"] else "premium"
@@ -478,6 +480,8 @@ class TradingModule(NexusModule):
             return
         if not push.configurado():
             return
+        if not self.config.get("context_alerts", False):
+            return  # solo operaciones del bot; alertas de contexto en off
         base = label.split("/")[0]
         n = len(protected or [])
         ev = spike.get("event")

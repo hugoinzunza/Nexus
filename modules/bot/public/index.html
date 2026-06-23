@@ -16,6 +16,13 @@
   </header>
 
   <main>
+    <nav class="botnav">
+      <a href="/">🏠 Home</a>
+      <a href="/m/trading/">📈 Trading</a>
+      <a href="/m/journal/">📒 Diario</a>
+      <button id="btn-notif" class="navbtn" onclick="activarNotif()">🔔 Activar notificaciones</button>
+    </nav>
+
     <p class="lead">Espejo en vivo de la operación <strong>real</strong> en Binance Futuros (subcuenta aislada).
        El Diario sigue registrando el paper aparte, para estudio.</p>
 
@@ -51,6 +58,7 @@
     </div>
   </main>
 
+  <script src="/static/pwa.js"></script>
   <script src="/m/bot/app.js"></script>
 </body>
 </html>

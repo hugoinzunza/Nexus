@@ -125,6 +125,18 @@ function trades(data) {
   }).join("");
 }
 
+async function activarNotif() {
+  const b = document.getElementById("btn-notif");
+  try {
+    if (!window.NexusPush) { alert("Notificaciones no disponibles en este navegador."); return; }
+    await window.NexusPush.activar();
+    alert("✅ Notificaciones activadas. Te llegarán solo las operaciones del bot.");
+    if (b) { b.textContent = "🔔 Notificaciones activas"; b.disabled = true; }
+  } catch (e) {
+    alert("No se pudo activar: " + (e.message || e));
+  }
+}
+
 async function load() {
   try {
     const r = await fetch("/m/bot/api/state", { cache: "no-store" });
