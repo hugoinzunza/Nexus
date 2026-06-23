@@ -128,6 +128,13 @@ class TradingModule(NexusModule):
         self._bot_executor = None   # bot espejo (NexUX BOT); inerte si no hay llaves
         self._bot_sync = None       # empuja estado a Railway + trae comandos
         self._bot_sync_every = 8    # cada 8 ticks (~16s con poll 2s)
+        # Símbolos Binance que el bot opera: para ellos el gatillo de TP/SL usa el
+        # precio de BINANCE (donde se ejecuta), no Crypto.com, para que no diverjan.
+        try:
+            from modules.bot.executor import load_config as _botcfg
+            self._bot_price_syms = set(_botcfg().get("pairs", []))
+        except Exception:  # noqa: BLE001
+            self._bot_price_syms = set()
 
     # --- Ciclo de vida -------------------------------------------------
     def start(self) -> None:
@@ -232,6 +239,16 @@ class TradingModule(NexusModule):
                 last = (st.get("ticker") or {}).get("last")
                 if not last:
                     continue
+                # Para los pares del bot, el gatillo es el precio de BINANCE (donde
+                # opera), no Crypto.com → evita cierres/aperturas por divergencia de feed.
+                bsym = inst.get("binance")
+                if bsym and bsym in self._bot_price_syms:
+                    try:
+                        last = binance.last_price(bsym)
+                        if st.get("ticker"):
+                            st["ticker"]["last"] = last
+                    except Exception:  # noqa: BLE001
+                        pass  # si Binance no responde, seguimos con el de Crypto.com
                 # RISK-OFF: vela anormal (guardia de volatilidad) O evento de alto impacto
                 # inminente (calendario). En ambos: pausa de entradas + BE defensivo.
                 spike = smc_live.volatility_spike(st.get("candles") or [])

@@ -27,6 +27,17 @@ UI_TO_BINANCE = {"1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m",
                  "1D": "1d", "1d": "1d", "1W": "1w", "1M": "1M"}
 
 
+def last_price(symbol: str, market: str = "futures") -> float:
+    """Último precio de Binance (público, sin clave). Para los pares que el BOT
+    opera, este es el gatillo de TP/SL del diario, así no diverge del exchange real."""
+    base = ("https://fapi.binance.com/fapi/v1/ticker/price" if market == "futures"
+            else "https://api.binance.com/api/v3/ticker/price")
+    req = urllib.request.Request(f"{base}?symbol={symbol}",
+                                 headers={"User-Agent": "Nexus-live/1.0"})
+    with urllib.request.urlopen(req, timeout=6) as resp:
+        return float(json.load(resp)["price"])
+
+
 def recent_klines(symbol: str, ui_timeframe: str, limit: int = 300, market: str = "futures") -> list:
     """Velas recientes de Binance (sin caché, para el gráfico/estructura en vivo).
 
