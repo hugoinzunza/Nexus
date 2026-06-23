@@ -201,13 +201,18 @@ class BinanceFutures:
         return self._request("POST", "/fapi/v1/order", p, signed=True)
 
     def stop_market(self, symbol: str, side: str, stop_price: float,
-                    client_id: str | None = None) -> dict:
-        """Stop de respaldo que cierra TODA la posición (closePosition) si el bot
-        se cae. `side` es el lado de la ORDEN (opuesto a la posición)."""
+                    qty: float | None = None, client_id: str | None = None) -> dict:
+        """Stop a mercado. `side` es el lado de la ORDEN (opuesto a la posición).
+        Si se da `qty` → reduceOnly de esa cantidad; si no → closePosition (toda)."""
         f = self.symbol_filters(symbol)
         p = {"symbol": symbol, "side": side, "type": "STOP_MARKET",
              "stopPrice": round(stop_price, f["price_precision"]),
-             "closePosition": "true", "workingType": "MARK_PRICE"}
+             "workingType": "MARK_PRICE"}
+        if qty is not None:
+            p["quantity"] = qty
+            p["reduceOnly"] = "true"
+        else:
+            p["closePosition"] = "true"
         if client_id:
             p["newClientOrderId"] = client_id
         return self._request("POST", "/fapi/v1/order", p, signed=True)

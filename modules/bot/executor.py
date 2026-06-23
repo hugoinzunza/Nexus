@@ -250,6 +250,20 @@ class BotExecutor:
         self.store.add_partial(sid, t.get("leg", "TP"), qty, round(px, 8),
                                realized_r=t.get("realized_r"), fee_usd=round(fee, 4))
         self.log(f"bot[{trade['mode']}]: PARCIAL {t.get('leg')} {symbol} qty={qty} @~{px:.2f}")
+        # Cuando el diario mueve el SL a BREAK-EVEN (tras TP1), intentamos poner un stop
+        # NATIVO a la entrada con el remanente. Best-effort: si la subcuenta no admite
+        # stops por API (-4120), no pasa nada y el bot sigue gestionando el cierre.
+        if t.get("be") and trade["mode"] == "live":
+            upd = self._find_open(sid)
+            rem = (upd or {}).get("qty_open", 0.0)
+            if rem > 0:
+                be_side = "SELL" if trade["dir"] == "long" else "BUY"
+                try:
+                    cli.stop_market(symbol, be_side, trade["entry_price"],
+                                    qty=cli.round_qty(symbol, rem), client_id=self._cid(sid, "be"))
+                    self.log(f"bot: ✅ stop nativo a break-even en {symbol} @ {trade['entry_price']}")
+                except Exception as exc:  # noqa: BLE001
+                    self.log(f"bot: stop BE nativo no disponible en {symbol} ({str(exc)[-40:]}); lo gestiona el bot")
 
     def _close(self, t: dict, ref_price: float) -> None:
         sid = self._setup_id(t)
