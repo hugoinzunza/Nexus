@@ -211,6 +211,23 @@ class BinanceFutures:
         return self._request("DELETE", "/fapi/v1/allOpenOrders",
                              {"symbol": symbol}, signed=True)
 
+    def open_orders(self, symbol: str | None = None) -> list[dict]:
+        """Órdenes ABIERTAS (pendientes), p.ej. el stop de respaldo."""
+        params = {"symbol": symbol} if symbol else {}
+        rows = self._request("GET", "/fapi/v1/openOrders", params, signed=True)
+        out = []
+        for r in rows:
+            out.append({
+                "symbol": r.get("symbol"),
+                "type": r.get("type"),
+                "side": r.get("side"),
+                "stop_price": float(r.get("stopPrice", 0) or 0),
+                "qty": float(r.get("origQty", 0) or 0),
+                "reduce_only": bool(r.get("reduceOnly")),
+                "close_position": bool(r.get("closePosition")),
+            })
+        return out
+
 
 def _load_envfile(path: str) -> None:
     """Carga KEY=VALUE de un archivo a os.environ (no pisa lo ya definido)."""

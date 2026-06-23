@@ -126,10 +126,13 @@ class TradingModule(NexusModule):
         self._stop = threading.Event()
         self._thread = None
         self._bot_executor = None   # bot espejo (NexUX BOT); inerte si no hay llaves
+        self._bot_sync = None       # empuja estado a Railway + trae comandos
+        self._bot_sync_every = 8    # cada 8 ticks (~16s con poll 2s)
 
     # --- Ciclo de vida -------------------------------------------------
     def start(self) -> None:
         self._bot_executor = self._make_bot_executor()
+        self._bot_sync = self._make_bot_sync()
         self._thread = threading.Thread(target=self._poll_loop, name="trading-poller", daemon=True)
         self._thread.start()
         self.context.log(f"trading: poller iniciado ({len(self.instruments)} instrumentos, cada {self.poll_interval}s)")
@@ -149,6 +152,17 @@ class TradingModule(NexusModule):
             return ex
         except Exception as exc:  # noqa: BLE001
             self.context.log(f"bot: ejecutor no disponible ({exc})")
+            return None
+
+    def _make_bot_sync(self):
+        """Sincronizador VPS→Railway (espejo + comandos). None si no hay ejecutor."""
+        if not self._bot_executor:
+            return None
+        try:
+            from modules.bot.sync import BotSync
+            return BotSync(self._bot_executor, self.context.log)
+        except Exception as exc:  # noqa: BLE001
+            self.context.log(f"bot: sync no disponible ({exc})")
             return None
 
     # --- Poller --------------------------------------------------------
@@ -271,6 +285,13 @@ class TradingModule(NexusModule):
                     regime.vix_now()
                 except Exception:  # noqa: BLE001
                     pass
+
+            # Espejo del bot → Railway (estado real) + trae comandos de la web.
+            if self._bot_sync and tick % self._bot_sync_every == 0:
+                try:
+                    self._bot_sync.push_and_pull()
+                except Exception as exc:  # noqa: BLE001
+                    self.context.log(f"bot-sync: {exc}")
 
             tick += 1
             self._stop.wait(self.poll_interval)

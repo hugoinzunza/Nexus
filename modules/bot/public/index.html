@@ -9,16 +9,32 @@
 <body>
   <header class="top">
     <div class="brand">🤖 NexUX <span class="bot">BOT</span></div>
-    <div id="mode" class="mode dry">…</div>
+    <div class="badges">
+      <span id="age" class="age"></span>
+      <span id="mode" class="mode dry">…</span>
+    </div>
   </header>
 
   <main>
-    <p class="lead">Operación <strong>real</strong> del bot espejo en Binance Futuros.
-       Refleja las señales del Diario; el Diario sigue registrando aparte para estudio.</p>
+    <p class="lead">Espejo en vivo de la operación <strong>real</strong> en Binance Futuros (subcuenta aislada).
+       El Diario sigue registrando el paper aparte, para estudio.</p>
+
+    <div id="kill-banner" class="kill-banner" hidden>🛑 Bot DETENIDO (kill-switch activo) — no abrirá nuevas posiciones.</div>
+
+    <div class="controls">
+      <button id="btn-kill" class="btn btn-danger" onclick="cmd('kill')">🛑 Parar bot</button>
+      <button id="btn-resume" class="btn btn-ok" onclick="cmd('resume')" hidden>▶️ Reanudar bot</button>
+    </div>
 
     <section id="cards" class="cards"></section>
 
-    <h2>Operaciones</h2>
+    <h2>Posición abierta</h2>
+    <div id="position" class="position"><p class="muted">Sin posición abierta.</p></div>
+
+    <h2>Órdenes activas</h2>
+    <div id="orders" class="orders"><p class="muted">Sin órdenes.</p></div>
+
+    <h2>Operaciones (libro)</h2>
     <div class="table-wrap">
       <table id="trades">
         <thead>
