@@ -47,7 +47,7 @@
   .nav-links{display:flex;align-items:center;gap:4px}
   .nav-links a{color:var(--text);font-size:14px;font-weight:550;padding:9px 14px;border-radius:10px}
   .nav-links a:hover{background:#e8eaf0;color:var(--ink)}
-  .btn{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:14px;padding:11px 20px;border-radius:11px;transition:.15s;cursor:pointer}
+  .btn{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:14px;padding:11px 20px;border-radius:11px;transition:.15s;cursor:pointer;white-space:nowrap}
   .btn.primary{color:#fff;background:linear-gradient(135deg,var(--accent),#574bc8)}
   .btn.primary:hover{transform:translateY(-1px);box-shadow:0 12px 26px -12px rgba(108,92,231,.6)}
   .btn.soft{color:var(--ink);background:#e8eaf0}
@@ -235,7 +235,7 @@
   /* botón de tema */
   #theme-toggle{font-size:15px;line-height:1;padding:9px 12px}
 
-  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:34px}.grid{grid-template-columns:1fr}.feat-row{grid-template-columns:1fr}.ind{grid-template-columns:repeat(2,1fr)}.nav-links a:not(.btn){display:none}.preview{transform:none}}
+  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:34px}.grid{grid-template-columns:1fr}.feat-row{grid-template-columns:1fr}.ind{grid-template-columns:repeat(2,1fr)}.nav-links a:not(.btn){display:none}.preview{transform:none}.nav-in{gap:10px}.nav-links{overflow-x:auto;min-width:0;-webkit-overflow-scrolling:touch;gap:6px}.nav-links::-webkit-scrollbar{display:none}.nav-links .btn{flex:0 0 auto;padding:9px 12px;font-size:13px;gap:5px}}
 </style>
 </head>
 <body>
