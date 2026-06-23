@@ -7,16 +7,14 @@ peticiones con HMAC-SHA256 para leer/operar la cuenta real.
 (balance y posiciones). No manda órdenes. La ejecución llega en la Fase 2 y vivirá
 en otro módulo, con sus propios guardrails (idempotencia, kill-switch, límites).
 
-Credenciales: variables de entorno SEPARADAS de las del colector (que es read-only
-de mercado). El colector usa BINANCE_API_KEY/SECRET; el bot usa una llave NUEVA con
-permiso de trading y RETIROS OFF:
-
-    BINANCE_TRADE_API_KEY=...
-    BINANCE_TRADE_API_SECRET=...
+Credenciales (en este orden): BINANCE_TRADE_API_KEY/SECRET (llave dedicada del bot)
+o, como fallback, BINANCE_API_KEY/SECRET (la del colector). Hugo reutilizó la llave
+del colector ("Nexux") habilitándole Futuros + IP-whitelist al VPS y RETIROS OFF, así
+que el bot toma esas credenciales del collector.env que YA vive en el VPS.
 
 Probar a mano (carga el envfile y consulta la cuenta):
 
-    set -a; . deploy/trade.env; set +a
+    set -a; . deploy/collector.env; set +a
     .venv/bin/python -m modules.trading.binance_account
 """
 from __future__ import annotations
@@ -47,13 +45,15 @@ class BinanceFutures:
 
     def __init__(self, api_key: str | None = None, api_secret: str | None = None,
                  base_url: str = FAPI):
-        self.api_key = api_key or os.environ.get("BINANCE_TRADE_API_KEY", "").strip()
-        self.api_secret = api_secret or os.environ.get("BINANCE_TRADE_API_SECRET", "").strip()
+        self.api_key = (api_key or os.environ.get("BINANCE_TRADE_API_KEY")
+                        or os.environ.get("BINANCE_API_KEY") or "").strip()
+        self.api_secret = (api_secret or os.environ.get("BINANCE_TRADE_API_SECRET")
+                           or os.environ.get("BINANCE_API_SECRET") or "").strip()
         self.base_url = base_url.rstrip("/")
         if not self.api_key or not self.api_secret:
             raise BinanceError(
-                "Faltan credenciales: define BINANCE_TRADE_API_KEY y "
-                "BINANCE_TRADE_API_SECRET (llave nueva, retiros OFF).")
+                "Faltan credenciales: define BINANCE_TRADE_API_KEY/SECRET "
+                "(o BINANCE_API_KEY/SECRET del colector). Retiros OFF.")
 
     # ---- plomería HTTP -------------------------------------------------
 
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     # Prueba de humo de la Fase 1: lee la cuenta real y la imprime. NO opera.
     import sys
 
-    envfile = sys.argv[1] if len(sys.argv) > 1 else "deploy/trade.env"
+    envfile = sys.argv[1] if len(sys.argv) > 1 else "deploy/collector.env"
     _load_envfile(envfile)
 
     cli = BinanceFutures()
