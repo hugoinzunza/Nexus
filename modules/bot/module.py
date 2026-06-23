@@ -45,6 +45,11 @@ class BotModule(NexusModule):
     # --- GET -----------------------------------------------------------
     def api(self, subpath, query, user=None):
         if subpath == "state":
+            # El estado incluye balance/posiciones reales → exige sesión cuando la
+            # auth está activa (Railway). En local/VPS (auth inerte) pasa.
+            from core import auth
+            if auth.enabled() and not user:
+                return self._json(401, {"error": "no autorizado", "login": "/login"})
             return self._state_response()
         return None
 
