@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>NexUX BOT</title>
+  <link rel="stylesheet" href="/m/bot/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">🤖 NexUX <span class="bot">BOT</span></div>
+    <div id="mode" class="mode dry">…</div>
+  </header>
+
+  <main>
+    <p class="lead">Operación <strong>real</strong> del bot espejo en Binance Futuros.
+       Refleja las señales del Diario; el Diario sigue registrando aparte para estudio.</p>
+
+    <section id="cards" class="cards"></section>
+
+    <h2>Operaciones</h2>
+    <div class="table-wrap">
+      <table id="trades">
+        <thead>
+          <tr>
+            <th>Par</th><th>Dir</th><th>Modo</th><th>Qty</th>
+            <th>Entrada</th><th>Salida</th><th>Lev</th><th>P&amp;L (USD)</th><th>Estado</th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="9" class="empty">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="/m/bot/app.js"></script>
+</body>
+</html>

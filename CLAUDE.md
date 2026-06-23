@@ -29,9 +29,19 @@ Hugo quiere que Claude ejecute los `git push` directamente, no que le pase los c
 
 ## Principio del producto
 
-**Todo solo-lectura sobre mercados.** NexUX observa y muestra info; **nunca** opera, ni mueve
-ni retira dinero. Mantener esa honestidad — incluido el laboratorio de backtest, que reporta
-resultados reales aunque sean negativos (no inflar edge).
+**Honestidad sobre todo.** NexUX observa, muestra y registra; reporta resultados reales aunque
+sean negativos (no inflar edge) — incluido el laboratorio de backtest y el diario/forward-test,
+que siguen siendo **solo lectura y paper**.
+
+**Excepción acotada y explícita — NexUX BOT (módulo `bot`).** Desde 2026-06 NexUX SÍ opera en
+vivo, pero solo a través del bot espejo: ejecuta en Binance Futuros real las mismas señales que
+el diario registra. Reglas que NO se rompen:
+- **Nunca retira ni mueve fondos fuera del exchange.** La llave tiene retiros OFF.
+- Opera **solo** en una **subcuenta dedicada** y aislada (no la cuenta principal), con llaves
+  `BINANCE_TRADE_*` exclusivas; jamás cae a las del colector.
+- Arranca en **dry-run** (`config.bot.live=false`); el paso a real es deliberado.
+- El **diario sigue siendo paper** y se reporta aparte del libro real del bot (no mezclar).
+- El libro del bot reporta P&L y comisiones **reales**, sin maquillar.
 
 ## Mapa rápido
 

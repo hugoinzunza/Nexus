@@ -506,6 +506,12 @@ class SetupStore:
                         "dir": s["dir"], "source": s.get("source", "indicador"),
                         "poi_tf": s.get("poi_tf"), "rr": s.get("rr"),
                         "result_r": s.get("result_r"), "key": s["key"],
+                        # Enriquecido para el ejecutor del bot espejo (NexUX BOT):
+                        # identidad única (key+ts_created) y precios para dimensionar/cerrar.
+                        "ts_created": s.get("ts_created"), "entry": s.get("entry"),
+                        "sl": s.get("sl"), "tp": s.get("tp"),
+                        "outcome_price": s.get("outcome_price"),
+                        "realized_r": s.get("realized_r"), "remaining": s.get("remaining"),
                         **ev,   # type ("activated"|"partial"|"closed") y datos del parcial
                     })
                 if s.get("trailing") and s["status"] not in _CLOSED:

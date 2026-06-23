@@ -3,9 +3,12 @@
 A diferencia de `binance.py` (klines públicas, sin clave), este módulo firma las
 peticiones con HMAC-SHA256 para leer/operar la cuenta real.
 
-⚠️ FASE 1 — SOLO LECTURA. Este archivo, por ahora, únicamente CONSULTA la cuenta
-(balance y posiciones). No manda órdenes. La ejecución llega en la Fase 2 y vivirá
-en otro módulo, con sus propios guardrails (idempotencia, kill-switch, límites).
+LECTURA: server_time, balance_usdt, positions, mark_price, symbol_filters.
+EJECUCIÓN: set_leverage, market_order, stop_market, cancel_all_orders.
+
+⚠️ Este cliente solo provee la CAPACIDAD de operar; la decisión de mandar o no
+una orden (y todos los guardrails: idempotencia, kill-switch, límites, dry-run)
+vive en `modules/bot/executor.py`. Nada acá dispara órdenes por su cuenta.
 
 Credenciales (en este orden): BINANCE_TRADE_API_KEY/SECRET (llave dedicada del bot)
 o, como fallback, BINANCE_API_KEY/SECRET (la del colector). Hugo reutilizó la llave
@@ -22,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import os
 import time
 import urllib.error
@@ -50,6 +54,7 @@ class BinanceFutures:
         self.api_secret = (api_secret or os.environ.get("BINANCE_TRADE_API_SECRET")
                            or os.environ.get("BINANCE_API_SECRET") or "").strip()
         self.base_url = base_url.rstrip("/")
+        self._filters_cache: dict = {}
         if not self.api_key or not self.api_secret:
             raise BinanceError(
                 "Faltan credenciales: define BINANCE_TRADE_API_KEY/SECRET "
@@ -79,6 +84,7 @@ class BinanceFutures:
                 url = f"{url}?{query}"
             else:
                 data = query.encode()
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
         elif params:
             url = f"{url}?{urllib.parse.urlencode(params)}"
 
@@ -137,6 +143,73 @@ class BinanceFutures:
                 "liq_price": float(r.get("liquidationPrice", 0) or 0),
             })
         return out
+
+    # ---- ejecución (la gobierna modules/bot/executor.py) ----------------
+
+    def mark_price(self, symbol: str) -> float:
+        """Precio mark del símbolo (público)."""
+        r = self._request("GET", "/fapi/v1/premiumIndex", {"symbol": symbol})
+        return float(r["markPrice"])
+
+    def symbol_filters(self, symbol: str) -> dict:
+        """Filtros del símbolo (cacheados): step de cantidad, mínimos y precisión.
+        Necesario para redondear la qty a un valor que Binance acepte."""
+        if symbol in self._filters_cache:
+            return self._filters_cache[symbol]
+        info = self._request("GET", "/fapi/v1/exchangeInfo", {"symbol": symbol})
+        syms = info.get("symbols") or []
+        if not syms:
+            raise BinanceError(f"sin exchangeInfo para {symbol}")
+        s = syms[0]
+        f = {"qty_step": 0.0, "min_qty": 0.0, "min_notional": 0.0,
+             "qty_precision": int(s.get("quantityPrecision", 3)),
+             "price_precision": int(s.get("pricePrecision", 2))}
+        for flt in s.get("filters", []):
+            t = flt.get("filterType")
+            if t == "LOT_SIZE":
+                f["qty_step"] = float(flt.get("stepSize", 0) or 0)
+                f["min_qty"] = float(flt.get("minQty", 0) or 0)
+            elif t == "MIN_NOTIONAL":
+                f["min_notional"] = float(flt.get("notional", 0) or 0)
+        self._filters_cache[symbol] = f
+        return f
+
+    def round_qty(self, symbol: str, qty: float) -> float:
+        """Redondea la cantidad HACIA ABAJO al step del símbolo."""
+        f = self.symbol_filters(symbol)
+        step = f["qty_step"] or (10 ** -f["qty_precision"])
+        n = math.floor(qty / step) * step
+        return round(n, f["qty_precision"])
+
+    def set_leverage(self, symbol: str, leverage: int) -> dict:
+        return self._request("POST", "/fapi/v1/leverage",
+                             {"symbol": symbol, "leverage": int(leverage)}, signed=True)
+
+    def market_order(self, symbol: str, side: str, qty: float,
+                     client_id: str | None = None, reduce_only: bool = False) -> dict:
+        """Orden a mercado. side: 'BUY'|'SELL'. Devuelve la respuesta cruda."""
+        p = {"symbol": symbol, "side": side, "type": "MARKET", "quantity": qty}
+        if reduce_only:
+            p["reduceOnly"] = "true"
+        if client_id:
+            p["newClientOrderId"] = client_id
+        return self._request("POST", "/fapi/v1/order", p, signed=True)
+
+    def stop_market(self, symbol: str, side: str, stop_price: float,
+                    client_id: str | None = None) -> dict:
+        """Stop de respaldo que cierra TODA la posición (closePosition) si el bot
+        se cae. `side` es el lado de la ORDEN (opuesto a la posición)."""
+        f = self.symbol_filters(symbol)
+        p = {"symbol": symbol, "side": side, "type": "STOP_MARKET",
+             "stopPrice": round(stop_price, f["price_precision"]),
+             "closePosition": "true", "workingType": "MARK_PRICE"}
+        if client_id:
+            p["newClientOrderId"] = client_id
+        return self._request("POST", "/fapi/v1/order", p, signed=True)
+
+    def cancel_all_orders(self, symbol: str) -> dict:
+        return self._request("DELETE", "/fapi/v1/allOpenOrders",
+                             {"symbol": symbol}, signed=True)
 
 
 def _load_envfile(path: str) -> None:

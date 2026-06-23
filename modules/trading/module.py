@@ -125,15 +125,31 @@ class TradingModule(NexusModule):
         }
         self._stop = threading.Event()
         self._thread = None
+        self._bot_executor = None   # bot espejo (NexUX BOT); inerte si no hay llaves
 
     # --- Ciclo de vida -------------------------------------------------
     def start(self) -> None:
+        self._bot_executor = self._make_bot_executor()
         self._thread = threading.Thread(target=self._poll_loop, name="trading-poller", daemon=True)
         self._thread.start()
         self.context.log(f"trading: poller iniciado ({len(self.instruments)} instrumentos, cada {self.poll_interval}s)")
 
     def stop(self) -> None:
         self._stop.set()
+
+    def _make_bot_executor(self):
+        """Crea el ejecutor del bot espejo. Si falla o no hay llaves de la subcuenta,
+        queda inerte y NO afecta al diario (que sigue siendo solo lectura)."""
+        try:
+            from modules.bot.bot_store import BotStore
+            from modules.bot.executor import BotExecutor
+            ex = BotExecutor(BotStore(), self.context.log)
+            estado = "ACTIVO" if ex.active else "inerte (sin llaves de subcuenta)"
+            self.context.log(f"bot: ejecutor espejo {estado} · modo {'LIVE' if ex.live else 'dry-run'}")
+            return ex
+        except Exception as exc:  # noqa: BLE001
+            self.context.log(f"bot: ejecutor no disponible ({exc})")
+            return None
 
     # --- Poller --------------------------------------------------------
     def _poll_loop(self) -> None:
@@ -241,6 +257,10 @@ class TradingModule(NexusModule):
                     transitions = self._setups.track(name, last, time.time())
                     if transitions:
                         self._alert_transitions(inst.get("label", name), transitions)
+                        # Bot espejo: refleja en Binance real las mismas transiciones
+                        # (abre/parcial/cierra). Inerte si no hay llaves de subcuenta.
+                        if self._bot_executor:
+                            self._bot_executor.on_transitions(inst.get("label", name), transitions, last)
                 except Exception as exc:  # noqa: BLE001
                     self.context.log(f"setups: no se pudo seguir {name}: {exc}")
 
