@@ -135,6 +135,7 @@ class TradingModule(NexusModule):
             self._bot_price_syms = set(_botcfg().get("pairs", []))
         except Exception:  # noqa: BLE001
             self._bot_price_syms = set()
+        self._last_binance_px = {}   # último precio Binance bueno por símbolo (anti-429)
 
     # --- Ciclo de vida -------------------------------------------------
     def start(self) -> None:
@@ -245,10 +246,14 @@ class TradingModule(NexusModule):
                 if bsym and bsym in self._bot_price_syms:
                     try:
                         last = binance.last_price(bsym)
-                        if st.get("ticker"):
-                            st["ticker"]["last"] = last
+                        self._last_binance_px[bsym] = last
                     except Exception:  # noqa: BLE001
-                        pass  # si Binance no responde, seguimos con el de Crypto.com
+                        # Binance no respondió (p.ej. 429): usa el ÚLTIMO precio Binance
+                        # bueno antes que caer a Crypto.com (evita reintroducir divergencia).
+                        if bsym in self._last_binance_px:
+                            last = self._last_binance_px[bsym]
+                    if st.get("ticker"):
+                        st["ticker"]["last"] = last
                 # RISK-OFF: vela anormal (guardia de volatilidad) O evento de alto impacto
                 # inminente (calendario). En ambos: pausa de entradas + BE defensivo.
                 spike = smc_live.volatility_spike(st.get("candles") or [])

@@ -95,7 +95,10 @@ class BotSync:
         pairs = set(self.executor.cfg.get("pairs", []))
         out = []
         for s in load_all():
-            if s.get("status") not in ("pendiente", "activo"):
+            # Solo PENDIENTES: lo que el bot espera para entrar. Los activos con
+            # posición real ya salen en "Posición abierta"; los activos sin posición
+            # son residuos que solo confundirían acá.
+            if s.get("status") != "pendiente":
                 continue
             sym = (s.get("pair") or "").replace("_", "").upper()
             if pairs and sym not in pairs:
