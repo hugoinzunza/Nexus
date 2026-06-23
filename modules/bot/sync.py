@@ -144,12 +144,37 @@ class BotSync:
                     break
             self.log(f"bot: 🔧 reconciliación cerró posición huérfana {sym} (sin setup abierto en el diario)")
 
+    def confirm_pnls(self) -> None:
+        """Reemplaza el P&L estimado de las operaciones cerradas por el REAL de Binance
+        (income: realized pnl + comisiones). Honestidad: el libro reporta lo de verdad."""
+        cli = self.executor.client()
+        if not cli:
+            return
+        for t in self.executor.store.all():
+            if t["status"] != "cerrada" or t.get("pnl_confirmed"):
+                continue
+            start = int(t.get("opened_at", 0)) * 1000
+            end = (int(t.get("closed_at", 0)) + 5) * 1000 if t.get("closed_at") else None
+            if not start:
+                continue
+            try:
+                r = cli.realized_pnl(t["symbol"], start, end)
+                self.executor.store.confirm_pnl(t["setup_id"], r["neto"], r["commission"])
+                self.log(f"bot: P&L REAL {t['symbol']}: {r['neto']:+.4f} USD "
+                         f"(bruto {r['pnl_bruto']:+.4f}, comisión {r['commission']:.4f})")
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"bot: no se pudo confirmar P&L real de {t['symbol']}: {exc}")
+
     # --- ciclo ---------------------------------------------------------
     def push_and_pull(self) -> None:
         try:
             self.reconcile()
         except Exception as exc:  # noqa: BLE001
             self.log(f"bot-sync: reconciliación falló: {exc}")
+        try:
+            self.confirm_pnls()
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"bot-sync: confirmación de P&L falló: {exc}")
         url, token = self._ingest_url(), self._token()
         if not url or not token:
             return

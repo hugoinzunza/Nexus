@@ -144,6 +144,19 @@ class BotStore:
             self._save()
             return t
 
+    def confirm_pnl(self, setup_id: str, pnl_neto: float, commission: float) -> bool:
+        """Reemplaza el P&L/comisiones ESTIMADOS por los REALES de Binance (income).
+        Marca pnl_confirmed para no volver a consultarlo."""
+        with self._lock:
+            for t in self._trades:
+                if t["setup_id"] == setup_id and t["status"] == _CLOSED:
+                    t["pnl_usd"] = round(pnl_neto, 4)
+                    t["fees_usd"] = round(abs(commission), 4)
+                    t["pnl_confirmed"] = True
+                    self._save()
+                    return True
+        return False
+
     # --- lectura -------------------------------------------------------
     def all(self) -> list:
         with self._lock:

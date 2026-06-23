@@ -221,6 +221,18 @@ class BinanceFutures:
         return self._request("DELETE", "/fapi/v1/allOpenOrders",
                              {"symbol": symbol}, signed=True)
 
+    def realized_pnl(self, symbol: str, start_ms: int, end_ms: int | None = None) -> dict:
+        """P&L realizado REAL + comisiones de Binance (income) para el símbolo en la
+        ventana dada. Para que el libro reporte lo real, no una estimación."""
+        params = {"symbol": symbol, "startTime": int(start_ms), "limit": 500}
+        if end_ms:
+            params["endTime"] = int(end_ms)
+        rows = self._request("GET", "/fapi/v1/income", params, signed=True)
+        pnl = sum(float(r["income"]) for r in rows if r.get("incomeType") == "REALIZED_PNL")
+        comm = sum(float(r["income"]) for r in rows if r.get("incomeType") == "COMMISSION")
+        return {"pnl_bruto": round(pnl, 6), "commission": round(comm, 6),
+                "neto": round(pnl + comm, 6)}
+
     def open_orders(self, symbol: str | None = None) -> list[dict]:
         """Órdenes ABIERTAS (pendientes), p.ej. el stop de respaldo."""
         params = {"symbol": symbol} if symbol else {}
