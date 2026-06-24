@@ -109,9 +109,11 @@ class BotSync:
         lo que el bot está esperando que se active para operar."""
         try:
             from modules.trading.setups_store import load_all
+            from modules.trading import binance
         except Exception:  # noqa: BLE001
             return []
         pairs = set(self.executor.cfg.get("pairs", []))
+        price_cache = {}
         out = []
         for s in load_all():
             # Solo PENDIENTES: lo que el bot espera para entrar. Los activos con
@@ -122,12 +124,20 @@ class BotSync:
             sym = (s.get("pair") or "").replace("_", "").upper()
             if pairs and sym not in pairs:
                 continue
+            if sym not in price_cache:
+                try:
+                    price_cache[sym] = binance.last_price(sym)
+                except Exception:  # noqa: BLE001
+                    price_cache[sym] = None
+            px = price_cache[sym]
+            entry = s.get("entry")
+            dist = round((px - entry) / entry * 100, 2) if (px and entry) else None
             out.append({
                 "pair": s.get("pair"), "dir": s.get("dir"), "status": s.get("status"),
                 "entry": s.get("entry"), "entry_lo": s.get("entry_lo"),
                 "entry_hi": s.get("entry_hi"), "sl": s.get("sl"), "tp": s.get("tp"),
                 "rr": s.get("rr"), "poi_tf": s.get("poi_tf"), "source": s.get("source"),
-                "ts_created": s.get("ts_created"),
+                "ts_created": s.get("ts_created"), "price_now": px, "dist_pct": dist,
             })
         out.sort(key=lambda x: (x["status"] != "pendiente", -(x.get("ts_created") or 0)))
         return out

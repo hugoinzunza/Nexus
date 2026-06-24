@@ -87,16 +87,17 @@ function watching(data) {
   const ws = data.watching || [];
   if (!ws.length) { $("watching").innerHTML = `<p class="muted">Nada en vigilancia en BTC/ETH ahora.</p>`; return; }
   $("watching").innerHTML = `<div class="table-wrap"><table><thead><tr>
-    <th>Par</th><th>Dir</th><th>Estado</th><th>Zona entrada</th><th>SL</th><th>TP</th><th>R:R</th><th>TF</th></tr></thead><tbody>` +
+    <th>Par</th><th>Dir</th><th>Zona entrada</th><th>Precio ahora</th><th>SL</th><th>TP</th><th>R:R</th><th>TF</th></tr></thead><tbody>` +
     ws.map(w => {
       const zona = (w.entry_lo && w.entry_hi && w.entry_lo !== w.entry_hi)
         ? `${fmt(w.entry_lo)}–${fmt(w.entry_hi)}` : fmt(w.entry);
-      const stCls = w.status === "activo" ? "abierta" : "dry";
+      const dist = (w.dist_pct != null) ? ` <span class="muted">(${w.dist_pct > 0 ? "+" : ""}${w.dist_pct}%)</span>` : "";
       return `<tr>
         <td>${pairLabel(w.pair)}</td>
         <td><span class="pill ${w.dir}">${w.dir === "long" ? "LONG" : "SHORT"}</span></td>
-        <td><span class="pill ${stCls}">${w.status}</span></td>
-        <td>${zona}</td><td>${fmt(w.sl)}</td><td>${fmt(w.tp)}</td>
+        <td>${zona}</td>
+        <td>${w.price_now ? fmt(w.price_now) : "—"}${dist}</td>
+        <td>${fmt(w.sl)}</td><td>${fmt(w.tp)}</td>
         <td>${w.rr ? fmt(w.rr, 1) : "—"}</td><td>${w.poi_tf || "—"}</td></tr>`;
     }).join("") + `</tbody></table></div>`;
 }
