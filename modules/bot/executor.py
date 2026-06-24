@@ -179,17 +179,21 @@ class BotExecutor:
         base = float(self.cfg["base_equity"])
         risk_pct = float(self.cfg["risk_pct"])
         risk_usd = base * risk_pct
-        notional = risk_usd / sl_frac
-        cap = float(self.cfg.get("max_notional_per_order") or 0)
-        if cap and notional > cap:
-            self.log(f"bot: notional {notional:.0f} > tope {cap:.0f} → recorto a tope")
-            notional = cap
         max_lev = int(self.cfg.get("max_leverage", 20))
         lev_ovr = t.get("leverage_override")
         if lev_ovr:
             leverage = max(1, min(int(lev_ovr), max_lev))   # leverage fijo del setup
         else:
             leverage = max(1, min(int(round(risk_pct / sl_frac)), max_lev))  # derivado
+        margin_ovr = t.get("margin_override")
+        if margin_ovr:
+            notional = float(margin_ovr) * leverage   # sizing FIJO: margen × leverage
+        else:
+            notional = risk_usd / sl_frac             # sizing por riesgo (2%)
+        cap = float(self.cfg.get("max_notional_per_order") or 0)
+        if cap and notional > cap:
+            self.log(f"bot: notional {notional:.0f} > tope {cap:.0f} → recorto a tope")
+            notional = cap
         side = "BUY" if t["dir"] == "long" else "SELL"
         qty = notional / px
         try:

@@ -883,7 +883,7 @@ class TradingModule(NexusModule):
             pair, direction, entry_val, body.get("sl"),
             body.get("tp"), tf=body.get("tf", "manual"), last_price=last,
             label=body.get("label", "profe"), scaled=bool(body.get("scaled", False)),
-            leverage=body.get("leverage"))
+            leverage=body.get("leverage"), margin=body.get("margin"))
         if not res.get("ok"):
             return self._json_error(400, res.get("error", "no se pudo registrar"))
         # Si nació ACTIVO (precio en zona / enter_now), disparar la apertura del bot
