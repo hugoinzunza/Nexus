@@ -154,11 +154,26 @@ class BotExecutor:
             self.log(f"bot: tope de pérdida diaria alcanzado → congelado, no abre {symbol}")
             return
 
-        entry = float(t.get("entry") or ref_price or 0)
         sl = float(t.get("sl") or 0)
-        if entry <= 0 or sl <= 0:
+        if sl <= 0:
             return
-        sl_frac = abs(entry - sl) / entry
+        cli = self.client()
+        px = float(t.get("entry") or ref_price or 0)
+        try:
+            px = cli.mark_price(symbol)
+        except Exception:  # noqa: BLE001
+            pass
+        if px <= 0:
+            return
+        # Si el precio YA está del lado perdedor del SL, no entrar (trade vencido).
+        if (t["dir"] == "long" and px <= sl) or (t["dir"] == "short" and px >= sl):
+            self.log(f"bot: {symbol} no abre (precio {px} ya pasó el SL {sl})")
+            return
+        # Dimensionar con la distancia REAL entrada→SL (precio de ejecución), no la del
+        # setup: como entramos a MERCADO, si el fill queda más lejos del SL el riesgo
+        # real no debe pasar del 2%. (Antes se usaba la distancia del setup y un fill
+        # lejano duplicaba la pérdida vs lo planeado.)
+        sl_frac = abs(px - sl) / px
         if sl_frac <= 0:
             return
         base = float(self.cfg["base_equity"])
@@ -172,13 +187,6 @@ class BotExecutor:
         leverage = max(1, min(int(round(risk_pct / sl_frac)),
                               int(self.cfg.get("max_leverage", 20))))
         side = "BUY" if t["dir"] == "long" else "SELL"
-
-        cli = self.client()
-        px = entry
-        try:
-            px = cli.mark_price(symbol)
-        except Exception:  # noqa: BLE001
-            pass
         qty = notional / px
         try:
             qty = cli.round_qty(symbol, qty)
