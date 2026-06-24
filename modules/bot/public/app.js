@@ -155,4 +155,4 @@ async function load() {
 }
 
 load();
-setInterval(load, 12000);
+setInterval(load, 5000);  // refresco del panel cada 5s

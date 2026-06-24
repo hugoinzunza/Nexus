@@ -127,7 +127,7 @@ class TradingModule(NexusModule):
         self._thread = None
         self._bot_executor = None   # bot espejo (NexUX BOT); inerte si no hay llaves
         self._bot_sync = None       # empuja estado a Railway + trae comandos
-        self._bot_sync_every = 8    # cada 8 ticks (~16s con poll 2s)
+        self._bot_sync_every = 4    # cada 4 ticks (~8s con poll 2s)
         # Símbolos Binance que el bot opera: para ellos el gatillo de TP/SL usa el
         # precio de BINANCE (donde se ejecuta), no Crypto.com, para que no diverjan.
         try:
