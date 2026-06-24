@@ -76,6 +76,25 @@ class BotSync:
                 orders = cli.open_orders()
             except Exception:  # noqa: BLE001
                 pass
+            # Adjuntar niveles SL/TP1/TP2/TP del libro a cada posición (Binance no los
+            # conoce; vienen del setup). TP1=1R, TP2=2R desde el entry del setup.
+            try:
+                tbs = {t["symbol"]: t for t in ex.store.all() if t["status"] == "abierta"}
+                for p in positions:
+                    tr = tbs.get(p["symbol"])
+                    if not tr:
+                        continue
+                    e = tr.get("setup_entry") or tr.get("entry_price")
+                    sl = tr.get("sl")
+                    if e and sl:
+                        R = abs(e - sl)
+                        lng = tr.get("dir") == "long"
+                        p["sl"] = sl
+                        p["tp1"] = round(e + R if lng else e - R, 4)
+                        p["tp2"] = round(e + 2 * R if lng else e - 2 * R, 4)
+                        p["tp"] = tr.get("tp")
+            except Exception:  # noqa: BLE001
+                pass
         return {
             "ts": int(time.time() * 1000),
             "live": ex.live, "active": ex.active, "kill": os.path.exists(KILL_FILE),

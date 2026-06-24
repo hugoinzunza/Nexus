@@ -86,6 +86,7 @@ class BotStore:
                 "qty": rec["qty"],
                 "qty_open": rec["qty"],          # cantidad aún abierta (baja con parciales)
                 "entry_price": rec["entry_price"],
+                "setup_entry": rec.get("setup_entry"),  # entry del setup (para TP1/TP2)
                 "sl": rec.get("sl"),
                 "tp": rec.get("tp"),
                 "risk_usd": rec.get("risk_usd"),

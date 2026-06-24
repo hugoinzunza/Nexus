@@ -226,6 +226,7 @@ class BotExecutor:
             "setup_id": sid, "key": t.get("key"), "symbol": symbol, "pair": t["pair"],
             "dir": t["dir"], "source": t.get("source"), "mode": mode,
             "leverage": leverage, "qty": qty, "entry_price": round(entry_price, 8),
+            "setup_entry": float(t.get("entry") or px),
             "sl": sl, "tp": t.get("tp"), "risk_usd": round(risk_usd, 2),
             "notional": round(px * qty, 2), "fee_rate": float(self.cfg.get("fee_rate", 0.0005)),
             "entry_fee_usd": round(entry_fee, 4), "ts": t.get("ts_created", time.time()),

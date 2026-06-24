@@ -72,6 +72,12 @@ function position(data) {
         <div><span>Apalancamiento</span>${p.leverage ? p.leverage + "x" : "—"}</div>
         <div><span>Liq.</span>${p.liq_price ? fmt(p.liq_price) : "—"}</div>
       </div>
+      <div class="pos-levels">
+        <div class="lvl sl"><span>SL</span>${p.sl ? fmt(p.sl) : "—"}</div>
+        <div class="lvl tp"><span>TP1 (50%)</span>${p.tp1 ? fmt(p.tp1) : "—"}</div>
+        <div class="lvl tp"><span>TP2 (25%)</span>${p.tp2 ? fmt(p.tp2) : "—"}</div>
+        <div class="lvl tp"><span>TP final</span>${p.tp ? fmt(p.tp) : "—"}</div>
+      </div>
       <button class="btn btn-danger sm" onclick="cmd('close','${p.symbol}')">✋ Cerrar posición ahora</button>
     </div>`;
   }).join("");
