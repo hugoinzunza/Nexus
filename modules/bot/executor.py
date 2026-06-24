@@ -332,4 +332,6 @@ class BotExecutor:
         now = time.time()
         day_start = now - (now % 86400)  # 00:00 UTC de hoy
         pnl = self.store.realized_pnl_since(day_start)
-        return pnl <= -(float(self.cfg["base_equity"]) * max_pct / 100.0)
+        # El tope diario es sobre el CAPITAL TOTAL (no la base de sizing por trade).
+        cap_ref = float(self.cfg.get("capital") or self.cfg.get("base_equity") or 1000)
+        return pnl <= -(cap_ref * max_pct / 100.0)

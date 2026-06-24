@@ -27,6 +27,7 @@
       "enabled": true,
       "live": true,
       "base_equity": 450.0,
+      "capital": 1000.0,
       "risk_pct": 0.02,
       "pairs": ["BTCUSDT", "ETHUSDT"],
       "max_leverage": 5,
