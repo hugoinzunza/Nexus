@@ -419,7 +419,26 @@ class SetupStore:
         }
         created = self.record(plan, pair, tf, last_price or entry, now_s, source="profe")
         return {"ok": True, "created": bool(created), "rr": plan["rr"],
-                "status": plan["state"], "sl_pct": round(risk / entry * 100, 2)}
+                "status": plan["state"], "sl_pct": round(risk / entry * 100, 2),
+                "setup": created if created else None}
+
+    def cancel_pending(self, pair: str, direction: str, source: str | None = None) -> int:
+        """Anula los setups PENDIENTES (no activos) del par+dirección (+fuente). Para
+        reemplazar una entrada pendiente por una nueva (p.ej. entrar a precio actual)."""
+        n = 0
+        now_s = int(time.time())
+        with self._lock:
+            for s in self._setups:
+                if (s.get("status") == "pendiente" and s.get("pair") == pair
+                        and s.get("dir") == direction
+                        and (source is None or s.get("source") == source)):
+                    s["status"] = "anulada"
+                    s["ts_closed"] = now_s
+                    s["ts_updated"] = now_s
+                    n += 1
+            if n:
+                self._save()
+        return n
 
     def mark_cdc(self, pair: str, plan: dict, now_s: float) -> bool:
         """Marca cdc_ok=True en el setup ABIERTO de la misma clave: el cambio de

@@ -871,14 +871,35 @@ class TradingModule(NexusModule):
             last = (st.get("ticker") or {}).get("last")
         except Exception:  # noqa: BLE001
             last = None
+        direction = body.get("dir", "long")
+        entry_val = body.get("entry")
+        enter_now = bool(body.get("enter_now"))
+        if enter_now and last:
+            # Entrar a PRECIO ACTUAL: anula el pendiente previo (mismo par/dir/profe)
+            # y usa el precio en vivo como entrada → nace activo y el bot abre ya.
+            self._setups.cancel_pending(pair, direction, source="profe")
+            entry_val = last
         res = self._setups.add_manual(
-            pair, body.get("dir", "long"), body.get("entry"), body.get("sl"),
+            pair, direction, entry_val, body.get("sl"),
             body.get("tp"), tf=body.get("tf", "manual"), last_price=last,
             label=body.get("label", "profe"), scaled=bool(body.get("scaled", False)))
         if not res.get("ok"):
             return self._json_error(400, res.get("error", "no se pudo registrar"))
-        self.context.log(f"setups: entrada MANUAL (profe) registrada {pair} {body.get('dir')} "
-                         f"@ {body.get('entry')} (rr {res['rr']})")
+        # Si nació ACTIVO (precio en zona / enter_now), disparar la apertura del bot
+        # ya mismo (mismo proceso → libro consistente).
+        created = res.get("setup")
+        if created and created.get("status") == "activo" and self._bot_executor:
+            try:
+                self._bot_executor.on_transitions(pair, [{
+                    "type": "activated", "pair": created["pair"], "dir": created["dir"],
+                    "key": created["key"], "ts_created": created["ts_created"],
+                    "entry": created.get("entry"), "sl": created.get("sl"),
+                    "tp": created.get("tp"), "source": created.get("source"),
+                }], last)
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(f"setups: no se pudo disparar el bot para {pair}: {exc}")
+        self.context.log(f"setups: entrada MANUAL (profe) registrada {pair} {direction} "
+                         f"@ {entry_val} (rr {res['rr']}, status {res['status']})")
         return (200, "application/json; charset=utf-8",
                 json.dumps(res, ensure_ascii=False).encode("utf-8"))
 
