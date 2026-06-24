@@ -875,14 +875,15 @@ class TradingModule(NexusModule):
         entry_val = body.get("entry")
         enter_now = bool(body.get("enter_now"))
         if enter_now and last:
-            # Entrar a PRECIO ACTUAL: anula el pendiente previo (mismo par/dir/profe)
-            # y usa el precio en vivo como entrada → nace activo y el bot abre ya.
-            self._setups.cancel_pending(pair, direction, source="profe")
+            # Entrar a PRECIO ACTUAL: anula SOLO el pendiente cercano al precio (no otras
+            # entradas en niveles distintos) y usa el precio en vivo como entrada.
+            self._setups.cancel_pending(pair, direction, source="profe", near_entry=last)
             entry_val = last
         res = self._setups.add_manual(
             pair, direction, entry_val, body.get("sl"),
             body.get("tp"), tf=body.get("tf", "manual"), last_price=last,
-            label=body.get("label", "profe"), scaled=bool(body.get("scaled", False)))
+            label=body.get("label", "profe"), scaled=bool(body.get("scaled", False)),
+            leverage=body.get("leverage"))
         if not res.get("ok"):
             return self._json_error(400, res.get("error", "no se pudo registrar"))
         # Si nació ACTIVO (precio en zona / enter_now), disparar la apertura del bot

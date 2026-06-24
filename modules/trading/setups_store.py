@@ -365,6 +365,7 @@ class SetupStore:
                 "disc_ok": plan.get("disc_ok"),
                 "state_init": plan.get("state", "pendiente"),
                 "scaled": bool(plan.get("scaled", False)),
+                "leverage_override": plan.get("leverage_override"),
                 # Filtro de régimen al momento de generarse (forward-test con/sin filtro).
                 "regime_ok": plan.get("regime_ok"),
                 "regime_vix": plan.get("regime_vix"),
@@ -392,7 +393,7 @@ class SetupStore:
     def add_manual(self, pair: str, direction: str, entry: float, sl: float, tp: float,
                    tf: str = "manual", last_price: float | None = None,
                    now_s: float | None = None, label: str = "profe",
-                   scaled: bool = False) -> dict:
+                   scaled: bool = False, leverage: float | None = None) -> dict:
         """Agrega una entrada MANUAL (del profe) al forward-test. La zona de entrada
         es el precio puntual (límite); se le sigue activación/TP/SL igual que a las
         del indicador. Devuelve {ok, created, rr, status} o {ok: False, error}."""
@@ -416,26 +417,34 @@ class SetupStore:
             "sl": sl, "tp": tp, "rr": round(abs(tp - entry) / risk, 2),
             "tp_label": label, "state": "activo" if in_zone else "pendiente",
             "regime_ok": None, "cdc_status": None, "scaled": scaled,
+            "leverage_override": leverage,
         }
         created = self.record(plan, pair, tf, last_price or entry, now_s, source="profe")
         return {"ok": True, "created": bool(created), "rr": plan["rr"],
                 "status": plan["state"], "sl_pct": round(risk / entry * 100, 2),
                 "setup": created if created else None}
 
-    def cancel_pending(self, pair: str, direction: str, source: str | None = None) -> int:
-        """Anula los setups PENDIENTES (no activos) del par+dirección (+fuente). Para
-        reemplazar una entrada pendiente por una nueva (p.ej. entrar a precio actual)."""
+    def cancel_pending(self, pair: str, direction: str, source: str | None = None,
+                       near_entry: float | None = None, tol: float = 0.005) -> int:
+        """Anula setups PENDIENTES del par+dirección (+fuente). Si `near_entry` se da,
+        anula SOLO los cuya entrada esté a <= `tol` (0.5%) de ese precio — para reemplazar
+        la entrada cercana sin tocar otras pendientes en niveles distintos."""
         n = 0
         now_s = int(time.time())
         with self._lock:
             for s in self._setups:
-                if (s.get("status") == "pendiente" and s.get("pair") == pair
+                if not (s.get("status") == "pendiente" and s.get("pair") == pair
                         and s.get("dir") == direction
                         and (source is None or s.get("source") == source)):
-                    s["status"] = "anulada"
-                    s["ts_closed"] = now_s
-                    s["ts_updated"] = now_s
-                    n += 1
+                    continue
+                if near_entry is not None:
+                    e = s.get("entry") or 0
+                    if not e or abs(e - near_entry) / near_entry > tol:
+                        continue  # entrada en otro nivel → no la tocamos
+                s["status"] = "anulada"
+                s["ts_closed"] = now_s
+                s["ts_updated"] = now_s
+                n += 1
             if n:
                 self._save()
         return n
@@ -533,6 +542,7 @@ class SetupStore:
                         "sl": s.get("sl"), "tp": s.get("tp"),
                         "outcome_price": s.get("outcome_price"),
                         "realized_r": s.get("realized_r"), "remaining": s.get("remaining"),
+                        "leverage_override": s.get("leverage_override"),
                         **ev,   # type ("activated"|"partial"|"closed") y datos del parcial
                     })
                 if s.get("trailing") and s["status"] not in _CLOSED:
