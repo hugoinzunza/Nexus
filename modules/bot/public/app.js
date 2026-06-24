@@ -74,9 +74,9 @@ function position(data) {
       </div>
       <div class="pos-levels">
         <div class="lvl sl"><span>SL</span>${p.sl ? fmt(p.sl) : "—"}</div>
-        <div class="lvl tp"><span>TP1 (50%)</span>${p.tp1 ? fmt(p.tp1) : "—"}</div>
-        <div class="lvl tp"><span>TP2 (25%)</span>${p.tp2 ? fmt(p.tp2) : "—"}</div>
-        <div class="lvl tp"><span>TP final</span>${p.tp ? fmt(p.tp) : "—"}</div>
+        <div class="lvl tp"><span>TP1 (50%) · 1R</span>${p.tp1 ? fmt(p.tp1) : "—"}</div>
+        <div class="lvl tp"><span>TP2 (25%) · 2R</span>${p.tp2 ? fmt(p.tp2) : "—"}</div>
+        <div class="lvl tp"><span>Runner (25%)</span>trailing ↗ (deja correr)</div>
       </div>
       <button class="btn btn-danger sm" onclick="cmd('close','${p.symbol}')">✋ Cerrar posición ahora</button>
     </div>`;
