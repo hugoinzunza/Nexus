@@ -874,7 +874,7 @@ class TradingModule(NexusModule):
         res = self._setups.add_manual(
             pair, body.get("dir", "long"), body.get("entry"), body.get("sl"),
             body.get("tp"), tf=body.get("tf", "manual"), last_price=last,
-            label=body.get("label", "profe"))
+            label=body.get("label", "profe"), scaled=bool(body.get("scaled", False)))
         if not res.get("ok"):
             return self._json_error(400, res.get("error", "no se pudo registrar"))
         self.context.log(f"setups: entrada MANUAL (profe) registrada {pair} {body.get('dir')} "

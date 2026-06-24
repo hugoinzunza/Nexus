@@ -364,6 +364,7 @@ class SetupStore:
                 # Disciplina premium/descuento (OTE) al generarse: para la cuenta selectiva.
                 "disc_ok": plan.get("disc_ok"),
                 "state_init": plan.get("state", "pendiente"),
+                "scaled": bool(plan.get("scaled", False)),
                 # Filtro de régimen al momento de generarse (forward-test con/sin filtro).
                 "regime_ok": plan.get("regime_ok"),
                 "regime_vix": plan.get("regime_vix"),
@@ -390,7 +391,8 @@ class SetupStore:
 
     def add_manual(self, pair: str, direction: str, entry: float, sl: float, tp: float,
                    tf: str = "manual", last_price: float | None = None,
-                   now_s: float | None = None, label: str = "profe") -> dict:
+                   now_s: float | None = None, label: str = "profe",
+                   scaled: bool = False) -> dict:
         """Agrega una entrada MANUAL (del profe) al forward-test. La zona de entrada
         es el precio puntual (límite); se le sigue activación/TP/SL igual que a las
         del indicador. Devuelve {ok, created, rr, status} o {ok: False, error}."""
@@ -413,7 +415,7 @@ class SetupStore:
             "tf": tf, "dir": direction, "entry": entry, "entry_lo": entry, "entry_hi": entry,
             "sl": sl, "tp": tp, "rr": round(abs(tp - entry) / risk, 2),
             "tp_label": label, "state": "activo" if in_zone else "pendiente",
-            "regime_ok": None, "cdc_status": None,
+            "regime_ok": None, "cdc_status": None, "scaled": scaled,
         }
         created = self.record(plan, pair, tf, last_price or entry, now_s, source="profe")
         return {"ok": True, "created": bool(created), "rr": plan["rr"],
@@ -556,7 +558,7 @@ class SetupStore:
         # SIN parciales ni break-even. La idea del forward-test del profe es comparar
         # SU gestión (aguantar a TP/SL, SL ancho) contra la nuestra (SMC escalonada);
         # aplicarle nuestras parciales lo cerraba antes de tiempo en break-even.
-        if s.get("sel_tf") == "manual" or s.get("source") == "profe":
+        if (s.get("sel_tf") == "manual" or s.get("source") == "profe") and not s.get("scaled"):
             return SetupStore._update_simple(s, price, now_s)
 
         # --- Activo: plan de salida ESCALONADA (parciales) + break-even ---
