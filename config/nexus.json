@@ -33,7 +33,7 @@
       "max_leverage": 5,
       "max_positions": 2,
       "max_notional_per_order": 4000.0,
-      "max_daily_loss_pct": 10.0,
+      "max_daily_loss_pct": 15.0,
       "fee_rate": 0.0005,
       "one_position_at_a_time": false
     }
