@@ -144,8 +144,13 @@ class BotExecutor:
             return
         open_trades = [x for x in self.store.all() if x["status"] == "abierta"]
         max_pos = int(self.cfg.get("max_positions", 1))
-        if len(open_trades) >= max_pos:
-            self.log(f"bot: {symbol} saltado ({len(open_trades)}/{max_pos} posiciones abiertas)")
+        # Solo cuentan para el límite las posiciones AÚN EN RIESGO (sin TP1 tomado). Las
+        # que ya tomaron parcial (SL en break-even / trailing) no ocupan cupo: su riesgo
+        # es ~0, así que el bot puede abrir otra en paralelo.
+        at_risk = [x for x in open_trades if not x.get("partials")]
+        if len(at_risk) >= max_pos:
+            self.log(f"bot: {symbol} saltado ({len(at_risk)}/{max_pos} posiciones EN RIESGO; "
+                     f"{len(open_trades)-len(at_risk)} en trailing no cuentan)")
             return
         if any(x["symbol"] == symbol for x in open_trades):
             self.log(f"bot: {symbol} saltado (ya hay posición abierta en {symbol})")
