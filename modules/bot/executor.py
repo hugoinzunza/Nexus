@@ -181,8 +181,11 @@ class BotExecutor:
         risk_usd = base * risk_pct
         max_lev = int(self.cfg.get("max_leverage", 20))
         lev_ovr = t.get("leverage_override")
+        fixed_lev = self.cfg.get("fixed_leverage")
         if lev_ovr:
-            leverage = max(1, min(int(lev_ovr), max_lev))   # leverage fijo del setup
+            leverage = max(1, min(int(lev_ovr), max_lev))           # override del setup
+        elif fixed_lev:
+            leverage = max(1, min(int(fixed_lev), max_lev))         # leverage fijo global
         else:
             leverage = max(1, min(int(round(risk_pct / sl_frac)), max_lev))  # derivado
         margin_ovr = t.get("margin_override")
