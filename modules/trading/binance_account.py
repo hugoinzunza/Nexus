@@ -138,6 +138,7 @@ class BinanceFutures:
             out.append({
                 "symbol": r.get("symbol"),
                 "side": "LONG" if amt > 0 else "SHORT",
+                "position_side": r.get("positionSide", "BOTH"),  # hedge: LONG/SHORT; one-way: BOTH
                 "qty": abs(amt),
                 "entry": float(r.get("entryPrice", 0) or 0),
                 "mark": float(r.get("markPrice", 0) or 0),
@@ -190,25 +191,46 @@ class BinanceFutures:
         return self._request("POST", "/fapi/v1/leverage",
                              {"symbol": symbol, "leverage": int(leverage)}, signed=True)
 
+    def set_position_mode(self, dual: bool) -> dict:
+        """Cambia entre one-way (dual=False) y HEDGE (dual=True). Requiere SIN posiciones
+        abiertas. Devuelve la respuesta (o lanza si ya está en ese modo / hay posiciones)."""
+        return self._request("POST", "/fapi/v1/positionSide/dual",
+                             {"dualSidePosition": "true" if dual else "false"}, signed=True)
+
+    def position_mode(self) -> bool:
+        """True si la cuenta está en modo HEDGE (dualSidePosition)."""
+        r = self._request("GET", "/fapi/v1/positionSide/dual", signed=True)
+        return bool(r.get("dualSidePosition"))
+
     def market_order(self, symbol: str, side: str, qty: float,
-                     client_id: str | None = None, reduce_only: bool = False) -> dict:
-        """Orden a mercado. side: 'BUY'|'SELL'. Devuelve la respuesta cruda."""
+                     client_id: str | None = None, reduce_only: bool = False,
+                     position_side: str | None = None) -> dict:
+        """Orden a mercado. side: 'BUY'|'SELL'. En HEDGE pasar position_side ('LONG'|
+        'SHORT') y NO reduceOnly (el par side+positionSide define abrir/cerrar)."""
         p = {"symbol": symbol, "side": side, "type": "MARKET", "quantity": qty}
-        if reduce_only:
+        if position_side:
+            p["positionSide"] = position_side
+        elif reduce_only:
             p["reduceOnly"] = "true"
         if client_id:
             p["newClientOrderId"] = client_id
         return self._request("POST", "/fapi/v1/order", p, signed=True)
 
     def stop_market(self, symbol: str, side: str, stop_price: float,
-                    qty: float | None = None, client_id: str | None = None) -> dict:
+                    qty: float | None = None, client_id: str | None = None,
+                    position_side: str | None = None) -> dict:
         """Stop a mercado. `side` es el lado de la ORDEN (opuesto a la posición).
-        Si se da `qty` → reduceOnly de esa cantidad; si no → closePosition (toda)."""
+        Si se da `qty` → reduceOnly de esa cantidad; si no → closePosition (toda).
+        En HEDGE pasar position_side y NO reduceOnly."""
         f = self.symbol_filters(symbol)
         p = {"symbol": symbol, "side": side, "type": "STOP_MARKET",
              "stopPrice": round(stop_price, f["price_precision"]),
              "workingType": "MARK_PRICE"}
-        if qty is not None:
+        if position_side:
+            p["positionSide"] = position_side
+            if qty is not None:
+                p["quantity"] = qty
+        elif qty is not None:
             p["quantity"] = qty
             p["reduceOnly"] = "true"
         else:

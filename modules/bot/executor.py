@@ -89,6 +89,10 @@ class BotExecutor:
     def live(self) -> bool:
         return bool(self.cfg.get("live"))
 
+    @property
+    def hedge(self) -> bool:
+        return bool(self.cfg.get("hedge"))
+
     def client(self):
         """Cliente de la subcuenta (lazy). None → ejecutor inerte (sin llaves)."""
         if self._client is not None:
@@ -152,7 +156,12 @@ class BotExecutor:
             self.log(f"bot: {symbol} saltado ({len(at_risk)}/{max_pos} posiciones EN RIESGO; "
                      f"{len(open_trades)-len(at_risk)} en trailing no cuentan)")
             return
-        if any(x["symbol"] == symbol for x in open_trades):
+        # one-way: 1 posición por símbolo. HEDGE: 1 por símbolo+lado (long y short coexisten).
+        if self.hedge:
+            if any(x["symbol"] == symbol and x["dir"] == t["dir"] for x in open_trades):
+                self.log(f"bot: {symbol} saltado (ya hay {t['dir']} abierto en {symbol})")
+                return
+        elif any(x["symbol"] == symbol for x in open_trades):
             self.log(f"bot: {symbol} saltado (ya hay posición abierta en {symbol})")
             return
         if self._daily_loss_hit():
@@ -230,7 +239,9 @@ class BotExecutor:
             except Exception:  # noqa: BLE001
                 pass
             cli.set_leverage(symbol, leverage)
-            resp = cli.market_order(symbol, side, qty, client_id=self._cid(sid, "o"))
+            pos_side = ("LONG" if t["dir"] == "long" else "SHORT") if self.hedge else None
+            resp = cli.market_order(symbol, side, qty, client_id=self._cid(sid, "o"),
+                                    position_side=pos_side)
             entry_price = float(resp.get("avgPrice") or 0) or px
             # NOTA: esta subcuenta NO admite STOP_MARKET por API (-4120 "use Algo Order
             # API"). El SL lo gestiona el BOT: cuando el diario detecta que el precio tocó
@@ -269,7 +280,8 @@ class BotExecutor:
             pass
         if trade["mode"] == "live" and qty > 0:
             side = "SELL" if trade["dir"] == "long" else "BUY"
-            cli.market_order(symbol, side, qty, reduce_only=True,
+            pos_side = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
+            cli.market_order(symbol, side, qty, reduce_only=True, position_side=pos_side,
                              client_id=self._cid(sid, "p" + str(len(trade["partials"]) + 1)))
         fee = px * qty * trade.get("fee_rate", 0.0005)
         self.store.add_partial(sid, t.get("leg", "TP"), qty, round(px, 8),
@@ -283,9 +295,11 @@ class BotExecutor:
             rem = (upd or {}).get("qty_open", 0.0)
             if rem > 0:
                 be_side = "SELL" if trade["dir"] == "long" else "BUY"
+                be_pos = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
                 try:
                     cli.stop_market(symbol, be_side, trade["entry_price"],
-                                    qty=cli.round_qty(symbol, rem), client_id=self._cid(sid, "be"))
+                                    qty=cli.round_qty(symbol, rem), client_id=self._cid(sid, "be"),
+                                    position_side=be_pos)
                     self.log(f"bot: ✅ stop nativo a break-even en {symbol} @ {trade['entry_price']}")
                 except Exception as exc:  # noqa: BLE001
                     self.log(f"bot: stop BE nativo no disponible en {symbol} ({str(exc)[-40:]}); lo gestiona el bot")
@@ -303,8 +317,10 @@ class BotExecutor:
             try:
                 if qty > 0:
                     side = "SELL" if trade["dir"] == "long" else "BUY"
+                    pos_side = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
                     cli.market_order(symbol, side, cli.round_qty(symbol, qty),
-                                     reduce_only=True, client_id=self._cid(sid, "c"))
+                                     reduce_only=True, position_side=pos_side,
+                                     client_id=self._cid(sid, "c"))
             except Exception as exc:  # noqa: BLE001
                 self.log(f"bot: ⚠️ error cerrando {symbol}: {exc}")
             try:

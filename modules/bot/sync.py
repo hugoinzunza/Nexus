@@ -151,30 +151,38 @@ class BotSync:
         if not cli or not self.executor.live:
             return
         from modules.trading.setups_store import load_all
-        open_syms = set()
+        hedge = self.executor.hedge
+        open_keys = set()  # símbolo (one-way) o (símbolo, dir) (hedge) con setup ABIERTO
         for s in load_all():
             if s.get("status") in ("pendiente", "activo"):
-                open_syms.add((s.get("pair") or "").replace("_", "").upper())
+                sym = (s.get("pair") or "").replace("_", "").upper()
+                open_keys.add((sym, s.get("dir")) if hedge else sym)
         pairs = set(self.executor.cfg.get("pairs", []))
         for p in cli.positions():
             sym = p["symbol"]
-            if sym not in pairs or sym in open_syms:
+            if sym not in pairs:
+                continue
+            pdir = "long" if p["side"] == "LONG" else "short"
+            has_setup = ((sym, pdir) in open_keys) if hedge else (sym in open_keys)
+            if has_setup:
                 continue
             side = "SELL" if p["side"] == "LONG" else "BUY"
+            pos_side = p.get("position_side") if hedge else None
             cli.market_order(sym, side, cli.round_qty(sym, p["qty"]), reduce_only=True,
-                             client_id="nxrec" + str(int(time.time()))[-7:])
-            try:
-                cli.cancel_all_orders(sym)
-            except Exception:  # noqa: BLE001
-                pass
+                             position_side=pos_side, client_id="nxrec" + str(int(time.time()))[-7:])
+            if not hedge:
+                try:
+                    cli.cancel_all_orders(sym)
+                except Exception:  # noqa: BLE001
+                    pass
             px = cli.mark_price(sym)
             for t in self.executor.store.all():
-                if t["symbol"] == sym and t["status"] == "abierta":
+                if t["symbol"] == sym and t["dir"] == pdir and t["status"] == "abierta":
                     self.executor.store.close_trade(
                         t["setup_id"], round(px, 8), result_r=None,
                         fee_usd=round(px * p["qty"] * t.get("fee_rate", 0.0005), 4))
                     break
-            self.log(f"bot: 🔧 reconciliación cerró posición huérfana {sym} (sin setup abierto en el diario)")
+            self.log(f"bot: 🔧 reconciliación cerró huérfana {sym} {pdir} (sin setup abierto)")
 
     def confirm_pnls(self) -> None:
         """Reemplaza el P&L estimado de las operaciones cerradas por el REAL de Binance
@@ -249,25 +257,30 @@ class BotSync:
         if not pos:
             self.log(f"bot-sync: no hay posición en {symbol} para cerrar")
             return
-        p = pos[0]
-        side = "SELL" if p["side"] == "LONG" else "BUY"
-        cli.market_order(symbol, side, cli.round_qty(symbol, p["qty"]), reduce_only=True,
-                         client_id="nxman" + str(int(time.time()))[-7:])
-        try:
-            cli.cancel_all_orders(symbol)
-        except Exception:  # noqa: BLE001
-            pass
-        # Reflejar el cierre manual en el libro (si había un trade abierto de ese par).
-        px = p["entry"]
+        hedge = self.executor.hedge
+        px = pos[0]["entry"]
         try:
             px = cli.mark_price(symbol)
         except Exception:  # noqa: BLE001
             pass
-        for t in self.executor.store.all():
-            if t["symbol"] == symbol and t["status"] == "abierta":
-                fee = px * p["qty"] * t.get("fee_rate", 0.0005)
-                self.executor.store.close_trade(t["setup_id"], round(px, 8),
-                                                result_r=None, fee_usd=round(fee, 4))
-                t["note"] = "cierre manual desde la web"
-                break
+        # En hedge puede haber long y short del mismo símbolo: cerramos todos los lados.
+        for p in pos:
+            side = "SELL" if p["side"] == "LONG" else "BUY"
+            pos_side = p.get("position_side") if hedge else None
+            cli.market_order(symbol, side, cli.round_qty(symbol, p["qty"]), reduce_only=True,
+                             position_side=pos_side,
+                             client_id="nxman" + str(int(time.time()))[-6:] + p["side"][0])
+            pdir = "long" if p["side"] == "LONG" else "short"
+            for t in self.executor.store.all():
+                if t["symbol"] == symbol and t["status"] == "abierta" and (not hedge or t["dir"] == pdir):
+                    fee = px * p["qty"] * t.get("fee_rate", 0.0005)
+                    self.executor.store.close_trade(t["setup_id"], round(px, 8),
+                                                    result_r=None, fee_usd=round(fee, 4))
+                    t["note"] = "cierre manual desde la web"
+                    break
+        if not hedge:
+            try:
+                cli.cancel_all_orders(symbol)
+            except Exception:  # noqa: BLE001
+                pass
         self.log(f"bot-sync: ✋ posición {symbol} cerrada manualmente desde la web")
