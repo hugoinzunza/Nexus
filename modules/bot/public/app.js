@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 2) => (n === null || n === undefined || n === "") ? "—" : Number(n).toLocaleString("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
 const pairLabel = (p) => (p || "").replace("_USDT", "").replace("USDT", "") || p;
 const signed = (n) => (n >= 0 ? "+" : "") + fmt(n);
+const dt = (ts) => { if (!ts) return "—"; const d = new Date(ts * 1000); return d.toLocaleString("es-CL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); };
 
 async function cmd(action, symbol) {
   const msg = action === "kill" ? "¿Detener el bot? No abrirá nuevas posiciones."
@@ -114,11 +115,15 @@ function orders(data) {
 
 function trades(data) {
   const ts = data.trades || [];
-  if (!ts.length) { $("rows").innerHTML = `<tr><td colspan="9" class="empty">Sin operaciones todavía. El bot anotará acá cada vez que un setup del Diario se active.</td></tr>`; return; }
+  if (!ts.length) { $("rows").innerHTML = `<tr><td colspan="10" class="empty">Sin operaciones todavía. El bot anotará acá cada vez que un setup del Diario se active.</td></tr>`; return; }
   $("rows").innerHTML = ts.map(t => {
     const pnl = t.pnl_usd;
     const pnlCell = (pnl == null) ? "—" : `<span class="${pnl >= 0 ? "pos" : "neg"}">${signed(pnl)}</span>`;
+    const fechaCell = t.closed_at
+      ? `${dt(t.opened_at)}<br><span style="font-size:11px;opacity:.6">cierre ${dt(t.closed_at)}</span>`
+      : dt(t.opened_at);
     return `<tr>
+      <td>${fechaCell}</td>
       <td>${pairLabel(t.pair || t.symbol)}</td>
       <td><span class="pill ${t.dir}">${t.dir === "long" ? "LONG" : "SHORT"}</span></td>
       <td><span class="pill ${t.mode}">${t.mode}</span></td>
