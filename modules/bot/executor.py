@@ -40,6 +40,7 @@ DEFAULTS = {
     "pairs": ["BTCUSDT", "ETHUSDT"],
     "max_leverage": 20,
     "max_notional_per_order": 6000.0,
+    "min_margin": 0.0,             # piso de margen por orden en USDT (0 = sin piso)
     "max_daily_loss_pct": 5.0,     # -5% del base congela el bot por el día
     "fee_rate": 0.0005,            # taker estimado para comisiones del libro
     "one_position_at_a_time": True,
@@ -207,6 +208,12 @@ class BotExecutor:
             notional = float(margin_ovr) * leverage   # sizing FIJO: margen × leverage
         else:
             notional = risk_usd / sl_frac             # sizing por riesgo (2%)
+        # Piso de MARGEN por orden: si el margen (notional/leverage) queda por debajo del
+        # mínimo configurado, sube el notional para alcanzarlo. OJO: en trades de SL ancho
+        # esto eleva el riesgo por encima del 2% (riesgo ≈ notional × SL%).
+        min_margin = float(self.cfg.get("min_margin") or 0)
+        if min_margin and notional / leverage < min_margin:
+            notional = min_margin * leverage
         cap = float(self.cfg.get("max_notional_per_order") or 0)
         if cap and notional > cap:
             self.log(f"bot: notional {notional:.0f} > tope {cap:.0f} → recorto a tope")
