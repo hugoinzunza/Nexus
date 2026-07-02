@@ -67,6 +67,17 @@ def _serializer():
     return URLSafeTimedSerializer(_secret(), salt="nexux-session")
 
 
+def _state_serializer():
+    # Salt DISTINTO al de la sesión: un token de `state` OAuth NO debe poder usarse
+    # como cookie de sesión (ni viceversa). Antes compartían serializer/salt, así que
+    # cualquiera copiaba el `state` de /auth/google y lo pegaba como sesión (forja).
+    from itsdangerous import URLSafeTimedSerializer
+    return URLSafeTimedSerializer(_secret(), salt="nexux-oauth-state")
+
+
+_STATE_MAX_AGE = 600   # un state OAuth vale 10 min (evita replay a 30 días)
+
+
 def make_cookie(user: dict) -> str:
     return _serializer().dumps({
         "uid": user.get("uid"), "email": user.get("email"),
@@ -81,11 +92,16 @@ def _read_cookie(token: str) -> Optional[dict]:
     try:
         from itsdangerous import BadSignature, SignatureExpired
         try:
-            return _serializer().loads(token, max_age=_MAX_AGE)
+            data = _serializer().loads(token, max_age=_MAX_AGE)
         except (BadSignature, SignatureExpired):
             return None
     except Exception:  # noqa: BLE001
         return None
+    # Solo una SESIÓN de verdad pasa: debe traer email. Así un token de `state`
+    # (u otro payload firmado) nunca se cuela como usuario logueado.
+    if not isinstance(data, dict) or not data.get("email"):
+        return None
+    return data
 
 
 def current_user(request) -> Optional[dict]:
@@ -120,11 +136,20 @@ def login_url(state: str, cb_uri: str) -> str:
 
 
 def sign_state(data: dict) -> str:
-    return _serializer().dumps({"st": data})
+    return _state_serializer().dumps({"st": data})
 
 
 def read_state(token: str) -> Optional[dict]:
-    d = _read_cookie(token)  # mismo serializer/firma; corta vida implícita
+    if not token:
+        return None
+    try:
+        from itsdangerous import BadSignature, SignatureExpired
+        try:
+            d = _state_serializer().loads(token, max_age=_STATE_MAX_AGE)
+        except (BadSignature, SignatureExpired):
+            return None
+    except Exception:  # noqa: BLE001
+        return None
     if isinstance(d, dict) and "st" in d:
         return d["st"]
     return None
