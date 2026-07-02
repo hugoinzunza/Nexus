@@ -140,8 +140,20 @@ def push_public_key():
     return {"key": push.public_key_b64(), "configurado": push.configurado()}
 
 
+def _push_gate(request: Request):
+    """Las alertas hoy contienen datos de Hugo (bot real + su forward-test), así que
+    SOLO admin se suscribe. Antes era público → cualquiera recibía sus alertas de
+    trading real. (Auth inerte/local = single-user → se permite.)"""
+    if auth.enabled() and not auth.is_admin(auth.current_user(request)):
+        return JSONResponse({"error": "solo administradores"}, status_code=403)
+    return None
+
+
 @app.post("/api/push/subscribe")
 async def push_subscribe(request: Request):
+    blocked = _push_gate(request)
+    if blocked is not None:
+        return blocked
     data = await request.json()
     n = push.guardar_suscripcion(data)
     return {"ok": True, "suscripciones": n}
@@ -149,6 +161,9 @@ async def push_subscribe(request: Request):
 
 @app.post("/api/push/unsubscribe")
 async def push_unsubscribe(request: Request):
+    blocked = _push_gate(request)
+    if blocked is not None:
+        return blocked
     data = await request.json()
     n = push.borrar_suscripcion(data.get("endpoint", ""))
     return {"ok": True, "suscripciones": n}

@@ -907,15 +907,18 @@ class TradingModule(NexusModule):
         si está configurado (igual que la ingesta del Diario)."""
         if subpath != "manual_setup":
             return None
+        # manual_setup puede DISPARAR ÓRDENES REALES (enter_now → bot). Nunca debe quedar
+        # abierto: si no hay token configurado, se rechaza (antes: sin token = sin auth).
         token = os.environ.get("NEXUS_INGEST_TOKEN", "").strip()
-        if token:
-            provided = headers.get("x-nexus-token", "")
-            if not provided:
-                auth = headers.get("authorization", "")
-                if auth.lower().startswith("bearer "):
-                    provided = auth[7:]
-            if not hmac.compare_digest(str(provided), str(token)):
-                return self._json_error(401, "token inválido")
+        if not token:
+            return self._json_error(503, "manual_setup deshabilitado (falta NEXUS_INGEST_TOKEN)")
+        provided = headers.get("x-nexus-token", "")
+        if not provided:
+            auth = headers.get("authorization", "")
+            if auth.lower().startswith("bearer "):
+                provided = auth[7:]
+        if not hmac.compare_digest(str(provided), str(token)):
+            return self._json_error(401, "token inválido")
         if not isinstance(body, dict):
             return self._json_error(400, "payload inválido (JSON objeto)")
         # Normaliza el par a un instrumento conocido (BTC / BTCUSDT / BTC_USDT).

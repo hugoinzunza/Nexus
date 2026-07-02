@@ -49,16 +49,17 @@ class BinanceFutures:
 
     def __init__(self, api_key: str | None = None, api_secret: str | None = None,
                  base_url: str = FAPI):
-        self.api_key = (api_key or os.environ.get("BINANCE_TRADE_API_KEY")
-                        or os.environ.get("BINANCE_API_KEY") or "").strip()
-        self.api_secret = (api_secret or os.environ.get("BINANCE_TRADE_API_SECRET")
-                           or os.environ.get("BINANCE_API_SECRET") or "").strip()
+        # SOLO llaves de trading dedicadas (BINANCE_TRADE_*). NUNCA cae a las del
+        # colector/cuenta principal (BINANCE_API_*): eso violaría la regla de la
+        # subcuenta aislada (CLAUDE.md). Mejor fallar que operar la cuenta equivocada.
+        self.api_key = (api_key or os.environ.get("BINANCE_TRADE_API_KEY") or "").strip()
+        self.api_secret = (api_secret or os.environ.get("BINANCE_TRADE_API_SECRET") or "").strip()
         self.base_url = base_url.rstrip("/")
         self._filters_cache: dict = {}
         if not self.api_key or not self.api_secret:
             raise BinanceError(
-                "Faltan credenciales: define BINANCE_TRADE_API_KEY/SECRET "
-                "(o BINANCE_API_KEY/SECRET del colector). Retiros OFF.")
+                "Faltan credenciales de TRADING: define BINANCE_TRADE_API_KEY/SECRET "
+                "(subcuenta dedicada, retiros OFF). No se usan las del colector.")
 
     # ---- plomería HTTP -------------------------------------------------
 

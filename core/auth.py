@@ -27,7 +27,7 @@ from core.store import DEFAULT_EMAIL, DEFAULT_NAME
 
 ADMIN_EMAIL = DEFAULT_EMAIL  # hugoinzunza@gmail.com — tú, CEO/admin
 COOKIE = "nexux_session"
-_MAX_AGE = 60 * 60 * 24 * 30  # 30 días
+_MAX_AGE = 60 * 60 * 24 * 7  # 7 días (antes 30: reduce la ventana de una sesión no revocable)
 
 _AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
