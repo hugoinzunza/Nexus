@@ -136,14 +136,14 @@ class BotModule(NexusModule):
             d = "Long" if t.get("dir") == "long" else "Short"
             if p is None and t.get("status") == "abierta":
                 push.notificar(
-                    f"🟢 BOT abrió {pair} {d}",
+                    f"BOT abrió {pair} {d}",
                     f"{pair} {d} {t.get('leverage')}x · entrada {t.get('entry_price')} · notional {t.get('notional')} USDT.",
                     url="/m/bot/", tag=f"bot-open-{sid}")
             elif p is not None and p.get("status") == "abierta" and t.get("status") == "cerrada":
                 pnl = t.get("pnl_usd") or 0.0
-                emo = "✅" if pnl >= 0 else "❌"
+                res = "ganada" if pnl >= 0 else "perdida"
                 push.notificar(
-                    f"{emo} BOT cerró {pair} {d}",
+                    f"BOT cerró {pair} {d} · {res}",
                     f"{pair} {d} cerró · P&L {pnl:+.2f} USD.",
                     url="/m/bot/", tag=f"bot-close-{sid}")
 

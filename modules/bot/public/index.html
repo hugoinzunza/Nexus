@@ -8,7 +8,7 @@
 </head>
 <body>
   <header class="top">
-    <div class="brand">🤖 NexUX <span class="bot">BOT</span></div>
+    <div class="brand">Nex<span class="bot">UX</span> BOT</div>
     <div class="badges">
       <span id="age" class="age"></span>
       <span id="mode" class="mode dry">…</span>
@@ -17,20 +17,21 @@
 
   <main>
     <nav class="botnav">
-      <a href="/">🏠 Home</a>
-      <a href="/m/trading/">📈 Trading</a>
-      <a href="/m/journal/">📒 Diario</a>
-      <button id="btn-notif" class="navbtn" onclick="activarNotif()">🔔 Activar notificaciones</button>
+      <a href="/">Home</a>
+      <a href="/m/trading/">Trading</a>
+      <a href="/m/journal/">Diario</a>
+      <button id="btn-notif" class="navbtn" onclick="activarNotif()">Activar notificaciones</button>
     </nav>
 
     <p class="lead">Espejo en vivo de la operación <strong>real</strong> en Binance Futuros (subcuenta aislada).
        El Diario sigue registrando el paper aparte, para estudio.</p>
 
-    <div id="kill-banner" class="kill-banner" hidden>🛑 Bot DETENIDO (kill-switch activo) — no abrirá nuevas posiciones.</div>
+    <div id="kill-banner" class="kill-banner" hidden>Bot DETENIDO (kill-switch activo) — no abrirá nuevas posiciones.</div>
+    <div id="watchdog-banner" class="watchdog-banner" hidden></div>
 
     <div class="controls">
-      <button id="btn-kill" class="btn btn-danger" onclick="cmd('kill')">🛑 Parar bot</button>
-      <button id="btn-resume" class="btn btn-ok" onclick="cmd('resume')" hidden>▶️ Reanudar bot</button>
+      <button id="btn-kill" class="btn btn-danger" onclick="cmd('kill')">Parar bot</button>
+      <button id="btn-resume" class="btn btn-ok" onclick="cmd('resume')" hidden>Reanudar bot</button>
     </div>
 
     <section id="cards" class="cards"></section>
@@ -50,10 +51,10 @@
         <thead>
           <tr>
             <th>Fecha</th><th>Par</th><th>Dir</th><th>Modo</th><th>Qty</th>
-            <th>Entrada</th><th>Salida</th><th>Lev</th><th>P&amp;L (USD)</th><th>Estado</th>
+            <th>Entrada</th><th>Salida</th><th>Lev</th><th>Riesgo</th><th>Calidad</th><th>P&amp;L (USD)</th><th>Estado</th>
           </tr>
         </thead>
-        <tbody id="rows"><tr><td colspan="10" class="empty">Cargando…</td></tr></tbody>
+        <tbody id="rows"><tr><td colspan="12" class="empty">Cargando…</td></tr></tbody>
       </table>
     </div>
   </main>

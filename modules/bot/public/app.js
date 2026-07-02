@@ -36,6 +36,25 @@ function header(data) {
   $("btn-resume").hidden = !killed;
 }
 
+function watchdog(data) {
+  const el = $("watchdog-banner");
+  if (!el) return;
+  const positions = data.positions || [];
+  const warns = [];
+  const age = data.source === "vps" ? data.age_seconds : null;
+  if (positions.length && age != null && age > 45) {
+    warns.push(`espejo atrasado ${Math.round(age)}s con posición abierta`);
+  }
+  if (positions.length && data.kill) {
+    warns.push("kill-switch activo mientras hay posición abierta");
+  }
+  if (positions.length && !data.active) {
+    warns.push("bot inactivo mientras hay posición abierta");
+  }
+  el.hidden = !warns.length;
+  el.textContent = warns.length ? "Watchdog: " + warns.join(" · ") : "";
+}
+
 function cards(data) {
   const a = data.account || {}, s = data.summary || {};
   const pnlCls = (s.pnl_usd || 0) >= 0 ? "green" : "red";
@@ -70,6 +89,12 @@ function position(data) {
         <div><span>uPnL</span><b class="${up>=0?'pos':'neg'}">${signed(up)}</b></div>
         <div><span>Notional</span>${p.notional != null ? fmt(p.notional) : "—"}</div>
         <div><span>Margen</span>${p.margin != null ? fmt(p.margin) : "—"}</div>
+        <div><span>Riesgo est.</span>${p.risk_usd_est != null ? fmt(p.risk_usd_est) : "—"}</div>
+        <div><span>Riesgo cuenta</span>${p.risk_pct_account != null ? fmt(p.risk_pct_account, 2) + "%" : "—"}</div>
+        <div><span>Margen libro</span>${p.margin_used != null ? fmt(p.margin_used) : "—"}</div>
+        <div><span>Fees est.</span>${p.fee_est_roundtrip != null ? fmt(p.fee_est_roundtrip, 4) : "—"}</div>
+        <div><span>Calidad</span>${p.quality ? `<span class="pill ${p.quality}" title="${p.quality_reason || ''}">${p.quality}</span>` : "—"}</div>
+        <div><span>SL %</span>${p.sl_pct != null ? fmt(p.sl_pct, 2) + "%" : "—"}</div>
         <div><span>Apalancamiento</span>${p.leverage ? p.leverage + "x" : "—"}</div>
         <div><span>Liq.</span>${p.liq_price ? fmt(p.liq_price) : "—"}</div>
       </div>
@@ -79,7 +104,7 @@ function position(data) {
         <div class="lvl tp"><span>TP2 (25%) · 2R</span>${p.tp2 ? fmt(p.tp2) : "—"}</div>
         <div class="lvl tp"><span>Runner (25%)</span>trailing ↗ (deja correr)</div>
       </div>
-      <button class="btn btn-danger sm" onclick="cmd('close','${p.symbol}')">✋ Cerrar posición ahora</button>
+      <button class="btn btn-danger sm" onclick="cmd('close','${p.symbol}')">Cerrar posición ahora</button>
     </div>`;
   }).join("");
 }
@@ -115,10 +140,11 @@ function orders(data) {
 
 function trades(data) {
   const ts = data.trades || [];
-  if (!ts.length) { $("rows").innerHTML = `<tr><td colspan="10" class="empty">Sin operaciones todavía. El bot anotará acá cada vez que un setup del Diario se active.</td></tr>`; return; }
+  if (!ts.length) { $("rows").innerHTML = `<tr><td colspan="12" class="empty">Sin operaciones todavía. El bot anotará acá cada vez que un setup del Diario se active.</td></tr>`; return; }
   $("rows").innerHTML = ts.map(t => {
     const pnl = t.pnl_usd;
     const pnlCell = (pnl == null) ? "—" : `<span class="${pnl >= 0 ? "pos" : "neg"}">${signed(pnl)}</span>`;
+    const risk = t.risk_usd_est ?? t.risk_usd;
     const fechaCell = t.closed_at
       ? `${dt(t.opened_at)}<br><span style="font-size:11px;opacity:.6">cierre ${dt(t.closed_at)}</span>`
       : dt(t.opened_at);
@@ -131,6 +157,8 @@ function trades(data) {
       <td>${fmt(t.entry_price)}</td>
       <td>${t.exit_price ? fmt(t.exit_price) : "—"}</td>
       <td>${t.leverage ? t.leverage + "x" : "—"}</td>
+      <td>${risk != null ? fmt(risk) : "—"}</td>
+      <td><span class="pill ${t.quality || 'manual'}" title="${t.quality_reason || ''}">${t.quality || "—"}</span></td>
       <td>${pnlCell}</td>
       <td><span class="pill ${t.status}">${t.status}</span></td>
     </tr>`;
@@ -142,8 +170,8 @@ async function activarNotif() {
   try {
     if (!window.NexusPush) { alert("Notificaciones no disponibles en este navegador."); return; }
     await window.NexusPush.activar();
-    alert("✅ Notificaciones activadas. Te llegarán solo las operaciones del bot.");
-    if (b) { b.textContent = "🔔 Notificaciones activas"; b.disabled = true; }
+    alert("Notificaciones activadas. Te llegarán solo las operaciones del bot.");
+    if (b) { b.textContent = "Notificaciones activas"; b.disabled = true; }
   } catch (e) {
     alert("No se pudo activar: " + (e.message || e));
   }
@@ -154,9 +182,9 @@ async function load() {
     const r = await fetch("/m/bot/api/state", { cache: "no-store" });
     if (r.status === 401) { location.href = "/login"; return; }
     const data = await r.json();
-    header(data); cards(data); position(data); watching(data); orders(data); trades(data);
+    header(data); watchdog(data); cards(data); position(data); watching(data); orders(data); trades(data);
   } catch (e) {
-    $("rows").innerHTML = `<tr><td colspan="9" class="empty">No se pudo cargar: ${e}</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="12" class="empty">No se pudo cargar: ${e}</td></tr>`;
   }
 }
 

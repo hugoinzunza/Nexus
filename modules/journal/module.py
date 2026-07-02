@@ -263,10 +263,10 @@ class JournalModule(NexusModule):
             if st in ("ganada", "perdida") and p.get("status") in OPEN:
                 r = s.get("result_r")
                 if st == "ganada":
-                    push.notificar(f"✅ {pair} · ganada", f"{pair} {d} cerró +{r}R con parciales.",
+                    push.notificar(f"{pair} · ganada", f"{pair} {d} cerró +{r}R con parciales.",
                                    url="/m/bot/", tag=f"setup-{k}-cerrada")
                 else:
-                    push.notificar(f"❌ {pair} · perdida", f"{pair} {d} cerró {r}R.",
+                    push.notificar(f"{pair} · perdida", f"{pair} {d} cerró {r}R.",
                                    url="/m/bot/", tag=f"setup-{k}-cerrada")
                 continue
             # 2) Parcial (TP1/TP2 nuevo)
@@ -274,7 +274,7 @@ class JournalModule(NexusModule):
                 legs = s.get("legs_filled") or 0
                 leg = "TP2" if legs >= 2 else "TP1"
                 pct = 50 if legs < 2 else 25
-                push.notificar(f"🎯 {pair} · {leg} alcanzado",
+                push.notificar(f"{pair} · {leg} alcanzado",
                                f"{pair} {d}: toma {pct}% en {leg}. Asegurado +{s.get('realized_r')}R · SL a break-even.",
                                url="/m/bot/", tag=f"setup-{k}-{leg}")
                 continue

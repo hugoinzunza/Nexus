@@ -8,7 +8,7 @@
   }
   function sync(btn) {
     var dark = cur() === "dark";
-    if (btn) btn.textContent = dark ? "☀️" : "🌙";
+    if (btn) btn.textContent = dark ? "Claro" : "Oscuro";
     var m = document.querySelector('meta[name="theme-color"]');
     if (m) m.setAttribute("content", dark ? "#0b0d12" : "#f4f5f8");
   }
