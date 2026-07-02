@@ -44,6 +44,12 @@ DEFAULTS = {
     "max_daily_loss_pct": 5.0,     # -5% del base congela el bot por el día
     "fee_rate": 0.0005,            # taker estimado para comisiones del libro
     "one_position_at_a_time": True,
+    # Filtro de calidad para NUEVAS entradas automáticas del indicador. El Diario
+    # sigue registrando todo; el bot real opera solo A/A+ salvo que se desactive.
+    "quality_filter": True,
+    "quality_min_rr": 5.0,
+    "quality_poi_tfs": ["1h", "4h", "1D"],
+    "quality_require_disc": True,
 }
 
 
@@ -138,12 +144,21 @@ class BotExecutor:
 
     # --- acciones ------------------------------------------------------
     def _open(self, t: dict, ref_price: float) -> None:
+        if t.get("paper_only"):
+            self.log(f"bot: {t.get('pair')} {t.get('dir')} es paper_only "
+                     f"({t.get('strategy_tag') or t.get('source')}) → no abre")
+            return
         symbol = self._symbol(t["pair"])
         if symbol not in self.cfg.get("pairs", []):
             return
         sid = self._setup_id(t)
         if self.store.has_trade(sid):
             return  # idempotencia: ya abrimos (o cerramos) este setup
+        quality = self._quality(t)
+        if not self._quality_allowed(t, quality):
+            self.log(f"bot: {symbol} saltado por calidad {quality['grade']} "
+                     f"(tf={quality['poi_tf']}, rr={quality['rr']}, disc={quality['disc_ok']})")
+            return
         if os.path.exists(KILL_FILE):
             self.log(f"bot: KILL-SWITCH activo → no abre {symbol}")
             return
@@ -234,10 +249,17 @@ class BotExecutor:
         if qty <= 0:
             return
 
+        actual_notional = px * qty
+        margin_used = actual_notional / leverage if leverage else actual_notional
+        risk_usd_est = actual_notional * sl_frac
+        cap_ref = float(self.cfg.get("capital") or self.cfg.get("base_equity") or 0)
+        risk_pct_account = (risk_usd_est / cap_ref * 100.0) if cap_ref > 0 else None
+        fee_est_roundtrip = actual_notional * float(self.cfg.get("fee_rate", 0.0005)) * 2.0
+
         mode = "live" if self.live else "dry"
         entry_price = px
         if mode == "live":
-            margin_needed = (px * qty) / leverage if leverage else px * qty
+            margin_needed = margin_used
             try:
                 avail = cli.balance_usdt().get("available", 0.0)
                 if avail < margin_needed * 1.02:
@@ -262,11 +284,18 @@ class BotExecutor:
             "leverage": leverage, "qty": qty, "entry_price": round(entry_price, 8),
             "setup_entry": float(t.get("entry") or px),
             "sl": sl, "tp": t.get("tp"), "risk_usd": round(risk_usd, 2),
-            "notional": round(px * qty, 2), "fee_rate": float(self.cfg.get("fee_rate", 0.0005)),
+            "risk_usd_est": round(risk_usd_est, 2),
+            "risk_pct_account": round(risk_pct_account, 2) if risk_pct_account is not None else None,
+            "margin_used": round(margin_used, 2),
+            "notional": round(actual_notional, 2), "fee_rate": float(self.cfg.get("fee_rate", 0.0005)),
+            "fee_est_roundtrip": round(fee_est_roundtrip, 4),
             "entry_fee_usd": round(entry_fee, 4), "ts": t.get("ts_created", time.time()),
+            "quality": quality["grade"], "quality_reason": quality["reason"],
+            "poi_tf": quality["poi_tf"], "rr": quality["rr"], "disc_ok": quality["disc_ok"],
+            "sl_pct": round(sl_frac * 100, 3),
         })
         self.log(f"bot[{mode}]: ABRE {side} {symbol} qty={qty} @~{entry_price:.2f} "
-                 f"lev={leverage}x notional≈{px*qty:.0f} SL={sl}")
+                 f"lev={leverage}x notional≈{px*qty:.0f} SL={sl} calidad={quality['grade']}")
 
     def _reduce(self, t: dict, ref_price: float) -> None:
         sid = self._setup_id(t)
@@ -277,7 +306,10 @@ class BotExecutor:
         if frac <= 0:
             return
         symbol = trade["symbol"]
-        qty = trade["qty"] * frac
+        leg = t.get("leg", "TP")
+        if any(p.get("leg") == leg for p in trade.get("partials", [])):
+            return
+        qty = min(trade["qty"] * frac, trade.get("qty_open", trade["qty"]))
         cli = self.client()
         px = ref_price or trade["entry_price"]
         try:
@@ -285,14 +317,17 @@ class BotExecutor:
             qty = cli.round_qty(symbol, qty)
         except Exception:  # noqa: BLE001
             pass
-        if trade["mode"] == "live" and qty > 0:
+        if qty <= 0:
+            return
+        if trade["mode"] == "live":
             side = "SELL" if trade["dir"] == "long" else "BUY"
             pos_side = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
             cli.market_order(symbol, side, qty, reduce_only=True, position_side=pos_side,
                              client_id=self._cid(sid, "p" + str(len(trade["partials"]) + 1)))
         fee = px * qty * trade.get("fee_rate", 0.0005)
-        self.store.add_partial(sid, t.get("leg", "TP"), qty, round(px, 8),
-                               realized_r=t.get("realized_r"), fee_usd=round(fee, 4))
+        if not self.store.add_partial(sid, leg, qty, round(px, 8),
+                                      realized_r=t.get("realized_r"), fee_usd=round(fee, 4)):
+            return
         self.log(f"bot[{trade['mode']}]: PARCIAL {t.get('leg')} {symbol} qty={qty} @~{px:.2f}")
         # Cuando el diario mueve el SL a BREAK-EVEN (tras TP1), intentamos poner un stop
         # NATIVO a la entrada con el remanente. Best-effort: si la subcuenta no admite
@@ -321,17 +356,31 @@ class BotExecutor:
         cli = self.client()
         px = float(t.get("outcome_price") or ref_price or trade["entry_price"])
         if trade["mode"] == "live":
+            if qty > 0:
+                side = "SELL" if trade["dir"] == "long" else "BUY"
+                pos_side = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
+                last_exc = None
+                for intento in range(3):   # reintenta ante fallos transitorios (timeout, -1021)
+                    try:
+                        cli.market_order(symbol, side, cli.round_qty(symbol, qty),
+                                         reduce_only=True, position_side=pos_side,
+                                         client_id=self._cid(sid, "c"))
+                        last_exc = None
+                        break
+                    except Exception as exc:  # noqa: BLE001
+                        last_exc = exc
+                        if intento < 2:
+                            time.sleep(1.5 * (intento + 1))
+                if last_exc is not None:
+                    # CRÍTICO (C1 auditoría): NO marcar cerrado ni cancelar el stop de
+                    # respaldo si el cierre falló → la posición sigue viva. Antes se
+                    # contabilizaba cerrada y se retiraba el stop → quedaba sin protección.
+                    # Se deja el trade ABIERTO para reintentar en el próximo cruce/reconcile.
+                    self.log(f"bot: ❌ FALLÓ cerrar {symbol} tras 3 intentos ({last_exc}); "
+                             f"trade sigue ABIERTO y con su stop; se reintentará")
+                    return
             try:
-                if qty > 0:
-                    side = "SELL" if trade["dir"] == "long" else "BUY"
-                    pos_side = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
-                    cli.market_order(symbol, side, cli.round_qty(symbol, qty),
-                                     reduce_only=True, position_side=pos_side,
-                                     client_id=self._cid(sid, "c"))
-            except Exception as exc:  # noqa: BLE001
-                self.log(f"bot: ⚠️ error cerrando {symbol}: {exc}")
-            try:
-                cli.cancel_all_orders(symbol)  # retira el stop de respaldo
+                cli.cancel_all_orders(symbol)  # cierre OK → recién ahora retira el stop de respaldo
             except Exception:  # noqa: BLE001
                 pass
         fee = px * qty * trade.get("fee_rate", 0.0005)
@@ -360,6 +409,43 @@ class BotExecutor:
             if x["setup_id"] == sid and x["status"] == "abierta":
                 return x
         return None
+
+    def _quality(self, t: dict) -> dict:
+        poi_tf = t.get("poi_tf")
+        try:
+            rr = float(t.get("rr") or 0.0)
+        except (TypeError, ValueError):
+            rr = 0.0
+        disc_ok = t.get("disc_ok")
+        min_rr = float(self.cfg.get("quality_min_rr", 5.0))
+        allowed_tfs = set(self.cfg.get("quality_poi_tfs") or ["1h", "4h", "1D"])
+        require_disc = bool(self.cfg.get("quality_require_disc", True))
+        rr_ok = rr >= min_rr
+        tf_ok = poi_tf in allowed_tfs
+        disc_pass = (disc_ok is True) if require_disc else (disc_ok is not False)
+        if tf_ok and rr_ok and disc_pass:
+            grade = "A+" if poi_tf in ("4h", "1D") else "A"
+            reason = f"{poi_tf} + RR {rr:g} + disciplina OK"
+        else:
+            grade = "B"
+            misses = []
+            if not tf_ok:
+                misses.append(f"tf {poi_tf}")
+            if not rr_ok:
+                misses.append(f"RR {rr:g}<{min_rr:g}")
+            if not disc_pass:
+                misses.append("sin disciplina premium/descuento")
+            reason = ", ".join(misses) or "no cumple filtro de calidad"
+        return {"grade": grade, "reason": reason, "poi_tf": poi_tf, "rr": rr, "disc_ok": disc_ok}
+
+    def _quality_allowed(self, t: dict, quality: dict) -> bool:
+        # Las entradas manuales son decisiones explícitas; no las bloquea el filtro
+        # automático del backtest. Siguen pasando por todos los guardrails de riesgo.
+        if t.get("source") == "profe":
+            return True
+        if not self.cfg.get("quality_filter", True):
+            return True
+        return quality.get("grade") in ("A", "A+")
 
     def _has_open(self) -> bool:
         return any(x["status"] == "abierta" for x in self.store.all())

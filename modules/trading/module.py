@@ -114,6 +114,12 @@ class TradingModule(NexusModule):
         # de planeación y se siguen contra el precio. El Diario los muestra como tabla.
         self.setup_tfs = cfg.get("setup_tfs", ["1h", "4h"])
         self._setups = SetupStore()
+        # Paper BTA: experimento prospectivo, separado del bot real. Por defecto
+        # parte solo en BTC M15 porque ese fue el universo backtesteado.
+        self.bta_paper_enabled = bool(cfg.get("bta_paper_enabled", True))
+        self.bta_paper_pairs = set(cfg.get("bta_paper_pairs", ["BTC_USDT"]))
+        self.bta_paper_tfs = cfg.get("bta_paper_tfs", ["15m"])
+        self.bta_paper_min_rr = float(cfg.get("bta_paper_min_rr", 2.0))
 
         # Estado compartido. Se reemplaza por referencia (atómico bajo el GIL),
         # así las lecturas desde otros hilos siempre ven una foto consistente.
@@ -136,6 +142,8 @@ class TradingModule(NexusModule):
         except Exception:  # noqa: BLE001
             self._bot_price_syms = set()
         self._last_binance_px = {}   # último precio Binance bueno por símbolo (anti-429)
+        self._last_binance_px_ts = {}  # timestamp de ese precio (para no gatillar SL con precio viejo)
+        self._BOT_PX_MAX_STALE = 45.0  # s: sobre esto, el precio Binance se considera viejo
 
     # --- Ciclo de vida -------------------------------------------------
     def start(self) -> None:
@@ -247,11 +255,19 @@ class TradingModule(NexusModule):
                     try:
                         last = binance.last_price(bsym)
                         self._last_binance_px[bsym] = last
+                        self._last_binance_px_ts[bsym] = time.time()
                     except Exception:  # noqa: BLE001
-                        # Binance no respondió (p.ej. 429): usa el ÚLTIMO precio Binance
-                        # bueno antes que caer a Crypto.com (evita reintroducir divergencia).
-                        if bsym in self._last_binance_px:
+                        # Binance no respondió (p.ej. 429). CRÍTICO (C2 auditoría): usar el
+                        # último precio Binance SOLO si es FRESCO. Si está viejo, el SL por
+                        # software gatilla con el precio EN VIVO de Crypto.com (muy cercano)
+                        # en vez de uno congelado que nunca dispararía mientras la posición
+                        # real se desangra.
+                        age = time.time() - self._last_binance_px_ts.get(bsym, 0)
+                        if bsym in self._last_binance_px and age < self._BOT_PX_MAX_STALE:
                             last = self._last_binance_px[bsym]
+                        else:
+                            self.context.log(f"bot: ⚠️ precio Binance de {bsym} viejo "
+                                             f"({age:.0f}s) → gatillo SL con precio Crypto.com en vivo")
                     if st.get("ticker"):
                         st["ticker"]["last"] = last
                 # RISK-OFF: vela anormal (guardia de volatilidad) O evento de alto impacto
@@ -549,6 +565,55 @@ class TradingModule(NexusModule):
                         self._grade_in_background(created)
             except Exception as exc:  # noqa: BLE001
                 self.context.log(f"setups: no se pudo registrar {name} {tf}: {exc}")
+        self._record_bta_paper(name, last)
+
+    def _bta_paper_plan(self, plan: dict) -> dict | None:
+        """Convierte un plan SMC en candidato BTA paper si cumple el núcleo validado:
+        POI tocado/seguido, CDC confirmado y TP hacia liquidez con RR >= 2."""
+        if not plan:
+            return None
+        try:
+            rr = float(plan.get("rr") or 0.0)
+        except (TypeError, ValueError):
+            rr = 0.0
+        if plan.get("cdc_ok") is not True or rr < self.bta_paper_min_rr:
+            return None
+        label = str(plan.get("tp_label") or "")
+        if "Weak" not in label:
+            return None
+        out = dict(plan)
+        out.update({
+            "paper_only": True,
+            "bta_paper": True,
+            "strategy_tag": "bta_cdc_liq",
+            "bta_reason": "POI + CDC confirmado + liquidez RR>=2",
+            "bta_rr_liq": rr,
+            # El backtest BTA fue TP/SL directo; no aplicamos parciales a esta
+            # cuenta sombra para que la comparación sea limpia.
+            "scaled": False,
+        })
+        return out
+
+    def _record_bta_paper(self, name: str, last: float) -> None:
+        if not self.bta_paper_enabled or name not in self.bta_paper_pairs:
+            return
+        for tf in self.bta_paper_tfs:
+            try:
+                analysis = self._smc_analysis(name, tf)
+                plan = self._bta_paper_plan(analysis.get("tpsl"))
+                if not plan:
+                    continue
+                created = self._setups.record(plan, name, tf, last, time.time(),
+                                              source="bta_paper")
+                if created:
+                    self.context.log(f"bta-paper: {name} {tf} {plan['dir']} "
+                                     f"RR={plan.get('rr')} {plan.get('tp_label')}")
+                    continue
+                # Si la misma idea ya vive como setup normal, la etiquetamos para
+                # que entre al corte estadístico BTA sin duplicar riesgo ni registro.
+                self._setups.mark_bta_paper(name, plan, time.time())
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(f"bta-paper: no se pudo registrar {name} {tf}: {exc}")
 
     def _grade_in_background(self, setup: dict) -> None:
         """Lanza la graduación de Claude en un hilo (la llamada a la API no debe
