@@ -32,7 +32,7 @@
     const v = d.verdict;
     $("layers-verdict").className = "verdict " + (v.any_robust ? "ok" : "warn");
     $("layers-verdict").innerHTML =
-      `<div class="v-tag">${v.any_robust ? "✅ Alguna capa logra edge robusto" : "⚠️ Ninguna capa logra edge robusto"}</div>
+      `<div class="v-tag">${v.any_robust ? "Alguna capa logra edge robusto" : "Ninguna capa logra edge robusto"}</div>
        <p>${v.text}</p>`;
     const baseOOS = d.base.out_sample.expectancy_R;
     table($("layers"),
@@ -41,7 +41,7 @@
         const delta = +(x.out_sample.expectancy_R - baseOOS).toFixed(3);
         return [x.name, x.layer, rc(x.in_sample.expectancy_R), rc(x.out_sample.expectancy_R),
           pfc(x.out_sample.profit_factor), sampleCell(x.out_sample.trades), rc(x.wfo.expectancy_R),
-          rc(delta), x.robust ? '<span class="up">✅ sí</span>' : (x.confident ? '<span class="muted">no</span>' : '<span class="down">⚠ pocos</span>')];
+          rc(delta), x.robust ? '<span class="up">sí</span>' : (x.confident ? '<span class="muted">no</span>' : '<span class="down">⚠ pocos</span>')];
       }),
       d.variants.map((x, i) => (x.robust ? i : -1)).filter((i) => i >= 0));
   }
@@ -52,7 +52,7 @@
     const v = d.verdict;
     $("verdict").className = "verdict " + (v.any_robust ? "ok" : "warn");
     $("verdict").innerHTML =
-      `<div class="v-tag">${v.any_robust ? "✅ Hay edge robusto fuera de muestra" : "⚠️ Sin edge robusto fuera de muestra"}</div>
+      `<div class="v-tag">${v.any_robust ? "Hay edge robusto fuera de muestra" : "Sin edge robusto fuera de muestra"}</div>
        <p>${v.text}</p>`;
 
     const c = d.costs;
@@ -106,7 +106,7 @@
   }
 
   function badge(s) {
-    if (s.robust) return '<span class="up">✅ sí</span>';
+    if (s.robust) return '<span class="up">sí</span>';
     if (!s.confident) return '<span class="down">⚠ pocos</span>';
     return '<span class="muted">no</span>';
   }

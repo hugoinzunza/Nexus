@@ -1127,10 +1127,10 @@
       const ro = d.risk_off;
       if (ro && ro.spike) {
         rb.hidden = false;
-        rb.textContent = `⚠️ Volatilidad anormal (vela ${ro.ratio}× lo normal) · pausa de entradas y SL a break-even`;
+        rb.textContent = `Volatilidad anormal (vela ${ro.ratio}× lo normal) · pausa de entradas y SL a break-even`;
       } else if (ro && ro.event) {
         rb.hidden = false;
-        rb.textContent = `📅 ${ro.event.title} inminente · pausa de entradas y SL a break-even`;
+        rb.textContent = `${ro.event.title} inminente · pausa de entradas y SL a break-even`;
       } else {
         rb.hidden = true;
       }
@@ -1147,7 +1147,7 @@
     if (!evs.length) { bar.hidden = true; return; }
     const fmtIn = (m) => m < 0 ? "ahora" : m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`;
     bar.hidden = false;
-    bar.innerHTML = '<span class="ev-label">📅 Alto impacto:</span> ' + evs.map((e) =>
+    bar.innerHTML = '<span class="ev-label">Alto impacto:</span> ' + evs.map((e) =>
       `<span class="ev-item${e.in_min >= 0 && e.in_min <= 60 ? " soon" : ""}">${e.title} <b>en ${fmtIn(e.in_min)}</b></span>`).join("");
   }
 
@@ -1369,16 +1369,16 @@
     const btn = document.getElementById("alert-btn");
     if (!btn) return;
     btn.addEventListener("click", async () => {
-      if (!window.NexusPush) { btn.textContent = "🔕 Push no soportado"; return; }
+      if (!window.NexusPush) { btn.textContent = "Push no soportado"; return; }
       btn.disabled = true;
       btn.textContent = "Activando…";
       try {
         await window.NexusPush.activar();
         btn.classList.add("on");
-        btn.textContent = "🔔 Alertas activas";
+        btn.textContent = "Alertas activas";
       } catch (err) {
-        btn.textContent = "🔕 " + (err && err.message ? err.message : "no se pudo activar");
-        setTimeout(() => { btn.textContent = "🔔 Alertas SMC"; btn.disabled = false; }, 4000);
+        btn.textContent = "" + (err && err.message ? err.message : "no se pudo activar");
+        setTimeout(() => { btn.textContent = "Alertas SMC"; btn.disabled = false; }, 4000);
         return;
       }
       btn.disabled = false;

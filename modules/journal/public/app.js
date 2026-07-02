@@ -251,7 +251,7 @@
   const fmtP = (v) => (v == null ? "—" : v.toLocaleString("es", { maximumFractionDigits: 2 }));
   const STATUS_LABEL = {
     pendiente: "⏳ en vigilancia", activo: "● activo",
-    ganada: "✅ ganada", perdida: "❌ perdida", anulada: "⊘ anulada",
+    ganada: "ganada", perdida: "perdida", anulada: "⊘ anulada",
   };
   const STATUS_CLS = { ganada: "up", perdida: "down", activo: "up", anulada: "muted", pendiente: "" };
 
@@ -377,7 +377,7 @@
           // Plan de parciales + break-even (la estrategia del bot).
           const risk = Math.abs(x.entry - x.sl);
           const legs = x.legs_filled || 0;
-          const legsTxt = (legs >= 2 ? "TP1✓ TP2✓" : legs >= 1 ? "TP1✓ TP2·" : "—") + (x.sl_be ? " · BE" : "") + (x.trailing ? " · 🏃trail" : "");
+          const legsTxt = (legs >= 2 ? "TP1✓ TP2✓" : legs >= 1 ? "TP1✓ TP2·" : "—") + (x.sl_be ? " · BE" : "") + (x.trailing ? " · trail" : "");
           let nextLabel, nextPx;
           if (x.trailing && x.sl_cur != null) { nextLabel = "Trailing stop"; nextPx = x.sl_cur; }
           else if (legs < 1) { nextLabel = "TP1 1R"; nextPx = long ? x.entry + risk : x.entry - risk; }
@@ -419,10 +419,15 @@
         blocks.push(`<div class="v-title">CDC · ¿la confirmación por cambio de carácter ayuda? (hipótesis 1h)</div>` +
           `<p class="bt-note">${line("✓ con CDC (apareció en el POI)", cc)}<br>${line("✕ sin CDC (nunca apareció)", sc)}</p>`);
       }
+      const bta = s.bta_paper;
+      if (bta && bta.cerradas) {
+        blocks.push(`<div class="v-title">BTA paper · POI + CDC + liquidez RR≥2</div>` +
+          `<p class="bt-note">${line("BTA confirmado", bta)}</p>`);
+      }
       const pr = s.profe, ind = s.indicador;
       if (pr && ind && (pr.cerradas || ind.cerradas)) {
         blocks.push(`<div class="v-title">Fuente · entradas del profe (manual) vs indicador (auto)</div>` +
-          `<p class="bt-note">${line("👤 profe", pr)}<br>${line("🤖 indicador", ind)}</p>`);
+          `<p class="bt-note">${line("profe", pr)}<br>${line("indicador", ind)}</p>`);
       }
       if (blocks.length) {
         $("setups-regime").hidden = false;
@@ -447,7 +452,9 @@
       const SETUP_HEADERS = ["Fecha", "Par", "TF", "Dir", "Entrada", "SL", "TP", "R:R", "Régimen", "CDC", "Estado", "Resultado", "P&L"];
       const setupRow = (x, pnlField = "paper_pnl") => [
         dt(x.ts_created),
-        x.pair.replace("_", "/") + (x.source === "profe" ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">profe</span>' : ""),
+        x.pair.replace("_", "/")
+          + (x.source === "profe" ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">profe</span>' : "")
+          + ((x.source === "bta_paper" || x.bta_paper) ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">BTA</span>' : ""),
         x.poi_tf,
         `<span class="${x.dir === "long" ? "up" : "down"}">${x.dir === "long" ? "Largo" : "Corto"}</span>`,
         fmtP(x.entry_lo) + "–" + fmtP(x.entry_hi),

@@ -248,7 +248,7 @@
 <nav>
   <div class="nav-in">
     <a class="brand" href="#"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg><span class="wm">Nex<span class="ux">UX</span></span></a>
-    <div class="nav-links"><a class="btn soft" href="/m/trading/">Trading</a><a class="btn soft" href="/m/journal/">Diario</a><button class="btn soft" id="theme-toggle" type="button" title="Tema claro/oscuro" aria-label="Cambiar tema">🌙</button><a class="btn soft" id="nav-auth" href="/login">Entrar</a></div>
+    <div class="nav-links"><a class="btn soft" href="/m/trading/">Trading</a><a class="btn soft" href="/m/journal/">Diario</a><button class="btn soft" id="theme-toggle" type="button" title="Tema claro/oscuro" aria-label="Cambiar tema">Oscuro</button><a class="btn soft" id="nav-auth" href="/login">Entrar</a></div>
   </div>
 </nav>
 
@@ -278,7 +278,7 @@
 
 <section class="wrap radar-wrap">
   <div class="card radar">
-    <div class="hd"><span class="ic">🎯</span><h3>Radar SMC · multi-activo</h3>
+    <div class="hd"><h3>Radar SMC · multi-activo</h3>
       <span class="hint">estado del mercado en vivo · contexto, no asesoría</span></div>
     <div id="board" class="board-grid"><div class="brow-empty">cargando radar…</div></div>
     <div class="radar-foot">Los <b>planes accionables</b> (entrada, stop, objetivo) viven en tu panel.
@@ -288,7 +288,7 @@
 
 <section class="wrap macro-wrap">
   <div class="card macro-card">
-    <div class="hd"><span class="ic">🌡️</span><h3>Termómetro macro</h3>
+    <div class="hd"><h3>Termómetro macro</h3>
       <span class="hint">risk-off ↔ risk-on · síntesis en vivo · contexto, no asesoría</span></div>
     <div id="macro" class="macro"><div class="brow-empty">calculando…</div></div>
   </div>
@@ -296,11 +296,11 @@
 
 <section class="wrap feat-row">
   <div class="card gauge-card">
-    <div class="hd"><span class="ic">🧭</span><h3>Sentimiento</h3><span class="hint">Fear &amp; Greed</span></div>
+    <div class="hd"><h3>Sentimiento</h3><span class="hint">Fear &amp; Greed</span></div>
     <div id="fng-gauge" class="gauge"><div class="brow-empty">—</div></div>
   </div>
   <div class="card heat-card">
-    <div class="hd"><span class="ic">🔥</span><h3>Mapa de calor · 24h</h3><span class="hint">risk-on / risk-off · toca para abrir Trading</span></div>
+    <div class="hd"><h3>Mapa de calor · 24h</h3><span class="hint">risk-on / risk-off · toca para abrir Trading</span></div>
     <div id="heatmap" class="heat-grid"><div class="brow-empty">cargando…</div></div>
   </div>
 </section>
@@ -316,7 +316,7 @@
       </div>
 
       <div class="card">
-        <div class="hd"><span class="ic">📊</span><h3>Indicadores</h3><span class="hint">toca para el detalle</span></div>
+        <div class="hd"><h3>Indicadores</h3><span class="hint">toca para el detalle</span></div>
         <div class="ind">
           <div class="icell" onclick="openInd('fng')"><div class="k">Fear &amp; Greed</div><div class="v am" id="i-fng">—</div><div class="d am" id="i-fng-d">—</div><span class="spark" data-k="fng"></span></div>
           <div class="icell" onclick="openInd('dom')"><div class="k">Dominancia BTC</div><div class="v" id="i-dom">—</div><div class="d" id="i-dom-d">—</div><span class="spark" data-k="dom"></span></div>
@@ -328,12 +328,12 @@
       </div>
 
       <div class="card">
-        <div class="hd"><span class="ic">🔥</span><h3>Mercado</h3><span class="hint" id="mk-live">24h<span class="livedot" id="mk-dot"></span></span></div>
+        <div class="hd"><h3>Mercado</h3><span class="hint" id="mk-live">24h<span class="livedot" id="mk-dot"></span></span></div>
         <div id="market"><div class="row"><span class="pair" style="color:var(--muted)">cargando…</span></div></div>
       </div>
 
       <div class="card news">
-        <div class="hd"><span class="ic">📰</span><h3>Noticias fundamentales</h3></div>
+        <div class="hd"><h3>Noticias fundamentales</h3></div>
         <div id="news"><div class="it"><div><div class="ti" style="color:var(--muted)">cargando…</div></div></div></div>
       </div>
 
@@ -341,18 +341,18 @@
 
     <div class="col">
       <div class="card join" id="join">
-        <div class="hd"><span class="ic">💼</span><h3>Tu diario, aquí</h3></div>
+        <div class="hd"><h3>Tu diario, aquí</h3></div>
         <p>Conecta tu Binance en solo lectura y verás tu PnL, win rate y posiciones en este mismo lugar.</p>
         <div class="miniyou">
           <div class="c"><div class="k">PnL hoy</div><div class="v up">+$182</div></div>
           <div class="c"><div class="k">Win rate</div><div class="v">58%</div></div>
-          <div class="ov">🔒</div>
+          <div class="ov">Bloqueado</div>
         </div>
         <a class="btn primary lg" href="/login" style="margin-top:16px;width:100%;justify-content:center">Entrar con Google</a>
       </div>
 
       <div class="card">
-        <div class="hd"><span class="ic">📅</span><h3>Fechas clave</h3></div>
+        <div class="hd"><h3>Fechas clave</h3></div>
         <div id="calendar"><div class="ev"><div class="b"><div class="t" style="color:var(--muted)">cargando…</div></div></div></div>
       </div>
 
@@ -361,7 +361,7 @@
 </main>
 
 <footer>
-  <div class="disc">⚠️ NexUX es una herramienta informativa de solo lectura. No es asesoría financiera ni recomendación de inversión. El trading conlleva riesgo; las decisiones son tuyas.<br><b>En vivo:</b> indicadores, mercado y calendario económico son datos reales. El panel personal (diario, PnL) es de ejemplo hasta que conectes tu exchange.<br><a href="/legal" style="color:inherit;text-decoration:underline">Términos y Privacidad</a></div>
+  <div class="disc">NexUX es una herramienta informativa de solo lectura. No es asesoría financiera ni recomendación de inversión. El trading conlleva riesgo; las decisiones son tuyas.<br><b>En vivo:</b> indicadores, mercado y calendario económico son datos reales. El panel personal (diario, PnL) es de ejemplo hasta que conectes tu exchange.<br><a href="/legal" style="color:inherit;text-decoration:underline">Términos y Privacidad</a></div>
   <a class="brand" href="#" style="justify-content:center"><svg class="iso" viewBox="0 0 100 100"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg><span class="wm">Nex<span class="ux">UX</span></span></a>
   <div style="margin-top:8px">nexux.cl</div>
 </footer>
@@ -524,7 +524,7 @@ async function loadMe(){
       links.insertBefore(a, nav); }
     // NexUX BOT (operación real): acceso SOLO admin, tras login. No aparece público.
     if(d.user.role==='admin' && links && !document.getElementById('nav-bot')){
-      const b=document.createElement('a'); b.id='nav-bot'; b.className='btn soft'; b.href='/m/bot/'; b.textContent='🤖 BOT';
+      const b=document.createElement('a'); b.id='nav-bot'; b.className='btn soft'; b.href='/m/bot/'; b.textContent='BOT';
       links.insertBefore(b, nav); }
     // Los CTA de "Entrar con Google" del cuerpo → llevan a su diario.
     document.querySelectorAll('a[href="/login"]').forEach(a=>{ a.href='/m/journal/'; a.textContent='Ir a mi diario →'; });
@@ -547,7 +547,7 @@ async function loadBoard(){
       else if(row.setup==='watching'){ state='⏳ Setup en vigilancia'; hasSetup=true; }
       else if(row.poi){ state='POI '+row.poi.tf+' '+(row.poi.discount?'descuento':'premium')+
         (row.poi.dist_pct!=null?' · '+(row.poi.dist_pct>0?'+':'')+row.poi.dist_pct+'%':''); }
-      const lock=hasSetup?'<a class="lockcta" href="/login">🔒 ver plan</a>':'';
+      const lock=hasSetup?'<a class="lockcta" href="/login">ver plan</a>':'';
       return `<div class="btile ${hasSetup?'has-setup':''}">
         <div class="bt-top"><span class="bsym">${row.symbol}</span><span class="bpx">${fmtPx(row.price)}</span><span class="bchg ${chgcls}">${chg}</span></div>
         <div class="bbias ${biascls}">${bias}</div>
@@ -560,7 +560,7 @@ async function loadBoard(){
 (function(){ var b=document.getElementById('theme-toggle'); if(!b) return;
   var mc=document.querySelector('meta[name="theme-color"]');
   function sync(){ var d=document.documentElement.getAttribute('data-theme')==='dark';
-    b.textContent=d?'☀️':'🌙'; if(mc) mc.setAttribute('content', d?'#0b0d12':'#f4f5f8'); }
+    b.textContent=d?'Claro':'Oscuro'; if(mc) mc.setAttribute('content', d?'#0b0d12':'#f4f5f8'); }
   sync();
   b.addEventListener('click', function(){
     var d=document.documentElement.getAttribute('data-theme')==='dark';
