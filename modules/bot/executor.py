@@ -41,6 +41,7 @@ DEFAULTS = {
     "max_leverage": 20,
     "max_notional_per_order": 6000.0,
     "min_margin": 0.0,             # piso de margen por orden en USDT (0 = sin piso)
+    "max_risk_pct": 0.0,           # tope de riesgo por orden (fracción del base; 0 = sin tope)
     "max_daily_loss_pct": 5.0,     # -5% del base congela el bot por el día
     "fee_rate": 0.0005,            # taker estimado para comisiones del libro
     "one_position_at_a_time": True,
@@ -229,6 +230,17 @@ class BotExecutor:
         min_margin = float(self.cfg.get("min_margin") or 0)
         if min_margin and notional / leverage < min_margin:
             notional = min_margin * leverage
+        # Cap de RIESGO por orden: aunque el piso de margen o un margin_override suban el
+        # notional, ningún trade puede arriesgar más de max_risk_pct del base (riesgo ≈
+        # notional × SL%). Protege el extremo (SL muy ancho / override grande). Tiene la
+        # última palabra por seguridad: puede bajar el notional por debajo del piso.
+        max_risk_pct = float(self.cfg.get("max_risk_pct") or 0)
+        if max_risk_pct:
+            max_risk_usd = base * max_risk_pct
+            if notional * sl_frac > max_risk_usd:
+                self.log(f"bot: riesgo {notional*sl_frac:.0f} > tope {max_risk_usd:.0f} "
+                         f"({max_risk_pct*100:.0f}% del base) → recorto notional")
+                notional = max_risk_usd / sl_frac
         cap = float(self.cfg.get("max_notional_per_order") or 0)
         if cap and notional > cap:
             self.log(f"bot: notional {notional:.0f} > tope {cap:.0f} → recorto a tope")

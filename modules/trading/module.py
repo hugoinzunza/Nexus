@@ -556,6 +556,12 @@ class TradingModule(NexusModule):
                             "key": created["key"], "ts_created": created["ts_created"],
                             "entry": created.get("entry"), "sl": created.get("sl"),
                             "tp": created.get("tp"), "source": created.get("source"),
+                            # A4: sin estos, el bot dimensionaba con defaults (filtro de calidad
+                            # ciego + overrides del profe ignorados → tamaño equivocado).
+                            "poi_tf": created.get("poi_tf"), "rr": created.get("rr"),
+                            "disc_ok": created.get("disc_ok"),
+                            "margin_override": created.get("margin_override"),
+                            "leverage_override": created.get("leverage_override"),
                         }], last)
                     if plan.get("cdc_ok"):
                         self._setups.mark_cdc(name, plan, time.time())
@@ -964,6 +970,11 @@ class TradingModule(NexusModule):
                     "key": created["key"], "ts_created": created["ts_created"],
                     "entry": created.get("entry"), "sl": created.get("sl"),
                     "tp": created.get("tp"), "source": created.get("source"),
+                    # A4: pasar overrides/calidad para que enter_now dimensione como se pidió.
+                    "poi_tf": created.get("poi_tf"), "rr": created.get("rr"),
+                    "disc_ok": created.get("disc_ok"),
+                    "margin_override": created.get("margin_override"),
+                    "leverage_override": created.get("leverage_override"),
                 }], last)
             except Exception as exc:  # noqa: BLE001
                 self.context.log(f"setups: no se pudo disparar el bot para {pair}: {exc}")

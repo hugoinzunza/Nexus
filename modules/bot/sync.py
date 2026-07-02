@@ -79,11 +79,23 @@ class BotSync:
             # Adjuntar niveles SL/TP1/TP2/TP del libro a cada posición (Binance no los
             # conoce; vienen del setup). TP1=1R, TP2=2R desde el entry del setup.
             try:
-                tbs = {t["symbol"]: t for t in ex.store.all() if t["status"] == "abierta"}
+                open_trades = [t for t in ex.store.all() if t["status"] == "abierta"]
+                by_symbol_side = {
+                    (t["symbol"], "LONG" if t.get("dir") == "long" else "SHORT"): t
+                    for t in open_trades
+                }
+                by_symbol = {t["symbol"]: t for t in open_trades}
                 for p in positions:
-                    tr = tbs.get(p["symbol"])
+                    tr = by_symbol_side.get((p["symbol"], p.get("side"))) or by_symbol.get(p["symbol"])
                     if not tr:
                         continue
+                    p["risk_usd_est"] = tr.get("risk_usd_est")
+                    p["risk_pct_account"] = tr.get("risk_pct_account")
+                    p["margin_used"] = tr.get("margin_used")
+                    p["fee_est_roundtrip"] = tr.get("fee_est_roundtrip")
+                    p["quality"] = tr.get("quality")
+                    p["quality_reason"] = tr.get("quality_reason")
+                    p["sl_pct"] = tr.get("sl_pct")
                     e = tr.get("setup_entry") or tr.get("entry_price")
                     sl = tr.get("sl")
                     if e and sl:
@@ -144,17 +156,23 @@ class BotSync:
 
     # --- reconciliación (red de seguridad) -----------------------------
     def reconcile(self) -> None:
-        """Cierra posiciones REALES de pares del bot que ya no tienen un setup ABIERTO
-        en el diario (huérfanas): el setup cerró pero la posición quedó viva (p.ej. por
-        divergencia de feed o un cierre que no se reflejó). Backup del cierre normal."""
+        """Detecta posiciones REALES sin setup ACTIVO en el diario.
+
+        Por defecto NO cierra nada: una desincronización del store no debe liquidar
+        trades operativos. El cierre automático solo corre si la config activa
+        `auto_close_orphans=true`; el cierre normal sigue viniendo de la transición
+        `closed` del setup o de un comando manual explícito.
+        """
         cli = self.executor.client()
         if not cli or not self.executor.live:
             return
         from modules.trading.setups_store import load_all
         hedge = self.executor.hedge
-        open_keys = set()  # símbolo (one-way) o (símbolo, dir) (hedge) con setup ABIERTO
+        open_keys = set()  # símbolo (one-way) o (símbolo, dir) (hedge) con setup ACTIVO
         for s in load_all():
-            if s.get("status") in ("pendiente", "activo"):
+            # Una posición real solo queda justificada por un setup ya activado. Un
+            # setup pendiente es una orden mental en espera, no una posición abierta.
+            if s.get("status") == "activo":
                 sym = (s.get("pair") or "").replace("_", "").upper()
                 open_keys.add((sym, s.get("dir")) if hedge else sym)
         pairs = set(self.executor.cfg.get("pairs", []))
@@ -165,6 +183,10 @@ class BotSync:
             pdir = "long" if p["side"] == "LONG" else "short"
             has_setup = ((sym, pdir) in open_keys) if hedge else (sym in open_keys)
             if has_setup:
+                continue
+            if not self.executor.cfg.get("auto_close_orphans", False):
+                self.log(f"bot: ⚠️ posición {sym} {pdir} sin setup activo; NO se cierra "
+                         "(auto_close_orphans=false)")
                 continue
             side = "SELL" if p["side"] == "LONG" else "BUY"
             pos_side = p.get("position_side") if hedge else None
@@ -193,6 +215,8 @@ class BotSync:
         for t in self.executor.store.all():
             if t["status"] != "cerrada" or t.get("pnl_confirmed"):
                 continue
+            if t.get("mode") != "live":
+                continue  # A6: no confirmar dry contra income real (0) → pisaba el P&L simulado
             start = int(t.get("opened_at", 0)) * 1000
             end = (int(t.get("closed_at", 0)) + 5) * 1000 if t.get("closed_at") else None
             if not start:

@@ -36,8 +36,13 @@
       "max_positions": 2,
       "max_notional_per_order": 4000.0,
       "min_margin": 250.0,
+      "max_risk_pct": 0.08,
       "max_daily_loss_pct": 15.0,
       "fee_rate": 0.0005,
+      "quality_filter": true,
+      "quality_min_rr": 5.0,
+      "quality_poi_tfs": ["1h", "4h", "1D"],
+      "quality_require_disc": true,
       "one_position_at_a_time": false
     }
   }
