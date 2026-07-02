@@ -53,6 +53,9 @@ IS_FRAC = 0.70                         # 70% in-sample / 30% out-of-sample (por 
 # hoy). be_after = cuántos legs deben llenarse antes de mover el SL a break-even.
 SCALE_VARIANTS = {
     "actual":        {"legs": [("far", 1.0)], "be_after": 99},
+    # real_vivo = LA GESTIÓN QUE CORRE EN VIVO (setups_store): TP1 1R/50%, TP2 2R/25%, y
+    # el runner (25%) con TRAILING a 1R (no TP fijo). Antes NO se backtesteaba tal cual.
+    "real_vivo":     {"legs": [(1.0, 0.5), (2.0, 0.25)], "be_after": 1, "trail_r": 1.0},
     "tu_idea":       {"legs": [(1.0, 0.5), (2.0, 0.25), ("far", 0.25)], "be_after": 1},
     "runner_agres":  {"legs": [(1.0, 0.5), (3.0, 0.25), ("far", 0.25)], "be_after": 1},
     "be_tardio":     {"legs": [(1.0, 0.5), (2.0, 0.25), ("far", 0.25)], "be_after": 2},
@@ -111,7 +114,7 @@ def _simulate(setup, sel, i, max_fwd):
     return ("abierto" if activated else "anulada"), None, end - 1, act_idx
 
 
-def _simulate_scaled(setup, sel, act_idx, end, legs, be_after):
+def _simulate_scaled(setup, sel, act_idx, end, legs, be_after, trail_r=None):
     """R final de un setup YA ACTIVADO con salida escalonada + break-even.
 
     `act_idx` = barra donde se activó; `end` = límite de la ventana. Camina las barras
@@ -138,6 +141,8 @@ def _simulate_scaled(setup, sel, act_idx, end, legs, be_after):
         targets.append([pr, R, frac, False])      # [precio, R, fracción, tomado]
     targets.sort(key=lambda x: x[1])               # del más cercano al más lejano
     remaining, realized, sl_cur, taken = 1.0, 0.0, sl, 0
+    n_fixed = len(targets)
+    best = entry                                   # mejor precio a favor (para el trailing)
     for j in range(act_idx, end):
         h, l = sel[j]["h"], sel[j]["l"]
         # Stop primero (conservador). En break-even el SL = entrada → aporta 0R.
@@ -157,6 +162,17 @@ def _simulate_scaled(setup, sel, act_idx, end, legs, be_after):
                     sl_cur = entry          # SL a break-even
                 if remaining <= 1e-9:
                     return round(realized, 4)
+        # Trailing del RUNNER (gestión viva real): tras llenar TODOS los legs fijos, el
+        # último tramo NO va a un TP fijo — su stop sigue al mejor precio a trail_r de
+        # distancia, nunca peor que break-even. Se actualiza al FINAL de la barra
+        # (conservador: el stop de esta barra ya se evaluó con el valor previo).
+        if trail_r is not None and taken >= n_fixed and remaining > 1e-9:
+            if long:
+                best = max(best, h)
+                sl_cur = max(sl_cur, entry, best - trail_r * risk)
+            else:
+                best = min(best, l)
+                sl_cur = min(sl_cur, entry, best + trail_r * risk)
     # Ventana agotada con remanente abierto: lo cierro a mercado (último cierre).
     last = sel[end - 1]["c"]
     last_r = (last - entry) / risk if long else (entry - last) / risk
@@ -205,7 +221,7 @@ def _run_pass(symbol, sel_tf, htf_series, htf_ts):
         if status in ("ganada", "perdida") and act_idx is not None:
             end = min(len(sel), i + 1 + MAX_FWD.get(sel_tf, 200))
             rec["scaled"] = {name: _simulate_scaled(setup, sel, act_idx, end,
-                                                    v["legs"], v["be_after"])
+                                                    v["legs"], v["be_after"], v.get("trail_r"))
                              for name, v in SCALE_VARIANTS.items()}
         trades.append(rec)
     return trades

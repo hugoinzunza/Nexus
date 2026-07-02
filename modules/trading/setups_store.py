@@ -111,6 +111,8 @@ def summarize(setups: list) -> dict:
     # Comparativa por FUENTE: entradas del profe (manuales) vs las del indicador.
     out["profe"] = _perf([s for s in closed if s.get("source") == "profe"])
     out["indicador"] = _perf([s for s in closed if s.get("source") in (None, "indicador")])
+    out["bta_paper"] = _perf([s for s in closed if s.get("source") == "bta_paper"
+                              or s.get("bta_paper") is True])
     return out
 
 
@@ -140,10 +142,11 @@ def _cost_fraction(won: bool, override=None) -> float:
     return PAPER_MAKER_FEE + exit_cost
 
 
-# Cuenta SELECTIVA = la config ÓPTIMA del laboratorio (validada IS/OOS): zona POI de
-# timeframe ALTO (4h/1D) + disciplina premium/descuento (OTE) + R:R ≥ 5. Es el edge
-# más fuerte (avgR ~0,92, win 85%, PF 7,3). La cuenta completa registra todo en
-# paralelo, para comparar calidad vs cantidad y tomar decisiones a futuro.
+# Cuenta SELECTIVA = HIPÓTESIS en validación (no un edge probado): el subgrupo que mejor
+# se veía en el laboratorio — zona POI de timeframe ALTO (4h/1D) + disciplina premium/
+# descuento (OTE) + R:R ≥ 5. OJO: son filtros elegidos MIRANDO los resultados (posible
+# sobreajuste); su muestra en vivo es minúscula. La cuenta completa registra todo en
+# paralelo, para comparar calidad vs cantidad — la decisión se toma con muestra suficiente.
 SELECTIVE_POI_TFS = ("4h", "1D")
 SELECTIVE_MIN_RR = 5.0
 
@@ -323,7 +326,10 @@ class SetupStore:
         comparar después el desempeño de cada fuente. Devuelve True si creó uno."""
         if not plan:
             return False
+        paper_only = bool(plan.get("paper_only"))
         k = _key(pair, plan)
+        if paper_only:
+            k = f"{k}:{source}"
         cooldown_s = _REENTRY_COOLDOWN_BARS * _TF_HOURS.get(plan["tf"], 1.0) * 3600
         new_lo, new_hi = plan.get("entry_lo"), plan.get("entry_hi")
         with self._lock:
@@ -334,6 +340,8 @@ class SetupStore:
                 # RIESGO sobre un mismo SL (caso ETH: dos long a ~1770, zonas casi idénticas
                 # [1757,1782] vs [1758,1783], keys distintas por $1). Una sola posición por zona.
                 if (s["status"] in _OPEN and s["pair"] == pair and s["dir"] == plan["dir"]
+                        and bool(s.get("paper_only")) == paper_only
+                        and (not paper_only or s.get("source") == source)
                         and _zones_overlap(new_lo, new_hi, s.get("entry_lo"), s.get("entry_hi"))):
                     return False
                 if s["key"] != k:
@@ -349,6 +357,12 @@ class SetupStore:
             s_new = {
                 "key": k,
                 "source": source,
+                "paper_only": paper_only,
+                "strategy_tag": plan.get("strategy_tag"),
+                "bta_paper": bool(plan.get("bta_paper", False)),
+                "bta_reason": plan.get("bta_reason"),
+                "bta_confirmed_at": (int(now_s) if plan.get("bta_paper") else None),
+                "bta_rr_liq": plan.get("bta_rr_liq"),
                 "ts_created": int(now_s),
                 "pair": pair,
                 "sel_tf": sel_tf,
@@ -377,6 +391,7 @@ class SetupStore:
                            if plan.get("cdc_status") is not None else None),
                 "cdc_status_init": plan.get("cdc_status"),
                 "cdc_tf": plan.get("cdc_tf"),
+                "cdc_t": plan.get("cdc_t"),
                 "ts_cdc": None,
                 "status": "activo" if active else "pendiente",
                 "activated": active,
@@ -468,6 +483,25 @@ class SetupStore:
                 self._save()
         return changed
 
+    def mark_bta_paper(self, pair: str, plan: dict, now_s: float) -> bool:
+        """Marca un setup normal abierto como candidato BTA paper. Se usa cuando la
+        misma idea ya existe en el forward-test regular y no queremos duplicarla."""
+        k = _key(pair, plan)
+        changed = False
+        with self._lock:
+            for s in self._setups:
+                if s["key"] == k and s["status"] in _OPEN and s.get("bta_paper") is not True:
+                    s["bta_paper"] = True
+                    s["strategy_tag"] = "bta_cdc_liq"
+                    s["bta_reason"] = "POI + CDC confirmado + liquidez RR>=2"
+                    s["bta_confirmed_at"] = int(now_s)
+                    s["bta_rr_liq"] = plan.get("rr")
+                    s["ts_updated"] = int(now_s)
+                    changed = True
+            if changed:
+                self._save()
+        return changed
+
     def attach_grade(self, key: str, ts_created: int, data: dict) -> bool:
         """Adjunta el GRADO de Claude (modo sombra) al setup identificado por
         key+ts_created. Se captura AL CREARSE y NO se actualiza después (registro
@@ -537,6 +571,10 @@ class SetupStore:
                         "prev": prev, "status": s["status"], "pair": s["pair"],
                         "dir": s["dir"], "source": s.get("source", "indicador"),
                         "poi_tf": s.get("poi_tf"), "rr": s.get("rr"),
+                        "disc_ok": s.get("disc_ok"),
+                        "paper_only": s.get("paper_only"),
+                        "strategy_tag": s.get("strategy_tag"),
+                        "bta_paper": s.get("bta_paper"),
                         "result_r": s.get("result_r"), "key": s["key"],
                         # Enriquecido para el ejecutor del bot espejo (NexUX BOT):
                         # identidad única (key+ts_created) y precios para dimensionar/cerrar.
@@ -590,7 +628,8 @@ class SetupStore:
         # SIN parciales ni break-even. La idea del forward-test del profe es comparar
         # SU gestión (aguantar a TP/SL, SL ancho) contra la nuestra (SMC escalonada);
         # aplicarle nuestras parciales lo cerraba antes de tiempo en break-even.
-        if (s.get("sel_tf") == "manual" or s.get("source") == "profe") and not s.get("scaled"):
+        if (s.get("sel_tf") == "manual" or s.get("source") == "profe"
+                or s.get("paper_only")) and not s.get("scaled"):
             return SetupStore._update_simple(s, price, now_s)
 
         # --- Activo: plan de salida ESCALONADA (parciales) + break-even ---
