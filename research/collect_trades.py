@@ -23,7 +23,7 @@ import os
 import sys
 import time
 
-ROOT = "/Users/hugh/Nexus"          # repo principal (klines en data/, gitignored)
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo principal
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 

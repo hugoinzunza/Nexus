@@ -208,5 +208,5 @@ los números de arriba dicen que los análogos no la confirman ni la niegan con 
   `research/analog_current.json`.
 - `research/data_macro/btc_daily_full.json` — caché del histórico.
 
-**Cómo correrlo:** `/Users/hugh/Nexus/.venv/bin/python research/analog_current.py`
+**Cómo correrlo:** `/Users/hugh/crisol/nexux/.venv/bin/python research/analog_current.py`
 (usa el venv con numpy/stumpy instalados).

@@ -89,7 +89,17 @@ class BotStore:
                 "setup_entry": rec.get("setup_entry"),  # entry del setup (para TP1/TP2)
                 "sl": rec.get("sl"),
                 "tp": rec.get("tp"),
+                "poi_tf": rec.get("poi_tf"),
+                "rr": rec.get("rr"),
+                "disc_ok": rec.get("disc_ok"),
+                "quality": rec.get("quality"),
+                "quality_reason": rec.get("quality_reason"),
+                "sl_pct": rec.get("sl_pct"),
                 "risk_usd": rec.get("risk_usd"),
+                "risk_usd_est": rec.get("risk_usd_est"),
+                "risk_pct_account": rec.get("risk_pct_account"),
+                "margin_used": rec.get("margin_used"),
+                "fee_est_roundtrip": rec.get("fee_est_roundtrip"),
                 "notional": rec.get("notional"),
                 "fee_rate": rec.get("fee_rate", 0.0005),
                 "fees_usd": rec.get("entry_fee_usd", 0.0),
@@ -108,10 +118,19 @@ class BotStore:
 
     def add_partial(self, setup_id: str, leg: str, qty: float, price: float,
                     realized_r=None, fee_usd: float = 0.0) -> bool:
-        """Anota un cierre PARCIAL (TP1/TP2): reduce qty_open y suma comisión."""
+        """Anota un cierre PARCIAL (TP1/TP2): reduce qty_open y suma comisión.
+
+        Idempotente por `leg`: si Binance/API/poller reintenta el mismo parcial, el
+        libro no descuenta dos veces el remanente ni duplica comisiones estimadas.
+        """
         with self._lock:
             t = self.get_open(setup_id)
             if not t:
+                return False
+            if any(p.get("leg") == leg for p in t.get("partials", [])):
+                return False
+            qty = round(min(max(float(qty or 0.0), 0.0), float(t.get("qty_open") or 0.0)), 8)
+            if qty <= 0:
                 return False
             t["partials"].append({
                 "leg": leg, "qty": qty, "price": price,

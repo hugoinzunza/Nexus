@@ -181,4 +181,4 @@ intradía no dan ninguna inclinación accionable.**
   actual de BTC.
 - `research/analogos_intradia_2026-06-12.md` — este informe.
 
-**Cómo correrlo:** `/Users/hugh/Nexus/.venv/bin/python research/analog_intraday.py` (~10 min).
+**Cómo correrlo:** `/Users/hugh/crisol/nexux/.venv/bin/python research/analog_intraday.py` (~10 min).

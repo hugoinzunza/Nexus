@@ -6,7 +6,7 @@ necesita pantalla: Nexux queda escuchando en la red y lo abres desde el iPhone,
 el iPad o el MacBook.
 
 > El plist está en [`com.hugo.nexus.plist`](com.hugo.nexus.plist). Si clonaste
-> Nexux en una carpeta distinta a `/Users/hugh/Nexus`, edita las rutas adentro
+> Nexux en una carpeta distinta a `/Users/hugh/crisol/nexux`, edita las rutas adentro
 > antes de instalarlo.
 
 ## Requisitos previos

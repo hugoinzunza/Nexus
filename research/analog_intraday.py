@@ -17,7 +17,7 @@ DISCIPLINA ANTI-DATA-MINING (clave en intradía, donde probamos muchas combinaci
     "significativos" se esperarían por puro azar.
   - Tamaño efectivo ≈ barras_de_prueba / horizonte (los forward solapan).
 
-Uso:  /Users/hugh/Nexus/.venv/bin/python research/analog_intraday.py
+Uso:  .venv/bin/python research/analog_intraday.py
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from analog_engine import _zwindows, find_analogs   # noqa: E402
 
-DATA = "/Users/hugh/Nexus/data"
+DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
 SCALES = ["1h", "15m"]
 L_GRID = [16, 24, 48]

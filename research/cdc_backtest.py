@@ -38,7 +38,7 @@ from modules.trading import smc, engine            # noqa: E402
 from modules.trading.strategies import detect_pois  # noqa: E402
 from modules.trading.backtest import metrics        # noqa: E402
 
-DATA_DIR = "/Users/hugh/Nexus/data"   # caché de klines (gitignored, repo principal)
+DATA_DIR = os.path.join(WT, "data")   # caché de klines (gitignored, repo principal)
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cdc_results.json")
 
 PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT"]

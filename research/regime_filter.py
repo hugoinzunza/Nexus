@@ -151,7 +151,7 @@ def regime_gate(sel_candles, now_ms: int | None = None,
 if __name__ == "__main__":
     # Demo: VIX actual y ejemplo de gate con velas BTC 1h.
     print("VIX ahora:", vix_now())
-    p = os.path.join("/Users/hugh/Nexus/data", "klines_BTCUSDT_1h.json")
+    p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "klines_BTCUSDT_1h.json")
     if os.path.isfile(p):
         with open(p, "r", encoding="utf-8") as fh:
             c = json.load(fh)

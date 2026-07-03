@@ -13,13 +13,13 @@
     <!-- AJUSTA las rutas si clonaste Nexus en otra carpeta. -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/hugh/Nexus/.venv/bin/python</string>
+        <string>/Users/hugh/crisol/nexux/.venv/bin/python</string>
         <string>-m</string>
         <string>modules.trading.refresh_klines</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/hugh/Nexus</string>
+    <string>/Users/hugh/crisol/nexux</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -42,8 +42,8 @@
 
     <!-- Logs del refresco. -->
     <key>StandardOutPath</key>
-    <string>/Users/hugh/Nexus/logs/klines.out.log</string>
+    <string>/Users/hugh/crisol/nexux/logs/klines.out.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/hugh/Nexus/logs/klines.err.log</string>
+    <string>/Users/hugh/crisol/nexux/logs/klines.err.log</string>
 </dict>
 </plist>

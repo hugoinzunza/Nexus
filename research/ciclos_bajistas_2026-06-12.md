@@ -164,4 +164,4 @@ anteriores a esta altura del calendario** — confirma el diagnóstico de drawdo
   trayectorias normalizadas y overlay ASCII → `research/bear_cycles.json`.
 - `research/ciclos_bajistas_2026-06-12.md` — este informe.
 
-**Cómo correrlo:** `/Users/hugh/Nexus/.venv/bin/python research/bear_cycles.py`
+**Cómo correrlo:** `/Users/hugh/crisol/nexux/.venv/bin/python research/bear_cycles.py`

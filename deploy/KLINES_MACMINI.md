@@ -17,7 +17,7 @@ infla el repo (cada push reescribe el JSON completo, git no lo diffea).
 ## Probar a mano
 
 ```bash
-cd /Users/hugh/Nexus
+cd /Users/hugh/crisol/nexux
 .venv/bin/python -m modules.trading.refresh_klines --no-push   # actualiza y commitea local
 .venv/bin/python -m modules.trading.refresh_klines             # + push a Railway
 # opciones:
@@ -38,10 +38,10 @@ ssh -T git@github.com                            # debe autenticar sin pedir nad
 Luego:
 
 ```bash
-cp /Users/hugh/Nexus/deploy/com.hugo.nexus-klines.plist ~/Library/LaunchAgents/
+cp /Users/hugh/crisol/nexux/deploy/com.hugo.nexus-klines.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.hugo.nexus-klines.plist
 launchctl start com.hugo.nexus-klines            # corrida inmediata de prueba
-tail -f /Users/hugh/Nexus/logs/klines.out.log    # ver el resultado
+tail -f /Users/hugh/crisol/nexux/logs/klines.out.log    # ver el resultado
 ```
 
 Para desinstalar: `launchctl unload ~/Library/LaunchAgents/com.hugo.nexus-klines.plist`.
