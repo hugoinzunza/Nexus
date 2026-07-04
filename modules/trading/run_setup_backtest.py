@@ -377,6 +377,16 @@ def main():
         print("Sin trades; ¿faltan los klines en data/? Genera con el backtest normal.")
         return
 
+    # RESEARCH: volcado POR-TRADE (pair, tf, dir, rr, t, r, scaled…) a data/ (gitignored)
+    # para auditorías OOS/walk-forward fuera de este script. No afecta al servicio.
+    dump_path = os.path.join(DATA_DIR, "setup_backtest_trades.json")
+    try:
+        with open(dump_path, "w", encoding="utf-8") as fh:
+            json.dump(all_trades, fh)
+        print(f"[research] {len(all_trades)} trades volcados en {dump_path}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[research] no se pudo volcar el detalle: {exc}")
+
     # Split temporal in-sample / out-of-sample por fecha de registro.
     times = sorted(t["t"] for t in all_trades)
     split = times[0] + IS_FRAC * (times[-1] - times[0])
