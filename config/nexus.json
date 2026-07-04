@@ -25,7 +25,7 @@
     },
     "bot": {
       "enabled": true,
-      "live": true,
+      "live": false,
       "base_equity": 450.0,
       "capital": 1000.0,
       "risk_pct": 0.02,
