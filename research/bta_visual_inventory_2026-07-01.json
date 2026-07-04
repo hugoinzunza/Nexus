@@ -1,0 +1,313 @@
+{
+  "meta": {
+    "created": "2026-07-01",
+    "symbol": "BTCUSDT.P",
+    "timeframe": "15m",
+    "source": "TradingView chart layout Bitcoin Traders Academy, local screenshots",
+    "screenshots_dir": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30",
+    "contact_sheet": "/Users/hugh/crisol/nexux/research/tradingview_bta_contact_sheet_2026-07-01.jpg",
+    "status": "provisional_until_chart_clean_renavigation"
+  },
+  "confidence_scale": {
+    "high": "Visible labels/zones and measured follow-through are consistent.",
+    "medium": "Useful visual evidence, but needs clean re-navigation or exact sequence confirmation.",
+    "low": "Non-conclusive, repeated, or not independent evidence."
+  },
+  "captures": [
+    {
+      "id": "2026-06-17_blue_range_premium_discount",
+      "file": "2026-06-17_blue_range_premium_discount.jpg",
+      "confidence": "high",
+      "visual_role": "range_map_distribution",
+      "visible_labels": [
+        "Premium POI X Confirmación",
+        "counter POI",
+        "Discount POI",
+        "Discount POI x confirmación"
+      ],
+      "visible_objects": [
+        "blue_reaction_bands",
+        "green_check",
+        "operational_high_low",
+        "grey_decision_zones"
+      ],
+      "bta_reading": "Complete premium/discount range map with premium, counter and discount zones. The POI is evaluated with confirmation/reaction, not as an isolated touch.",
+      "measured_case": {
+        "data_source": "futures_recent",
+        "range_high": 67255.4,
+        "range_low": 60193.0,
+        "range_pct": 11.73,
+        "move_24h_up_pct": 0.92,
+        "move_24h_down_pct": -5.44,
+        "move_72h_up_pct": 0.92,
+        "move_72h_down_pct": -5.44
+      },
+      "nexux_mapping": {
+        "required_objects": ["RangeMap", "Zone", "CharacterLevel", "ReferenceLevel"],
+        "zone_kinds": ["premium_poi", "counter_poi", "discount_poi"],
+        "required_states": ["pending", "confirmed", "target_hit"],
+        "gap": "Nexux does not persist simultaneous zone states inside one range."
+      },
+      "next_validation": "Revisit after chart cleanup to capture exact CDC and zone prices."
+    },
+    {
+      "id": "2026-06-24_discount_poi_confirmacion",
+      "file": "2026-06-24_discount_poi_confirmacion.jpg",
+      "confidence": "high",
+      "visual_role": "discount_confirmation_sequence",
+      "visible_labels": [
+        "Discount POI x confirmación",
+        "Alto Referencial (Resistencia)",
+        "Strong High (Nivel De Resistencia)"
+      ],
+      "visible_objects": [
+        "grey_decision_zones",
+        "operational_low",
+        "stacked_reference_levels"
+      ],
+      "bta_reading": "Discount POI acts as confirmation/reaction point inside a bearish sequence. Strong High and Alto Referencial organize invalidation or resistance.",
+      "measured_case": {
+        "data_source": "futures_recent",
+        "range_high": 66419.2,
+        "range_low": 57758.6,
+        "range_pct": 14.99,
+        "move_24h_up_pct": 2.38,
+        "move_24h_down_pct": -4.07,
+        "move_72h_up_pct": 2.38,
+        "move_72h_down_pct": -4.07
+      },
+      "nexux_mapping": {
+        "required_objects": ["CharacterLevel", "Zone", "ReferenceLevel"],
+        "zone_kinds": ["discount_poi", "reference", "strong_high"],
+        "required_states": ["tapped", "confirmed", "failed"],
+        "gap": "Nexux lacks a distinction between ordinary Discount POI and Discount POI x confirmación."
+      },
+      "next_validation": "Confirm exact CDC/reaction candles on clean chart."
+    },
+    {
+      "id": "2026-06-11_premium_discount_check",
+      "file": "2026-06-11_premium_discount_check.jpg",
+      "confidence": "high",
+      "visual_role": "poi_cdc_reaction_check",
+      "visible_labels": [
+        "Premium POI",
+        "Discount POI",
+        "CDC"
+      ],
+      "visible_objects": [
+        "green_checks",
+        "blue_reaction_bands",
+        "orange_leg",
+        "cyan_pivots"
+      ],
+      "bta_reading": "Teaching sequence: swing, CDC, POI, displacement and check. The check appears to mark a zone state transition.",
+      "measured_case": {
+        "data_source": "futures_recent",
+        "range_high": 67255.4,
+        "range_low": 60363.0,
+        "range_pct": 11.42,
+        "move_24h_up_pct": 2.49,
+        "move_24h_down_pct": -0.77,
+        "move_72h_up_pct": 3.09,
+        "move_72h_down_pct": -0.77
+      },
+      "nexux_mapping": {
+        "required_objects": ["Zone", "CharacterLevel", "SwingLeg"],
+        "zone_kinds": ["premium_poi", "discount_poi"],
+        "required_states": ["confirmed"],
+        "gap": "Nexux calculates CDC but does not persist a visible validation mark/check as zone state."
+      },
+      "next_validation": "Capture more examples of green checks to separate valid reaction from later annotation."
+    },
+    {
+      "id": "2026-05-27_drop_to_orange_target",
+      "file": "2026-05-27_drop_to_orange_target.jpg",
+      "confidence": "medium_high",
+      "visual_role": "bearish_continuation_to_target_zone",
+      "visible_labels": [
+        "Premium POI",
+        "Discount"
+      ],
+      "visible_objects": [
+        "orange_target_box",
+        "cyan_intermediate_zone",
+        "blue_reaction_band",
+        "operational_high_low"
+      ],
+      "bta_reading": "Bearish continuation after structure loss. The orange box appears to be a target/arrival zone, not an entry zone.",
+      "measured_case": {
+        "data_source": "futures_recent",
+        "range_high": 78180.0,
+        "range_low": 65359.1,
+        "range_pct": 19.62,
+        "move_24h_up_pct": 0.17,
+        "move_24h_down_pct": -3.6,
+        "move_72h_up_pct": 0.17,
+        "move_72h_down_pct": -3.76
+      },
+      "nexux_mapping": {
+        "required_objects": ["TargetZone", "Zone", "CharacterLevel"],
+        "zone_kinds": ["target", "retest_continuation"],
+        "required_states": ["failed", "retest_continuation", "target_hit"],
+        "gap": "Nexux lacks an explicit visual target box / arrival-zone object."
+      },
+      "next_validation": "Confirm whether orange box is manual target, range projection, or indicator object."
+    },
+    {
+      "id": "2026-05-15_discount_cdc_zones",
+      "file": "2026-05-15_discount_cdc_zones.jpg",
+      "confidence": "medium_high",
+      "visual_role": "cdc_failure_and_retest_continuation",
+      "visible_labels": [
+        "Discount POI",
+        "CDC"
+      ],
+      "visible_objects": [
+        "cyan_intermediate_zones",
+        "operational_high_low",
+        "bearish_displacement"
+      ],
+      "bta_reading": "Although the zone starts as Discount POI, the visible read becomes bearish after CDC loss; cyan zones act as retest/continuation references.",
+      "measured_case": {
+        "data_source": "futures_recent",
+        "range_high": 82460.5,
+        "range_low": 76014.2,
+        "range_pct": 8.48,
+        "move_24h_up_pct": 0.47,
+        "move_24h_down_pct": -1.97,
+        "move_72h_up_pct": 0.47,
+        "move_72h_down_pct": -3.97
+      },
+      "nexux_mapping": {
+        "required_objects": ["CharacterLevel", "Zone", "ReferenceLevel"],
+        "zone_kinds": ["discount_poi", "intermediate_liquidity", "retest_continuation"],
+        "required_states": ["broken", "failed", "retest_continuation"],
+        "gap": "Automatic HTF POI can conflict with visible M15 bearish context; Nexux needs hierarchy rules."
+      },
+      "next_validation": "Manual review required because prototype found a nearby long HTF candidate."
+    },
+    {
+      "id": "2025-11-05_zigzag_structure",
+      "file": "2025-11-05_zigzag_structure.jpg",
+      "confidence": "medium",
+      "visual_role": "swing_leg_structure",
+      "visible_labels": [
+        "0",
+        "1"
+      ],
+      "visible_objects": [
+        "purple_zigzag",
+        "cyan_pivots",
+        "leg_arrows",
+        "red_measurement_lines"
+      ],
+      "bta_reading": "Explicit leg/swing layer. Useful to decide whether a POI aligns with active structure.",
+      "measured_case": {
+        "data_source": "spot_cache",
+        "range_high": 111250.01,
+        "range_low": 98944.36,
+        "range_pct": 12.44,
+        "move_24h_up_pct": 2.6,
+        "move_24h_down_pct": -0.69,
+        "move_72h_up_pct": 2.6,
+        "move_72h_down_pct": -2.57
+      },
+      "nexux_mapping": {
+        "required_objects": ["SwingLeg"],
+        "zone_kinds": [],
+        "required_states": ["forming", "completed", "invalidated"],
+        "gap": "Nexux has pivots but not connected active swing legs with direction/invalidation."
+      },
+      "warning": "2025-04-16, 2025-08-01 and 2025-11-05 screenshots look visually identical or near-identical in the contact sheet; this is not independent historical evidence.",
+      "next_validation": "Re-navigate 2025 dates on clean chart and recapture independent scenes."
+    },
+    {
+      "id": "2026-01-15_level_cluster",
+      "file": "2026-01-15_level_cluster.jpg",
+      "confidence": "low_medium",
+      "visual_role": "reference_level_cluster",
+      "visible_labels": [],
+      "visible_objects": [
+        "stacked_reference_levels",
+        "price_axis_alert_cluster"
+      ],
+      "bta_reading": "Looks like reference/alert cluster rather than complete POI sequence.",
+      "measured_case": null,
+      "nexux_mapping": {
+        "required_objects": ["ReferenceLevel"],
+        "zone_kinds": ["intermediate_liquidity", "reference"],
+        "required_states": [],
+        "gap": "Not enough visual evidence to classify levels."
+      },
+      "next_validation": "Re-navigate around January 2026 and capture context before/after levels."
+    },
+    {
+      "id": "2025-08-01_structure_context",
+      "file": "2025-08-01_structure_context.jpg",
+      "confidence": "low",
+      "visual_role": "non_independent_repeated_capture",
+      "visible_labels": [],
+      "visible_objects": [
+        "purple_zigzag",
+        "cyan_pivots"
+      ],
+      "bta_reading": "Non-conclusive due repeated chart state.",
+      "measured_case": null,
+      "nexux_mapping": {
+        "required_objects": [],
+        "zone_kinds": [],
+        "required_states": [],
+        "gap": "Cannot use as independent evidence."
+      },
+      "next_validation": "Re-navigate 2025-08-01 on clean chart."
+    },
+    {
+      "id": "2025-04-16_liquidity_case",
+      "file": "2025-04-16_liquidity_case.jpg",
+      "confidence": "low",
+      "visual_role": "non_independent_repeated_capture",
+      "visible_labels": [],
+      "visible_objects": [
+        "purple_zigzag",
+        "cyan_pivots"
+      ],
+      "bta_reading": "Non-conclusive due repeated chart state. Backtest has a 2025-04-16 candidate, but this screenshot does not prove visual alignment.",
+      "measured_case": null,
+      "nexux_mapping": {
+        "required_objects": [],
+        "zone_kinds": [],
+        "required_states": [],
+        "gap": "Cannot use as independent evidence."
+      },
+      "next_validation": "Re-navigate 2025-04-16 on clean chart."
+    }
+  ],
+  "derived_requirements": [
+    "RangeMap",
+    "Zone.state",
+    "CharacterLevel",
+    "SwingLeg",
+    "ReferenceLevel",
+    "TargetZone",
+    "retest_continuation"
+  ],
+  "core_quantitative_finding": {
+    "poi_liquidity_rr2": {
+      "trades": 605,
+      "win_rate": 26.8,
+      "expectancy_R": -0.129,
+      "profit_factor": 0.86
+    },
+    "poi_cdc_liquidity": {
+      "trades": 272,
+      "win_rate": 44.9,
+      "expectancy_R": 0.7,
+      "profit_factor": 1.99
+    }
+  },
+  "completion_blockers": [
+    "Need authorization to reload or clean TradingView chart after accidental text object.",
+    "Need independent visual re-navigation of 2025 and 2024 history.",
+    "Need replacement captures for repeated 2025 screenshots."
+  ]
+}

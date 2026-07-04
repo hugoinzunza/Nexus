@@ -1,0 +1,984 @@
+{
+  "meta": {
+    "created": "2026-07-01",
+    "status": "template_pending_clean_recapture",
+    "source_checklist": "/Users/hugh/crisol/nexux/research/bta_recapture_priority_checklist_2026-07-01.json",
+    "valid_statuses": [
+      "pending",
+      "confirmed",
+      "no_annotation",
+      "blank_projection",
+      "not_matching",
+      "needs_review"
+    ],
+    "status_meanings": {
+      "pending": "not reviewed/captured yet",
+      "confirmed": "visual TradingView evidence matches expected markers",
+      "no_annotation": "date reached, chart had no useful professor annotation",
+      "blank_projection": "navigation landed in blank/projection area",
+      "not_matching": "visible chart did not match candidate expectation",
+      "needs_review": "captured but requires manual decision"
+    }
+  },
+  "counts": {
+    "needs_review": 1,
+    "not_matching": 2,
+    "pending": 29
+  },
+  "items": [
+    {
+      "target_file": "2024-05-27_1500_short_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-05-27 15:00",
+      "priority": "critical",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 6.565,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-06-12_1415_short_1h_bta_recapture.jpg",
+      "status": "not_matching",
+      "captured_file": "attempt_2024-06-12_1415_after_go_check.png",
+      "date_time": "2024-06-12 14:15",
+      "priority": "critical",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 5.925,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [
+        "jumped_to_december_2025",
+        "ultima_barra_disponible",
+        "zigzag_pivots_visible"
+      ],
+      "notes": "Ir a fecha 2024-06-12 14:15 no aterrizó en 2024; TradingView cayó en zona diciembre 2025 con Última barra disponible.",
+      "reviewed_by": "Codex",
+      "reviewed_at": "2026-07-01"
+    },
+    {
+      "target_file": "2024-07-03_0300_long_1h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-07-03 03:00",
+      "priority": "critical",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 9,
+      "rr_liq": 14.106,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-08-01_1500_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-08-01 15:00",
+      "priority": "critical",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 17.033,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-09-17_1500_short_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-09-17 15:00",
+      "priority": "critical",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 14.343,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-10-02_1045_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-10-02 10:45",
+      "priority": "critical",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 8.173,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-11-15_1200_short_1h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-11-15 12:00",
+      "priority": "critical",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 3.157,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-11-15_1200_short_4h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-11-15 12:00",
+      "priority": "critical",
+      "direction": "short",
+      "source_tf": "4h",
+      "score": 10,
+      "rr_liq": 3.157,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 4h"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-02-02_1830_long_1h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-02-02 18:30",
+      "priority": "critical",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 4.131,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-02-19_1000_short_1h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-02-19 10:00",
+      "priority": "critical",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 4.721,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-03-03_1945_long_1h_bta_recapture.jpg",
+      "status": "not_matching",
+      "captured_file": "attempt_2025-03-03_1945_after_go_check.png",
+      "date_time": "2025-03-03 19:45",
+      "priority": "critical",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 9.021,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [
+        "jumped_to_december_2025",
+        "ultima_barra_disponible",
+        "zigzag_pivots_visible"
+      ],
+      "notes": "Ir a fecha 2025-03-03 19:45 volvió a aterrizar en diciembre 2025; no confirma el candidato de marzo.",
+      "reviewed_by": "Codex",
+      "reviewed_at": "2026-07-01"
+    },
+    {
+      "target_file": "2025-03-12_1430_long_1h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-03-12 14:30",
+      "priority": "critical",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 6.553,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-05-15_1630_short_1h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-05-15 16:30",
+      "priority": "critical",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 6.867,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-05-20_1915_short_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-05-20 19:15",
+      "priority": "critical",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 11.219,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-07-18_0830_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-07-18 08:30",
+      "priority": "critical",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 15.685,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-12-29_1045_long_1h_bta_recapture.jpg",
+      "status": "needs_review",
+      "captured_file": "2025-12-29_1045_long_1h_bta_recapture.jpg",
+      "date_time": "2025-12-29 10:45",
+      "priority": "critical",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 5.425,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [
+        "december_29_price_area",
+        "purple_zone",
+        "orange_arc",
+        "minimo_label"
+      ],
+      "notes": "Captura cercana a 2025-12-29 muestra caída, zona morada, arco naranja y mínimo; faltan etiquetas POI/CDC legibles para confirmar.",
+      "reviewed_by": "Codex",
+      "reviewed_at": "2026-07-01"
+    },
+    {
+      "target_file": "2026-01-21_1700_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2026-01-21 17:00",
+      "priority": "high",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 27.866,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2026-02-18_1530_short_1h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2026-02-18 15:30",
+      "priority": "high",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 3.473,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2026-03-19_1415_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2026-03-19 14:15",
+      "priority": "high",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 11.746,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2026-05-15_1330_long_4h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2026-05-15 13:30",
+      "priority": "high",
+      "direction": "long",
+      "source_tf": "4h",
+      "score": 10,
+      "rr_liq": 6.086,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 4h"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-01-03_0900_short_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-01-03 09:00",
+      "priority": "medium",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 3.398,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-02-23_0730_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-02-23 07:30",
+      "priority": "medium",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 3.43,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-03-14_1930_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-03-14 19:30",
+      "priority": "medium",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 4.267,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-04-26_1045_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-04-26 10:45",
+      "priority": "medium",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 3.648,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2024-12-11_1500_short_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2024-12-11 15:00",
+      "priority": "medium",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 2.589,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-01-31_2015_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-01-31 20:15",
+      "priority": "medium",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 6.915,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-04-30_1345_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-04-30 13:45",
+      "priority": "medium",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 5.89,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-06-24_1645_short_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-06-24 16:45",
+      "priority": "medium",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 3.481,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-08-28_1845_long_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-08-28 18:45",
+      "priority": "medium",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 4.087,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-09-12_1700_short_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-09-12 17:00",
+      "priority": "medium",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 5.758,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-10-20_0630_short_1h_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-10-20 06:30",
+      "priority": "medium",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 9,
+      "rr_liq": 4.818,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    },
+    {
+      "target_file": "2025-11-10_0915_short_15m_bta_recapture.jpg",
+      "status": "pending",
+      "captured_file": "",
+      "date_time": "2025-11-10 09:15",
+      "priority": "medium",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 5.237,
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "observed_markers": [],
+      "notes": "",
+      "reviewed_by": "",
+      "reviewed_at": ""
+    }
+  ]
+}

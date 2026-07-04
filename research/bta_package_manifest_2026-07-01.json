@@ -1,0 +1,1168 @@
+{
+  "created_utc": "2026-07-02T03:10:10Z",
+  "status": "provisional_until_tradingview_clean_renavigation",
+  "root": "/Users/hugh/crisol/nexux/research",
+  "artifact_count": 143,
+  "missing_count": 0,
+  "by_role": {
+    "audit": 5,
+    "comparison": 3,
+    "entrypoint": 4,
+    "html": 1,
+    "live_screenshot": 74,
+    "model": 3,
+    "notes": 1,
+    "package": 1,
+    "plan": 15,
+    "quant": 13,
+    "screenshot": 9,
+    "summary": 2,
+    "visual": 12
+  },
+  "artifacts": [
+    {
+      "role": "entrypoint",
+      "path": "/Users/hugh/crisol/nexux/research/README_BTA_REVIEW_PACKAGE_2026-07-01.md",
+      "relative_path": "README_BTA_REVIEW_PACKAGE_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 3512,
+      "sha256": "1fcb1199394bf0e9847a667988aef7b71650aee4fa81ef0c69335e770ba5ab55"
+    },
+    {
+      "role": "entrypoint",
+      "path": "/Users/hugh/crisol/nexux/research/bta_review_index_2026-07-01.md",
+      "relative_path": "bta_review_index_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 8523,
+      "sha256": "463b54a2a8b0e0dc493dcce7d31551f14b0cab9cf8aaf0485b8f725011b61ef1"
+    },
+    {
+      "role": "entrypoint",
+      "path": "/Users/hugh/crisol/nexux/research/bta_morning_review_2026-07-01.html",
+      "relative_path": "bta_morning_review_2026-07-01.html",
+      "exists": true,
+      "size_bytes": 32166,
+      "sha256": "47e3ad565cd675673c87e89609f93c281ebbfaaa3d0347239de34565d7261817"
+    },
+    {
+      "role": "entrypoint",
+      "path": "/Users/hugh/crisol/nexux/research/bta_morning_review_agenda_2026-07-01.md",
+      "relative_path": "bta_morning_review_agenda_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 3337,
+      "sha256": "07efe7ffae744aa141ff14fffb5cc183eda838f906bfbb971307b9c56fd7073f"
+    },
+    {
+      "role": "summary",
+      "path": "/Users/hugh/crisol/nexux/research/bta_morning_status_2026-07-01.md",
+      "relative_path": "bta_morning_status_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 6288,
+      "sha256": "8e1b20dd1730af80f62fdad52edbac85836ea32cfcececbf280e3a62cd989c24"
+    },
+    {
+      "role": "summary",
+      "path": "/Users/hugh/crisol/nexux/research/bta_morning_brief_2026-07-01.md",
+      "relative_path": "bta_morning_brief_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 15283,
+      "sha256": "3d56bc36762b9252ad12a125d25b7dd7e72e36cc77037e1fde425b934fa35957"
+    },
+    {
+      "role": "audit",
+      "path": "/Users/hugh/crisol/nexux/research/bta_goal_completion_audit_2026-07-01.md",
+      "relative_path": "bta_goal_completion_audit_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 5187,
+      "sha256": "d7afb9fd566b59c992d358bbbd7d9fced22cf97c6736b12b4ce6fc2eba64667e"
+    },
+    {
+      "role": "audit",
+      "path": "/Users/hugh/crisol/nexux/research/bta_goal_completion_checklist_2026-07-01.json",
+      "relative_path": "bta_goal_completion_checklist_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 4612,
+      "sha256": "e51b666f6455d6a21bf62d3c9740801590884df5b009007d5015f82a63d703a8"
+    },
+    {
+      "role": "audit",
+      "path": "/Users/hugh/crisol/nexux/research/bta_goal_completion_status.py",
+      "relative_path": "bta_goal_completion_status.py",
+      "exists": true,
+      "size_bytes": 1774,
+      "sha256": "bc69f4fa0667e2b28fe95ae7af0f59304705c1021241a8350a995e6ddf21cdc0"
+    },
+    {
+      "role": "audit",
+      "path": "/Users/hugh/crisol/nexux/research/bta_goal_completion_status_2026-07-01.md",
+      "relative_path": "bta_goal_completion_status_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 1815,
+      "sha256": "2c610f031803a08aa45b973b8f276b5314b8eff21ce197223642d953b5157d67"
+    },
+    {
+      "role": "audit",
+      "path": "/Users/hugh/crisol/nexux/research/bta_final_completion_audit_2026-07-01.md",
+      "relative_path": "bta_final_completion_audit_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 5070,
+      "sha256": "779400a203e0745ddb1a0ad63b4f6acbd595ff469544bc1d6495e12f10ee2883"
+    },
+    {
+      "role": "notes",
+      "path": "/Users/hugh/crisol/nexux/research/bta_overnight_mission_notes_2026-07-01.md",
+      "relative_path": "bta_overnight_mission_notes_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 11212,
+      "sha256": "8a347613548ddac644e8d49e052b10f571ba040d57146699eb0f45ec8edc8c38"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_tradingview_renavigation_protocol_2026-07-01.md",
+      "relative_path": "bta_tradingview_renavigation_protocol_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 4914,
+      "sha256": "636aa52e4a1612327e68483985606e99c2cf9a98998f493352499a22d55c76ee"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_clean_capture_checklist_2026-07-01.md",
+      "relative_path": "bta_clean_capture_checklist_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 1740,
+      "sha256": "dbc0ce3ec037af6817a3e79356bc83f79cb3dc312ff2a7e5c08bdc65f9ad214b"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_clean_capture_checklist_2026-07-01.json",
+      "relative_path": "bta_clean_capture_checklist_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 2753,
+      "sha256": "e410c6ce2e0eb9754fcf1c3c5b3dc582e816ee835901ac343d2dc8d17bacd8d7"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_recapture_priority_checklist.py",
+      "relative_path": "bta_recapture_priority_checklist.py",
+      "exists": true,
+      "size_bytes": 6084,
+      "sha256": "900a031e1671b422b94c756397ef4ed3045c44f10057120eb60e037f75f63bc1"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_recapture_priority_checklist_2026-07-01.json",
+      "relative_path": "bta_recapture_priority_checklist_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 35314,
+      "sha256": "ffbd6f633c9058e74eab78149acdd51e1c96e73c8bf31696665e5ff5712f7084"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_recapture_priority_checklist_2026-07-01.md",
+      "relative_path": "bta_recapture_priority_checklist_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 7324,
+      "sha256": "7f90ab33d64b16f55d794c37f895434b65454f564e8757a7303c3aa47d2cfeb8"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_recapture_log_template.py",
+      "relative_path": "bta_recapture_log_template.py",
+      "exists": true,
+      "size_bytes": 4983,
+      "sha256": "800ed5bc4a0eb2c2339b696da8fbe4487727ad86171a412f6e0c514b80c3ab73"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_recapture_results_log_2026-07-01.json",
+      "relative_path": "bta_recapture_results_log_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 27133,
+      "sha256": "f4b5c9491620e00ee0521976e6285205fd2d804ebf6688d300b02c8119e414c0"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_recapture_results_log_2026-07-01.md",
+      "relative_path": "bta_recapture_results_log_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 4537,
+      "sha256": "fb13441a974c8997a994048be6cea6f751d8f52ecb08689e8a56336c52dc70a0"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_recapture_session_2026-07-01.md",
+      "relative_path": "bta_recapture_session_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 2063,
+      "sha256": "61372c85ea8bd8af32b01357672a2b8bb1a932966a41980cce9b8b978bc7ff9c"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_clean_capture_ingest.py",
+      "relative_path": "bta_clean_capture_ingest.py",
+      "exists": true,
+      "size_bytes": 7778,
+      "sha256": "405d2582b4b71aa51503c4d9de084ae139aeb61c624de2341b464a82788cf8cb"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_clean_capture_coverage_2026-07-01.md",
+      "relative_path": "bta_clean_capture_coverage_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 9745,
+      "sha256": "731deaf1da8761d1110e815ad97667bd3638dbdfbe06ba098a1e63580813a4da"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_clean_capture_coverage_2026-07-01.json",
+      "relative_path": "bta_clean_capture_coverage_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 15751,
+      "sha256": "b1b9fd500389d053c4f985e6a1a6984fca9e84e5cac951164363476ee4014b1f"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_clean_contact_sheet_2026-07-01.jpg",
+      "relative_path": "tradingview_bta_clean_contact_sheet_2026-07-01.jpg",
+      "exists": true,
+      "size_bytes": 114463,
+      "sha256": "b7b373ff75e6e7af039f975a6ca97c45dbaa82865c9739f300e0193e11344c3a"
+    },
+    {
+      "role": "plan",
+      "path": "/Users/hugh/crisol/nexux/research/bta_live_renavigation_notes_2026-07-01.md",
+      "relative_path": "bta_live_renavigation_notes_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 4177,
+      "sha256": "778063d04ef4b4567acad01ddd87db929e4d4183c662063b1a6cf67aedd984b5"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_live_capture_inventory.py",
+      "relative_path": "bta_live_capture_inventory.py",
+      "exists": true,
+      "size_bytes": 10370,
+      "sha256": "5db4acd559f21880c1240592d61062fdeeac79790e24c64071dedaa925053d0d"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_live_capture_inventory_2026-07-01.json",
+      "relative_path": "bta_live_capture_inventory_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 41720,
+      "sha256": "69e3598a7456c0b4a15ad128b1aadad62773593882188cb94c3cb5d695dae60b"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_live_capture_inventory_2026-07-01.md",
+      "relative_path": "bta_live_capture_inventory_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 2689,
+      "sha256": "4eb0c6f1a9911ff693eecc446ed43e35ace60dc9c683b81adea70328f8e4b934"
+    },
+    {
+      "role": "package",
+      "path": "/Users/hugh/crisol/nexux/research/bta_package_zip.py",
+      "relative_path": "bta_package_zip.py",
+      "exists": true,
+      "size_bytes": 996,
+      "sha256": "77166ca4fa332920b988077ef583b996a868fae91d3c35217d996ccdaa414afa"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_contact_sheet_2026-07-01.jpg",
+      "relative_path": "tradingview_bta_contact_sheet_2026-07-01.jpg",
+      "exists": true,
+      "size_bytes": 312794,
+      "sha256": "6bbd48a9bbd29e5292f5855e5e1ea5391dda6795613b18cefe890be40cd2af96"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_visual_audit_2026-06-30.md",
+      "relative_path": "tradingview_bta_visual_audit_2026-06-30.md",
+      "exists": true,
+      "size_bytes": 7924,
+      "sha256": "c606798b0545c3352091d95d6477820e5d4e54fa67575bd797e275e4c97abfd0"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_zone_catalog_2026-07-01.md",
+      "relative_path": "bta_visual_zone_catalog_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 8156,
+      "sha256": "3f0ae73ba63cbc386e9466f99753d08d1b09c88cbf4d305762aa8507751043de"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_screenshot_similarity.py",
+      "relative_path": "bta_screenshot_similarity.py",
+      "exists": true,
+      "size_bytes": 3740,
+      "sha256": "af68bfe681c836165df8661bf6a1886c4870cf70b56619302c85a889e14e3e51"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_screenshot_similarity_2026-07-01.json",
+      "relative_path": "bta_screenshot_similarity_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 5225,
+      "sha256": "80649004c52bce916f02f3ab51d2489bf9cfe07ece19ad22126a6dba6135e563"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_screenshot_similarity_2026-07-01.md",
+      "relative_path": "bta_screenshot_similarity_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 1708,
+      "sha256": "d4f43c80fda67257311d8731dbdbc9e2fc7c246afca5041b666155ff601b28ff"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_inventory_2026-07-01.json",
+      "relative_path": "bta_visual_inventory_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 11725,
+      "sha256": "cd24ec18f5a0b368cea75c064d219fe55e32bbe7a92c6a985131a062202ab8e2"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_inventory_summary_2026-07-01.md",
+      "relative_path": "bta_visual_inventory_summary_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 1666,
+      "sha256": "2c4a2bade2d98dd502332f726b898e254f19484133cfffa534654e6afe7468dc"
+    },
+    {
+      "role": "visual",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_inventory_summary.py",
+      "relative_path": "bta_visual_inventory_summary.py",
+      "exists": true,
+      "size_bytes": 4404,
+      "sha256": "8e3de20c6b798ad15b1dfcd7061d08b6adced870eb57dae6f597866b9febcb3c"
+    },
+    {
+      "role": "comparison",
+      "path": "/Users/hugh/crisol/nexux/research/bta_nexux_alignment_matrix_2026-07-01.md",
+      "relative_path": "bta_nexux_alignment_matrix_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 6643,
+      "sha256": "7a311c9399a74903e976739c1429c4949c448009c3e6dab817151228c5ec92f0"
+    },
+    {
+      "role": "comparison",
+      "path": "/Users/hugh/crisol/nexux/research/bta_nexux_implementation_backlog_2026-07-01.md",
+      "relative_path": "bta_nexux_implementation_backlog_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 5415,
+      "sha256": "240b2cb16485c22608341d2bc2c07df62506722dc9289016005b6d4b97273105"
+    },
+    {
+      "role": "comparison",
+      "path": "/Users/hugh/crisol/nexux/research/bta_operational_playbook_2026-07-01.md",
+      "relative_path": "bta_operational_playbook_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 8102,
+      "sha256": "e31f5097bb7d31f20bf9b42249d7cb0996bca33f5544212e4ff28ed70685d7e0"
+    },
+    {
+      "role": "model",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_model_spec_2026-07-01.md",
+      "relative_path": "bta_visual_model_spec_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 4656,
+      "sha256": "0a77826d2db59f4e9b91ee82e1ee0a465e1c15c9009adf3bfd7efb8b81cf3496"
+    },
+    {
+      "role": "model",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_model.py",
+      "relative_path": "bta_visual_model.py",
+      "exists": true,
+      "size_bytes": 12167,
+      "sha256": "b1072d3c20e7f8e81ad5bbe0a7b202d3f09e1182591af506257581e25e5ab3f4"
+    },
+    {
+      "role": "model",
+      "path": "/Users/hugh/crisol/nexux/research/test_bta_visual_model.py",
+      "relative_path": "test_bta_visual_model.py",
+      "exists": true,
+      "size_bytes": 3457,
+      "sha256": "32bf6964bea4565ec2fa5c594276d2bbdf8707bf9a1ed78a617bf9771ce74066"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_backtest.py",
+      "relative_path": "bta_visual_backtest.py",
+      "exists": true,
+      "size_bytes": 11022,
+      "sha256": "a207ec91b8dbd2b0b866d6e733a444bb3d539706cc0587a0f290dea2a562d9f4"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_backtest_2026-07-01.md",
+      "relative_path": "bta_visual_backtest_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 7153,
+      "sha256": "0e5a634c15f19b5f0fd5e6c21c7d20b0f598d045d6e394a5e33df6f2cca2cb97"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_backtest_results.json",
+      "relative_path": "bta_visual_backtest_results.json",
+      "exists": true,
+      "size_bytes": 10232,
+      "sha256": "f23a1e5232b056af14eba756ea33799e5bdb5fa493c1af9090e36314f12a41cc"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_historical_navigation_atlas.py",
+      "relative_path": "bta_historical_navigation_atlas.py",
+      "exists": true,
+      "size_bytes": 7901,
+      "sha256": "30e231d35ef66aa83612071047f6027a29266bf39295f3a25f93b5b61c4c075b"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_historical_navigation_atlas_2026-07-01.json",
+      "relative_path": "bta_historical_navigation_atlas_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 108742,
+      "sha256": "1625bf1aa165d3d7cd0067b6f440785cf7cf1138823dcbe081f6230398fa3f0a"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_historical_navigation_atlas_2026-07-01.md",
+      "relative_path": "bta_historical_navigation_atlas_2026-07-01.md",
+      "exists": true,
+      "size_bytes": 17153,
+      "sha256": "b8a5cc93bdc6d552478006cc21cd3fc7d6e5205b36996102f69095a7877e7e93"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_cases_data.py",
+      "relative_path": "bta_visual_cases_data.py",
+      "exists": true,
+      "size_bytes": 6711,
+      "sha256": "9a3daa45a081ddac7fdfd5bdd5c9ca4d61c8f7fb707d39b0c56639d3c8a2887a"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_visual_cases_data.json",
+      "relative_path": "bta_visual_cases_data.json",
+      "exists": true,
+      "size_bytes": 26731,
+      "sha256": "13fdf9f5f5f1b722772d4c8d2b223b46a5f25a94c04633a2f7d369f9f7fdb178"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_fetch_btcusdtp_recent.py",
+      "relative_path": "bta_fetch_btcusdtp_recent.py",
+      "exists": true,
+      "size_bytes": 1821,
+      "sha256": "22dbb948ccebcc6cb5935926c0cac0244793cb80a23bc5dee1053a0774c157aa"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_btcusdtp_15m_recent.json",
+      "relative_path": "bta_btcusdtp_15m_recent.json",
+      "exists": true,
+      "size_bytes": 540501,
+      "sha256": "57abcd188017f1e4951274b786acae6ec16995173f7008cb4a0b308c3c5579af"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_m15_structure_study.py",
+      "relative_path": "bta_m15_structure_study.py",
+      "exists": true,
+      "size_bytes": 21741,
+      "sha256": "dbd4c2a3f6e03eee56cfa158c5fa6ed880ed9ba61a9d98aac7aef74b4b0ce73c"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_m15_structure_2026-06-30.md",
+      "relative_path": "bta_m15_structure_2026-06-30.md",
+      "exists": true,
+      "size_bytes": 11651,
+      "sha256": "83f2b3bedd4360d187b88a5b28f16563299f3026a04df572f44a2945c8ff3d13"
+    },
+    {
+      "role": "quant",
+      "path": "/Users/hugh/crisol/nexux/research/bta_m15_structure_results.json",
+      "relative_path": "bta_m15_structure_results.json",
+      "exists": true,
+      "size_bytes": 19090,
+      "sha256": "f2b9c53c41fab74d788a326b7bfab1b0aa20cfdcd66757599ca36b6f224797b9"
+    },
+    {
+      "role": "html",
+      "path": "/Users/hugh/crisol/nexux/research/bta_morning_html.py",
+      "relative_path": "bta_morning_html.py",
+      "exists": true,
+      "size_bytes": 14164,
+      "sha256": "8956dc093d4f7cfcbdc123e1a88add7fb67312106c35887d9d5fc6081651176a"
+    },
+    {
+      "role": "screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30/2025-04-16_liquidity_case.jpg",
+      "relative_path": "tradingview_bta_screenshots_2026-06-30/2025-04-16_liquidity_case.jpg",
+      "exists": true,
+      "size_bytes": 77481,
+      "sha256": "7e87c16d1b260db320dbcf9c77408b589e56052e8a827765964a1e1e2fdb3fe0"
+    },
+    {
+      "role": "screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30/2025-08-01_structure_context.jpg",
+      "relative_path": "tradingview_bta_screenshots_2026-06-30/2025-08-01_structure_context.jpg",
+      "exists": true,
+      "size_bytes": 77288,
+      "sha256": "8bd559234fb238ff1ff060bc0b29051097cbe5b986b39edb4991461bef2b7ed2"
+    },
+    {
+      "role": "screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30/2025-11-05_zigzag_structure.jpg",
+      "relative_path": "tradingview_bta_screenshots_2026-06-30/2025-11-05_zigzag_structure.jpg",
+      "exists": true,
+      "size_bytes": 77481,
+      "sha256": "7e87c16d1b260db320dbcf9c77408b589e56052e8a827765964a1e1e2fdb3fe0"
+    },
+    {
+      "role": "screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30/2026-01-15_level_cluster.jpg",
+      "relative_path": "tradingview_bta_screenshots_2026-06-30/2026-01-15_level_cluster.jpg",
+      "exists": true,
+      "size_bytes": 80588,
+      "sha256": "d798726bcb2e15b4bdcf372fabe4a607a93877a729b50d587807a7c6f2d1c586"
+    },
+    {
+      "role": "screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30/2026-05-15_discount_cdc_zones.jpg",
+      "relative_path": "tradingview_bta_screenshots_2026-06-30/2026-05-15_discount_cdc_zones.jpg",
+      "exists": true,
+      "size_bytes": 91019,
+      "sha256": "bcd831bd39715f05d2913bbebc0435572625488cf7bbe6e79dedadab82296a7d"
+    },
+    {
+      "role": "screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30/2026-05-27_drop_to_orange_target.jpg",
+      "relative_path": "tradingview_bta_screenshots_2026-06-30/2026-05-27_drop_to_orange_target.jpg",
+      "exists": true,
+      "size_bytes": 104759,
+      "sha256": "d9750a5b3f7608d8bbfb2125b444716c8ded180d9e7fca389bfbf698beffbf02"
+    },
+    {
+      "role": "screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30/2026-06-11_premium_discount_check.jpg",
+      "relative_path": "tradingview_bta_screenshots_2026-06-30/2026-06-11_premium_discount_check.jpg",
+      "exists": true,
+      "size_bytes": 131546,
+      "sha256": "b2f276907f8af18277a8db87c840ae0935bd179472423215762f2c040693dd08"
+    },
+    {
+      "role": "screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30/2026-06-17_blue_range_premium_discount.jpg",
+      "relative_path": "tradingview_bta_screenshots_2026-06-30/2026-06-17_blue_range_premium_discount.jpg",
+      "exists": true,
+      "size_bytes": 123617,
+      "sha256": "55f8c4cccfd2fc091db83c0da1f132486205644a3229aaccc60f6eda3f119f27"
+    },
+    {
+      "role": "screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_2026-06-30/2026-06-24_discount_poi_confirmacion.jpg",
+      "relative_path": "tradingview_bta_screenshots_2026-06-30/2026-06-24_discount_poi_confirmacion.jpg",
+      "exists": true,
+      "size_bytes": 119754,
+      "sha256": "598ddc547d933231e42bc0a251b91d15e67ff8d588ef611b02d25554613409a0"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/2024-06-12_1415_short_1h_bta_recapture.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/2024-06-12_1415_short_1h_bta_recapture.png",
+      "exists": true,
+      "size_bytes": 104189,
+      "sha256": "17eca62aa65a2cab020cca1bf7f3a8b7b0272b2670f130e50596231589daf7cb"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/2025-12-04_live_zigzag_structure_recapture.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/2025-12-04_live_zigzag_structure_recapture.png",
+      "exists": true,
+      "size_bytes": 83573,
+      "sha256": "b68bffab0378e336d35154a9db0b0cd38d69f2e99f1d6c4b46cf618980d45e39"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/2025-12-29_1045_long_1h_bta_recapture.jpg",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/2025-12-29_1045_long_1h_bta_recapture.jpg",
+      "exists": true,
+      "size_bytes": 109943,
+      "sha256": "4ecc6ef4543794c81e9705e1e99d449067164c86a41652faae8f62df97d34fda"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/2025-12-29_1045_long_1h_bta_recapture.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/2025-12-29_1045_long_1h_bta_recapture.png",
+      "exists": true,
+      "size_bytes": 76719,
+      "sha256": "e0b3a0e23cee9adc3994d88a5b68f302365d3fd20876c7769bdc6bd948833a68"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/attempt_2024-06-12_1415_after_go_check.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/attempt_2024-06-12_1415_after_go_check.png",
+      "exists": true,
+      "size_bytes": 83573,
+      "sha256": "b68bffab0378e336d35154a9db0b0cd38d69f2e99f1d6c4b46cf618980d45e39"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/attempt_2025-03-03_1945_after_go_check.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/attempt_2025-03-03_1945_after_go_check.png",
+      "exists": true,
+      "size_bytes": 83709,
+      "sha256": "2aa18b8cf57e078278066b155842d8015dcfa0b2676b3bc04c077ed2407d3a6e"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/attempt_drag_toward_2025-12-29.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/attempt_drag_toward_2025-12-29.png",
+      "exists": true,
+      "size_bytes": 76719,
+      "sha256": "e0b3a0e23cee9adc3994d88a5b68f302365d3fd20876c7769bdc6bd948833a68"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_2026-07-01_current_jun_range.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_2026-07-01_current_jun_range.png",
+      "exists": true,
+      "size_bytes": 122609,
+      "sha256": "e276777fc52f31ca12951a0b406c0db41254e5bfcdef461a2afd4ca85f90e597"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_after_wait_for_history_load.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_after_wait_for_history_load.png",
+      "exists": true,
+      "size_bytes": 49007,
+      "sha256": "da42ce4342f63b4f923be6fee46bcab838e8016cfaae611885c833d594c7efe7"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_autoscale_after_blank_windows.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_autoscale_after_blank_windows.png",
+      "exists": true,
+      "size_bytes": 102899,
+      "sha256": "22bf9de01a41699b4d763c425d05b267fd038f043200704ac97ab3ca69ecd0d5"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_01.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_01.png",
+      "exists": true,
+      "size_bytes": 83070,
+      "sha256": "2e0d6106db61a520a333256d07f5fecf51f5eec264f2f3a995f2b9155b9e352a"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_02.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_02.png",
+      "exists": true,
+      "size_bytes": 82487,
+      "sha256": "7d8f5a2c439b04810165723f9d113160ac6496e20a3c5d23f0b4fbd6644b71f8"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_03.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_03.png",
+      "exists": true,
+      "size_bytes": 82939,
+      "sha256": "85fe3c64726f5779b441873987148a67af2d364fbaf81dcfdcbcbbf6df9efce0"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_04.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_04.png",
+      "exists": true,
+      "size_bytes": 88608,
+      "sha256": "09642a637cc1a680ba258a3f1794813dce332a702439390ea49531a6abc64e86"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_05.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_05.png",
+      "exists": true,
+      "size_bytes": 83100,
+      "sha256": "eb126276b4f11eb86195a5e6bdcc1c3757454f22801ff5f311edd7a0f7f91b69"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_06.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_06.png",
+      "exists": true,
+      "size_bytes": 96578,
+      "sha256": "51733c89f2a48b1d80a8fcbf9a07058316780ef628d25968153a14f00fbdd298"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_07.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_07.png",
+      "exists": true,
+      "size_bytes": 90786,
+      "sha256": "21056a57fa92b49f4ba38cc7906ee6c65aad77bfa8c0aac851eeec76a28939f4"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_08.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_2026_jun_may_window_08.png",
+      "exists": true,
+      "size_bytes": 85296,
+      "sha256": "e070cc74aa29b10ac5a6a449d05fbf2ae6366e6980a00a28d0d0a5f310906959"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_01.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_01.png",
+      "exists": true,
+      "size_bytes": 78904,
+      "sha256": "0578173ab32db0a2813c65537f8e6e9ab6e30979853462c24d11807073031a45"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_02.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_02.png",
+      "exists": true,
+      "size_bytes": 75433,
+      "sha256": "c623cccd0674f06e50ec81ba9bbc2df70ab1a1c23733a451fbf336af6de7b1d9"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_03.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_03.png",
+      "exists": true,
+      "size_bytes": 81822,
+      "sha256": "b6000004e8a4f448ad456a0ee8ee117834c9e2891352070f03e407bcb5180008"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_04.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_04.png",
+      "exists": true,
+      "size_bytes": 69823,
+      "sha256": "1751da73dbcdad32ead48fba588e9c1ec60487c6cf275fc85f3900389b9f25e3"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_05.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_05.png",
+      "exists": true,
+      "size_bytes": 49039,
+      "sha256": "d3564faec2021f3f9181741d26e96e8f47e4cca0701e44249cd0e9c1a4a20bcf"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_06.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_06.png",
+      "exists": true,
+      "size_bytes": 49032,
+      "sha256": "e28a888216c89b07218f85aa1c003f814e3ad7811c59cfa58136057abc10ce6f"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_07.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_07.png",
+      "exists": true,
+      "size_bytes": 49036,
+      "sha256": "5be0b195e11905a5618a2dff50109b3444ff45a74371ab8eb6ab05acde20e951"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_08.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_08.png",
+      "exists": true,
+      "size_bytes": 49024,
+      "sha256": "d9780238a2442d81d34e160e65e9072541dcc32ead406fcde8b9a0907c66ae97"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_09.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_09.png",
+      "exists": true,
+      "size_bytes": 49030,
+      "sha256": "f16cd15c003d1eca880351d92188a616732c3ecde833efa5d7d6093f4245bf9f"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_10.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_10.png",
+      "exists": true,
+      "size_bytes": 49038,
+      "sha256": "ddb7fe400b82b24738b8fd86ad60216cc0e7997f1e0c68e3c9aa80dddf1fdda9"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_11.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_11.png",
+      "exists": true,
+      "size_bytes": 49028,
+      "sha256": "d5eee9212e8f3062cdf5a6680bb9f3c6dbea65f3b88fe7388d79cbedf5c6d3f2"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_12.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_12.png",
+      "exists": true,
+      "size_bytes": 49030,
+      "sha256": "9f120d495ae04117fb55e12c1ef4e4fac6e8ef5f8b8f5a37e8b7f40d865d16d6"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_13.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_13.png",
+      "exists": true,
+      "size_bytes": 49027,
+      "sha256": "b4f20007ae580dce420e5ab4a9a62972e3790639ab0fa777f4f0e007efd0afca"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_14.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_14.png",
+      "exists": true,
+      "size_bytes": 49036,
+      "sha256": "5be0b195e11905a5618a2dff50109b3444ff45a74371ab8eb6ab05acde20e951"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_15.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_15.png",
+      "exists": true,
+      "size_bytes": 49040,
+      "sha256": "463a66708790bcc53820f2e0a04c35f805d11eee7a0bef31cc7b83baee042e5c"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_16.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_16.png",
+      "exists": true,
+      "size_bytes": 49030,
+      "sha256": "f16cd15c003d1eca880351d92188a616732c3ecde833efa5d7d6093f4245bf9f"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_17.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_17.png",
+      "exists": true,
+      "size_bytes": 49028,
+      "sha256": "3aae0812f47a25ec2958b3ad28e7360e87e2ac84a08e50b089d3d2a68e96196b"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_18.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_18.png",
+      "exists": true,
+      "size_bytes": 49039,
+      "sha256": "f67cf8149799959cc81f1903345a1ca668888c4afd039a5831b99f8195256568"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_19.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_19.png",
+      "exists": true,
+      "size_bytes": 49039,
+      "sha256": "f67cf8149799959cc81f1903345a1ca668888c4afd039a5831b99f8195256568"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_20.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_20.png",
+      "exists": true,
+      "size_bytes": 49032,
+      "sha256": "b7891747b45f2edc7e3cb2eb39f061e2dfe36b13b060d84471475f07297661a4"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_21.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_21.png",
+      "exists": true,
+      "size_bytes": 49032,
+      "sha256": "64ef295fa24216a013e621b52fb53e4c44e036d2a180d9bc89faacc12af6272b"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_22.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_22.png",
+      "exists": true,
+      "size_bytes": 49041,
+      "sha256": "34ca0bd4e24f35bbba7088c3d0299bbe62a28eb6224851a981e975d553236245"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_23.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_23.png",
+      "exists": true,
+      "size_bytes": 49028,
+      "sha256": "3aae0812f47a25ec2958b3ad28e7360e87e2ac84a08e50b089d3d2a68e96196b"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_24.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_2026_to_2025_24.png",
+      "exists": true,
+      "size_bytes": 49031,
+      "sha256": "90b95ad095ec0dc32bcc955db44981aedb1b7698cd37ea79c97b8c69646cda5f"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_contact_sheet_2026-07-01.jpg",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_back_autoscale_contact_sheet_2026-07-01.jpg",
+      "exists": true,
+      "size_bytes": 330888,
+      "sha256": "40142ecaa2e9348cb7e0e32ed510a46f80d016613aa437f30dddaaa30644cfd5"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_capture_contact_sheet_2026-07-01.jpg",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_capture_contact_sheet_2026-07-01.jpg",
+      "exists": true,
+      "size_bytes": 290609,
+      "sha256": "e102cd019e17c31b1d7d60d292a7de01ceccb5d604a3d9edeb27d076f860cca5"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_capture_file_audit_2026-07-01.json",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_capture_file_audit_2026-07-01.json",
+      "exists": true,
+      "size_bytes": 11672,
+      "sha256": "790f72fc401e4067ca176d400e9fcec9c88082bcc13e16d0abe8f18c809e7f4b"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_01.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_01.png",
+      "exists": true,
+      "size_bytes": 79206,
+      "sha256": "c16cf0a975f61943393b502ed8f857707dd00a9c499963b82e00c7e7524b2de9"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_02.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_02.png",
+      "exists": true,
+      "size_bytes": 55392,
+      "sha256": "28cb9f7ecbde0be55c8fb5acf6e720b3b607a7561785ebe269aeea3c98f76b4c"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_03.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_03.png",
+      "exists": true,
+      "size_bytes": 55416,
+      "sha256": "d77a73b181afd7452c2d162b8d71f5a3847dd6ee73be0578442f81ba27d503ed"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_04.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_04.png",
+      "exists": true,
+      "size_bytes": 55384,
+      "sha256": "03a2615223a2ef716df5a7cbad09045843469436108517d924e4848139c4ea6c"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_05.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_05.png",
+      "exists": true,
+      "size_bytes": 55384,
+      "sha256": "85ad0da0531ad1173afd3bd4358aa8f2d99b0343b4e0028b90db10510c79de4b"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_06.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_06.png",
+      "exists": true,
+      "size_bytes": 55385,
+      "sha256": "7f3d0056c482bb08b45a2e8b4ec299f0d7680e30d3ad87804729ad369dbbfb8f"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_07.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_07.png",
+      "exists": true,
+      "size_bytes": 55389,
+      "sha256": "80c117a63c0ddae50f2c7e08f377dad462eda5f90a8fabaaa2568c8e400d5fb1"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_08.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_08.png",
+      "exists": true,
+      "size_bytes": 55385,
+      "sha256": "3a9d13d8fee3f4ab72eb3ff4b12cdc4ced3def887104df649fe0db02f16fca9c"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_09.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_09.png",
+      "exists": true,
+      "size_bytes": 55391,
+      "sha256": "61f2255940fb730b0e6eacb7f4bddcf1c650ae59229c7df37c61fd8986928812"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_10.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_10.png",
+      "exists": true,
+      "size_bytes": 55384,
+      "sha256": "271f6bd9c1fec29a391327e727e8dbfa160057c1988eede21f059209b5fb688e"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_11.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_11.png",
+      "exists": true,
+      "size_bytes": 55382,
+      "sha256": "627f98685e9c50e4280aa87ae46beb86aa898aae6bfe29968d4c3ab57168b68a"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_12.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_12.png",
+      "exists": true,
+      "size_bytes": 55421,
+      "sha256": "707c0e96155bf0b60e1aa77e7e7f370fc145aa5f54426426c8fa2c698aeb1c0a"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_13.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_13.png",
+      "exists": true,
+      "size_bytes": 55387,
+      "sha256": "5df0839b4b83afa00bf4a0650f302c875b402e6674add81e605f51bb03a1aea7"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_14.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_14.png",
+      "exists": true,
+      "size_bytes": 55384,
+      "sha256": "03a2615223a2ef716df5a7cbad09045843469436108517d924e4848139c4ea6c"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_15.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_15.png",
+      "exists": true,
+      "size_bytes": 55385,
+      "sha256": "3a9d13d8fee3f4ab72eb3ff4b12cdc4ced3def887104df649fe0db02f16fca9c"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_16.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_16.png",
+      "exists": true,
+      "size_bytes": 55385,
+      "sha256": "3a9d13d8fee3f4ab72eb3ff4b12cdc4ced3def887104df649fe0db02f16fca9c"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_17.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_17.png",
+      "exists": true,
+      "size_bytes": 55415,
+      "sha256": "59755aab53687bd4c89583cbfa30ef09a8e11969b820c5613b36790bf18aa863"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_18.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_18.png",
+      "exists": true,
+      "size_bytes": 55379,
+      "sha256": "f90c1cf9396d096ca076f398593e834aab18a30153be9e0870ac97d7056ca98a"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_19.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_19.png",
+      "exists": true,
+      "size_bytes": 55416,
+      "sha256": "fe5a53048db149d1b34c60f9b6a5872b7b0ed7e237af08a4b02e74fd823fa5f3"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_20.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_20.png",
+      "exists": true,
+      "size_bytes": 55407,
+      "sha256": "8efe048d1ce8bbd3e8a9bd17f4db0af523f9e9e0c82d99475672d35ef976d068"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_21.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_21.png",
+      "exists": true,
+      "size_bytes": 55416,
+      "sha256": "d77a73b181afd7452c2d162b8d71f5a3847dd6ee73be0578442f81ba27d503ed"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_22.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_22.png",
+      "exists": true,
+      "size_bytes": 55392,
+      "sha256": "28cb9f7ecbde0be55c8fb5acf6e720b3b607a7561785ebe269aeea3c98f76b4c"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_23.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_23.png",
+      "exists": true,
+      "size_bytes": 55388,
+      "sha256": "84b2bb32f495f8e59962b1bc6e33ce1df2736b1a18e8877dfb25e021b6ddd1a6"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_24.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_2026_2025_24.png",
+      "exists": true,
+      "size_bytes": 55391,
+      "sha256": "61f2255940fb730b0e6eacb7f4bddcf1c650ae59229c7df37c61fd8986928812"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_contact_sheet_2026-07-01.jpg",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_history_contact_sheet_2026-07-01.jpg",
+      "exists": true,
+      "size_bytes": 344106,
+      "sha256": "3aa66bee2520bef368088d182eda38180e5ebb88bba495a9f8cad432e8ddadf0"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_drag_right_test.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_drag_right_test.png",
+      "exists": true,
+      "size_bytes": 83644,
+      "sha256": "10f9837805636545d3cb7b2fffb86e601c75a6c879d62b757bc10c5b67bee806"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_pan_test_after_scrollX_negative.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_pan_test_after_scrollX_negative.png",
+      "exists": true,
+      "size_bytes": 136622,
+      "sha256": "00019ac4bfc7eddb0bf2e35daee0552fc73a662cc28367c01dc790843b50b4e4"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_reverse_from_blank_test.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_reverse_from_blank_test.png",
+      "exists": true,
+      "size_bytes": 75029,
+      "sha256": "16862ef91d697b222a5c49d1a7cd761c253eda9a3c9dd3388c1711576098b9a4"
+    },
+    {
+      "role": "live_screenshot",
+      "path": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01/live_zoom_test_scrollY_positive.png",
+      "relative_path": "tradingview_bta_screenshots_clean_2026-07-01/live_zoom_test_scrollY_positive.png",
+      "exists": true,
+      "size_bytes": 136574,
+      "sha256": "980f61a07c86896c34a5b7791a3c9abab8c9dd70bf3f70c1e5d59582fb037495"
+    }
+  ]
+}

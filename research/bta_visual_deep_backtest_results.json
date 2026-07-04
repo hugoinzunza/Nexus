@@ -1,0 +1,1005 @@
+{
+  "params": {
+    "split_ts": "2025-03-30 00:00",
+    "rr_min": 2.0,
+    "cdc_max_delay": 16,
+    "max_hold": 96,
+    "range_bars": 672
+  },
+  "span": {
+    "from": "2022-06-12 17:45",
+    "to": "2026-06-11 19:30",
+    "candles": 140163
+  },
+  "touch_records": 2403,
+  "variants": {
+    "liq_rr2": {
+      "selected": 874,
+      "with_costs": {
+        "trades": 605,
+        "win_rate": 26.8,
+        "expectancy_R": -0.129,
+        "profit_factor": 0.86,
+        "total_R": -78.07,
+        "max_drawdown_R": 100.57,
+        "timeouts": 18
+      },
+      "no_costs": {
+        "trades": 605,
+        "win_rate": 26.9,
+        "expectancy_R": 0.11,
+        "profit_factor": 1.15,
+        "total_R": 66.62,
+        "max_drawdown_R": 40.01,
+        "timeouts": 18
+      },
+      "by_year": {
+        "2022": {
+          "trades": 48,
+          "win_rate": 33.3,
+          "expectancy_R": 0.004,
+          "profit_factor": 1.01,
+          "total_R": 0.21,
+          "max_drawdown_R": 8.81,
+          "timeouts": 5
+        },
+        "2023": {
+          "trades": 111,
+          "win_rate": 29.7,
+          "expectancy_R": -0.072,
+          "profit_factor": 0.92,
+          "total_R": -7.97,
+          "max_drawdown_R": 31.53,
+          "timeouts": 4
+        },
+        "2024": {
+          "trades": 179,
+          "win_rate": 23.5,
+          "expectancy_R": -0.307,
+          "profit_factor": 0.68,
+          "total_R": -55.04,
+          "max_drawdown_R": 57.3,
+          "timeouts": 4
+        },
+        "2025": {
+          "trades": 194,
+          "win_rate": 25.8,
+          "expectancy_R": -0.058,
+          "profit_factor": 0.94,
+          "total_R": -11.32,
+          "max_drawdown_R": 33.97,
+          "timeouts": 2
+        },
+        "2026": {
+          "trades": 73,
+          "win_rate": 28.8,
+          "expectancy_R": -0.054,
+          "profit_factor": 0.94,
+          "total_R": -3.95,
+          "max_drawdown_R": 14.23,
+          "timeouts": 3
+        }
+      },
+      "by_session": {
+        "Asia": {
+          "trades": 131,
+          "win_rate": 29.0,
+          "expectancy_R": -0.011,
+          "profit_factor": 0.99,
+          "total_R": -1.47,
+          "max_drawdown_R": 51.51,
+          "timeouts": 3
+        },
+        "Fuera": {
+          "trades": 57,
+          "win_rate": 31.6,
+          "expectancy_R": -0.021,
+          "profit_factor": 0.98,
+          "total_R": -1.21,
+          "max_drawdown_R": 17.24,
+          "timeouts": 2
+        },
+        "Londres": {
+          "trades": 117,
+          "win_rate": 25.6,
+          "expectancy_R": -0.266,
+          "profit_factor": 0.73,
+          "total_R": -31.14,
+          "max_drawdown_R": 31.19,
+          "timeouts": 1
+        },
+        "NY": {
+          "trades": 300,
+          "win_rate": 25.3,
+          "expectancy_R": -0.148,
+          "profit_factor": 0.84,
+          "total_R": -44.25,
+          "max_drawdown_R": 58.11,
+          "timeouts": 12
+        }
+      },
+      "by_direction": {
+        "long": {
+          "trades": 269,
+          "win_rate": 25.7,
+          "expectancy_R": -0.133,
+          "profit_factor": 0.86,
+          "total_R": -35.67,
+          "max_drawdown_R": 48.32,
+          "timeouts": 9
+        },
+        "short": {
+          "trades": 336,
+          "win_rate": 27.7,
+          "expectancy_R": -0.126,
+          "profit_factor": 0.86,
+          "total_R": -42.41,
+          "max_drawdown_R": 75.95,
+          "timeouts": 9
+        }
+      },
+      "by_source_isolated": {
+        "15m": {
+          "trades": 521,
+          "win_rate": 26.7,
+          "expectancy_R": -0.143,
+          "profit_factor": 0.85,
+          "total_R": -74.28,
+          "max_drawdown_R": 80.54,
+          "timeouts": 11
+        },
+        "1h": {
+          "trades": 95,
+          "win_rate": 25.3,
+          "expectancy_R": -0.135,
+          "profit_factor": 0.85,
+          "total_R": -12.8,
+          "max_drawdown_R": 35.58,
+          "timeouts": 5
+        },
+        "4h": {
+          "trades": 25,
+          "win_rate": 20.0,
+          "expectancy_R": -0.52,
+          "profit_factor": 0.4,
+          "total_R": -13.01,
+          "max_drawdown_R": 15.39,
+          "timeouts": 5
+        }
+      },
+      "splits": {
+        "in_sample_until_2025_03_30": {
+          "selected": 522,
+          "with_costs": {
+            "trades": 373,
+            "win_rate": 26.3,
+            "expectancy_R": -0.208,
+            "profit_factor": 0.78,
+            "total_R": -77.55,
+            "max_drawdown_R": 85.07,
+            "timeouts": 13
+          },
+          "no_costs": {
+            "trades": 373,
+            "win_rate": 26.3,
+            "expectancy_R": 0.015,
+            "profit_factor": 1.02,
+            "total_R": 5.62,
+            "max_drawdown_R": 31.12,
+            "timeouts": 13
+          }
+        },
+        "out_sample_from_2025_03_30": {
+          "selected": 352,
+          "with_costs": {
+            "trades": 232,
+            "win_rate": 27.6,
+            "expectancy_R": -0.002,
+            "profit_factor": 1.0,
+            "total_R": -0.53,
+            "max_drawdown_R": 26.34,
+            "timeouts": 5
+          },
+          "no_costs": {
+            "trades": 232,
+            "win_rate": 28.0,
+            "expectancy_R": 0.263,
+            "profit_factor": 1.37,
+            "total_R": 61.0,
+            "max_drawdown_R": 17.6,
+            "timeouts": 5
+          }
+        }
+      }
+    },
+    "cdc_liq": {
+      "selected": 390,
+      "with_costs": {
+        "trades": 272,
+        "win_rate": 44.9,
+        "expectancy_R": 0.7,
+        "profit_factor": 1.99,
+        "total_R": 190.38,
+        "max_drawdown_R": 13.49,
+        "timeouts": 8
+      },
+      "no_costs": {
+        "trades": 272,
+        "win_rate": 45.2,
+        "expectancy_R": 0.923,
+        "profit_factor": 2.7,
+        "total_R": 250.95,
+        "max_drawdown_R": 9.35,
+        "timeouts": 8
+      },
+      "by_year": {
+        "2022": {
+          "trades": 18,
+          "win_rate": 66.7,
+          "expectancy_R": 1.346,
+          "profit_factor": 4.25,
+          "total_R": 24.23,
+          "max_drawdown_R": 2.44,
+          "timeouts": 2
+        },
+        "2023": {
+          "trades": 56,
+          "win_rate": 41.1,
+          "expectancy_R": 0.425,
+          "profit_factor": 1.57,
+          "total_R": 23.81,
+          "max_drawdown_R": 6.23,
+          "timeouts": 3
+        },
+        "2024": {
+          "trades": 76,
+          "win_rate": 40.8,
+          "expectancy_R": 0.401,
+          "profit_factor": 1.53,
+          "total_R": 30.5,
+          "max_drawdown_R": 11.79,
+          "timeouts": 1
+        },
+        "2025": {
+          "trades": 91,
+          "win_rate": 42.9,
+          "expectancy_R": 0.87,
+          "profit_factor": 2.14,
+          "total_R": 79.2,
+          "max_drawdown_R": 13.49,
+          "timeouts": 1
+        },
+        "2026": {
+          "trades": 31,
+          "win_rate": 54.8,
+          "expectancy_R": 1.053,
+          "profit_factor": 2.99,
+          "total_R": 32.64,
+          "max_drawdown_R": 2.69,
+          "timeouts": 1
+        }
+      },
+      "by_session": {
+        "Asia": {
+          "trades": 59,
+          "win_rate": 47.5,
+          "expectancy_R": 0.888,
+          "profit_factor": 2.33,
+          "total_R": 52.36,
+          "max_drawdown_R": 11.55,
+          "timeouts": 1
+        },
+        "Fuera": {
+          "trades": 30,
+          "win_rate": 46.7,
+          "expectancy_R": 0.661,
+          "profit_factor": 1.96,
+          "total_R": 19.83,
+          "max_drawdown_R": 7.85,
+          "timeouts": 1
+        },
+        "Londres": {
+          "trades": 57,
+          "win_rate": 45.6,
+          "expectancy_R": 0.576,
+          "profit_factor": 1.77,
+          "total_R": 32.85,
+          "max_drawdown_R": 9.74,
+          "timeouts": 1
+        },
+        "NY": {
+          "trades": 126,
+          "win_rate": 42.9,
+          "expectancy_R": 0.677,
+          "profit_factor": 1.95,
+          "total_R": 85.34,
+          "max_drawdown_R": 9.84,
+          "timeouts": 5
+        }
+      },
+      "by_direction": {
+        "long": {
+          "trades": 118,
+          "win_rate": 42.4,
+          "expectancy_R": 0.673,
+          "profit_factor": 1.94,
+          "total_R": 79.41,
+          "max_drawdown_R": 9.93,
+          "timeouts": 5
+        },
+        "short": {
+          "trades": 154,
+          "win_rate": 46.8,
+          "expectancy_R": 0.721,
+          "profit_factor": 2.03,
+          "total_R": 110.97,
+          "max_drawdown_R": 15.92,
+          "timeouts": 3
+        }
+      },
+      "by_source_isolated": {
+        "15m": {
+          "trades": 240,
+          "win_rate": 45.4,
+          "expectancy_R": 0.699,
+          "profit_factor": 1.99,
+          "total_R": 167.83,
+          "max_drawdown_R": 11.79,
+          "timeouts": 6
+        },
+        "1h": {
+          "trades": 37,
+          "win_rate": 37.8,
+          "expectancy_R": 0.581,
+          "profit_factor": 1.77,
+          "total_R": 21.49,
+          "max_drawdown_R": 12.84,
+          "timeouts": 1
+        },
+        "4h": {
+          "trades": 6,
+          "win_rate": 50.0,
+          "expectancy_R": 0.277,
+          "profit_factor": 1.48,
+          "total_R": 1.66,
+          "max_drawdown_R": 2.34,
+          "timeouts": 2
+        }
+      },
+      "splits": {
+        "in_sample_until_2025_03_30": {
+          "selected": 230,
+          "with_costs": {
+            "trades": 166,
+            "win_rate": 42.8,
+            "expectancy_R": 0.476,
+            "profit_factor": 1.66,
+            "total_R": 79.03,
+            "max_drawdown_R": 11.79,
+            "timeouts": 6
+          },
+          "no_costs": {
+            "trades": 166,
+            "win_rate": 42.8,
+            "expectancy_R": 0.688,
+            "profit_factor": 2.21,
+            "total_R": 114.18,
+            "max_drawdown_R": 8.74,
+            "timeouts": 6
+          }
+        },
+        "out_sample_from_2025_03_30": {
+          "selected": 160,
+          "with_costs": {
+            "trades": 106,
+            "win_rate": 48.1,
+            "expectancy_R": 1.05,
+            "profit_factor": 2.55,
+            "total_R": 111.34,
+            "max_drawdown_R": 9.76,
+            "timeouts": 2
+          },
+          "no_costs": {
+            "trades": 106,
+            "win_rate": 49.1,
+            "expectancy_R": 1.29,
+            "profit_factor": 3.53,
+            "total_R": 136.77,
+            "max_drawdown_R": 8.0,
+            "timeouts": 2
+          }
+        }
+      }
+    },
+    "range_cdc_liq": {
+      "selected": 245,
+      "with_costs": {
+        "trades": 176,
+        "win_rate": 44.3,
+        "expectancy_R": 0.626,
+        "profit_factor": 1.88,
+        "total_R": 110.22,
+        "max_drawdown_R": 11.69,
+        "timeouts": 7
+      },
+      "no_costs": {
+        "trades": 176,
+        "win_rate": 44.9,
+        "expectancy_R": 0.85,
+        "profit_factor": 2.56,
+        "total_R": 149.64,
+        "max_drawdown_R": 8.35,
+        "timeouts": 7
+      },
+      "by_year": {
+        "2022": {
+          "trades": 13,
+          "win_rate": 61.5,
+          "expectancy_R": 1.009,
+          "profit_factor": 3.12,
+          "total_R": 13.11,
+          "max_drawdown_R": 2.44,
+          "timeouts": 2
+        },
+        "2023": {
+          "trades": 41,
+          "win_rate": 41.5,
+          "expectancy_R": 0.388,
+          "profit_factor": 1.53,
+          "total_R": 15.92,
+          "max_drawdown_R": 5.68,
+          "timeouts": 3
+        },
+        "2024": {
+          "trades": 44,
+          "win_rate": 45.5,
+          "expectancy_R": 0.567,
+          "profit_factor": 1.8,
+          "total_R": 24.97,
+          "max_drawdown_R": 9.81,
+          "timeouts": 1
+        },
+        "2025": {
+          "trades": 56,
+          "win_rate": 41.1,
+          "expectancy_R": 0.743,
+          "profit_factor": 1.95,
+          "total_R": 41.64,
+          "max_drawdown_R": 11.69,
+          "timeouts": 0
+        },
+        "2026": {
+          "trades": 22,
+          "win_rate": 45.5,
+          "expectancy_R": 0.663,
+          "profit_factor": 2.02,
+          "total_R": 14.59,
+          "max_drawdown_R": 4.13,
+          "timeouts": 1
+        }
+      },
+      "by_session": {
+        "Asia": {
+          "trades": 40,
+          "win_rate": 52.5,
+          "expectancy_R": 1.197,
+          "profit_factor": 2.97,
+          "total_R": 47.87,
+          "max_drawdown_R": 6.68,
+          "timeouts": 1
+        },
+        "Fuera": {
+          "trades": 20,
+          "win_rate": 45.0,
+          "expectancy_R": 0.44,
+          "profit_factor": 1.63,
+          "total_R": 8.8,
+          "max_drawdown_R": 6.48,
+          "timeouts": 1
+        },
+        "Londres": {
+          "trades": 35,
+          "win_rate": 42.9,
+          "expectancy_R": 0.367,
+          "profit_factor": 1.47,
+          "total_R": 12.85,
+          "max_drawdown_R": 6.83,
+          "timeouts": 1
+        },
+        "NY": {
+          "trades": 81,
+          "win_rate": 40.7,
+          "expectancy_R": 0.503,
+          "profit_factor": 1.68,
+          "total_R": 40.71,
+          "max_drawdown_R": 14.28,
+          "timeouts": 4
+        }
+      },
+      "by_direction": {
+        "long": {
+          "trades": 74,
+          "win_rate": 37.8,
+          "expectancy_R": 0.501,
+          "profit_factor": 1.65,
+          "total_R": 37.07,
+          "max_drawdown_R": 8.76,
+          "timeouts": 4
+        },
+        "short": {
+          "trades": 102,
+          "win_rate": 49.0,
+          "expectancy_R": 0.717,
+          "profit_factor": 2.07,
+          "total_R": 73.15,
+          "max_drawdown_R": 13.03,
+          "timeouts": 3
+        }
+      },
+      "by_source_isolated": {
+        "15m": {
+          "trades": 155,
+          "win_rate": 43.9,
+          "expectancy_R": 0.578,
+          "profit_factor": 1.8,
+          "total_R": 89.59,
+          "max_drawdown_R": 10.34,
+          "timeouts": 5
+        },
+        "1h": {
+          "trades": 22,
+          "win_rate": 36.4,
+          "expectancy_R": 0.588,
+          "profit_factor": 1.77,
+          "total_R": 12.94,
+          "max_drawdown_R": 8.59,
+          "timeouts": 1
+        },
+        "4h": {
+          "trades": 6,
+          "win_rate": 50.0,
+          "expectancy_R": 0.277,
+          "profit_factor": 1.48,
+          "total_R": 1.66,
+          "max_drawdown_R": 2.34,
+          "timeouts": 2
+        }
+      },
+      "splits": {
+        "in_sample_until_2025_03_30": {
+          "selected": 151,
+          "with_costs": {
+            "trades": 110,
+            "win_rate": 44.5,
+            "expectancy_R": 0.499,
+            "profit_factor": 1.7,
+            "total_R": 54.85,
+            "max_drawdown_R": 9.81,
+            "timeouts": 6
+          },
+          "no_costs": {
+            "trades": 110,
+            "win_rate": 44.5,
+            "expectancy_R": 0.712,
+            "profit_factor": 2.3,
+            "total_R": 78.3,
+            "max_drawdown_R": 7.0,
+            "timeouts": 6
+          }
+        },
+        "out_sample_from_2025_03_30": {
+          "selected": 94,
+          "with_costs": {
+            "trades": 66,
+            "win_rate": 43.9,
+            "expectancy_R": 0.839,
+            "profit_factor": 2.16,
+            "total_R": 55.37,
+            "max_drawdown_R": 10.34,
+            "timeouts": 1
+          },
+          "no_costs": {
+            "trades": 66,
+            "win_rate": 45.5,
+            "expectancy_R": 1.081,
+            "profit_factor": 2.98,
+            "total_R": 71.34,
+            "max_drawdown_R": 8.0,
+            "timeouts": 1
+          }
+        }
+      }
+    },
+    "visual_score7": {
+      "selected": 587,
+      "with_costs": {
+        "trades": 410,
+        "win_rate": 30.7,
+        "expectancy_R": 0.087,
+        "profit_factor": 1.1,
+        "total_R": 35.69,
+        "max_drawdown_R": 38.46,
+        "timeouts": 11
+      },
+      "no_costs": {
+        "trades": 410,
+        "win_rate": 31.0,
+        "expectancy_R": 0.313,
+        "profit_factor": 1.46,
+        "total_R": 128.15,
+        "max_drawdown_R": 18.2,
+        "timeouts": 11
+      },
+      "by_year": {
+        "2022": {
+          "trades": 26,
+          "win_rate": 42.3,
+          "expectancy_R": 0.333,
+          "profit_factor": 1.48,
+          "total_R": 8.66,
+          "max_drawdown_R": 5.16,
+          "timeouts": 3
+        },
+        "2023": {
+          "trades": 84,
+          "win_rate": 28.6,
+          "expectancy_R": -0.114,
+          "profit_factor": 0.87,
+          "total_R": -9.55,
+          "max_drawdown_R": 23.32,
+          "timeouts": 3
+        },
+        "2024": {
+          "trades": 116,
+          "win_rate": 29.3,
+          "expectancy_R": -0.038,
+          "profit_factor": 0.96,
+          "total_R": -4.46,
+          "max_drawdown_R": 23.09,
+          "timeouts": 2
+        },
+        "2025": {
+          "trades": 134,
+          "win_rate": 31.3,
+          "expectancy_R": 0.275,
+          "profit_factor": 1.31,
+          "total_R": 36.87,
+          "max_drawdown_R": 24.16,
+          "timeouts": 1
+        },
+        "2026": {
+          "trades": 50,
+          "win_rate": 30.0,
+          "expectancy_R": 0.083,
+          "profit_factor": 1.1,
+          "total_R": 4.17,
+          "max_drawdown_R": 7.71,
+          "timeouts": 2
+        }
+      },
+      "by_session": {
+        "Asia": {
+          "trades": 52,
+          "win_rate": 44.2,
+          "expectancy_R": 0.855,
+          "profit_factor": 2.23,
+          "total_R": 44.48,
+          "max_drawdown_R": 9.89,
+          "timeouts": 1
+        },
+        "Fuera": {
+          "trades": 26,
+          "win_rate": 34.6,
+          "expectancy_R": 0.049,
+          "profit_factor": 1.06,
+          "total_R": 1.27,
+          "max_drawdown_R": 12.0,
+          "timeouts": 1
+        },
+        "Londres": {
+          "trades": 91,
+          "win_rate": 29.7,
+          "expectancy_R": -0.083,
+          "profit_factor": 0.91,
+          "total_R": -7.51,
+          "max_drawdown_R": 15.84,
+          "timeouts": 1
+        },
+        "NY": {
+          "trades": 241,
+          "win_rate": 27.8,
+          "expectancy_R": -0.011,
+          "profit_factor": 0.99,
+          "total_R": -2.55,
+          "max_drawdown_R": 28.27,
+          "timeouts": 8
+        }
+      },
+      "by_direction": {
+        "long": {
+          "trades": 181,
+          "win_rate": 29.3,
+          "expectancy_R": 0.082,
+          "profit_factor": 1.09,
+          "total_R": 14.83,
+          "max_drawdown_R": 21.19,
+          "timeouts": 6
+        },
+        "short": {
+          "trades": 229,
+          "win_rate": 31.9,
+          "expectancy_R": 0.091,
+          "profit_factor": 1.11,
+          "total_R": 20.85,
+          "max_drawdown_R": 34.95,
+          "timeouts": 5
+        }
+      },
+      "by_source_isolated": {
+        "15m": {
+          "trades": 336,
+          "win_rate": 31.5,
+          "expectancy_R": 0.101,
+          "profit_factor": 1.12,
+          "total_R": 34.01,
+          "max_drawdown_R": 26.67,
+          "timeouts": 7
+        },
+        "1h": {
+          "trades": 75,
+          "win_rate": 26.7,
+          "expectancy_R": 0.003,
+          "profit_factor": 1.0,
+          "total_R": 0.26,
+          "max_drawdown_R": 27.82,
+          "timeouts": 2
+        },
+        "4h": {
+          "trades": 22,
+          "win_rate": 18.2,
+          "expectancy_R": -0.507,
+          "profit_factor": 0.42,
+          "total_R": -11.15,
+          "max_drawdown_R": 13.09,
+          "timeouts": 4
+        }
+      },
+      "splits": {
+        "in_sample_until_2025_03_30": {
+          "selected": 349,
+          "with_costs": {
+            "trades": 251,
+            "win_rate": 29.9,
+            "expectancy_R": -0.043,
+            "profit_factor": 0.95,
+            "total_R": -10.68,
+            "max_drawdown_R": 26.16,
+            "timeouts": 8
+          },
+          "no_costs": {
+            "trades": 251,
+            "win_rate": 29.9,
+            "expectancy_R": 0.168,
+            "profit_factor": 1.24,
+            "total_R": 42.2,
+            "max_drawdown_R": 14.85,
+            "timeouts": 8
+          }
+        },
+        "out_sample_from_2025_03_30": {
+          "selected": 238,
+          "with_costs": {
+            "trades": 159,
+            "win_rate": 32.1,
+            "expectancy_R": 0.292,
+            "profit_factor": 1.33,
+            "total_R": 46.36,
+            "max_drawdown_R": 17.07,
+            "timeouts": 3
+          },
+          "no_costs": {
+            "trades": 159,
+            "win_rate": 32.7,
+            "expectancy_R": 0.541,
+            "profit_factor": 1.81,
+            "total_R": 85.95,
+            "max_drawdown_R": 12.6,
+            "timeouts": 3
+          }
+        }
+      }
+    }
+  },
+  "year_stability": {
+    "2022": {
+      "liq_rr2": {
+        "trades": 48,
+        "win_rate": 33.3,
+        "expectancy_R": 0.004,
+        "profit_factor": 1.01,
+        "total_R": 0.21,
+        "max_drawdown_R": 8.81,
+        "timeouts": 5
+      },
+      "cdc_liq": {
+        "trades": 18,
+        "win_rate": 66.7,
+        "expectancy_R": 1.346,
+        "profit_factor": 4.25,
+        "total_R": 24.23,
+        "max_drawdown_R": 2.44,
+        "timeouts": 2
+      },
+      "range_cdc_liq": {
+        "trades": 13,
+        "win_rate": 61.5,
+        "expectancy_R": 1.009,
+        "profit_factor": 3.12,
+        "total_R": 13.11,
+        "max_drawdown_R": 2.44,
+        "timeouts": 2
+      },
+      "visual_score7": {
+        "trades": 26,
+        "win_rate": 42.3,
+        "expectancy_R": 0.333,
+        "profit_factor": 1.48,
+        "total_R": 8.66,
+        "max_drawdown_R": 5.16,
+        "timeouts": 3
+      }
+    },
+    "2023": {
+      "liq_rr2": {
+        "trades": 111,
+        "win_rate": 29.7,
+        "expectancy_R": -0.072,
+        "profit_factor": 0.92,
+        "total_R": -7.97,
+        "max_drawdown_R": 31.53,
+        "timeouts": 4
+      },
+      "cdc_liq": {
+        "trades": 56,
+        "win_rate": 41.1,
+        "expectancy_R": 0.425,
+        "profit_factor": 1.57,
+        "total_R": 23.81,
+        "max_drawdown_R": 6.23,
+        "timeouts": 3
+      },
+      "range_cdc_liq": {
+        "trades": 41,
+        "win_rate": 41.5,
+        "expectancy_R": 0.388,
+        "profit_factor": 1.53,
+        "total_R": 15.92,
+        "max_drawdown_R": 5.68,
+        "timeouts": 3
+      },
+      "visual_score7": {
+        "trades": 84,
+        "win_rate": 28.6,
+        "expectancy_R": -0.114,
+        "profit_factor": 0.87,
+        "total_R": -9.55,
+        "max_drawdown_R": 23.32,
+        "timeouts": 3
+      }
+    },
+    "2024": {
+      "liq_rr2": {
+        "trades": 179,
+        "win_rate": 23.5,
+        "expectancy_R": -0.307,
+        "profit_factor": 0.68,
+        "total_R": -55.04,
+        "max_drawdown_R": 57.3,
+        "timeouts": 4
+      },
+      "cdc_liq": {
+        "trades": 76,
+        "win_rate": 40.8,
+        "expectancy_R": 0.401,
+        "profit_factor": 1.53,
+        "total_R": 30.5,
+        "max_drawdown_R": 11.79,
+        "timeouts": 1
+      },
+      "range_cdc_liq": {
+        "trades": 44,
+        "win_rate": 45.5,
+        "expectancy_R": 0.567,
+        "profit_factor": 1.8,
+        "total_R": 24.97,
+        "max_drawdown_R": 9.81,
+        "timeouts": 1
+      },
+      "visual_score7": {
+        "trades": 116,
+        "win_rate": 29.3,
+        "expectancy_R": -0.038,
+        "profit_factor": 0.96,
+        "total_R": -4.46,
+        "max_drawdown_R": 23.09,
+        "timeouts": 2
+      }
+    },
+    "2025": {
+      "liq_rr2": {
+        "trades": 194,
+        "win_rate": 25.8,
+        "expectancy_R": -0.058,
+        "profit_factor": 0.94,
+        "total_R": -11.32,
+        "max_drawdown_R": 33.97,
+        "timeouts": 2
+      },
+      "cdc_liq": {
+        "trades": 91,
+        "win_rate": 42.9,
+        "expectancy_R": 0.87,
+        "profit_factor": 2.14,
+        "total_R": 79.2,
+        "max_drawdown_R": 13.49,
+        "timeouts": 1
+      },
+      "range_cdc_liq": {
+        "trades": 56,
+        "win_rate": 41.1,
+        "expectancy_R": 0.743,
+        "profit_factor": 1.95,
+        "total_R": 41.64,
+        "max_drawdown_R": 11.69,
+        "timeouts": 0
+      },
+      "visual_score7": {
+        "trades": 134,
+        "win_rate": 31.3,
+        "expectancy_R": 0.275,
+        "profit_factor": 1.31,
+        "total_R": 36.87,
+        "max_drawdown_R": 24.16,
+        "timeouts": 1
+      }
+    },
+    "2026": {
+      "liq_rr2": {
+        "trades": 73,
+        "win_rate": 28.8,
+        "expectancy_R": -0.054,
+        "profit_factor": 0.94,
+        "total_R": -3.95,
+        "max_drawdown_R": 14.23,
+        "timeouts": 3
+      },
+      "cdc_liq": {
+        "trades": 31,
+        "win_rate": 54.8,
+        "expectancy_R": 1.053,
+        "profit_factor": 2.99,
+        "total_R": 32.64,
+        "max_drawdown_R": 2.69,
+        "timeouts": 1
+      },
+      "range_cdc_liq": {
+        "trades": 22,
+        "win_rate": 45.5,
+        "expectancy_R": 0.663,
+        "profit_factor": 2.02,
+        "total_R": 14.59,
+        "max_drawdown_R": 4.13,
+        "timeouts": 1
+      },
+      "visual_score7": {
+        "trades": 50,
+        "win_rate": 30.0,
+        "expectancy_R": 0.083,
+        "profit_factor": 1.1,
+        "total_R": 4.17,
+        "max_drawdown_R": 7.71,
+        "timeouts": 2
+      }
+    }
+  }
+}

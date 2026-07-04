@@ -30,3 +30,8 @@ data/*
 
 # Worktrees temporales de agentes Claude
 .claude/worktrees/
+
+# BTA research: el zip es regenerable (bta_package_zip.py) y los os_screenshots son
+# capturas de debug de la automatizacion (no evidencia de charts) — no van al repo.
+research/bta_review_package_*.zip
+research/tradingview_bta_night_2026-06-30/os_screenshots/

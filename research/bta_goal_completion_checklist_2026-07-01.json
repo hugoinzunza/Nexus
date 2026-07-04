@@ -1,0 +1,116 @@
+{
+  "objective": "Estudiar TradingView del profe en BTCUSDT.P M15, recorrer historia con zoom-out, capturar zonas, inventariar POI/CDC/liquidez/estructura visible y preparar reporte detallado para revisar en la mañana.",
+  "overall_status": "not_complete",
+  "reason": "El paquete de revisión está listo y se agregaron capturas en vivo adicionales, pero falta evidencia visual directa de re-navegación histórica 2025/2024 con chart limpio.",
+  "requirements": [
+    {
+      "id": "study_tradingview_bta_m15",
+      "requirement": "Estudiar TradingView del profe en BTCUSDT.P M15.",
+      "status": "partial",
+      "evidence": [
+        "tradingview_bta_visual_audit_2026-06-30.md",
+        "bta_visual_zone_catalog_2026-07-01.md",
+        "tradingview_bta_contact_sheet_2026-07-01.jpg",
+        "bta_live_renavigation_notes_2026-07-01.md",
+        "bta_live_capture_inventory_2026-07-01.md"
+      ],
+      "missing": "Re-navegar chart limpio para confirmar historia antigua."
+    },
+    {
+      "id": "zoom_out_find_zones",
+      "requirement": "Hacer zoom-out para encontrar zonas.",
+      "status": "partial",
+      "evidence": [
+        "2026-06-11_premium_discount_check.jpg",
+        "2026-06-17_blue_range_premium_discount.jpg",
+        "2026-06-24_discount_poi_confirmacion.jpg",
+        "2026-05-15_discount_cdc_zones.jpg",
+        "2026-05-27_drop_to_orange_target.jpg",
+        "live_autoscale_after_blank_windows.png",
+        "live_back_autoscale_2026_to_2025_04.png"
+      ],
+      "missing": "Extender zoom-out histórico 2025/2024."
+    },
+    {
+      "id": "multi_year_history",
+      "requirement": "Recorrer la historia de la mayor cantidad de años posible.",
+      "status": "missing",
+      "evidence": [
+        "bta_screenshot_similarity_2026-07-01.md",
+        "bta_goal_completion_audit_2026-07-01.md",
+        "bta_live_renavigation_notes_2026-07-01.md",
+        "bta_historical_navigation_atlas_2026-07-01.md",
+        "bta_recapture_priority_checklist_2026-07-01.md"
+      ],
+      "missing": "Hay nueva evidencia parcial de diciembre 2025, atlas de fechas candidatas y checklist de 32 recapturas, pero falta confirmar esas fechas con capturas visuales del chart del profe."
+    },
+    {
+      "id": "capture_visible_zones",
+      "requirement": "Capturar zonas visibles.",
+      "status": "partial",
+      "evidence": [
+        "tradingview_bta_screenshots_2026-06-30/",
+        "tradingview_bta_contact_sheet_2026-07-01.jpg",
+        "tradingview_bta_screenshots_clean_2026-07-01/",
+        "bta_live_capture_inventory_2026-07-01.md"
+      ],
+      "missing": "Capturas limpias independientes suficientes para 2025/2024."
+    },
+    {
+      "id": "inventory_poi_cdc_liquidity_structure",
+      "requirement": "Inventariar POI, CDC, liquidez y estructura visible.",
+      "status": "partial",
+      "evidence": [
+        "bta_visual_inventory_2026-07-01.json",
+        "bta_visual_inventory_summary_2026-07-01.md",
+        "bta_visual_zone_catalog_2026-07-01.md",
+        "bta_live_capture_inventory_2026-07-01.json",
+        "bta_live_capture_inventory_2026-07-01.md"
+      ],
+      "missing": "Inventario ampliado con capturas limpias 2025/2024."
+    },
+    {
+      "id": "compare_with_nexux",
+      "requirement": "Comparar con nuestra estrategia en Nexux.",
+      "status": "complete",
+      "evidence": [
+        "bta_nexux_alignment_matrix_2026-07-01.md",
+        "bta_nexux_implementation_backlog_2026-07-01.md",
+        "bta_visual_backtest_2026-07-01.md"
+      ],
+      "missing": ""
+    },
+    {
+      "id": "morning_report",
+      "requirement": "Preparar reporte detallado para revisar en la mañana.",
+      "status": "complete",
+      "evidence": [
+        "README_BTA_REVIEW_PACKAGE_2026-07-01.md",
+        "bta_morning_review_2026-07-01.html",
+        "bta_morning_brief_2026-07-01.md",
+        "bta_review_index_2026-07-01.md"
+      ],
+      "missing": ""
+    },
+    {
+      "id": "package_integrity",
+      "requirement": "Mantener paquete verificable de la misión.",
+      "status": "complete",
+      "evidence": [
+        "bta_package_manifest_2026-07-01.md",
+        "bta_verify_package.py",
+        "bta_review_package_2026-07-01.zip"
+      ],
+      "missing": ""
+    }
+  ],
+  "completion_gate": {
+    "required_for_complete": [
+      "Autorización para limpiar/recargar TradingView.",
+      "Capturas limpias independientes de 2025.",
+      "Evidencia visual 2024 o documentación de ausencia de anotaciones.",
+      "Inventario actualizado con capturas limpias.",
+      "bta_verify_package.py con errors=0 después de actualizar paquete."
+    ]
+  }
+}

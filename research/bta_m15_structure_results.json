@@ -1,0 +1,795 @@
+{
+  "params": {
+    "symbol": "BTCUSDT",
+    "base_tf": "15m",
+    "poi_sources": [
+      "15m",
+      "1h",
+      "4h",
+      "1d"
+    ],
+    "piv_micro": 2,
+    "piv_struct": 10,
+    "disp_atr": 1.0,
+    "cdc_window": 16,
+    "max_age_days": 30,
+    "rr_fixed": 2.0,
+    "min_rr_liquidity": 2.0,
+    "max_hold": 96
+  },
+  "span": {
+    "from": "2022-06-12 17:45",
+    "to": "2026-06-11 19:30",
+    "candles": 140163
+  },
+  "structure": {
+    "piv2": {
+      "piv": 2,
+      "by_year": {
+        "2022": {
+          "swing_highs": 2744,
+          "swing_lows": 2758,
+          "weak_highs_end": 0,
+          "weak_lows_end": 11,
+          "swept_highs": 2744,
+          "swept_lows": 2747,
+          "median_sweep_hours_high": 2.75,
+          "median_sweep_hours_low": 2.5
+        },
+        "2023": {
+          "swing_highs": 4798,
+          "swing_lows": 4880,
+          "weak_highs_end": 0,
+          "weak_lows_end": 192,
+          "swept_highs": 4798,
+          "swept_lows": 4688,
+          "median_sweep_hours_high": 2.5,
+          "median_sweep_hours_low": 2.5
+        },
+        "2024": {
+          "swing_highs": 4694,
+          "swing_lows": 4690,
+          "weak_highs_end": 0,
+          "weak_lows_end": 81,
+          "swept_highs": 4694,
+          "swept_lows": 4609,
+          "median_sweep_hours_high": 2.75,
+          "median_sweep_hours_low": 2.75
+        },
+        "2025": {
+          "swing_highs": 4666,
+          "swing_lows": 4614,
+          "weak_highs_end": 35,
+          "weak_lows_end": 0,
+          "swept_highs": 4631,
+          "swept_lows": 4614,
+          "median_sweep_hours_high": 2.5,
+          "median_sweep_hours_low": 2.75
+        },
+        "2026": {
+          "swing_highs": 2060,
+          "swing_lows": 2122,
+          "weak_highs_end": 100,
+          "weak_lows_end": 12,
+          "swept_highs": 1960,
+          "swept_lows": 2110,
+          "median_sweep_hours_high": 2.5,
+          "median_sweep_hours_low": 2.5
+        }
+      },
+      "examples": [
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-12 21:15",
+          "sweep": "2023-03-17 22:30",
+          "price": 27532.07
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 00:30",
+          "sweep": "2023-03-17 11:30",
+          "price": 26895.84
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 04:15",
+          "sweep": "2023-03-14 13:00",
+          "price": 26257.31
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 05:15",
+          "sweep": "2023-03-14 12:45",
+          "price": 25849.99
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 06:15",
+          "sweep": "2023-03-14 12:45",
+          "price": 25607.0
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 09:15",
+          "sweep": "2022-07-30 13:00",
+          "price": 24651.17
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 10:30",
+          "sweep": "2022-06-13 12:00",
+          "price": 24324.19
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 12:00",
+          "sweep": "2022-07-29 06:30",
+          "price": 24376.09
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 13:30",
+          "sweep": "2022-06-13 16:00",
+          "price": 23979.67
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 16:30",
+          "sweep": "2022-07-20 15:15",
+          "price": 24204.55
+        }
+      ]
+    },
+    "piv10": {
+      "piv": 10,
+      "by_year": {
+        "2022": {
+          "swing_highs": 656,
+          "swing_lows": 666,
+          "weak_highs_end": 0,
+          "weak_lows_end": 7,
+          "swept_highs": 656,
+          "swept_lows": 659,
+          "median_sweep_hours_high": 11.75,
+          "median_sweep_hours_low": 10.5
+        },
+        "2023": {
+          "swing_highs": 1177,
+          "swing_lows": 1199,
+          "weak_highs_end": 0,
+          "weak_lows_end": 83,
+          "swept_highs": 1177,
+          "swept_lows": 1116,
+          "median_sweep_hours_high": 12.0,
+          "median_sweep_hours_low": 10.25
+        },
+        "2024": {
+          "swing_highs": 1174,
+          "swing_lows": 1136,
+          "weak_highs_end": 0,
+          "weak_lows_end": 42,
+          "swept_highs": 1174,
+          "swept_lows": 1094,
+          "median_sweep_hours_high": 9.25,
+          "median_sweep_hours_low": 12.25
+        },
+        "2025": {
+          "swing_highs": 1125,
+          "swing_lows": 1121,
+          "weak_highs_end": 21,
+          "weak_lows_end": 0,
+          "swept_highs": 1104,
+          "swept_lows": 1121,
+          "median_sweep_hours_high": 10.0,
+          "median_sweep_hours_low": 11.5
+        },
+        "2026": {
+          "swing_highs": 492,
+          "swing_lows": 529,
+          "weak_highs_end": 47,
+          "weak_lows_end": 7,
+          "swept_highs": 445,
+          "swept_lows": 522,
+          "median_sweep_hours_high": 10.25,
+          "median_sweep_hours_low": 10.0
+        }
+      },
+      "examples": [
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 04:15",
+          "sweep": "2023-03-14 13:00",
+          "price": 26257.31
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 12:00",
+          "sweep": "2022-07-29 06:30",
+          "price": 24376.09
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-13 16:30",
+          "sweep": "2022-07-20 15:15",
+          "price": 24204.55
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-14 05:15",
+          "sweep": "2022-07-19 16:30",
+          "price": 23362.88
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-14 15:45",
+          "sweep": "2022-06-16 00:00",
+          "price": 22800.0
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-14 23:30",
+          "sweep": "2022-06-15 18:45",
+          "price": 22344.0
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-15 07:00",
+          "sweep": "2022-06-15 12:15",
+          "price": 21445.71
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-15 13:45",
+          "sweep": "2022-06-15 18:30",
+          "price": 21798.95
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-15 18:45",
+          "sweep": "2022-06-15 22:00",
+          "price": 22496.52
+        },
+        {
+          "type": "swept_high",
+          "pivot": "2022-06-16 01:15",
+          "sweep": "2022-07-19 15:30",
+          "price": 22995.73
+        }
+      ]
+    }
+  },
+  "fvg": {
+    "2022": {
+      "bull_fvg": 1588,
+      "bear_fvg": 1654,
+      "filled": 3240,
+      "filled_bull": 1586,
+      "filled_bear": 1654,
+      "median_fill_bars": 2.0,
+      "fill_rate_pct": 99.9
+    },
+    "2023": {
+      "bull_fvg": 4043,
+      "bear_fvg": 3598,
+      "filled": 7582,
+      "filled_bull": 3984,
+      "filled_bear": 3598,
+      "median_fill_bars": 2.0,
+      "fill_rate_pct": 99.2
+    },
+    "2024": {
+      "bull_fvg": 4080,
+      "bear_fvg": 3619,
+      "filled": 7659,
+      "filled_bull": 4040,
+      "filled_bear": 3619,
+      "median_fill_bars": 2,
+      "fill_rate_pct": 99.5
+    },
+    "2025": {
+      "bull_fvg": 4172,
+      "bear_fvg": 4067,
+      "filled": 8212,
+      "filled_bull": 4172,
+      "filled_bear": 4040,
+      "median_fill_bars": 2.0,
+      "fill_rate_pct": 99.7
+    },
+    "2026": {
+      "bull_fvg": 1709,
+      "bear_fvg": 1815,
+      "filled": 3473,
+      "filled_bull": 1704,
+      "filled_bear": 1769,
+      "median_fill_bars": 2,
+      "fill_rate_pct": 98.6
+    }
+  },
+  "poi_formation_by_year": {
+    "2022": {
+      "long": 143,
+      "short": 153
+    },
+    "2023": {
+      "long": 306,
+      "short": 406
+    },
+    "2024": {
+      "long": 335,
+      "short": 402
+    },
+    "2025": {
+      "long": 393,
+      "short": 482
+    },
+    "2026": {
+      "long": 168,
+      "short": 198
+    }
+  },
+  "poi_events": {
+    "by_year": {
+      "2022": {
+        "touches": 212,
+        "invalid_before_touch": 55,
+        "cdc_same_bar": 0,
+        "cdc_within_window": 97,
+        "liq_rr_ge_2": 61,
+        "long": 108,
+        "short": 104
+      },
+      "2023": {
+        "touches": 581,
+        "invalid_before_touch": 108,
+        "cdc_same_bar": 2,
+        "cdc_within_window": 319,
+        "liq_rr_ge_2": 174,
+        "long": 243,
+        "short": 338
+      },
+      "2024": {
+        "touches": 608,
+        "invalid_before_touch": 95,
+        "cdc_same_bar": 7,
+        "cdc_within_window": 312,
+        "liq_rr_ge_2": 238,
+        "long": 266,
+        "short": 342
+      },
+      "2025": {
+        "touches": 718,
+        "invalid_before_touch": 121,
+        "cdc_same_bar": 4,
+        "cdc_within_window": 382,
+        "liq_rr_ge_2": 284,
+        "long": 326,
+        "short": 392
+      },
+      "2026": {
+        "touches": 284,
+        "invalid_before_touch": 67,
+        "cdc_same_bar": 1,
+        "cdc_within_window": 136,
+        "liq_rr_ge_2": 117,
+        "long": 134,
+        "short": 150
+      }
+    },
+    "by_source": {
+      "15m": {
+        "touches": 1876,
+        "invalid_before_touch": 406,
+        "cdc_within_window": 997,
+        "liq_rr_ge_2": 738
+      },
+      "1d": {
+        "touches": 17,
+        "invalid_before_touch": 1,
+        "cdc_within_window": 9,
+        "liq_rr_ge_2": 0
+      },
+      "1h": {
+        "touches": 386,
+        "invalid_before_touch": 35,
+        "cdc_within_window": 190,
+        "liq_rr_ge_2": 109
+      },
+      "4h": {
+        "touches": 124,
+        "invalid_before_touch": 4,
+        "cdc_within_window": 50,
+        "liq_rr_ge_2": 27
+      }
+    },
+    "by_session": {
+      "Asia": {
+        "touches": 555,
+        "cdc_within_window": 285
+      },
+      "Fuera": {
+        "touches": 258,
+        "cdc_within_window": 151
+      },
+      "Londres": {
+        "touches": 566,
+        "cdc_within_window": 321
+      },
+      "NY": {
+        "touches": 1024,
+        "cdc_within_window": 489
+      }
+    }
+  },
+  "trades": {
+    "fixed_all": {
+      "trades": 1488,
+      "win_rate": 36.8,
+      "expectancy_R": -0.129,
+      "profit_factor": 0.83,
+      "total_R": -191.44,
+      "max_drawdown_R": 202.31,
+      "timeouts": 139
+    },
+    "liquidity_all": {
+      "trades": 605,
+      "win_rate": 26.8,
+      "expectancy_R": -0.129,
+      "profit_factor": 0.86,
+      "total_R": -78.07,
+      "max_drawdown_R": 100.57,
+      "timeouts": 18
+    },
+    "fixed_by_year": {
+      "2022": {
+        "trades": 144,
+        "win_rate": 43.1,
+        "expectancy_R": 0.002,
+        "profit_factor": 1.0,
+        "total_R": 0.34,
+        "max_drawdown_R": 20.43,
+        "timeouts": 23
+      },
+      "2023": {
+        "trades": 346,
+        "win_rate": 32.9,
+        "expectancy_R": -0.255,
+        "profit_factor": 0.67,
+        "total_R": -88.14,
+        "max_drawdown_R": 88.27,
+        "timeouts": 40
+      },
+      "2024": {
+        "trades": 388,
+        "win_rate": 40.2,
+        "expectancy_R": -0.003,
+        "profit_factor": 1.0,
+        "total_R": -1.32,
+        "max_drawdown_R": 44.32,
+        "timeouts": 33
+      },
+      "2025": {
+        "trades": 433,
+        "win_rate": 34.4,
+        "expectancy_R": -0.204,
+        "profit_factor": 0.74,
+        "total_R": -88.21,
+        "max_drawdown_R": 91.72,
+        "timeouts": 29
+      },
+      "2026": {
+        "trades": 177,
+        "win_rate": 37.9,
+        "expectancy_R": -0.08,
+        "profit_factor": 0.89,
+        "total_R": -14.11,
+        "max_drawdown_R": 28.88,
+        "timeouts": 14
+      }
+    },
+    "liquidity_by_year": {
+      "2022": {
+        "trades": 48,
+        "win_rate": 33.3,
+        "expectancy_R": 0.004,
+        "profit_factor": 1.01,
+        "total_R": 0.21,
+        "max_drawdown_R": 8.81,
+        "timeouts": 5
+      },
+      "2023": {
+        "trades": 111,
+        "win_rate": 29.7,
+        "expectancy_R": -0.072,
+        "profit_factor": 0.92,
+        "total_R": -7.97,
+        "max_drawdown_R": 31.53,
+        "timeouts": 4
+      },
+      "2024": {
+        "trades": 179,
+        "win_rate": 23.5,
+        "expectancy_R": -0.307,
+        "profit_factor": 0.68,
+        "total_R": -55.04,
+        "max_drawdown_R": 57.3,
+        "timeouts": 4
+      },
+      "2025": {
+        "trades": 194,
+        "win_rate": 25.8,
+        "expectancy_R": -0.058,
+        "profit_factor": 0.94,
+        "total_R": -11.32,
+        "max_drawdown_R": 33.97,
+        "timeouts": 2
+      },
+      "2026": {
+        "trades": 73,
+        "win_rate": 28.8,
+        "expectancy_R": -0.054,
+        "profit_factor": 0.94,
+        "total_R": -3.95,
+        "max_drawdown_R": 14.23,
+        "timeouts": 3
+      }
+    },
+    "fixed_by_session": {
+      "Asia": {
+        "trades": 343,
+        "win_rate": 34.7,
+        "expectancy_R": -0.171,
+        "profit_factor": 0.78,
+        "total_R": -58.65,
+        "max_drawdown_R": 64.57,
+        "timeouts": 32
+      },
+      "Fuera": {
+        "trades": 159,
+        "win_rate": 40.9,
+        "expectancy_R": -0.054,
+        "profit_factor": 0.92,
+        "total_R": -8.59,
+        "max_drawdown_R": 21.92,
+        "timeouts": 19
+      },
+      "Londres": {
+        "trades": 321,
+        "win_rate": 35.2,
+        "expectancy_R": -0.195,
+        "profit_factor": 0.76,
+        "total_R": -62.59,
+        "max_drawdown_R": 64.67,
+        "timeouts": 18
+      },
+      "NY": {
+        "trades": 665,
+        "win_rate": 37.7,
+        "expectancy_R": -0.093,
+        "profit_factor": 0.87,
+        "total_R": -61.6,
+        "max_drawdown_R": 68.01,
+        "timeouts": 70
+      }
+    },
+    "liquidity_by_session": {
+      "Asia": {
+        "trades": 131,
+        "win_rate": 29.0,
+        "expectancy_R": -0.011,
+        "profit_factor": 0.99,
+        "total_R": -1.47,
+        "max_drawdown_R": 51.51,
+        "timeouts": 3
+      },
+      "Fuera": {
+        "trades": 57,
+        "win_rate": 31.6,
+        "expectancy_R": -0.021,
+        "profit_factor": 0.98,
+        "total_R": -1.21,
+        "max_drawdown_R": 17.24,
+        "timeouts": 2
+      },
+      "Londres": {
+        "trades": 117,
+        "win_rate": 25.6,
+        "expectancy_R": -0.266,
+        "profit_factor": 0.73,
+        "total_R": -31.14,
+        "max_drawdown_R": 31.19,
+        "timeouts": 1
+      },
+      "NY": {
+        "trades": 300,
+        "win_rate": 25.3,
+        "expectancy_R": -0.148,
+        "profit_factor": 0.84,
+        "total_R": -44.25,
+        "max_drawdown_R": 58.11,
+        "timeouts": 12
+      }
+    }
+  },
+  "examples": {
+    "best_liquidity_winners": [
+      {
+        "time": "2025-11-05 01:15",
+        "source_tf": "15m",
+        "dir": "long",
+        "session": "Asia",
+        "rr_liq": 12.08,
+        "cdc_delay_bars": 8,
+        "fixed_R": 1.8182,
+        "liq_R": 11.8962,
+        "outcome_liq": "win"
+      },
+      {
+        "time": "2025-04-16 17:45",
+        "source_tf": "15m",
+        "dir": "long",
+        "session": "NY",
+        "rr_liq": 17.677,
+        "cdc_delay_bars": 10,
+        "fixed_R": 1.8165,
+        "liq_R": 10.5422,
+        "outcome_liq": "time"
+      },
+      {
+        "time": "2025-09-15 05:45",
+        "source_tf": "15m",
+        "dir": "short",
+        "session": "Asia",
+        "rr_liq": 8.271,
+        "cdc_delay_bars": 7,
+        "fixed_R": 1.7729,
+        "liq_R": 8.0451,
+        "outcome_liq": "win"
+      },
+      {
+        "time": "2025-08-01 14:15",
+        "source_tf": "15m",
+        "dir": "short",
+        "session": "NY",
+        "rr_liq": 8.003,
+        "cdc_delay_bars": 11,
+        "fixed_R": 1.8605,
+        "liq_R": 7.8647,
+        "outcome_liq": "win"
+      },
+      {
+        "time": "2024-06-12 14:15",
+        "source_tf": "1h",
+        "dir": "short",
+        "session": "NY",
+        "rr_liq": 5.925,
+        "cdc_delay_bars": 8,
+        "fixed_R": 1.9234,
+        "liq_R": 5.8492,
+        "outcome_liq": "win"
+      },
+      {
+        "time": "2025-04-30 13:45",
+        "source_tf": "15m",
+        "dir": "long",
+        "session": "NY",
+        "rr_liq": 5.89,
+        "cdc_delay_bars": 15,
+        "fixed_R": 1.8641,
+        "liq_R": 5.7533,
+        "outcome_liq": "win"
+      },
+      {
+        "time": "2025-11-24 02:00",
+        "source_tf": "1h",
+        "dir": "short",
+        "session": "Asia",
+        "rr_liq": 5.846,
+        "cdc_delay_bars": 9,
+        "fixed_R": 1.8645,
+        "liq_R": 5.7113,
+        "outcome_liq": "win"
+      },
+      {
+        "time": "2024-10-10 18:00",
+        "source_tf": "15m",
+        "dir": "long",
+        "session": "NY",
+        "rr_liq": 5.682,
+        "cdc_delay_bars": 15,
+        "fixed_R": 1.9273,
+        "liq_R": 5.6086,
+        "outcome_liq": "win"
+      }
+    ],
+    "fixed_rr_failures": [
+      {
+        "time": "2025-10-04 21:15",
+        "source_tf": "15m",
+        "dir": "short",
+        "session": "Fuera",
+        "rr_liq": 4.444,
+        "cdc_delay_bars": null,
+        "fixed_R": -1.5994,
+        "liq_R": -1.5994,
+        "outcome_liq": "loss"
+      },
+      {
+        "time": "2024-07-18 12:00",
+        "source_tf": "15m",
+        "dir": "short",
+        "session": "Londres",
+        "rr_liq": 4.258,
+        "cdc_delay_bars": 6,
+        "fixed_R": -1.5988,
+        "liq_R": -1.5988,
+        "outcome_liq": "loss"
+      },
+      {
+        "time": "2023-09-26 07:30",
+        "source_tf": "15m",
+        "dir": "long",
+        "session": "Londres",
+        "rr_liq": 2.231,
+        "cdc_delay_bars": 8,
+        "fixed_R": -1.5954,
+        "liq_R": -1.5954,
+        "outcome_liq": "loss"
+      },
+      {
+        "time": "2023-12-01 16:15",
+        "source_tf": "1h",
+        "dir": "short",
+        "session": "NY",
+        "rr_liq": 9.76,
+        "cdc_delay_bars": 12,
+        "fixed_R": -1.5939,
+        "liq_R": -1.5939,
+        "outcome_liq": "loss"
+      },
+      {
+        "time": "2023-07-07 07:15",
+        "source_tf": "15m",
+        "dir": "long",
+        "session": "Londres",
+        "rr_liq": 4.625,
+        "cdc_delay_bars": null,
+        "fixed_R": -1.59,
+        "liq_R": -1.59,
+        "outcome_liq": "loss"
+      },
+      {
+        "time": "2025-05-20 19:15",
+        "source_tf": "15m",
+        "dir": "short",
+        "session": "NY",
+        "rr_liq": 11.219,
+        "cdc_delay_bars": 8,
+        "fixed_R": -1.5883,
+        "liq_R": -1.5883,
+        "outcome_liq": "loss"
+      },
+      {
+        "time": "2023-07-09 09:30",
+        "source_tf": "15m",
+        "dir": "long",
+        "session": "Londres",
+        "rr_liq": 0.977,
+        "cdc_delay_bars": 12,
+        "fixed_R": -1.5861,
+        "liq_R": null,
+        "outcome_liq": null
+      },
+      {
+        "time": "2026-05-12 10:00",
+        "source_tf": "15m",
+        "dir": "long",
+        "session": "Londres",
+        "rr_liq": 1.281,
+        "cdc_delay_bars": null,
+        "fixed_R": -1.584,
+        "liq_R": null,
+        "outcome_liq": null
+      }
+    ]
+  }
+}

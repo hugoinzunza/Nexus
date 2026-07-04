@@ -1,0 +1,476 @@
+{
+  "params": {
+    "range_bars": 672,
+    "rr_min": 2.0,
+    "risk_max_pct": 1.2,
+    "cdc_max_delay": 16,
+    "max_hold": 96
+  },
+  "span": {
+    "from": "2022-06-12 17:45",
+    "to": "2026-06-11 19:30",
+    "candles": 140163
+  },
+  "touch_records": 2403,
+  "variants": {
+    "liq_rr2": {
+      "summary": {
+        "selected": 874,
+        "executed_trades": 605,
+        "by_year": {
+          "2022": 61,
+          "2023": 174,
+          "2024": 238,
+          "2025": 284,
+          "2026": 117
+        },
+        "by_source": {
+          "15m": 738,
+          "1h": 109,
+          "4h": 27
+        },
+        "by_score": {
+          "4": 41,
+          "5": 103,
+          "6": 143,
+          "7": 295,
+          "8": 119,
+          "9": 159,
+          "10": 14
+        },
+        "median_risk_pct": 0.324,
+        "median_rr_liq": 3.199,
+        "trade_metrics": {
+          "trades": 605,
+          "win_rate": 26.8,
+          "expectancy_R": -0.129,
+          "profit_factor": 0.86,
+          "total_R": -78.07,
+          "max_drawdown_R": 100.57,
+          "timeouts": 18
+        }
+      }
+    },
+    "cdc_liq": {
+      "summary": {
+        "selected": 390,
+        "executed_trades": 272,
+        "by_year": {
+          "2022": 21,
+          "2023": 84,
+          "2024": 101,
+          "2025": 136,
+          "2026": 48
+        },
+        "by_source": {
+          "15m": 339,
+          "1h": 45,
+          "4h": 6
+        },
+        "by_score": {
+          "5": 1,
+          "6": 36,
+          "7": 100,
+          "8": 80,
+          "9": 159,
+          "10": 14
+        },
+        "median_risk_pct": 0.291,
+        "median_rr_liq": 3.177,
+        "trade_metrics": {
+          "trades": 272,
+          "win_rate": 44.9,
+          "expectancy_R": 0.7,
+          "profit_factor": 1.99,
+          "total_R": 190.38,
+          "max_drawdown_R": 13.49,
+          "timeouts": 8
+        }
+      }
+    },
+    "range_cdc_liq": {
+      "summary": {
+        "selected": 245,
+        "executed_trades": 176,
+        "by_year": {
+          "2022": 16,
+          "2023": 57,
+          "2024": 61,
+          "2025": 78,
+          "2026": 33
+        },
+        "by_source": {
+          "15m": 213,
+          "1h": 26,
+          "4h": 6
+        },
+        "by_score": {
+          "7": 4,
+          "8": 68,
+          "9": 159,
+          "10": 14
+        },
+        "median_risk_pct": 0.305,
+        "median_rr_liq": 3.282,
+        "trade_metrics": {
+          "trades": 176,
+          "win_rate": 44.3,
+          "expectancy_R": 0.626,
+          "profit_factor": 1.88,
+          "total_R": 110.22,
+          "max_drawdown_R": 11.69,
+          "timeouts": 7
+        }
+      }
+    },
+    "visual_score6": {
+      "summary": {
+        "selected": 730,
+        "executed_trades": 504,
+        "by_year": {
+          "2022": 49,
+          "2023": 153,
+          "2024": 195,
+          "2025": 232,
+          "2026": 101
+        },
+        "by_source": {
+          "15m": 600,
+          "1h": 105,
+          "4h": 25
+        },
+        "by_score": {
+          "6": 143,
+          "7": 295,
+          "8": 119,
+          "9": 159,
+          "10": 14
+        },
+        "median_risk_pct": 0.33,
+        "median_rr_liq": 3.186,
+        "trade_metrics": {
+          "trades": 504,
+          "win_rate": 29.2,
+          "expectancy_R": -0.007,
+          "profit_factor": 0.99,
+          "total_R": -3.6,
+          "max_drawdown_R": 60.01,
+          "timeouts": 14
+        }
+      }
+    },
+    "visual_score7": {
+      "summary": {
+        "selected": 587,
+        "executed_trades": 410,
+        "by_year": {
+          "2022": 34,
+          "2023": 125,
+          "2024": 156,
+          "2025": 192,
+          "2026": 80
+        },
+        "by_source": {
+          "15m": 475,
+          "1h": 88,
+          "4h": 24
+        },
+        "by_score": {
+          "7": 295,
+          "8": 119,
+          "9": 159,
+          "10": 14
+        },
+        "median_risk_pct": 0.349,
+        "median_rr_liq": 3.198,
+        "trade_metrics": {
+          "trades": 410,
+          "win_rate": 30.7,
+          "expectancy_R": 0.087,
+          "profit_factor": 1.1,
+          "total_R": 35.69,
+          "max_drawdown_R": 38.46,
+          "timeouts": 11
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "time": "2023-12-01 16:15",
+      "dir": "short",
+      "source_tf": "1h",
+      "session": "NY",
+      "score": 10,
+      "rr_liq": 9.76,
+      "risk_pct": 0.152,
+      "range": [
+        36707.0,
+        37770.0,
+        38833.0
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2025-03-03 19:45",
+      "dir": "long",
+      "source_tf": "1h",
+      "session": "NY",
+      "score": 10,
+      "rr_liq": 9.021,
+      "risk_pct": 0.698,
+      "range": [
+        78258.52,
+        86629.26,
+        95000.0
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2025-05-15 16:30",
+      "dir": "short",
+      "source_tf": "1h",
+      "session": "NY",
+      "score": 10,
+      "rr_liq": 6.867,
+      "risk_pct": 0.311,
+      "range": [
+        100718.37,
+        103268.91,
+        105819.45
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2025-03-12 14:30",
+      "dir": "long",
+      "source_tf": "1h",
+      "session": "NY",
+      "score": 10,
+      "rr_liq": 6.553,
+      "risk_pct": 0.532,
+      "range": [
+        76606.0,
+        84708.32,
+        92810.64
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2026-05-15 13:30",
+      "dir": "long",
+      "source_tf": "4h",
+      "session": "NY",
+      "score": 10,
+      "rr_liq": 6.086,
+      "risk_pct": 0.338,
+      "range": [
+        78754.65,
+        80616.99,
+        82479.32
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2024-06-12 14:15",
+      "dir": "short",
+      "source_tf": "1h",
+      "session": "NY",
+      "score": 10,
+      "rr_liq": 5.925,
+      "risk_pct": 0.52,
+      "range": [
+        66051.0,
+        69024.01,
+        71997.02
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2025-12-29 10:45",
+      "dir": "long",
+      "source_tf": "1h",
+      "session": "Londres",
+      "score": 10,
+      "rr_liq": 5.425,
+      "risk_pct": 0.429,
+      "range": [
+        86420.0,
+        88504.11,
+        90588.23
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2025-02-19 10:00",
+      "dir": "short",
+      "source_tf": "1h",
+      "session": "Londres",
+      "score": 10,
+      "rr_liq": 4.721,
+      "risk_pct": 0.166,
+      "range": [
+        93388.09,
+        96107.04,
+        98826.0
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2025-02-02 18:30",
+      "dir": "long",
+      "source_tf": "1h",
+      "session": "NY",
+      "score": 10,
+      "rr_liq": 4.131,
+      "risk_pct": 0.589,
+      "range": [
+        96862.02,
+        101659.73,
+        106457.44
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2023-08-14 18:00",
+      "dir": "long",
+      "source_tf": "1h",
+      "session": "NY",
+      "score": 10,
+      "rr_liq": 4.067,
+      "risk_pct": 0.31,
+      "range": [
+        28973.03,
+        29608.51,
+        30244.0
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2026-02-18 15:30",
+      "dir": "short",
+      "source_tf": "1h",
+      "session": "NY",
+      "score": 10,
+      "rr_liq": 3.473,
+      "risk_pct": 0.589,
+      "range": [
+        65118.0,
+        68050.5,
+        70983.0
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    },
+    {
+      "time": "2024-11-15 12:00",
+      "dir": "short",
+      "source_tf": "1h",
+      "session": "Londres",
+      "score": 10,
+      "rr_liq": 3.157,
+      "risk_pct": 1.151,
+      "range": [
+        75630.76,
+        84448.2,
+        93265.64
+      ],
+      "reasons": [
+        "premium/discount global correcto",
+        "CDC confirmado",
+        "liquidez con RR>=2",
+        "riesgo acotado",
+        "POI HTF",
+        "sesion liquida",
+        "rango reciente suficiente"
+      ]
+    }
+  ]
+}

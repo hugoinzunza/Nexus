@@ -1,0 +1,69 @@
+{
+  "status": "pending_tradingview_cleanup",
+  "target_dir": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01",
+  "items": [
+    {
+      "priority": "high",
+      "date": "2025-04-16",
+      "target_file": "2025-04-16_clean_liquidity_case.jpg",
+      "reason": "Backtest has a highlighted candidate, current screenshot is not independent evidence.",
+      "must_capture": ["zoomed_range", "decision_zone", "outcome_if_visible"],
+      "required_labels_or_objects": ["POI", "CDC", "liquidity", "swing_structure"],
+      "done": false
+    },
+    {
+      "priority": "high",
+      "date": "2025-08-01",
+      "target_file": "2025-08-01_clean_structure_context.jpg",
+      "reason": "Current screenshot repeated/non-independent.",
+      "must_capture": ["zoomed_range", "structure_context", "outcome_if_visible"],
+      "required_labels_or_objects": ["POI", "CDC", "zigzag", "liquidity"],
+      "done": false
+    },
+    {
+      "priority": "high",
+      "date": "2025-11-05",
+      "target_file": "2025-11-05_clean_zigzag_structure.jpg",
+      "reason": "Current image shows useful zigzag layer but needs independent recapture.",
+      "must_capture": ["zigzag_leg", "pivots", "measurement_lines"],
+      "required_labels_or_objects": ["zigzag", "cyan_pivots", "leg_arrows", "0/1 measurement"],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "date": "2026-01-15",
+      "target_file": "2026-01-15_clean_level_cluster.jpg",
+      "reason": "Level cluster not classified.",
+      "must_capture": ["zoomed_range", "levels", "context_before_after"],
+      "required_labels_or_objects": ["reference_levels", "liquidity", "alerts_or_axis_levels"],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "date": "2026-03",
+      "target_file": "2026-03_clean_poi_cdc_sample.jpg",
+      "reason": "Expand 2026 visual sample before May.",
+      "must_capture": ["zoomed_range", "poi", "cdc"],
+      "required_labels_or_objects": ["Premium POI", "Discount POI", "CDC"],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "date": "2026-04",
+      "target_file": "2026-04_clean_structure_sample.jpg",
+      "reason": "Expand 2026 structure sample before May.",
+      "must_capture": ["structure", "range", "liquidity"],
+      "required_labels_or_objects": ["SwingLeg", "reference_level", "liquidity"],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "date": "2024-Q1/Q2/Q3",
+      "target_file": "2024-qx_clean_three_examples.jpg",
+      "reason": "No reliable 2024 visual evidence yet.",
+      "must_capture": ["poi_cdc", "retest_continuation", "zigzag_structure"],
+      "required_labels_or_objects": ["POI", "CDC", "retest", "zigzag"],
+      "done": false
+    }
+  ]
+}

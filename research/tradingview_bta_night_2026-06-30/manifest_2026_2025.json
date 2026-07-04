@@ -1,0 +1,421 @@
+{
+  "createdAt": "2026-07-01T01:59:41.286Z",
+  "count": 83,
+  "records": [
+    {
+      "date": "2026-06-24",
+      "ok": false,
+      "error": "Timed out after 3000ms waiting for selector input[placeholder=\"YYYY-MM-DD\"]: CDP operation exceeded its deadline before command dispatch"
+    },
+    {
+      "date": "2026-06-17",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-06-11",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-06-10",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-06-03",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-05-27",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-05-20",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-05-15",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-05-13",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-05-06",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-04-29",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-04-22",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-04-16",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-04-15",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-04-08",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-04-01",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-03-25",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-03-18",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-03-11",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-03-04",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-02-25",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-02-18",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-02-11",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-02-04",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-01-28",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-01-21",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-01-15",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-01-14",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2026-01-07",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-12-31",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-12-24",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-12-17",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-12-10",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-12-03",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-11-26",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-11-19",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-11-12",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-11-05",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-10-29",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-10-22",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-10-15",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-10-08",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-10-01",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-09-24",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-09-17",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-09-10",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-09-03",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-08-27",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-08-20",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-08-13",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-08-06",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-08-01",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-07-30",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-07-23",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-07-16",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-07-09",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-07-02",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-06-25",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-06-18",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-06-11",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-06-04",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-05-28",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-05-21",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-05-14",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-05-07",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-04-30",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-04-23",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-04-16",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-04-09",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-04-02",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-03-26",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-03-19",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-03-12",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-03-05",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-02-26",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-02-19",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-02-12",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-02-05",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-01-29",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-01-22",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-01-15",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-01-08",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    },
+    {
+      "date": "2025-01-01",
+      "ok": false,
+      "error": "Browser is not available: -4e90-4212-ac89-a27dffae1218"
+    }
+  ]
+}

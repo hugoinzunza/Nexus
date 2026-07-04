@@ -1,0 +1,1032 @@
+{
+  "source": "/Users/hugh/crisol/nexux/data/klines_BTCUSDT_15m.json",
+  "futures_recent_source": "/Users/hugh/crisol/nexux/research/bta_btcusdtp_15m_recent.json",
+  "cases": [
+    {
+      "key": "2026-06-24_discount_poi_confirmacion",
+      "center": "2026-06-24 12:00",
+      "days_before": 7,
+      "days_after": 7,
+      "visual": "Mapa premium/discount, CDC, strong high, minimo 57.758.",
+      "data_source_used": "futures_recent",
+      "window": {
+        "from": "2026-06-17 16:00",
+        "to": "2026-07-01 02:15",
+        "candles": 1290
+      },
+      "range": {
+        "high": 66419.2,
+        "high_time": "2026-06-17 16:15",
+        "low": 57758.6,
+        "low_time": "2026-07-01 01:00",
+        "range_pct": 14.99
+      },
+      "fvg": {
+        "bull": 134,
+        "bear": 128,
+        "total": 262
+      },
+      "pivots": {
+        "piv2": {
+          "highs": 172,
+          "lows": 176
+        },
+        "piv10": {
+          "highs": 42,
+          "lows": 42
+        },
+        "near_center_piv10": [
+          {
+            "side": "high",
+            "time": "2026-06-23 02:45",
+            "price": 64247.2,
+            "bars_from_center": -149
+          },
+          {
+            "side": "high",
+            "time": "2026-06-23 14:15",
+            "price": 62837.1,
+            "bars_from_center": -103
+          },
+          {
+            "side": "high",
+            "time": "2026-06-24 01:30",
+            "price": 63090.9,
+            "bars_from_center": -58
+          },
+          {
+            "side": "high",
+            "time": "2026-06-24 05:30",
+            "price": 63053.5,
+            "bars_from_center": -42
+          },
+          {
+            "side": "high",
+            "time": "2026-06-24 11:45",
+            "price": 63209.6,
+            "bars_from_center": -17
+          },
+          {
+            "side": "high",
+            "time": "2026-06-24 22:00",
+            "price": 61256.0,
+            "bars_from_center": 24
+          },
+          {
+            "side": "high",
+            "time": "2026-06-25 07:30",
+            "price": 61931.1,
+            "bars_from_center": 62
+          },
+          {
+            "side": "high",
+            "time": "2026-06-25 12:30",
+            "price": 61742.9,
+            "bars_from_center": 82
+          },
+          {
+            "side": "high",
+            "time": "2026-06-25 21:45",
+            "price": 60245.0,
+            "bars_from_center": 119
+          },
+          {
+            "side": "high",
+            "time": "2026-06-26 07:30",
+            "price": 60734.0,
+            "bars_from_center": 158
+          },
+          {
+            "side": "low",
+            "time": "2026-06-22 22:30",
+            "price": 63758.3,
+            "bars_from_center": -166
+          },
+          {
+            "side": "low",
+            "time": "2026-06-23 08:15",
+            "price": 61870.0,
+            "bars_from_center": -127
+          },
+          {
+            "side": "low",
+            "time": "2026-06-23 13:30",
+            "price": 61916.9,
+            "bars_from_center": -106
+          },
+          {
+            "side": "low",
+            "time": "2026-06-23 18:45",
+            "price": 62075.6,
+            "bars_from_center": -85
+          },
+          {
+            "side": "low",
+            "time": "2026-06-24 03:15",
+            "price": 62402.8,
+            "bars_from_center": -51
+          },
+          {
+            "side": "low",
+            "time": "2026-06-24 17:45",
+            "price": 59060.0,
+            "bars_from_center": 7
+          },
+          {
+            "side": "low",
+            "time": "2026-06-25 03:15",
+            "price": 60648.0,
+            "bars_from_center": 45
+          },
+          {
+            "side": "low",
+            "time": "2026-06-25 13:45",
+            "price": 58030.0,
+            "bars_from_center": 87
+          },
+          {
+            "side": "low",
+            "time": "2026-06-26 03:00",
+            "price": 58288.0,
+            "bars_from_center": 140
+          },
+          {
+            "side": "low",
+            "time": "2026-06-26 13:15",
+            "price": 58388.0,
+            "bars_from_center": 181
+          }
+        ]
+      },
+      "move_after_24h": {
+        "close_at_center": 60492.3,
+        "max_up_pct": 2.38,
+        "max_down_pct": -4.07,
+        "future_high": 61931.1,
+        "future_low": 58030.0
+      },
+      "move_after_72h": {
+        "close_at_center": 60492.3,
+        "max_up_pct": 2.38,
+        "max_down_pct": -4.07,
+        "future_high": 61931.1,
+        "future_low": 58030.0
+      }
+    },
+    {
+      "key": "2026-06-17_blue_range_premium_discount",
+      "center": "2026-06-17 12:00",
+      "days_before": 7,
+      "days_after": 7,
+      "visual": "Rango amplio azul/gris, premium POI, counter POI, discount POI.",
+      "data_source_used": "futures_recent",
+      "window": {
+        "from": "2026-06-10 16:00",
+        "to": "2026-06-24 16:00",
+        "candles": 1345
+      },
+      "range": {
+        "high": 67255.4,
+        "high_time": "2026-06-15 15:45",
+        "low": 60193.0,
+        "low_time": "2026-06-24 16:00",
+        "range_pct": 11.73
+      },
+      "fvg": {
+        "bull": 145,
+        "bear": 138,
+        "total": 283
+      },
+      "pivots": {
+        "piv2": {
+          "highs": 183,
+          "lows": 181
+        },
+        "piv10": {
+          "highs": 44,
+          "lows": 43
+        },
+        "near_center_piv10": [
+          {
+            "side": "high",
+            "time": "2026-06-15 15:45",
+            "price": 67255.4,
+            "bars_from_center": -193
+          },
+          {
+            "side": "high",
+            "time": "2026-06-16 08:45",
+            "price": 66956.7,
+            "bars_from_center": -125
+          },
+          {
+            "side": "high",
+            "time": "2026-06-16 12:30",
+            "price": 66787.1,
+            "bars_from_center": -110
+          },
+          {
+            "side": "high",
+            "time": "2026-06-16 18:00",
+            "price": 66246.1,
+            "bars_from_center": -88
+          },
+          {
+            "side": "high",
+            "time": "2026-06-17 02:15",
+            "price": 66092.5,
+            "bars_from_center": -55
+          },
+          {
+            "side": "high",
+            "time": "2026-06-17 16:15",
+            "price": 66419.2,
+            "bars_from_center": 1
+          },
+          {
+            "side": "high",
+            "time": "2026-06-18 01:00",
+            "price": 64780.0,
+            "bars_from_center": 36
+          },
+          {
+            "side": "high",
+            "time": "2026-06-18 08:00",
+            "price": 64631.5,
+            "bars_from_center": 64
+          },
+          {
+            "side": "high",
+            "time": "2026-06-18 13:00",
+            "price": 64423.4,
+            "bars_from_center": 84
+          },
+          {
+            "side": "high",
+            "time": "2026-06-18 20:15",
+            "price": 63266.8,
+            "bars_from_center": 113
+          },
+          {
+            "side": "low",
+            "time": "2026-06-16 03:15",
+            "price": 65607.1,
+            "bars_from_center": -147
+          },
+          {
+            "side": "low",
+            "time": "2026-06-16 14:30",
+            "price": 65328.8,
+            "bars_from_center": -102
+          },
+          {
+            "side": "low",
+            "time": "2026-06-16 19:15",
+            "price": 65529.0,
+            "bars_from_center": -83
+          },
+          {
+            "side": "low",
+            "time": "2026-06-17 01:15",
+            "price": 65427.9,
+            "bars_from_center": -59
+          },
+          {
+            "side": "low",
+            "time": "2026-06-17 11:00",
+            "price": 64525.0,
+            "bars_from_center": -20
+          },
+          {
+            "side": "low",
+            "time": "2026-06-17 22:00",
+            "price": 63881.2,
+            "bars_from_center": 24
+          },
+          {
+            "side": "low",
+            "time": "2026-06-18 05:00",
+            "price": 63660.1,
+            "bars_from_center": 52
+          },
+          {
+            "side": "low",
+            "time": "2026-06-18 15:45",
+            "price": 62232.1,
+            "bars_from_center": 95
+          },
+          {
+            "side": "low",
+            "time": "2026-06-18 22:30",
+            "price": 62710.5,
+            "bars_from_center": 122
+          },
+          {
+            "side": "low",
+            "time": "2026-06-19 03:15",
+            "price": 62237.2,
+            "bars_from_center": 141
+          }
+        ]
+      },
+      "move_after_24h": {
+        "close_at_center": 65815.1,
+        "max_up_pct": 0.92,
+        "max_down_pct": -5.44,
+        "future_high": 66419.2,
+        "future_low": 62232.1
+      },
+      "move_after_72h": {
+        "close_at_center": 65815.1,
+        "max_up_pct": 0.92,
+        "max_down_pct": -5.44,
+        "future_high": 66419.2,
+        "future_low": 62232.1
+      }
+    },
+    {
+      "key": "2026-06-11_premium_discount_check",
+      "center": "2026-06-11 12:00",
+      "days_before": 5,
+      "days_after": 7,
+      "visual": "CDC, premium POI con check, desplazamiento desde discount.",
+      "data_source_used": "futures_recent",
+      "window": {
+        "from": "2026-06-06 16:00",
+        "to": "2026-06-18 16:00",
+        "candles": 1153
+      },
+      "range": {
+        "high": 67255.4,
+        "high_time": "2026-06-15 15:45",
+        "low": 60363.0,
+        "low_time": "2026-06-06 18:15",
+        "range_pct": 11.42
+      },
+      "fvg": {
+        "bull": 120,
+        "bear": 108,
+        "total": 228
+      },
+      "pivots": {
+        "piv2": {
+          "highs": 159,
+          "lows": 152
+        },
+        "piv10": {
+          "highs": 35,
+          "lows": 34
+        },
+        "near_center_piv10": [
+          {
+            "side": "high",
+            "time": "2026-06-09 20:15",
+            "price": 62253.2,
+            "bars_from_center": -175
+          },
+          {
+            "side": "high",
+            "time": "2026-06-10 01:00",
+            "price": 61947.4,
+            "bars_from_center": -156
+          },
+          {
+            "side": "high",
+            "time": "2026-06-10 07:30",
+            "price": 61783.4,
+            "bars_from_center": -130
+          },
+          {
+            "side": "high",
+            "time": "2026-06-10 15:45",
+            "price": 62840.2,
+            "bars_from_center": -97
+          },
+          {
+            "side": "high",
+            "time": "2026-06-11 11:30",
+            "price": 63235.9,
+            "bars_from_center": -18
+          },
+          {
+            "side": "high",
+            "time": "2026-06-11 19:30",
+            "price": 63915.3,
+            "bars_from_center": 14
+          },
+          {
+            "side": "high",
+            "time": "2026-06-12 00:00",
+            "price": 63777.0,
+            "bars_from_center": 32
+          },
+          {
+            "side": "high",
+            "time": "2026-06-12 04:30",
+            "price": 63843.2,
+            "bars_from_center": 50
+          },
+          {
+            "side": "high",
+            "time": "2026-06-12 09:30",
+            "price": 63929.9,
+            "bars_from_center": 70
+          },
+          {
+            "side": "high",
+            "time": "2026-06-12 15:15",
+            "price": 64362.6,
+            "bars_from_center": 93
+          },
+          {
+            "side": "low",
+            "time": "2026-06-09 16:30",
+            "price": 60755.0,
+            "bars_from_center": -190
+          },
+          {
+            "side": "low",
+            "time": "2026-06-10 05:15",
+            "price": 61045.7,
+            "bars_from_center": -139
+          },
+          {
+            "side": "low",
+            "time": "2026-06-10 09:15",
+            "price": 60691.9,
+            "bars_from_center": -123
+          },
+          {
+            "side": "low",
+            "time": "2026-06-10 22:15",
+            "price": 61068.6,
+            "bars_from_center": -71
+          },
+          {
+            "side": "low",
+            "time": "2026-06-11 12:30",
+            "price": 62455.8,
+            "bars_from_center": -14
+          },
+          {
+            "side": "low",
+            "time": "2026-06-11 17:15",
+            "price": 62315.0,
+            "bars_from_center": 5
+          },
+          {
+            "side": "low",
+            "time": "2026-06-11 20:45",
+            "price": 63235.8,
+            "bars_from_center": 19
+          },
+          {
+            "side": "low",
+            "time": "2026-06-12 01:15",
+            "price": 63271.6,
+            "bars_from_center": 37
+          },
+          {
+            "side": "low",
+            "time": "2026-06-12 06:30",
+            "price": 62800.0,
+            "bars_from_center": 58
+          },
+          {
+            "side": "low",
+            "time": "2026-06-12 13:30",
+            "price": 63020.6,
+            "bars_from_center": 86
+          }
+        ]
+      },
+      "move_after_24h": {
+        "close_at_center": 62798.7,
+        "max_up_pct": 2.49,
+        "max_down_pct": -0.77,
+        "future_high": 64362.6,
+        "future_low": 62315.0
+      },
+      "move_after_72h": {
+        "close_at_center": 62798.7,
+        "max_up_pct": 3.09,
+        "max_down_pct": -0.77,
+        "future_high": 64738.0,
+        "future_low": 62315.0
+      }
+    },
+    {
+      "key": "2026-05-27_drop_to_orange_target",
+      "center": "2026-05-27 12:00",
+      "days_before": 7,
+      "days_after": 7,
+      "visual": "Continuacion bajista hacia caja objetivo naranja.",
+      "data_source_used": "futures_recent",
+      "window": {
+        "from": "2026-05-20 16:00",
+        "to": "2026-06-03 16:00",
+        "candles": 1345
+      },
+      "range": {
+        "high": 78180.0,
+        "high_time": "2026-05-21 08:00",
+        "low": 65359.1,
+        "low_time": "2026-06-03 03:45",
+        "range_pct": 19.62
+      },
+      "fvg": {
+        "bull": 121,
+        "bear": 158,
+        "total": 279
+      },
+      "pivots": {
+        "piv2": {
+          "highs": 177,
+          "lows": 173
+        },
+        "piv10": {
+          "highs": 48,
+          "lows": 47
+        },
+        "near_center_piv10": [
+          {
+            "side": "high",
+            "time": "2026-05-26 10:45",
+            "price": 77600.0,
+            "bars_from_center": -117
+          },
+          {
+            "side": "high",
+            "time": "2026-05-26 14:15",
+            "price": 78077.1,
+            "bars_from_center": -103
+          },
+          {
+            "side": "high",
+            "time": "2026-05-27 01:00",
+            "price": 76083.9,
+            "bars_from_center": -60
+          },
+          {
+            "side": "high",
+            "time": "2026-05-27 08:15",
+            "price": 76038.0,
+            "bars_from_center": -31
+          },
+          {
+            "side": "high",
+            "time": "2026-05-27 12:15",
+            "price": 76155.5,
+            "bars_from_center": -15
+          },
+          {
+            "side": "high",
+            "time": "2026-05-27 20:15",
+            "price": 75391.0,
+            "bars_from_center": 17
+          },
+          {
+            "side": "high",
+            "time": "2026-05-28 10:00",
+            "price": 73592.1,
+            "bars_from_center": 72
+          },
+          {
+            "side": "high",
+            "time": "2026-05-28 14:15",
+            "price": 73557.3,
+            "bars_from_center": 89
+          },
+          {
+            "side": "high",
+            "time": "2026-05-28 18:15",
+            "price": 73723.0,
+            "bars_from_center": 105
+          },
+          {
+            "side": "high",
+            "time": "2026-05-28 22:00",
+            "price": 73932.2,
+            "bars_from_center": 120
+          },
+          {
+            "side": "low",
+            "time": "2026-05-26 18:45",
+            "price": 75711.0,
+            "bars_from_center": -85
+          },
+          {
+            "side": "low",
+            "time": "2026-05-26 22:45",
+            "price": 75641.2,
+            "bars_from_center": -69
+          },
+          {
+            "side": "low",
+            "time": "2026-05-27 04:30",
+            "price": 75277.8,
+            "bars_from_center": -46
+          },
+          {
+            "side": "low",
+            "time": "2026-05-27 09:15",
+            "price": 75666.0,
+            "bars_from_center": -27
+          },
+          {
+            "side": "low",
+            "time": "2026-05-27 14:15",
+            "price": 74735.7,
+            "bars_from_center": -7
+          },
+          {
+            "side": "low",
+            "time": "2026-05-27 18:00",
+            "price": 74632.0,
+            "bars_from_center": 8
+          },
+          {
+            "side": "low",
+            "time": "2026-05-28 04:00",
+            "price": 72667.9,
+            "bars_from_center": 48
+          },
+          {
+            "side": "low",
+            "time": "2026-05-28 14:00",
+            "price": 72556.0,
+            "bars_from_center": 88
+          },
+          {
+            "side": "low",
+            "time": "2026-05-28 20:00",
+            "price": 73212.3,
+            "bars_from_center": 112
+          },
+          {
+            "side": "low",
+            "time": "2026-05-29 02:45",
+            "price": 73158.8,
+            "bars_from_center": 139
+          }
+        ]
+      },
+      "move_after_24h": {
+        "close_at_center": 75263.1,
+        "max_up_pct": 0.17,
+        "max_down_pct": -3.6,
+        "future_high": 75391.0,
+        "future_low": 72556.0
+      },
+      "move_after_72h": {
+        "close_at_center": 75263.1,
+        "max_up_pct": 0.17,
+        "max_down_pct": -3.76,
+        "future_high": 75391.0,
+        "future_low": 72436.0
+      }
+    },
+    {
+      "key": "2026-05-15_discount_cdc_zones",
+      "center": "2026-05-15 12:00",
+      "days_before": 7,
+      "days_after": 7,
+      "visual": "Discount POI, CDC perdido, zonas celestes de retest.",
+      "data_source_used": "futures_recent",
+      "window": {
+        "from": "2026-05-08 16:00",
+        "to": "2026-05-22 16:00",
+        "candles": 1345
+      },
+      "range": {
+        "high": 82460.5,
+        "high_time": "2026-05-10 23:15",
+        "low": 76014.2,
+        "low_time": "2026-05-18 15:30",
+        "range_pct": 8.48
+      },
+      "fvg": {
+        "bull": 132,
+        "bear": 151,
+        "total": 283
+      },
+      "pivots": {
+        "piv2": {
+          "highs": 181,
+          "lows": 193
+        },
+        "piv10": {
+          "highs": 42,
+          "lows": 44
+        },
+        "near_center_piv10": [
+          {
+            "side": "high",
+            "time": "2026-05-14 05:45",
+            "price": 79962.5,
+            "bars_from_center": -137
+          },
+          {
+            "side": "high",
+            "time": "2026-05-14 17:00",
+            "price": 81999.0,
+            "bars_from_center": -92
+          },
+          {
+            "side": "high",
+            "time": "2026-05-15 00:30",
+            "price": 81623.8,
+            "bars_from_center": -62
+          },
+          {
+            "side": "high",
+            "time": "2026-05-15 07:15",
+            "price": 80971.3,
+            "bars_from_center": -35
+          },
+          {
+            "side": "high",
+            "time": "2026-05-15 10:45",
+            "price": 80730.0,
+            "bars_from_center": -21
+          },
+          {
+            "side": "high",
+            "time": "2026-05-15 18:00",
+            "price": 79532.1,
+            "bars_from_center": 8
+          },
+          {
+            "side": "high",
+            "time": "2026-05-16 00:30",
+            "price": 79199.7,
+            "bars_from_center": 34
+          },
+          {
+            "side": "high",
+            "time": "2026-05-16 16:00",
+            "price": 78337.4,
+            "bars_from_center": 96
+          },
+          {
+            "side": "high",
+            "time": "2026-05-16 18:45",
+            "price": 78306.6,
+            "bars_from_center": 107
+          },
+          {
+            "side": "high",
+            "time": "2026-05-17 05:00",
+            "price": 78300.0,
+            "bars_from_center": 148
+          },
+          {
+            "side": "low",
+            "time": "2026-05-14 03:45",
+            "price": 78869.4,
+            "bars_from_center": -145
+          },
+          {
+            "side": "low",
+            "time": "2026-05-14 11:45",
+            "price": 79188.0,
+            "bars_from_center": -113
+          },
+          {
+            "side": "low",
+            "time": "2026-05-14 20:30",
+            "price": 81114.8,
+            "bars_from_center": -78
+          },
+          {
+            "side": "low",
+            "time": "2026-05-15 05:30",
+            "price": 80266.8,
+            "bars_from_center": -42
+          },
+          {
+            "side": "low",
+            "time": "2026-05-15 14:00",
+            "price": 78610.0,
+            "bars_from_center": -8
+          },
+          {
+            "side": "low",
+            "time": "2026-05-15 21:45",
+            "price": 78861.6,
+            "bars_from_center": 23
+          },
+          {
+            "side": "low",
+            "time": "2026-05-16 01:30",
+            "price": 78970.4,
+            "bars_from_center": 38
+          },
+          {
+            "side": "low",
+            "time": "2026-05-16 10:15",
+            "price": 77601.8,
+            "bars_from_center": 73
+          },
+          {
+            "side": "low",
+            "time": "2026-05-16 13:30",
+            "price": 77800.0,
+            "bars_from_center": 86
+          },
+          {
+            "side": "low",
+            "time": "2026-05-17 01:30",
+            "price": 77675.4,
+            "bars_from_center": 134
+          }
+        ]
+      },
+      "move_after_24h": {
+        "close_at_center": 79159.1,
+        "max_up_pct": 0.47,
+        "max_down_pct": -1.97,
+        "future_high": 79532.1,
+        "future_low": 77601.8
+      },
+      "move_after_72h": {
+        "close_at_center": 79159.1,
+        "max_up_pct": 0.47,
+        "max_down_pct": -3.97,
+        "future_high": 79532.1,
+        "future_low": 76014.2
+      }
+    },
+    {
+      "key": "2025-11-05_zigzag_structure",
+      "center": "2025-11-05 01:15",
+      "days_before": 5,
+      "days_after": 5,
+      "visual": "Zigzag morado, pivotes celestes, medicion 0/1.",
+      "data_source_used": "spot_cache",
+      "window": {
+        "from": "2025-10-31 05:15",
+        "to": "2025-11-10 05:15",
+        "candles": 961
+      },
+      "range": {
+        "high": 111250.01,
+        "high_time": "2025-11-02 12:00",
+        "low": 98944.36,
+        "low_time": "2025-11-04 21:30",
+        "range_pct": 12.44
+      },
+      "fvg": {
+        "bull": 108,
+        "bear": 115,
+        "total": 223
+      },
+      "pivots": {
+        "piv2": {
+          "highs": 140,
+          "lows": 126
+        },
+        "piv10": {
+          "highs": 34,
+          "lows": 32
+        },
+        "near_center_piv10": [
+          {
+            "side": "high",
+            "time": "2025-11-04 04:00",
+            "price": 107299.0,
+            "bars_from_center": -101
+          },
+          {
+            "side": "high",
+            "time": "2025-11-04 11:30",
+            "price": 104699.07,
+            "bars_from_center": -71
+          },
+          {
+            "side": "high",
+            "time": "2025-11-04 15:15",
+            "price": 104842.63,
+            "bars_from_center": -56
+          },
+          {
+            "side": "high",
+            "time": "2025-11-04 22:30",
+            "price": 101893.09,
+            "bars_from_center": -27
+          },
+          {
+            "side": "high",
+            "time": "2025-11-05 05:00",
+            "price": 102370.0,
+            "bars_from_center": -1
+          },
+          {
+            "side": "high",
+            "time": "2025-11-05 09:00",
+            "price": 102203.48,
+            "bars_from_center": 15
+          },
+          {
+            "side": "high",
+            "time": "2025-11-05 20:00",
+            "price": 104534.74,
+            "bars_from_center": 59
+          },
+          {
+            "side": "high",
+            "time": "2025-11-05 23:30",
+            "price": 104100.0,
+            "bars_from_center": 73
+          },
+          {
+            "side": "high",
+            "time": "2025-11-06 04:45",
+            "price": 104200.0,
+            "bars_from_center": 94
+          },
+          {
+            "side": "high",
+            "time": "2025-11-06 13:15",
+            "price": 103626.46,
+            "bars_from_center": 128
+          },
+          {
+            "side": "low",
+            "time": "2025-11-03 16:00",
+            "price": 105306.56,
+            "bars_from_center": -149
+          },
+          {
+            "side": "low",
+            "time": "2025-11-03 22:30",
+            "price": 105755.59,
+            "bars_from_center": -123
+          },
+          {
+            "side": "low",
+            "time": "2025-11-04 10:30",
+            "price": 103605.0,
+            "bars_from_center": -75
+          },
+          {
+            "side": "low",
+            "time": "2025-11-04 21:30",
+            "price": 98944.36,
+            "bars_from_center": -31
+          },
+          {
+            "side": "low",
+            "time": "2025-11-05 01:30",
+            "price": 98966.8,
+            "bars_from_center": -15
+          },
+          {
+            "side": "low",
+            "time": "2025-11-05 08:15",
+            "price": 101176.47,
+            "bars_from_center": 12
+          },
+          {
+            "side": "low",
+            "time": "2025-11-05 22:00",
+            "price": 103305.05,
+            "bars_from_center": 67
+          },
+          {
+            "side": "low",
+            "time": "2025-11-06 01:15",
+            "price": 102716.26,
+            "bars_from_center": 80
+          },
+          {
+            "side": "low",
+            "time": "2025-11-06 16:30",
+            "price": 100300.95,
+            "bars_from_center": 141
+          },
+          {
+            "side": "low",
+            "time": "2025-11-06 21:15",
+            "price": 100541.17,
+            "bars_from_center": 160
+          }
+        ]
+      },
+      "move_after_24h": {
+        "close_at_center": 101882.89,
+        "max_up_pct": 2.6,
+        "max_down_pct": -0.69,
+        "future_high": 104534.74,
+        "future_low": 101176.47
+      },
+      "move_after_72h": {
+        "close_at_center": 101882.89,
+        "max_up_pct": 2.6,
+        "max_down_pct": -2.57,
+        "future_high": 104534.74,
+        "future_low": 99260.86
+      }
+    }
+  ]
+}

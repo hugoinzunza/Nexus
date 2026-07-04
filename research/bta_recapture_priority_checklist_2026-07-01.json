@@ -1,0 +1,1374 @@
+{
+  "meta": {
+    "created": "2026-07-01",
+    "status": "pending_clean_tradingview_recapture",
+    "target_dir": "/Users/hugh/crisol/nexux/research/tradingview_bta_screenshots_clean_2026-07-01",
+    "source_atlas": "/Users/hugh/crisol/nexux/research/bta_historical_navigation_atlas_2026-07-01.json",
+    "purpose": "Concrete screenshot queue for completing 2024/2025 visual evidence."
+  },
+  "counts": {
+    "total": 32,
+    "critical": 16,
+    "high": 4,
+    "medium": 12
+  },
+  "items": [
+    {
+      "priority": "critical",
+      "source": "top_2024",
+      "date_time": "2024-05-27 15:00",
+      "year": "2024",
+      "month": "2024-05",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 6.565,
+      "risk_pct": 0.356,
+      "range": {
+        "low": 66312.16,
+        "eq": 69145.58,
+        "high": 71979.0,
+        "pct": 8.55
+      },
+      "target_file": "2024-05-27_1500_short_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2024",
+      "date_time": "2024-06-12 14:15",
+      "year": "2024",
+      "month": "2024-06",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 5.925,
+      "risk_pct": 0.52,
+      "range": {
+        "low": 66051.0,
+        "eq": 69024.01,
+        "high": 71997.02,
+        "pct": 9.0
+      },
+      "target_file": "2024-06-12_1415_short_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2024",
+      "date_time": "2024-07-03 03:00",
+      "year": "2024",
+      "month": "2024-07",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 9,
+      "rr_liq": 14.106,
+      "risk_pct": 0.171,
+      "range": {
+        "low": 60063.0,
+        "eq": 61962.38,
+        "high": 63861.76,
+        "pct": 6.32
+      },
+      "target_file": "2024-07-03_0300_long_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2024",
+      "date_time": "2024-08-01 15:00",
+      "year": "2024",
+      "month": "2024-08",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 17.033,
+      "risk_pct": 0.114,
+      "range": {
+        "low": 63584.0,
+        "eq": 66831.99,
+        "high": 70079.99,
+        "pct": 10.22
+      },
+      "target_file": "2024-08-01_1500_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2024",
+      "date_time": "2024-09-17 15:00",
+      "year": "2024",
+      "month": "2024-09",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 14.343,
+      "risk_pct": 0.248,
+      "range": {
+        "low": 55545.19,
+        "eq": 58304.6,
+        "high": 61064.0,
+        "pct": 9.94
+      },
+      "target_file": "2024-09-17_1500_short_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2024",
+      "date_time": "2024-10-02 10:45",
+      "year": "2024",
+      "month": "2024-10",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 8.173,
+      "risk_pct": 0.145,
+      "range": {
+        "low": 60164.0,
+        "eq": 63331.0,
+        "high": 66498.0,
+        "pct": 10.53
+      },
+      "target_file": "2024-10-02_1045_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2024",
+      "date_time": "2024-11-15 12:00",
+      "year": "2024",
+      "month": "2024-11",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 3.157,
+      "risk_pct": 1.151,
+      "range": {
+        "low": 75630.76,
+        "eq": 84448.2,
+        "high": 93265.64,
+        "pct": 23.32
+      },
+      "target_file": "2024-11-15_1200_short_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2024",
+      "date_time": "2024-11-15 12:00",
+      "year": "2024",
+      "month": "2024-11",
+      "direction": "short",
+      "source_tf": "4h",
+      "score": 10,
+      "rr_liq": 3.157,
+      "risk_pct": 1.151,
+      "range": {
+        "low": 75630.76,
+        "eq": 84448.2,
+        "high": 93265.64,
+        "pct": 23.32
+      },
+      "target_file": "2024-11-15_1200_short_4h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 4h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2025",
+      "date_time": "2025-02-02 18:30",
+      "year": "2025",
+      "month": "2025-02",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 4.131,
+      "risk_pct": 0.589,
+      "range": {
+        "low": 96862.02,
+        "eq": 101659.73,
+        "high": 106457.44,
+        "pct": 9.91
+      },
+      "target_file": "2025-02-02_1830_long_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2025",
+      "date_time": "2025-02-19 10:00",
+      "year": "2025",
+      "month": "2025-02",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 4.721,
+      "risk_pct": 0.166,
+      "range": {
+        "low": 93388.09,
+        "eq": 96107.04,
+        "high": 98826.0,
+        "pct": 5.82
+      },
+      "target_file": "2025-02-19_1000_short_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2025",
+      "date_time": "2025-03-03 19:45",
+      "year": "2025",
+      "month": "2025-03",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 9.021,
+      "risk_pct": 0.698,
+      "range": {
+        "low": 78258.52,
+        "eq": 86629.26,
+        "high": 95000.0,
+        "pct": 21.39
+      },
+      "target_file": "2025-03-03_1945_long_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2025",
+      "date_time": "2025-03-12 14:30",
+      "year": "2025",
+      "month": "2025-03",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 6.553,
+      "risk_pct": 0.532,
+      "range": {
+        "low": 76606.0,
+        "eq": 84708.32,
+        "high": 92810.64,
+        "pct": 21.15
+      },
+      "target_file": "2025-03-12_1430_long_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2025",
+      "date_time": "2025-05-15 16:30",
+      "year": "2025",
+      "month": "2025-05",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 6.867,
+      "risk_pct": 0.311,
+      "range": {
+        "low": 100718.37,
+        "eq": 103268.91,
+        "high": 105819.45,
+        "pct": 5.06
+      },
+      "target_file": "2025-05-15_1630_short_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2025",
+      "date_time": "2025-05-20 19:15",
+      "year": "2025",
+      "month": "2025-05",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 11.219,
+      "risk_pct": 0.153,
+      "range": {
+        "low": 101383.07,
+        "eq": 104245.85,
+        "high": 107108.62,
+        "pct": 5.65
+      },
+      "target_file": "2025-05-20_1915_short_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2025",
+      "date_time": "2025-07-18 08:30",
+      "year": "2025",
+      "month": "2025-07",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 15.685,
+      "risk_pct": 0.108,
+      "range": {
+        "low": 115736.92,
+        "eq": 119477.46,
+        "high": 123218.0,
+        "pct": 6.46
+      },
+      "target_file": "2025-07-18_0830_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "critical",
+      "source": "top_2025",
+      "date_time": "2025-12-29 10:45",
+      "year": "2025",
+      "month": "2025-12",
+      "direction": "long",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 5.425,
+      "risk_pct": 0.429,
+      "range": {
+        "low": 86420.0,
+        "eq": 88504.11,
+        "high": 90588.23,
+        "pct": 4.82
+      },
+      "target_file": "2025-12-29_1045_long_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "high",
+      "source": "top_2026_control",
+      "date_time": "2026-01-21 17:00",
+      "year": "2026",
+      "month": "2026-01",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 27.866,
+      "risk_pct": 0.134,
+      "range": {
+        "low": 87272.27,
+        "eq": 92598.38,
+        "high": 97924.49,
+        "pct": 12.21
+      },
+      "target_file": "2026-01-21_1700_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "high",
+      "source": "top_2026_control",
+      "date_time": "2026-02-18 15:30",
+      "year": "2026",
+      "month": "2026-02",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 10,
+      "rr_liq": 3.473,
+      "risk_pct": 0.589,
+      "range": {
+        "low": 65118.0,
+        "eq": 68050.5,
+        "high": 70983.0,
+        "pct": 9.01
+      },
+      "target_file": "2026-02-18_1530_short_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "high",
+      "source": "top_2026_control",
+      "date_time": "2026-03-19 14:15",
+      "year": "2026",
+      "month": "2026-03",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 11.746,
+      "risk_pct": 0.172,
+      "range": {
+        "low": 69081.51,
+        "eq": 72540.76,
+        "high": 76000.0,
+        "pct": 10.01
+      },
+      "target_file": "2026-03-19_1415_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "high",
+      "source": "top_2026_control",
+      "date_time": "2026-05-15 13:30",
+      "year": "2026",
+      "month": "2026-05",
+      "direction": "long",
+      "source_tf": "4h",
+      "score": 10,
+      "rr_liq": 6.086,
+      "risk_pct": 0.338,
+      "range": {
+        "low": 78754.65,
+        "eq": 80616.99,
+        "high": 82479.32,
+        "pct": 4.73
+      },
+      "target_file": "2026-05-15_1330_long_4h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion",
+        "POI HTF 4h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2024-01-03 09:00",
+      "year": "2024",
+      "month": "2024-01",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 3.398,
+      "risk_pct": 0.234,
+      "range": {
+        "low": 41300.0,
+        "eq": 43589.82,
+        "high": 45879.63,
+        "pct": 11.09
+      },
+      "target_file": "2024-01-03_0900_short_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2024-02-23 07:30",
+      "year": "2024",
+      "month": "2024-02",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 3.43,
+      "risk_pct": 0.149,
+      "range": {
+        "low": 50625.0,
+        "eq": 51805.0,
+        "high": 52985.0,
+        "pct": 4.66
+      },
+      "target_file": "2024-02-23_0730_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2024-03-14 19:30",
+      "year": "2024",
+      "month": "2024-03",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 4.267,
+      "risk_pct": 0.838,
+      "range": {
+        "low": 66082.66,
+        "eq": 69929.83,
+        "high": 73777.0,
+        "pct": 11.64
+      },
+      "target_file": "2024-03-14_1930_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2024-04-26 10:45",
+      "year": "2024",
+      "month": "2024-04",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 3.648,
+      "risk_pct": 0.206,
+      "range": {
+        "low": 62794.0,
+        "eq": 65013.18,
+        "high": 67232.35,
+        "pct": 7.07
+      },
+      "target_file": "2024-04-26_1045_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2024-12-11 15:00",
+      "year": "2024",
+      "month": "2024-12",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 2.589,
+      "risk_pct": 0.578,
+      "range": {
+        "low": 90500.0,
+        "eq": 97294.0,
+        "high": 104088.0,
+        "pct": 15.01
+      },
+      "target_file": "2024-12-11_1500_short_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2025-01-31 20:15",
+      "year": "2025",
+      "month": "2025-01",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 6.915,
+      "risk_pct": 0.578,
+      "range": {
+        "low": 97777.77,
+        "eq": 102117.61,
+        "high": 106457.44,
+        "pct": 8.88
+      },
+      "target_file": "2025-01-31_2015_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2025-04-30 13:45",
+      "year": "2025",
+      "month": "2025-04",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 5.89,
+      "risk_pct": 0.295,
+      "range": {
+        "low": 91660.01,
+        "eq": 93709.02,
+        "high": 95758.04,
+        "pct": 4.47
+      },
+      "target_file": "2025-04-30_1345_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2025-06-24 16:45",
+      "year": "2025",
+      "month": "2025-06",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 3.481,
+      "risk_pct": 0.29,
+      "range": {
+        "low": 98200.0,
+        "eq": 102362.32,
+        "high": 106524.65,
+        "pct": 8.48
+      },
+      "target_file": "2025-06-24_1645_short_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2025-08-28 18:45",
+      "year": "2025",
+      "month": "2025-08",
+      "direction": "long",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 4.087,
+      "risk_pct": 0.177,
+      "range": {
+        "low": 108666.66,
+        "eq": 113047.86,
+        "high": 117429.05,
+        "pct": 8.06
+      },
+      "target_file": "2025-08-28_1845_long_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Discount POI",
+        "weak high / high objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Discount POI",
+        "CDC or x confirmacion",
+        "weak high/high objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2025-09-12 17:00",
+      "year": "2025",
+      "month": "2025-09",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 5.758,
+      "risk_pct": 0.099,
+      "range": {
+        "low": 109977.0,
+        "eq": 113154.4,
+        "high": 116331.81,
+        "pct": 5.78
+      },
+      "target_file": "2025-09-12_1700_short_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2025-10-20 06:30",
+      "year": "2025",
+      "month": "2025-10",
+      "direction": "short",
+      "source_tf": "1h",
+      "score": 9,
+      "rr_liq": 4.818,
+      "risk_pct": 0.646,
+      "range": {
+        "low": 103528.23,
+        "eq": 109709.76,
+        "high": 115891.3,
+        "pct": 11.94
+      },
+      "target_file": "2025-10-20_0630_short_1h_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion",
+        "POI HTF 1h"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    },
+    {
+      "priority": "medium",
+      "source": "first_monthly_target",
+      "date_time": "2025-11-10 09:15",
+      "year": "2025",
+      "month": "2025-11",
+      "direction": "short",
+      "source_tf": "15m",
+      "score": 9,
+      "rr_liq": 5.237,
+      "risk_pct": 0.155,
+      "range": {
+        "low": 98944.36,
+        "eq": 103638.68,
+        "high": 108333.0,
+        "pct": 9.49
+      },
+      "target_file": "2025-11-10_0915_short_15m_bta_recapture.jpg",
+      "expected_visual_markers": [
+        "CDC",
+        "liquidez objetivo",
+        "premium/discount correcto",
+        "Premium POI",
+        "weak low / low objetivo",
+        "posible check/reaccion"
+      ],
+      "must_capture": [
+        "zoomed_range",
+        "poi_zone",
+        "cdc_or_confirmation",
+        "liquidity_target",
+        "swing_or_zigzag_context",
+        "outcome_if_visible"
+      ],
+      "acceptance_criteria": [
+        "Premium POI",
+        "CDC or x confirmacion",
+        "weak low/low objetivo",
+        "range/premium/discount context"
+      ],
+      "done": false
+    }
+  ]
+}
