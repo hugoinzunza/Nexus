@@ -37,6 +37,11 @@
       "max_notional_per_order": 4000.0,
       "min_margin": 250.0,
       "max_risk_pct": 0.08,
+      "entry_profiles": [
+        { "poi_tfs": ["4h", "1D"], "min_rr": 5 },
+        { "dirs": ["short"], "min_rr": 5 }
+      ],
+      "max_entry_slippage_pct": 0.3,
       "max_daily_loss_pct": 15.0,
       "fee_rate": 0.0005,
       "quality_filter": true,
