@@ -29,7 +29,7 @@
       "base_equity": 450.0,
       "capital": 1000.0,
       "risk_pct": 0.02,
-      "pairs": ["BTCUSDT", "ETHUSDT"],
+      "pairs": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "XRPUSDT"],
       "max_leverage": 5,
       "fixed_leverage": 5,
       "hedge": true,
@@ -37,9 +37,9 @@
       "max_notional_per_order": 4000.0,
       "min_margin": 250.0,
       "max_risk_pct": 0.08,
+      "_entry_profiles_nota": "min_rr GLOBAL (rr>=5). NO es un perfil sobreoptimizado: la 2a auditoria (Fable 5, 2026-07-04) refuto OOS el combo 4h/1D-o-short (no batia a rr>=5 solo) y la regla evitar-1h-long. Un solo {min_rr:5} = piso rr>=5 para cualquier tf/dir.",
       "entry_profiles": [
-        { "poi_tfs": ["4h", "1D"], "min_rr": 5 },
-        { "dirs": ["short"], "min_rr": 5 }
+        { "min_rr": 5 }
       ],
       "max_entry_slippage_pct": 0.3,
       "max_daily_loss_pct": 15.0,

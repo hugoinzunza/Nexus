@@ -17,10 +17,28 @@ El kill-switch es el archivo **`/home/hugo/Nexus/data/bot_kill`** (solo en el VP
 crear/borrar el archivo surte efecto al instante, sin restart.
 
 ## Por qué está pausado
-191 trades dedup netos de costos: el libro REAL dio 37% win / −$129 vs 61% del paper —
-gap de fills (slippage de entrada a mercado) + operar todo (rr<5 pierde −0.20R/trade).
-Los filtros atacan ambos: solo 4h/1D o short, siempre rr≥5, y no abrir si el precio
-ya se alejó >0.3% del plan. Filtros elegidos in-sample → validar out-of-sample ANTES de live.
+El libro REAL dio 37% win / −$129 vs 61% del paper. La 2a auditoría (Fable 5,
+2026-07-04) mostró que el gap es **selección, no ejecución**: el bot estaba
+configurado solo con BTC/ETH y cazó 23/27 setups 1h-long — el rincón plano de la
+estrategia (en paper ese perfil da +0.012R, ~cero edge). El slippage NO causó las
+pérdidas (los ganadores reales tuvieron +0.23% de slippage vs +0.06% los perdedores;
+solo 4/27 trades cambiaron de resultado por fills).
+
+## Ajuste de Fase 1 (decisión Hugo, 2026-07-04)
+Config para el dry-run, validada en Diario (191) + backtest 4 años (6.263 trades reales,
+IS/OOS/walk-forward, neto de costos):
+- **`entry_profiles: [{ min_rr: 5 }]`** — piso rr≥5 GLOBAL. Se quitó el combo
+  `4h/1D-o-short` porque OOS **no batía** a rr≥5 solo (overfitting). La regla
+  "evitar 1h-long" se **refutó OOS** en los 3 datasets (1h-long rr≥5 da +0.11 a +0.74).
+- **pairs ampliado** a `BTC, ETH, SOL, ADA, XRP` — los 3 nuevos tienen edge OOS propio
+  (SOL el mejor, +1.0R; BTC el peor, +0.66R). Ataca la causa real del gap: diversificar
+  fuera de BTC-only. `max_positions` sigue en **2** (tope intacto; solo hay más candidatos).
+- **`max_entry_slippage_pct: 0.3`** se mantiene como **higiene**, no como edge.
+- El sesgo SHORT del 1er análisis era **régimen** (jun–jul bajista): en 4 años OOS
+  long ≈ short. No se privilegia short.
+> ⚠️ El backtest está **anotado** (rr planificado mediana 10.9, TPs lejanos → posible
+> look-ahead): sus números ABSOLUTOS no son promesa. Se usó solo para orden RELATIVO y
+> estabilidad OOS. El criterio de go-live es la Fase 2 medida en dry-run REAL, no el backtest.
 
 ---
 
@@ -86,6 +104,11 @@ curl -s http://localhost:8800/m/bot/api/state | .venv/bin/python3 -c \
 
 # [VPS] 6) SOLO si el paso 5 dio live:False → quitar el kill (arranca el dry-run):
 rm ~/Nexus/data/bot_kill
+
+# [VPS] 7) verificar dry-run activo:
+curl -s http://localhost:8800/m/bot/api/state | .venv/bin/python3 -c \
+  "import sys,json; d=json.load(sys.stdin); print('live:', d.get('live'), '| kill:', d.get('kill'))"
+# esperado: live: False | kill: False
 ```
 
 El bot simulará (mode=dry) con los filtros. El P&L dry se ve **separado** en el
@@ -132,7 +155,9 @@ ssh hugo@49.13.85.184 'journalctl -u nexus.service --since "1 hour ago" --no-pag
 ```
 
 ## Notas
-- Sesgo SHORT del análisis puede ser régimen (jun–jul bajista); si el dry-run cae en
-  mercado alcista y los short fallan, es señal de régimen, no de bug.
+- Sesgo SHORT: la 2a auditoría lo confirmó como **régimen** (jun–jul bajista). En 4 años
+  OOS long ≈ short (+0.80 vs +0.80). No se privilegia ninguna dirección.
+- `rr≥5` es piso conservador: en el Diario separó fuerte (OOS +0.33 vs −0.28 rr<5); en el
+  backtest la mejora es leve (+0.80 vs +0.61). No es el origen del edge, es higiene.
 - Graduador de Claude anti-predictivo in-sample: NO usarlo como gate.
 - BTA sigue en research (`paper_only`); no llega al bot.
