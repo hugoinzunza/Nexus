@@ -28,6 +28,12 @@ function header(data) {
   if (!data.active) { el.className = "mode off"; el.textContent = "Inerte (sin llaves)"; }
   else if (data.live) { el.className = "mode live"; el.textContent = "● En vivo (real)"; }
   else { el.className = "mode dry"; el.textContent = "Dry-run (simulado)"; }
+  const lead = $("lead");
+  if (lead) {
+    lead.innerHTML = data.live
+      ? `Espejo en vivo de la operación <strong>real</strong> en Binance Futuros (subcuenta aislada). El Diario sigue registrando el paper aparte, para estudio.`
+      : `Dry-run activo: el bot registra operaciones <strong>simuladas</strong> en el libro con modo <strong>dry</strong>; no envía órdenes reales a Binance.`;
+  }
   $("age").textContent = data.source === "vps" && data.age_seconds != null
     ? `actualizado hace ${Math.round(data.age_seconds)}s` : "";
   const killed = !!data.kill;
@@ -57,12 +63,19 @@ function watchdog(data) {
 
 function cards(data) {
   const a = data.account || {}, s = data.summary || {};
+  const byMode = s.by_mode || {};
+  const dryPnl = byMode.dry && byMode.dry.pnl_usd;
+  const livePnl = byMode.live && byMode.live.pnl_usd;
   const pnlCls = (s.pnl_usd || 0) >= 0 ? "green" : "red";
+  const dryCls = (dryPnl || 0) >= 0 ? "green" : "red";
+  const liveCls = (livePnl || 0) >= 0 ? "green" : "red";
   const upnlCls = (a.upnl || 0) >= 0 ? "green" : "red";
   const list = [
     { k: "Balance (USDT)", v: a.balance != null ? fmt(a.balance) : "—" },
     { k: "uPnL abierto", v: a.upnl != null ? signed(a.upnl) : "—", cls: upnlCls },
-    { k: "P&L libro (USD)", v: fmt(s.pnl_usd), cls: pnlCls },
+    { k: "P&L dry (sim)", v: dryPnl != null ? fmt(dryPnl) : "—", cls: dryCls },
+    { k: "P&L live (real)", v: livePnl != null ? fmt(livePnl) : "—", cls: liveCls },
+    { k: "P&L libro total", v: fmt(s.pnl_usd), cls: pnlCls },
     { k: "Operaciones", v: s.total ?? 0 },
     { k: "Win rate", v: (s.win_rate == null) ? "—" : fmt(s.win_rate, 0) + "%" },
     { k: "Comisiones", v: fmt(s.fees_usd) },
