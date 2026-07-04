@@ -42,6 +42,15 @@ DEFAULTS = {
     "max_notional_per_order": 6000.0,
     "min_margin": 0.0,             # piso de margen por orden en USDT (0 = sin piso)
     "max_risk_pct": 0.0,           # tope de riesgo por orden (fracción del base; 0 = sin tope)
+    # Perfiles de ENTRADA (análisis del Diario 2026-07-04; None = apagado, comportamiento
+    # actual). Lista de perfiles; el setup entra si CALZA CON ALGUNO. Cada perfil puede
+    # tener: poi_tfs (lista), dirs (lista), min_rr (float). Ej. recomendado:
+    #   [{"poi_tfs": ["4h", "1D"], "min_rr": 5}, {"dirs": ["short"], "min_rr": 5}]
+    "entry_profiles": None,
+    # Guarda de SLIPPAGE de entrada: si el precio actual ya se alejó del plan más de
+    # este % (en contra), NO abre (el libro real mostró fills hasta +1.6% peores que el
+    # plan). 0 = apagado.
+    "max_entry_slippage_pct": 0.0,
     "max_daily_loss_pct": 5.0,     # -5% del base congela el bot por el día
     "fee_rate": 0.0005,            # taker estimado para comisiones del libro
     "one_position_at_a_time": True,
@@ -63,6 +72,37 @@ def load_config() -> dict:
     except Exception:  # noqa: BLE001
         pass
     return cfg
+
+
+def _passes_entry_profiles(t: dict, profiles) -> bool:
+    """True si el setup calza con ALGÚN perfil de entrada. `profiles=None/[]` = filtro
+    apagado (todo pasa). Cada perfil es AND de sus condiciones: poi_tfs, dirs, min_rr."""
+    if not profiles:
+        return True
+    for p in profiles:
+        tfs = p.get("poi_tfs")
+        if tfs and t.get("poi_tf") not in tfs:
+            continue
+        dirs = p.get("dirs")
+        if dirs and t.get("dir") not in dirs:
+            continue
+        min_rr = p.get("min_rr")
+        if min_rr and (t.get("rr") or 0) < float(min_rr):
+            continue
+        return True
+    return False
+
+
+def _entry_slippage_ok(plan_entry, ref_price, direction, max_pct) -> bool:
+    """False si el precio actual ya se alejó del plan MÁS de max_pct EN CONTRA
+    (long: precio muy por encima de la entrada; short: muy por debajo). A favor
+    no bloquea (entrar mejor que el plan no es slippage adverso). 0/None = apagado."""
+    if not max_pct or not plan_entry or not ref_price:
+        return True
+    adverse = (ref_price - plan_entry) / plan_entry
+    if direction == "short":
+        adverse = -adverse
+    return adverse * 100.0 <= float(max_pct)
 
 
 def _trade_creds() -> tuple[str, str]:
@@ -155,6 +195,19 @@ class BotExecutor:
         sid = self._setup_id(t)
         if self.store.has_trade(sid):
             return  # idempotencia: ya abrimos (o cerramos) este setup
+        # Perfiles de entrada (flag, apagado por defecto): del análisis del Diario —
+        # rr<5 pierde neto; el edge vive en 4h/1D y shorts. Ver DEFAULTS["entry_profiles"].
+        if not _passes_entry_profiles(t, self.cfg.get("entry_profiles")):
+            self.log(f"bot: {t.get('pair')} {t.get('dir')} no calza los entry_profiles "
+                     f"(tf={t.get('poi_tf')}, rr={t.get('rr')}) → no abre")
+            return
+        # Guarda de slippage (flag, apagada por defecto): el libro real mostró entradas
+        # hasta +1.6% peores que el plan (entrada a mercado tras la activación).
+        if not _entry_slippage_ok(t.get("entry"), ref_price, t.get("dir"),
+                                  self.cfg.get("max_entry_slippage_pct")):
+            self.log(f"bot: {t.get('pair')} {t.get('dir')} precio ya se alejó del plan "
+                     f"(entry {t.get('entry')} vs actual {ref_price}) → no abre")
+            return
         quality = self._quality(t)
         if not self._quality_allowed(t, quality):
             self.log(f"bot: {symbol} saltado por calidad {quality['grade']} "

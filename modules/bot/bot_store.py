@@ -208,4 +208,13 @@ class BotStore:
             "pnl_usd": pnl,
             "fees_usd": fees,
             "modes": sorted({t.get("mode", "dry") for t in trades}),
+            # Desglose por modo (honestidad: no mezclar P&L real con simulado en un
+            # solo número). Aditivo: la UI vieja sigue funcionando con pnl_usd total.
+            "by_mode": {
+                m: {
+                    "cerradas": len([t for t in closed if t.get("mode", "dry") == m]),
+                    "pnl_usd": round(sum((t.get("pnl_usd") or 0.0)
+                                         for t in closed if t.get("mode", "dry") == m), 2),
+                } for m in sorted({t.get("mode", "dry") for t in trades})
+            },
         }

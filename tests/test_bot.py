@@ -260,3 +260,62 @@ def test_reconcile_can_auto_close_orphans_when_explicitly_enabled(monkeypatch, t
     assert kwargs["position_side"] == "LONG"
     assert kwargs["client_id"].startswith("nxrec")
     assert store.all()[0]["status"] == "cerrada"
+
+
+# --- Perfiles de entrada + guarda de slippage (flags, apagados por defecto) -------
+from modules.bot.executor import _passes_entry_profiles, _entry_slippage_ok
+
+
+def test_entry_profiles_off_lets_everything_pass():
+    t = {"poi_tf": "1h", "dir": "long", "rr": 2.0}
+    assert _passes_entry_profiles(t, None)
+    assert _passes_entry_profiles(t, [])
+
+
+def test_entry_profiles_any_profile_match_allows():
+    profiles = [{"poi_tfs": ["4h", "1D"], "min_rr": 5},
+                {"dirs": ["short"], "min_rr": 5}]
+    assert _passes_entry_profiles({"poi_tf": "4h", "dir": "long", "rr": 6}, profiles)
+    assert _passes_entry_profiles({"poi_tf": "1h", "dir": "short", "rr": 7}, profiles)
+    # 1h-long queda fuera aunque tenga rr alto
+    assert not _passes_entry_profiles({"poi_tf": "1h", "dir": "long", "rr": 9}, profiles)
+    # rr bajo queda fuera en todos los perfiles
+    assert not _passes_entry_profiles({"poi_tf": "4h", "dir": "long", "rr": 3}, profiles)
+    assert not _passes_entry_profiles({"poi_tf": "1h", "dir": "short", "rr": 3}, profiles)
+
+
+def test_entry_profiles_missing_fields_do_not_crash():
+    assert not _passes_entry_profiles({}, [{"poi_tfs": ["4h"]}])
+    assert _passes_entry_profiles({}, [{}])   # perfil vacío = sin condiciones = pasa
+
+
+def test_entry_slippage_guard():
+    # apagada (0/None) → siempre ok
+    assert _entry_slippage_ok(100.0, 105.0, "long", 0)
+    assert _entry_slippage_ok(100.0, 105.0, "long", None)
+    # long: precio 0.5% por ENCIMA del plan con tope 0.3% → bloquea
+    assert not _entry_slippage_ok(100.0, 100.5, "long", 0.3)
+    assert _entry_slippage_ok(100.0, 100.2, "long", 0.3)
+    # a favor (long entra más barato) nunca bloquea
+    assert _entry_slippage_ok(100.0, 99.0, "long", 0.3)
+    # short: adverso es precio POR DEBAJO del plan
+    assert not _entry_slippage_ok(100.0, 99.5, "short", 0.3)
+    assert _entry_slippage_ok(100.0, 100.5, "short", 0.3)
+    # datos faltantes → no bloquea (no romper la apertura por metadata incompleta)
+    assert _entry_slippage_ok(None, 100.0, "long", 0.3)
+    assert _entry_slippage_ok(100.0, None, "long", 0.3)
+
+
+def test_summary_splits_pnl_by_mode(tmp_path):
+    store = BotStore(path=str(tmp_path / "bot_trades.json"))
+    a = _trade_rec(); a["setup_id"] = "s:dry"; a["mode"] = "dry"
+    b = _trade_rec(); b["setup_id"] = "s:live"; b["mode"] = "live"
+    store.open_trade(a); store.open_trade(b)
+    store.close_trade("s:dry", exit_price=110.0)    # dry gana
+    store.close_trade("s:live", exit_price=90.0)    # live pierde
+    s = store.summary()
+    assert "by_mode" in s
+    assert s["by_mode"]["dry"]["pnl_usd"] > 0
+    assert s["by_mode"]["live"]["pnl_usd"] < 0
+    # el total sigue existiendo para la UI vieja
+    assert "pnl_usd" in s
