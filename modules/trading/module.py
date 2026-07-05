@@ -41,6 +41,11 @@ _DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(_MOD_DIR)), "data")
 _BACKTEST_PATH = os.path.join(_MOD_DIR, "backtest_results.json")
 _POI_LAYERS_PATH = os.path.join(_MOD_DIR, "poi_layers_results.json")
 _SETUP_BT_PATH = os.path.join(_MOD_DIR, "setup_backtest_results.json")
+# Vista research BTA v2 (solo lectura): payload PRE-COMPUTADO y committeado desde
+# datos históricos estáticos (research/bta_visual_replay.py). No es señal ni toca
+# al bot; regenerarlo es manual. Vive en research/ porque es un prototipo.
+_BTA_V2_REPLAY_PATH = os.path.join(os.path.dirname(os.path.dirname(_MOD_DIR)),
+                                   "research", "bta_visual_replay_2026-07-05.json")
 _HTF_FOR_POI = ["1D", "4h", "1h"]   # temporalidades donde se detectan POIs
 # Tope de velas por petición del gráfico (paginación): acota el payload por página
 # del back-load al scrollear años hacia atrás. ~3 MB en 15m, cómodo en móvil.
@@ -904,6 +909,14 @@ class TradingModule(NexusModule):
                 return self._json_error(404, "todavía no hay backtest de setups; corre "
                                              "python3 -m modules.trading.run_setup_backtest")
             with open(_SETUP_BT_PATH, "rb") as fh:
+                return (200, "application/json; charset=utf-8", fh.read())
+        if subpath == "research_bta_v2":
+            # Research only: sirve el replay histórico pre-computado tal cual
+            # (sin cómputo en vivo, sin señal, sin bot).
+            if not os.path.isfile(_BTA_V2_REPLAY_PATH):
+                return self._json_error(404, "no hay replay generado; corre "
+                                             "python3 research/bta_visual_replay.py")
+            with open(_BTA_V2_REPLAY_PATH, "rb") as fh:
                 return (200, "application/json; charset=utf-8", fh.read())
         return None
 

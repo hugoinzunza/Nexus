@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BTA visual v2 - research - NexUX</title>
+<style>
+  :root{--bg:#0e1116;--panel:#141922;--grid:#1d232c;--txt:#aeb7c2;--tit:#e6ebf1;
+    --up:#3fb68b;--dn:#e05563;--fib:#c9a227;--tgt:#4f9dde;--amb:#e0a955;
+    --zpend:#5a6472;--ztap:#4f9dde;--zconf:#3fb68b;--zfail:#e05563;--zret:#e0a955;--zhit:#7ad9b8}
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--txt);font:14px/1.45 system-ui,-apple-system,sans-serif}
+  .banner{background:#3a1d24;color:#f2c8cf;border-bottom:1px solid #5c2833;
+    padding:8px 16px;font-weight:700;letter-spacing:.03em;text-align:center}
+  header{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;padding:12px 16px 4px}
+  header h1{color:var(--tit);font-size:18px;font-weight:650}
+  header .sub{font-size:12px;opacity:.8}
+  header a{color:var(--tgt);text-decoration:none;font-size:12px;margin-left:auto}
+  .wrap{padding:8px 16px 20px;max-width:1400px;margin:0 auto}
+  .controls{display:flex;flex-wrap:wrap;gap:14px;align-items:center;
+    background:var(--panel);border:1px solid var(--grid);border-radius:8px;padding:10px 12px;margin:8px 0}
+  .controls label{display:flex;gap:5px;align-items:center;font-size:12.5px;cursor:pointer;user-select:none}
+  .controls input[type=range]{flex:1;min-width:180px;accent-color:var(--tgt)}
+  #fecha{font-variant-numeric:tabular-nums;color:var(--tit);font-size:12.5px;min-width:150px}
+  canvas{width:100%;height:auto;display:block;background:var(--bg);
+    border:1px solid var(--grid);border-radius:8px}
+  .leyenda{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;margin:10px 0}
+  .leyenda span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}
+  th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}
+  th{color:var(--tit);font-weight:600}
+  .est{padding:1px 7px;border-radius:9px;font-size:11.5px;color:#0e1116;font-weight:650}
+  footer{padding:10px 16px 24px;font-size:11.5px;opacity:.75;max-width:1400px;margin:0 auto}
+</style>
+</head>
+<body>
+<div class="banner">Research only &middot; No se&ntilde;al &middot; No bot</div>
+<header>
+  <h1>BTA visual v2 &mdash; replay hist&oacute;rico</h1>
+  <span class="sub" id="dataset">cargando&hellip;</span>
+  <a href="/m/trading/backtest">&larr; volver al laboratorio</a>
+</header>
+<div class="wrap">
+  <div class="controls">
+    <span id="fecha"></span>
+    <input type="range" id="cursor" min="120" max="2999" value="2999" step="1"
+           aria-label="Cursor temporal del replay">
+    <label><input type="checkbox" id="ly-fib" checked> fib pierna (0/0.5/1)</label>
+    <label><input type="checkbox" id="ly-cdc" checked> escalera CDC</label>
+    <label><input type="checkbox" id="ly-zonas" checked> zonas</label>
+    <label><input type="checkbox" id="ly-tgt" checked> liquidez</label>
+    <label><input type="checkbox" id="ly-rep"> repisas</label>
+  </div>
+  <canvas id="chart" width="1360" height="640"></canvas>
+  <div class="leyenda">
+    <span><i class="dot" style="background:var(--zpend)"></i>pending</span>
+    <span><i class="dot" style="background:var(--ztap)"></i>tapped</span>
+    <span><i class="dot" style="background:var(--zconf)"></i>confirmed (CDC posterior al toque)</span>
+    <span><i class="dot" style="background:var(--zfail)"></i>failed</span>
+    <span><i class="dot" style="background:var(--zret)"></i>retest_continuation (cambia de rol)</span>
+    <span><i class="dot" style="background:var(--zhit)"></i>target_hit</span>
+    <span><i class="dot" style="background:var(--fib)"></i>fib local por pierna</span>
+    <span><i class="dot" style="background:var(--tgt)"></i>liquidez objetivo</span>
+  </div>
+  <table id="tabla-zonas"><thead>
+    <tr><th>zona</th><th>tipo</th><th>dir</th><th>lado pierna al nacer</th>
+        <th>estado al cursor</th><th>target</th></tr>
+  </thead><tbody></tbody></table>
+</div>
+<footer id="pie"></footer>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const cv=$("#chart"),cx=cv.getContext("2d");
+const COL={pending:"#5a6472",tapped:"#4f9dde",confirmed:"#3fb68b",failed:"#e05563",
+  retest_continuation:"#e0a955",target_hit:"#7ad9b8",pruned:null};
+let D=null;
+
+function estadoEn(history,t){ // último estado con timestamp <= t (histories causales)
+  let st=null;
+  for(const [s,ht] of history){ if(ht<=t) st=s; else break; }
+  return st;
+}
+function fmtT(ms){const d=new Date(ms);
+  return d.toLocaleDateString("es-CL",{day:"2-digit",month:"short"})+" "+
+         d.toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"});}
+
+function draw(){
+  if(!D) return;
+  const i1=+$("#cursor").value, cs=D.candles.slice(0,i1+1), t=cs[cs.length-1].t;
+  const i0=Math.max(0,i1-900), vis=cs.slice(i0);           // ventana visible
+  $("#fecha").textContent=fmtT(t)+" (vela "+(i1+1)+"/"+D.candles.length+")";
+  const W=cv.width,H=cv.height,PL=8,PR=86,PT=10,PB=18;
+  let lo=Math.min(...vis.map(c=>c.l)), hi=Math.max(...vis.map(c=>c.h));
+  const pad=(hi-lo)*.05; lo-=pad; hi+=pad;
+  const X=i=>PL+(i-i0)*(W-PL-PR)/vis.length, Y=p=>PT+(hi-p)*(H-PT-PB)/(hi-lo);
+  cx.clearRect(0,0,W,H);
+  cx.font="11px system-ui"; cx.textBaseline="middle";
+  // grid + eje
+  cx.strokeStyle="#1d232c"; cx.fillStyle="#aeb7c2";
+  for(let k=0;k<=5;k++){const p=lo+(hi-lo)*k/5,y=Y(p);
+    cx.beginPath();cx.moveTo(PL,y);cx.lineTo(W-PR,y);cx.stroke();
+    cx.fillText(p.toLocaleString("es-CL",{maximumFractionDigits:0}),W-PR+6,y);}
+  // zonas: solo las 8 más recientes al cursor (como el chart del profe: pocas vivas;
+  // el resto queda en la tabla)
+  if($("#ly-zonas").checked) for(const z of D.zones.filter(z=>z.created_t<=t).slice(-8)){
+    const st=estadoEn(z.history,t)||"pending", col=COL[st]; if(!col) continue;
+    const y1=Y(z.hi),y2=Y(z.lo);
+    if(y2<PT||y1>H-PB) continue;
+    let xi=vis.findIndex(c=>c.t>=z.created_t); xi=xi<0?0:xi;
+    cx.fillStyle=col+"2e"; cx.strokeStyle=col+"90";
+    cx.fillRect(X(i0+xi),y1,(W-PR)-X(i0+xi),y2-y1);
+    cx.strokeRect(X(i0+xi),y1,(W-PR)-X(i0+xi),y2-y1);
+  }
+  // velas
+  const bw=Math.max(.8,(W-PL-PR)/vis.length*.7);
+  for(let i=0;i<vis.length;i++){const c=vis[i],x=X(i0+i);
+    cx.strokeStyle=cx.fillStyle=(c.c>=c.o?"#3fb68b":"#e05563");
+    cx.beginPath();cx.moveTo(x,Y(c.h));cx.lineTo(x,Y(c.l));cx.stroke();
+    const yo=Y(c.o),yc=Y(c.c);
+    cx.fillRect(x-bw/2,Math.min(yo,yc),bw,Math.max(Math.abs(yc-yo),1));}
+  // escalera CDC (peldaños vivos al cursor)
+  if($("#ly-cdc").checked){
+    const vivos=D.cdc.filter(l=>{const s=estadoEn(l.history,t);
+      return s&&s!=="pruned"&&Y(l.price)>PT&&Y(l.price)<H-PB;}).slice(-8);
+    for(const l of vivos){const s=estadoEn(l.history,t),y=Y(l.price);
+      const col=s==="pending"?"#8b93a1":s==="broken"?"#e05563":s==="retest"?"#e0a955":"#5a6472";
+      cx.strokeStyle=col; cx.setLineDash(s==="reclaimed"?[2,4]:[]);
+      cx.beginPath();cx.moveTo(PL,y);cx.lineTo(W-PR,y);cx.stroke();cx.setLineDash([]);
+      cx.fillStyle=col; cx.fillText("CDC "+s,PL+4,y-8);}
+  }
+  // fib de la pierna activa (LOCAL, la corrección D1)
+  if($("#ly-fib").checked){
+    const legs=D.legs.filter(l=>l.confirm_t<=t);
+    const leg=legs[legs.length-1];
+    if(leg){
+      const pares=[["0",leg.fib0],["0.5 EQ local",leg.fib05],["1",leg.fib1]];
+      let xi=vis.findIndex(c=>c.t>=leg.a_t); xi=xi<0?0:xi;
+      cx.strokeStyle="#c9a227"; cx.setLineDash([6,3]);
+      cx.beginPath();cx.moveTo(X(i0+xi),Y(leg.a_price));
+      const xj=vis.findIndex(c=>c.t>=leg.b_t);
+      cx.lineTo(X(i0+(xj<0?vis.length-1:xj)),Y(leg.b_price));cx.stroke();
+      for(const [tag,p] of pares){const y=Y(p); if(y<PT||y>H-PB) continue;
+        cx.setLineDash([2,4]);cx.beginPath();cx.moveTo(X(i0+xi),y);cx.lineTo(W-PR,y);cx.stroke();
+        cx.setLineDash([]);cx.fillStyle="#c9a227";
+        cx.fillText("fib "+tag,Math.max(PL+4,X(i0+xi)-56),y-8);}
+      cx.setLineDash([]);
+    }
+  }
+  // liquidez objetivo: pivotes débiles cercanos + alto referencial / mínimo
+  if($("#ly-tgt").checked){
+    const px=vis[vis.length-1].c;
+    const weak=D.pivots.filter(p=>p.confirm_t<=t&&(p.swept_t==null||p.swept_t>t));
+    const arriba=weak.filter(p=>p.side==="high"&&p.price>px).sort((a,b)=>a.price-b.price).slice(0,3);
+    const abajo=weak.filter(p=>p.side==="low"&&p.price<px).sort((a,b)=>b.price-a.price).slice(0,3);
+    const alto=weak.filter(p=>p.side==="high").sort((a,b)=>b.price-a.price)[0];
+    const piso=weak.filter(p=>p.side==="low").sort((a,b)=>a.price-b.price)[0];
+    const rows=[...arriba,...abajo]; if(alto)rows.push(alto); if(piso)rows.push(piso);
+    cx.strokeStyle="#4f9dde"; cx.fillStyle="#4f9dde";
+    for(const p of new Set(rows)){const y=Y(p.price); if(y<PT||y>H-PB) continue;
+      cx.setLineDash([8,5]);cx.beginPath();cx.moveTo(PL,y);cx.lineTo(W-PR,y);cx.stroke();cx.setLineDash([]);
+      const tag=(p===alto)?"Alto Referencial":(p===piso)?"Minimo ref":(p.side==="high"?"weak high":"weak low");
+      cx.textAlign="right";cx.fillText(tag,W-PR-6,y-8);cx.textAlign="left";}
+  }
+  // repisas
+  if($("#ly-rep").checked){
+    const reps=D.repisas.filter(r=>r.created_t<=t&&(r.swept_t==null||r.swept_t>t)).slice(0,6);
+    cx.strokeStyle="#7f96b3"; cx.fillStyle="#7f96b3";
+    for(const r of reps){const y=Y(r.price); if(y<PT||y>H-PB) continue;
+      cx.setLineDash([3,6]);cx.beginPath();cx.moveTo(PL,y);cx.lineTo(W-PR,y);cx.stroke();cx.setLineDash([]);
+      cx.textAlign="right";cx.fillText("repisa ("+r.n+")",W-PR-6,y+9);cx.textAlign="left";}
+  }
+  tabla(t);
+}
+
+function tabla(t){
+  const tb=$("#tabla-zonas tbody"); tb.innerHTML="";
+  const act=D.zones.filter(z=>z.created_t<=t).slice(-12).reverse();
+  for(const z of act){
+    const st=estadoEn(z.history,t)||"pending";
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${z.id}</td><td>${z.kind}</td>`+
+      `<td>${z.dir_original}${st==="retest_continuation"?" &rarr; "+z.dir_final:""}</td>`+
+      `<td>${z.leg_side_at_birth||"-"}</td>`+
+      `<td><span class="est" style="background:${COL[st]||"#5a6472"}">${st}</span></td>`+
+      `<td>${z.target?z.target.kind+" "+z.target.price.toLocaleString("es-CL"):"-"}</td>`;
+    tb.appendChild(tr);
+  }
+}
+
+fetch("/m/trading/api/research_bta_v2").then(r=>{
+  if(!r.ok) throw new Error("payload no disponible ("+r.status+")");
+  return r.json();
+}).then(d=>{
+  if(!d.meta||d.meta.research_only!==true) throw new Error("payload sin marca research_only");
+  D=d;
+  $("#dataset").textContent=d.meta.dataset;
+  $("#pie").textContent="Vista de investigacion, solo lectura. "+d.meta.aviso+
+    ". Modelo: "+d.meta.modelo+" - Doc: "+d.meta.doc+
+    " - Payload pre-computado por "+d.meta.generado_por+" (regeneracion manual).";
+  const sl=$("#cursor"); sl.max=String(d.candles.length-1); sl.value=sl.max;
+  sl.addEventListener("input",draw);
+  for(const id of["ly-fib","ly-cdc","ly-zonas","ly-tgt","ly-rep"])
+    $("#"+id).addEventListener("change",draw);
+  draw();
+}).catch(e=>{
+  $("#dataset").textContent="Error: "+e.message;
+});
+</script>
+</body>
+</html>
