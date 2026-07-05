@@ -34,6 +34,15 @@ IS/OOS/walk-forward, neto de costos):
   (SOL el mejor, +1.0R; BTC el peor, +0.66R). Ataca la causa real del gap: diversificar
   fuera de BTC-only. `max_positions` sigue en **2** (tope intacto; solo hay más candidatos).
 - **`max_entry_slippage_pct: 0.3`** se mantiene como **higiene**, no como edge.
+- **`quality_require_disc: false`** (auditoría visual 2026-07-05): el `disc_ok`
+  global queda FUERA del gate. Mide premium/descuento contra el **EQ GLOBAL** del
+  dealing range, y como veto contradice la evidencia en 3 datasets (dealing_range
+  06-12: empeora OOS; ya se había quitado de la capa de plan; Diario: disc_ok=False
+  dio **+0.460R** con 73% WR vs +0.094R con True). El profe mide premium/discount
+  **LOCAL por pierna** (fib 0/0.5/1 del swing), y eso ya viene validado dentro de
+  `detect_pois` al formar el POI. Semántica corregida en `executor._quality`:
+  `require_disc=false` = ignorar `disc_ok` por completo (incluso False).
+  **El filtro real de Fase 1 es RR>=5 (+pares +slippage), no la disciplina global.**
 - El sesgo SHORT del 1er análisis era **régimen** (jun–jul bajista): en 4 años OOS
   long ≈ short. No se privilegia short.
 > ⚠️ El backtest está **anotado** (rr planificado mediana 10.9, TPs lejanos → posible

@@ -147,6 +147,43 @@ def test_bot_quality_filter_allows_a_and_blocks_b():
     assert not ex._quality_allowed({"source": "indicador"}, b)
 
 
+def test_quality_require_disc_false_ignores_disc_ok_completamente():
+    """require_disc=False debe IGNORAR disc_ok, incluso disc_ok=False (Fase 1).
+
+    Semántica corregida 2026-07-05: el veto por EQ global contradice la evidencia
+    (dealing_range 06-12 + Diario: disc_ok=False +0.460R vs True +0.094R). Con el
+    flag apagado, un setup rr>=5 en 1h con disc_ok=False tiene que pasar.
+    """
+    ex = BotExecutor(store=None, log=lambda _msg: None, config={
+        "quality_filter": True,
+        "quality_min_rr": 5.0,
+        "quality_poi_tfs": ["1h", "4h", "1D"],
+        "quality_require_disc": False,
+    })
+
+    q_false = ex._quality({"poi_tf": "1h", "rr": 5.0, "disc_ok": False})
+    q_none = ex._quality({"poi_tf": "1h", "rr": 6.0, "disc_ok": None})
+    q_true = ex._quality({"poi_tf": "4h", "rr": 7.0, "disc_ok": True})
+
+    assert q_false["grade"] == "A"       # disc_ok=False ya NO bloquea
+    assert q_none["grade"] == "A"
+    assert q_true["grade"] == "A+"
+    assert ex._quality_allowed({"source": "indicador"}, q_false)
+    assert ex._quality_allowed({"source": "indicador"}, q_none)
+    assert ex._quality_allowed({"source": "indicador"}, q_true)
+
+    # Con require_disc=True la exigencia se mantiene (no rompimos el modo estricto).
+    ex_strict = BotExecutor(store=None, log=lambda _msg: None, config={
+        "quality_filter": True,
+        "quality_min_rr": 5.0,
+        "quality_poi_tfs": ["1h", "4h", "1D"],
+        "quality_require_disc": True,
+    })
+    q_strict = ex_strict._quality({"poi_tf": "1h", "rr": 5.0, "disc_ok": False})
+    assert q_strict["grade"] == "B"
+    assert not ex_strict._quality_allowed({"source": "indicador"}, q_strict)
+
+
 def test_bot_quality_filter_does_not_block_manual_entries():
     ex = BotExecutor(store=None, log=lambda _msg: None, config={"quality_filter": True})
     b = ex._quality({"source": "profe", "poi_tf": "manual", "rr": 1.5, "disc_ok": None})

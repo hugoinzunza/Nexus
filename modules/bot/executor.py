@@ -487,7 +487,12 @@ class BotExecutor:
         require_disc = bool(self.cfg.get("quality_require_disc", True))
         rr_ok = rr >= min_rr
         tf_ok = poi_tf in allowed_tfs
-        disc_pass = (disc_ok is True) if require_disc else (disc_ok is not False)
+        # require_disc=False significa IGNORAR disc_ok por completo (incluso False).
+        # Motivo (auditoría 2026-07-05): disc_ok mide EQ GLOBAL y como veto contradice
+        # la evidencia en 3 datasets (dealing_range 06-12 OOS, capa de plan, y Diario:
+        # disc_ok=False +0.460R vs True +0.094R). El premium/discount correcto es el
+        # LOCAL por pierna y ya viene validado dentro de detect_pois al formar el POI.
+        disc_pass = (disc_ok is True) if require_disc else True
         if tf_ok and rr_ok and disc_pass:
             grade = "A+" if poi_tf in ("4h", "1D") else "A"
             reason = f"{poi_tf} + RR {rr:g} + disciplina OK"
