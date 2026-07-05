@@ -23,11 +23,16 @@ def candle(i, o, h, l, c):
     return {"t": i * BAR, "o": o, "h": h, "l": l, "c": c, "v": 1.0}
 
 
-def _leg(direction="up", lo=100.0, hi=110.0):
+def _leg(direction="up", lo=100.0, hi=110.0, enriquecida=True):
+    """Pierna de prueba. `enriquecida=False` simula piernas del builder v1
+    (sin t/confirm_t) para testear el contrato de active_leg."""
     a = {"side": "low" if direction == "up" else "high",
-         "price": lo if direction == "up" else hi, "idx": 0, "confirm_idx": 1, "t": 0}
+         "price": lo if direction == "up" else hi, "idx": 0, "confirm_idx": 1}
     b = {"side": "high" if direction == "up" else "low",
-         "price": hi if direction == "up" else lo, "idx": 5, "confirm_idx": 6, "t": 5 * BAR}
+         "price": hi if direction == "up" else lo, "idx": 5, "confirm_idx": 6}
+    if enriquecida:
+        a["t"], a["confirm_t"] = 0, 1 * BAR
+        b["t"], b["confirm_t"] = 5 * BAR, 6 * BAR
     return SwingLeg(id="leg_t", pivot_a=a, pivot_b=b, direction=direction,
                     leg_high=hi, leg_low=lo, fib0=a["price"], fib1=b["price"],
                     eq=(hi + lo) / 2.0)
@@ -55,6 +60,86 @@ def test_d1_zone_from_poi_v2_clasifica_por_pierna():
     poi_hi = {"lo": 108.0, "hi": 109.0, "dir": "long", "t_conf": 7 * BAR}
     z2 = v2.zone_from_poi_v2(poi_hi, legs, "z1")
     assert z2.kind == "counter_poi"           # long en premium local = contra-pierna
+
+
+# ---------------- D4: active_leg causal (fix look-ahead 2026-07-05) ----------------
+# Estos tres tests FALLAN con la versión anterior de active_leg (filtraba por una
+# clave "t" inexistente -> devolvía la pierna FINAL, con fallback a legs[:1]).
+
+def _leg_conf(direction, lo, hi, confirm_t, lid="leg"):
+    a = {"side": "low" if direction == "up" else "high",
+         "price": lo if direction == "up" else hi, "idx": 0, "confirm_idx": 1,
+         "t": 0, "confirm_t": 0}
+    b = {"side": "high" if direction == "up" else "low",
+         "price": hi if direction == "up" else lo, "idx": 5, "confirm_idx": 6,
+         "t": confirm_t - BAR, "confirm_t": confirm_t}
+    return SwingLeg(id=lid, pivot_a=a, pivot_b=b, direction=direction,
+                    leg_high=hi, leg_low=lo, fib0=a["price"], fib1=b["price"],
+                    eq=(hi + lo) / 2.0)
+
+
+def test_d4_active_leg_no_usa_pierna_futura():
+    """Un observador en as_of=5*BAR NO puede ver la pierna que confirma en 100*BAR."""
+    vieja = _leg_conf("up", 100.0, 110.0, confirm_t=3 * BAR, lid="vieja")
+    futura = _leg_conf("up", 50.0, 200.0, confirm_t=100 * BAR, lid="futura")
+    leg = v2.active_leg([vieja, futura], as_of=5 * BAR)
+    assert leg is not None and leg.id == "vieja", \
+        "active_leg devolvió una pierna confirmada DESPUÉS de as_of (look-ahead)"
+
+
+def test_d4_active_leg_sin_pierna_confirmada_devuelve_none():
+    """Antes de que confirme la primera pierna no hay contexto: None, no inventar."""
+    futura = _leg_conf("up", 100.0, 110.0, confirm_t=50 * BAR)
+    assert v2.active_leg([futura], as_of=10 * BAR) is None
+
+
+def test_d4_active_leg_exige_confirm_t():
+    """Piernas sin enriquecer (sin confirm_t) + as_of => error explícito, no
+    degradación silenciosa a look-ahead."""
+    cruda = _leg("up", 100.0, 110.0, enriquecida=False)   # pivotes sin confirm_t
+    try:
+        v2.active_leg([cruda], as_of=5 * BAR)
+        raise AssertionError("debió levantar ValueError")
+    except ValueError as exc:
+        assert "confirm_t" in str(exc)
+
+
+def test_d4_zone_from_poi_v2_ignora_pierna_futura():
+    """La zona creada en t=500*BAR se clasifica con la pierna vigente (eq local 105
+    -> mid 107 = premium local = counter_poi para un long), NO con la pierna futura
+    (eq 125 -> daría discount_poi)."""
+    vieja = _leg_conf("up", 100.0, 110.0, confirm_t=10 * BAR, lid="vieja")
+    futura = _leg_conf("up", 50.0, 200.0, confirm_t=1000 * BAR, lid="futura")
+    poi = {"lo": 106.5, "hi": 107.5, "dir": "long", "t_conf": 500 * BAR}
+    z = v2.zone_from_poi_v2(poi, [vieja, futura], "z_causal")
+    assert z.leg_side_at_birth == "premium"
+    assert z.kind == "counter_poi", \
+        f"clasificó {z.kind}: usó la pierna futura (look-ahead)"
+
+
+def test_d4_zone_sin_pierna_confirmada_no_clasifica():
+    """Zona creada ANTES de confirmar cualquier pivote/pierna: no puede usarlos."""
+    futura = _leg_conf("up", 100.0, 110.0, confirm_t=1000 * BAR)
+    poi = {"lo": 102.0, "hi": 103.0, "dir": "long", "t_conf": 5 * BAR}
+    z = v2.zone_from_poi_v2(poi, [futura], "z_sin_ctx")
+    assert z.leg_side_at_birth == "equilibrium"
+    assert z.kind == "counter_poi"
+
+
+def test_d4_build_swing_legs_v2_enriquece_timestamps():
+    # zigzag real: 3 ondas de 15 velas (pivotes alternados que forman piernas)
+    cs, i = [], 0
+    for base, paso in ((100, +1), (115, -1), (100, +1), (115, -1)):
+        for k in range(15):
+            p = base + paso * k
+            cs.append(candle(i, p, p + 1, p - 1, p + paso * 0.5))
+            i += 1
+    legs = v2.build_swing_legs_v2(cs, piv=5)
+    assert legs, "debe encontrar al menos una pierna"
+    for leg in legs:
+        for p in (leg.pivot_a, leg.pivot_b):
+            assert "confirm_t" in p and "t" in p
+            assert p["confirm_t"] >= p["t"], "un pivote no confirma antes de existir"
 
 
 # --------------------------- D2: escalera CDC con vida ---------------------------

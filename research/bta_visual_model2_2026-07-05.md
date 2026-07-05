@@ -26,6 +26,25 @@ Es una capa de LECTURA (indicador/panel), no de decisión.
 | D2 | Los CDC nacían ya `broken`, sin ciclo de vida ni convivencia | `cdc_ladder()`: escalera de niveles simultáneos con `pending → broken → reclaimed / retest` e historial | `test_d2_*` |
 | D3 | Una zona se confirmaba con cualquier CDC roto, aunque el quiebre fuera ANTERIOR al toque (la "entrada tardía" que el Diario penaliza: confirmado-al-nacer +0.095R vs zona fresca +0.707R) | `ZoneV2.step()`: confirmación SOLO con quiebre posterior al toque y dentro de `CONFIRM_WINDOW` | `test_d3_*` |
 
+## Actualización 2026-07-05 (tarde) — D4: fix look-ahead en `active_leg()`
+
+La versión original de `active_leg(legs, t)` filtraba por una clave `"t"` que los
+pivotes de `build_swing_legs` (v1) no tienen → el filtro dejaba pasar todo y
+devolvía la pierna **FINAL** (look-ahead), con fallback a la primera pierna
+aunque no existiera aún. La vista replay lo esquivaba con un filtro externo.
+Corregido **en el modelo**:
+
+- `build_swing_legs_v2(candles, piv)`: piernas con `t`/`confirm_t` en cada pivote.
+- `active_leg(legs, as_of=...)`: causal por diseño — solo piernas con
+  `confirm_t <= as_of`; sin pierna confirmada devuelve `None` (no inventa
+  contexto); con piernas sin enriquecer levanta `ValueError` (nada de degradar
+  silenciosamente a look-ahead).
+- `zone_from_poi_v2`: clasifica con `as_of = t_conf` del POI; sin timestamp no
+  clasifica con ninguna pierna.
+- El replay ya no necesita el workaround; el payload regenerado quedó
+  **byte-idéntico** (el filtro externo era equivalente — el fix lo hace
+  estructural). Tests D4 verificados: fallan contra la versión vieja.
+
 ## Modelo de datos propuesto
 
 - **RangeMap** (v1, se reusa): rango visible + premium/discount como **contexto**, nunca veto.

@@ -50,15 +50,55 @@ CONFIRM_WINDOW = 16     # velas tras el toque para aceptar el CDC (misma ventana
 # D1 — premium/discount LOCAL por pierna (fib 0/0.5/1 del SwingLeg)
 # ---------------------------------------------------------------------------
 
-def active_leg(legs: list[SwingLeg], t: Optional[int] = None) -> Optional[SwingLeg]:
-    """La pierna vigente: la última cuyo pivote B ya confirmó (a `t`, o la final)."""
+def build_swing_legs_v2(candles: list[dict], piv: int = 10) -> list[SwingLeg]:
+    """Piernas de v1 ENRIQUECIDAS con timestamps causales en sus pivotes:
+    `t` (vela del pivote) y `confirm_t` (vela que lo CONFIRMA, `confirm_idx`).
+    Obligatorio para usar `active_leg(..., as_of=...)`: sin `confirm_t` no hay
+    forma de saber cuándo una pierna empezó a existir para el observador."""
+    legs = build_swing_legs(candles, piv=piv)
+    n = len(candles)
+    for leg in legs:
+        for p in (leg.pivot_a, leg.pivot_b):
+            idx = min(int(p.get("idx", n - 1)), n - 1)
+            ci = min(int(p.get("confirm_idx", n - 1)), n - 1)
+            p["t"] = candles[idx]["t"]
+            p["confirm_t"] = candles[ci]["t"]
+    return legs
+
+
+def leg_confirm_t(leg: SwingLeg) -> Optional[int]:
+    """Timestamp en que la pierna queda confirmada (confirm del pivote B)."""
+    return leg.pivot_b.get("confirm_t")
+
+
+def active_leg(legs: list[SwingLeg], as_of: Optional[int] = None) -> Optional[SwingLeg]:
+    """La pierna vigente para un observador en `as_of` (ms), CAUSAL por diseño.
+
+    - `as_of=None`: la última pierna del set (solo para snapshots de fin de datos).
+    - Con `as_of`: la última pierna cuyo `confirm_t` <= as_of. Si ninguna pierna
+      estaba confirmada a esa hora, devuelve None (no se inventa contexto).
+    - Exige piernas enriquecidas (`build_swing_legs_v2`); si falta `confirm_t`
+      levanta ValueError en vez de degradar silenciosamente a look-ahead.
+
+    Historia: la versión anterior filtraba por `pivot_b.get("t", 0) <= t` sobre
+    pivotes SIN clave "t" -> el filtro dejaba pasar todo y devolvía la pierna
+    FINAL (look-ahead), con fallback a la primera pierna aunque no existiera aún.
+    Detectado en la vista replay (2026-07-05) y corregido acá.
+    """
     if not legs:
         return None
-    if t is None:
+    if as_of is None:
         return legs[-1]
-    vivas = [l for l in legs if l.pivot_b["confirm_idx"] is not None]
-    vivas = [l for l in legs if l.pivot_b.get("t", 0) <= t] or legs[:1]
-    return vivas[-1]
+    vivas = []
+    for leg in legs:
+        ct = leg_confirm_t(leg)
+        if ct is None:
+            raise ValueError(
+                "active_leg(as_of=...) necesita piernas con confirm_t; "
+                "constrúyelas con build_swing_legs_v2(candles, piv)")
+        if ct <= as_of:
+            vivas.append(leg)
+    return vivas[-1] if vivas else None
 
 
 def leg_fibs(leg: SwingLeg) -> dict:
@@ -296,10 +336,15 @@ class ZoneV2:
 
 
 def zone_from_poi_v2(poi: dict, legs: list[SwingLeg], zone_id: str) -> ZoneV2:
-    """Zona desde un POI de Nexux, clasificada por la pierna LOCAL (no rango global)."""
+    """Zona desde un POI de Nexux, clasificada por la pierna LOCAL (no rango global).
+
+    Causal: solo mira piernas confirmadas ANTES de la creación del POI
+    (`active_leg(..., as_of=t_conf)`). Un POI sin timestamp no clasifica con
+    ninguna pierna (side "equilibrium") — jamás con la pierna final."""
     mid = (poi["lo"] + poi["hi"]) / 2.0
     direction = poi.get("dir", "long")
-    leg = active_leg(legs, poi.get("t_conf") or poi.get("t"))
+    as_of = poi.get("t_conf") or poi.get("t")
+    leg = active_leg(legs, as_of=as_of) if as_of else None
     side = leg_side(leg, mid) if leg else "equilibrium"
     kind = "counter_poi"
     if direction == "long" and side == "discount":
@@ -322,8 +367,9 @@ def visual_snapshot(candles: list[dict], pois: Optional[list[dict]] = None,
     """Payload completo del indicador visual v2. SOLO contexto de lectura:
     `research_only=True` — nada de esto alimenta al bot ni a las señales."""
     rng: RangeMap = build_range_map(candles)
-    legs = build_swing_legs(candles, piv=piv_leg)
-    leg = active_leg(legs)
+    legs = build_swing_legs_v2(candles, piv=piv_leg)
+    # as_of explícito = última vela cerrada (snapshot de fin de datos, causal)
+    leg = active_leg(legs, as_of=candles[-1]["t"]) if candles else None
     ladder = cdc_ladder(candles, piv=piv_cdc)
     targets = find_targets(candles, piv=piv_leg)
     zones: list[ZoneV2] = []

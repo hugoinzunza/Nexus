@@ -24,7 +24,6 @@ if WT not in sys.path:
 from modules.trading import smc  # noqa: E402
 from modules.trading.strategies import detect_pois  # noqa: E402
 from research import bta_visual_model2 as v2  # noqa: E402
-from research.bta_visual_model import build_swing_legs  # noqa: E402
 
 DATA = os.path.join(WT, "research", "bta_btcusdtp_15m_recent.json")
 OUT = os.path.join(WT, "research", "bta_visual_replay_2026-07-05.json")
@@ -35,12 +34,6 @@ CDC_PIV = 2
 POI_PIV = 2
 POI_DISP = 1.0
 MAX_ZONES = 60
-
-
-def _leg_confirm_t(leg, candles) -> int:
-    ci = leg.pivot_b.get("confirm_idx")
-    ci = min(int(ci), len(candles) - 1) if ci is not None else len(candles) - 1
-    return candles[ci]["t"]
 
 
 def _pivot_rows(candles, piv):
@@ -123,16 +116,14 @@ def build_replay(candles: list[dict]) -> dict:
     window = candles[-WINDOW:]
     n = len(window)
 
-    legs = build_swing_legs(window, piv=LEG_PIV)
+    legs = v2.build_swing_legs_v2(window, piv=LEG_PIV)   # pivotes con t/confirm_t
     leg_rows = []
     for leg in legs:
         leg_rows.append({
             "id": leg.id, "direction": leg.direction,
-            "a_t": window[min(leg.pivot_a["idx"], n - 1)]["t"],
-            "a_price": leg.pivot_a["price"],
-            "b_t": window[min(leg.pivot_b["idx"], n - 1)]["t"],
-            "b_price": leg.pivot_b["price"],
-            "confirm_t": _leg_confirm_t(leg, window),
+            "a_t": leg.pivot_a["t"], "a_price": leg.pivot_a["price"],
+            "b_t": leg.pivot_b["t"], "b_price": leg.pivot_b["price"],
+            "confirm_t": v2.leg_confirm_t(leg),
             **v2.leg_fibs(leg),
         })
 
@@ -148,15 +139,13 @@ def build_replay(candles: list[dict]) -> dict:
     repisas = _repisas(pivots, window)
 
     # Zonas desde los POIs validados de Nexux (detect_pois, anti-repaint), pasadas
-    # por la máquina de estados v2. Anti-look-ahead: al clasificar la zona solo se
-    # le muestran las piernas CONFIRMADAS antes de su creación (evita el bug de
-    # active_leg() que tomaría la pierna final).
+    # por la máquina de estados v2. La causalidad vive EN el modelo:
+    # zone_from_poi_v2 -> active_leg(as_of=t_conf) ignora piernas futuras
+    # (fix del look-ahead, 2026-07-05; antes se esquivaba con un filtro externo).
     pois = detect_pois(window, POI_PIV, POI_DISP)[-MAX_ZONES:]
     zone_rows = []
     for k, poi in enumerate(pois):
-        legs_visibles = [leg for i, leg in enumerate(legs)
-                         if leg_rows[i]["confirm_t"] <= poi["t_conf"]]
-        z = v2.zone_from_poi_v2(poi, legs_visibles, f"zone_{k}")
+        z = v2.zone_from_poi_v2(poi, legs, f"zone_{k}")
         target = None
         for c in window:
             if c["t"] <= z.created_t:

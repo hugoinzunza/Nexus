@@ -80,6 +80,26 @@ def test_pagina_muestra_banner_y_endpoint():
         "la página debe rechazar payloads sin marca research_only"
 
 
+def test_zone_leg_side_es_causal_en_el_payload():
+    """El lado de pierna con que nació cada zona debe poder reconstruirse usando
+    SOLO las piernas confirmadas antes de su creación (fix look-ahead active_leg).
+    Con la versión look-ahead (pierna final) este test falla."""
+    p = _payload()
+    legs = p["legs"]
+    for z in p["zones"]:
+        visibles = [l for l in legs if l["confirm_t"] <= z["created_t"]]
+        if not visibles:
+            assert z["leg_side_at_birth"] == "equilibrium", \
+                f"{z['id']}: clasificó sin pierna confirmada disponible"
+            continue
+        leg = visibles[-1]
+        eq = (max(leg["a_price"], leg["b_price"]) + min(leg["a_price"], leg["b_price"])) / 2
+        mid = (z["lo"] + z["hi"]) / 2
+        esperado = "discount" if mid < eq else ("premium" if mid > eq else "equilibrium")
+        assert z["leg_side_at_birth"] == esperado, \
+            f"{z['id']}: side {z['leg_side_at_birth']} != causal {esperado} (look-ahead?)"
+
+
 def test_lab_tiene_link_discreto_y_module_sirve_subpath():
     lab = open(LAB, encoding="utf-8").read()
     assert "/m/trading/research-bta-v2" in lab
