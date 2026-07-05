@@ -40,6 +40,24 @@ main { max-width: 920px; margin: 0 auto; padding: 20px; }
 .card .k { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .card .v { font-size: 22px; font-weight: 700; }
 .v.green { color: var(--green); } .v.red { color: var(--red); }
+.phase1 { margin-bottom: 28px; }
+.phase-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.phase-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.phase-head strong { display: block; font-size: 17px; margin-bottom: 3px; }
+.phase-head span { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.phase-status { flex: 0 0 auto; border-radius: 999px; padding: 5px 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.phase-status.wait { color: var(--amber); background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.35); }
+.phase-status.ok { color: var(--green); background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.35); }
+.progress { height: 8px; background: rgba(139,155,180,.16); border-radius: 999px; overflow: hidden; margin-bottom: 14px; }
+.progress div { height: 100%; background: linear-gradient(90deg, var(--amber), var(--green)); border-radius: inherit; }
+.phase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 14px; }
+.phase-grid div { background: rgba(26,33,46,.7); border: 1px solid rgba(36,48,68,.7); border-radius: 10px; padding: 10px 12px; }
+.phase-grid span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+.phase-grid b { font-size: 18px; }
+.phase-note { color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 12px; }
+.phase-table { margin-top: 12px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.phase-table table { font-size: 12px; }
+.phase-table th, .phase-table td { padding: 8px 10px; }
 h2 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 8px 0 12px; }
 h2 .sub { font-weight: 400; font-size: 12px; color: var(--muted); opacity: .8; }
 .watching { margin-bottom: 8px; }

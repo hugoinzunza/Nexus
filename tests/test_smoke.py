@@ -7,6 +7,7 @@ tumbó el motor). Un simple `import core.app` lo habría detectado.
 """
 import base64
 import importlib
+from pathlib import Path
 
 import pytest
 
@@ -57,3 +58,14 @@ def test_vault_public_cannot_decrypt():
     blob = vault.seal_credentials("a" * 20, "b" * 20, pub)
     with pytest.raises(Exception):
         vault.unseal(blob, pub)
+
+
+def test_bot_panel_muestra_fase1_dry_run():
+    """El panel del bot debe mostrar el seguimiento de Fase 1 sin venderlo como permiso live."""
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "modules/bot/public/index.html").read_text(encoding="utf-8")
+    js = (root / "modules/bot/public/app.js").read_text(encoding="utf-8")
+    assert 'id="phase1"' in html
+    assert "Fase 1 dry-run" in html
+    assert "20 trades dry o 3 semanas" in js
+    assert "no autoriza live" in js

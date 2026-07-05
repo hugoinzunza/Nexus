@@ -170,3 +170,6 @@ ssh hugo@49.13.85.184 'journalctl -u nexus.service --since "1 hour ago" --no-pag
   backtest la mejora es leve (+0.80 vs +0.61). No es el origen del edge, es higiene.
 - Graduador de Claude anti-predictivo in-sample: NO usarlo como gate.
 - BTA sigue en research (`paper_only`); no llega al bot.
+- Alcance actual: cerrar primero Fase 1 dry-run/filtros del bot. Las mejoras visuales
+  del gráfico/indicador (premium-discount local por pierna, CDC escalera, estados de
+  zona, targets de liquidez) quedan para una tarea separada después.

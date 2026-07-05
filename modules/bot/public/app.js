@@ -4,6 +4,12 @@ const fmt = (n, d = 2) => (n === null || n === undefined || n === "") ? "—" : 
 const pairLabel = (p) => (p || "").replace("_USDT", "").replace("USDT", "") || p;
 const signed = (n) => (n >= 0 ? "+" : "") + fmt(n);
 const dt = (ts) => { if (!ts) return "—"; const d = new Date(ts * 1000); return d.toLocaleString("es-CL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); };
+const tradeR = (t) => {
+  if (t.result_r !== null && t.result_r !== undefined && t.result_r !== "") return Number(t.result_r);
+  const risk = Number(t.risk_usd_est ?? t.risk_usd ?? 0);
+  if (!risk || t.pnl_usd === null || t.pnl_usd === undefined) return null;
+  return Number(t.pnl_usd) / risk;
+};
 
 async function cmd(action, symbol) {
   const msg = action === "kill" ? "¿Detener el bot? No abrirá nuevas posiciones."
@@ -82,6 +88,63 @@ function cards(data) {
   ];
   $("cards").innerHTML = list.map(c =>
     `<div class="card"><div class="k">${c.k}</div><div class="v ${c.cls || ""}">${c.v}</div></div>`).join("");
+}
+
+function phase1(data) {
+  const el = $("phase1");
+  if (!el) return;
+  const dry = (data.trades || []).filter(t => t.mode === "dry");
+  const closed = dry.filter(t => t.status === "cerrada");
+  const open = dry.filter(t => t.status === "abierta");
+  const rs = closed.map(tradeR).filter(r => r !== null && Number.isFinite(r));
+  const n = closed.length;
+  const wins = closed.filter(t => (t.pnl_usd || 0) > 0).length;
+  const wr = n ? wins / n * 100 : null;
+  const avgR = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null;
+  const pnl = closed.reduce((acc, t) => acc + Number(t.pnl_usd || 0), 0);
+  const progress = Math.min(100, n / 20 * 100);
+  const passN = n >= 20;
+  const passR = avgR !== null && avgR > 0.2;
+  const passWr = wr !== null && wr >= 55;
+  const statusCls = passN && passR && passWr ? "ok" : "wait";
+  const status = passN && passR && passWr
+    ? "Cumple criterio numerico; requiere decision manual antes de live"
+    : "Observando; no autoriza live";
+  const byPair = {};
+  for (const t of closed) {
+    const p = pairLabel(t.pair || t.symbol);
+    const r = tradeR(t);
+    byPair[p] ||= { n: 0, wins: 0, pnl: 0, rsum: 0, rn: 0 };
+    byPair[p].n += 1;
+    byPair[p].wins += (t.pnl_usd || 0) > 0 ? 1 : 0;
+    byPair[p].pnl += Number(t.pnl_usd || 0);
+    if (r !== null && Number.isFinite(r)) { byPair[p].rsum += r; byPair[p].rn += 1; }
+  }
+  const pairRows = Object.entries(byPair).sort((a, b) => b[1].n - a[1].n).map(([p, x]) => {
+    const pwr = x.n ? x.wins / x.n * 100 : 0;
+    const pr = x.rn ? x.rsum / x.rn : null;
+    return `<tr><td>${p}</td><td>${x.n}</td><td>${fmt(pwr, 0)}%</td><td>${pr === null ? "—" : signed(pr)}</td><td>${signed(x.pnl)}</td></tr>`;
+  }).join("");
+  el.innerHTML = `<div class="phase-card">
+    <div class="phase-head">
+      <div>
+        <strong>Fase 1</strong>
+        <span>20 trades dry o 3 semanas · avgR &gt; +0.20 · WR >= 55%</span>
+      </div>
+      <span class="phase-status ${statusCls}">${status}</span>
+    </div>
+    <div class="progress"><div style="width:${progress}%"></div></div>
+    <div class="phase-grid">
+      <div><span>Trades dry cerrados</span><b>${n}/20</b></div>
+      <div><span>Dry abiertos</span><b>${open.length}</b></div>
+      <div><span>WR dry</span><b class="${passWr ? "pos" : ""}">${wr === null ? "—" : fmt(wr, 0) + "%"}</b></div>
+      <div><span>avgR neto</span><b class="${passR ? "pos" : (avgR !== null && avgR < 0 ? "neg" : "")}">${avgR === null ? "—" : signed(avgR)}</b></div>
+      <div><span>P&L dry</span><b class="${pnl >= 0 ? "pos" : "neg"}">${signed(pnl)}</b></div>
+      <div><span>Estado live</span><b>${data.live ? "REAL" : "DRY"}</b></div>
+    </div>
+    <div class="phase-note">Este bloque solo observa la Fase 1. No cambia filtros, no abre/cierra trades y no autoriza live automaticamente.</div>
+    ${pairRows ? `<div class="phase-table"><table><thead><tr><th>Par</th><th>N</th><th>WR</th><th>avgR</th><th>P&L</th></tr></thead><tbody>${pairRows}</tbody></table></div>` : ""}
+  </div>`;
 }
 
 function position(data) {
@@ -195,7 +258,7 @@ async function load() {
     const r = await fetch("/m/bot/api/state", { cache: "no-store" });
     if (r.status === 401) { location.href = "/login"; return; }
     const data = await r.json();
-    header(data); watchdog(data); cards(data); position(data); watching(data); orders(data); trades(data);
+    header(data); watchdog(data); cards(data); phase1(data); position(data); watching(data); orders(data); trades(data);
   } catch (e) {
     $("rows").innerHTML = `<tr><td colspan="12" class="empty">No se pudo cargar: ${e}</td></tr>`;
   }
