@@ -10,6 +10,9 @@ def _trade_rec():
         "pair": "BTC_USDT",
         "dir": "long",
         "mode": "dry",
+        "phase_id": "phase1_v2_2026-07-18",
+        "entry_model": "midpoint_touch_v2",
+        "activation_price": 100.02,
         "qty": 1.0,
         "entry_price": 100.0,
     }
@@ -60,6 +63,9 @@ def test_bot_store_keeps_quality_metadata(tmp_path):
     trade = store.open_trade(rec)
 
     assert trade["quality"] == "A"
+    assert trade["phase_id"] == "phase1_v2_2026-07-18"
+    assert trade["entry_model"] == "midpoint_touch_v2"
+    assert trade["activation_price"] == 100.02
     assert trade["poi_tf"] == "1h"
     assert trade["rr"] == 7.0
     assert trade["disc_ok"] is True

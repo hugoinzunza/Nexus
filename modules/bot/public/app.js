@@ -3,12 +3,13 @@ const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 2) => (n === null || n === undefined || n === "") ? "—" : Number(n).toLocaleString("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
 const pairLabel = (p) => (p || "").replace("_USDT", "").replace("USDT", "") || p;
 const signed = (n) => (n >= 0 ? "+" : "") + fmt(n);
+const PHASE1_V2 = "phase1_v2_2026-07-18";
 const dt = (ts) => { if (!ts) return "—"; const d = new Date(ts * 1000); return d.toLocaleString("es-CL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); };
 const tradeR = (t) => {
-  if (t.result_r !== null && t.result_r !== undefined && t.result_r !== "") return Number(t.result_r);
   const risk = Number(t.risk_usd_est ?? t.risk_usd ?? 0);
-  if (!risk || t.pnl_usd === null || t.pnl_usd === undefined) return null;
-  return Number(t.pnl_usd) / risk;
+  if (risk && t.pnl_usd !== null && t.pnl_usd !== undefined) return Number(t.pnl_usd) / risk;
+  if (t.result_r !== null && t.result_r !== undefined && t.result_r !== "") return Number(t.result_r);
+  return null;
 };
 
 async function cmd(action, symbol) {
@@ -93,7 +94,9 @@ function cards(data) {
 function phase1(data) {
   const el = $("phase1");
   if (!el) return;
-  const dry = (data.trades || []).filter(t => t.mode === "dry");
+  const allDry = (data.trades || []).filter(t => t.mode === "dry");
+  const dry = allDry.filter(t => t.phase_id === PHASE1_V2);
+  const legacyClosed = allDry.filter(t => t.phase_id !== PHASE1_V2 && t.status === "cerrada");
   const closed = dry.filter(t => t.status === "cerrada");
   const open = dry.filter(t => t.status === "abierta");
   const rs = closed.map(tradeR).filter(r => r !== null && Number.isFinite(r));
@@ -128,7 +131,7 @@ function phase1(data) {
   el.innerHTML = `<div class="phase-card">
     <div class="phase-head">
       <div>
-        <strong>Fase 1</strong>
+        <strong>Fase 1 V2</strong>
         <span>20 trades dry o 3 semanas · avgR &gt; +0.20 · WR >= 55%</span>
       </div>
       <span class="phase-status ${statusCls}">${status}</span>
@@ -142,7 +145,7 @@ function phase1(data) {
       <div><span>P&L dry</span><b class="${pnl >= 0 ? "pos" : "neg"}">${signed(pnl)}</b></div>
       <div><span>Estado live</span><b>${data.live ? "REAL" : "DRY"}</b></div>
     </div>
-    <div class="phase-note">Este bloque solo observa la Fase 1. No cambia filtros, no abre/cierra trades y no autoriza live automaticamente.</div>
+    <div class="phase-note">Fill V2: cruce causal de la entrada central. Histórico V1 archivado: ${legacyClosed.length} cerrados, fuera de esta evaluación. Este bloque no abre/cierra trades y no autoriza live automaticamente.</div>
     ${pairRows ? `<div class="phase-table"><table><thead><tr><th>Par</th><th>N</th><th>WR</th><th>avgR</th><th>P&L</th></tr></thead><tbody>${pairRows}</tbody></table></div>` : ""}
   </div>`;
 }

@@ -264,11 +264,12 @@
 
   function loadSetups() {
     fetch("api/setups").then((r) => r.json()).then(async (d) => {
-      const s = d.summary || {};
+      const s = d.summary_v2 || d.summary || {};
+      const legacy = d.summary_legacy || {};
       const wr = s.win_rate == null ? "—" : s.win_rate + "%";
       const pfv = (s.pf == null) ? (s.ganadas > 0 ? "∞" : "—") : s.pf;
       const metaTxt = d.has_data
-        ? `${s.total} registrados · ${s.cerradas} cerrados`
+        ? `${s.total || 0} V2 registrados · ${s.cerradas || 0} cerrados`
         : "sin registros todavía";
       let status = "";
       if (d.source === "macmini") {
@@ -280,6 +281,15 @@
         else status = ` · <span class="up">● al día</span> <span class="muted">(Binance, hace ${ageMin}m)</span>`;
       }
       $("setups-meta").innerHTML = metaTxt + status;
+      const legacyEl = $("setups-v1-legacy");
+      if (legacyEl) {
+        const lp = d.paper_legacy || {};
+        legacyEl.innerHTML = `<div class="v-title">Histórico V1 archivado · no comparable</div>
+          <p class="bt-note">${legacy.cerradas || 0} cerrados · WR ${legacy.win_rate == null ? "—" : legacy.win_rate + "%"}
+          · equity teórica ${lp.equity == null ? "—" : "$" + Math.round(lp.equity).toLocaleString("es")}.
+          V1 activaba al tocar el borde del POI y atribuía el fill al centro; se conserva como evidencia,
+          pero no autoriza decisiones de live.</p>`;
+      }
       $("setups-summary").innerHTML = [
         card("Cerrados", s.cerradas || 0),
         card("Win rate", wr, s.win_rate != null && s.win_rate >= 50 ? "up" : ""),
@@ -292,7 +302,7 @@
       ].join("");
 
       // Cuenta PAPER: el forward-test traducido a USD con sizing sano (dinero simulado).
-      const p = d.paper;
+      const p = d.paper_v2 || d.paper;
       if (p) {
         const sec = p.asegurado_abierto || 0;
         const eqV = (p.equity_vivo != null) ? p.equity_vivo : p.equity;
@@ -327,11 +337,11 @@
         }
       }
       // Cuenta SELECTIVA (solo POI 4h/1D) — comparación calidad vs cantidad.
-      const ps = d.paper_selectivo;
+      const ps = d.paper_selectivo_v2 || d.paper_selectivo;
       if (ps) {
         const sign = (v) => (v > 0 ? "+" : "") + v;
         $("setups-paper-sel-meta").textContent =
-          `${ps.trades} trades selectivos · vs ${p ? p.trades : "?"} de la completa`;
+          `${ps.trades} trades selectivos V2 · vs ${p ? p.trades : "?"} de la completa V2`;
         $("setups-paper-sel").innerHTML = [
           card("Equity", "$" + ps.equity.toLocaleString("es"), ps.pnl >= 0 ? "up" : "down"),
           card("P&L", "$" + sign(Math.round(ps.pnl)).toLocaleString("es"), ps.pnl >= 0 ? "up" : "down"),
@@ -343,7 +353,7 @@
       }
 
       // --- Operaciones en curso (activas): dinero, apalancamiento y P&L en vivo ---
-      const costRate = (d.paper && d.paper.cost_rate) || 0.0014;   // comisión round-trip s/ nocional
+      const costRate = (p && p.cost_rate) || 0.0014;   // comisión round-trip s/ nocional
       const active = (d.setups || []).filter((x) => x.status === "activo");
       $("live-meta").textContent = active.length ? `${active.length} activa(s)` : "";
       const liveEl = $("setups-live");
@@ -453,6 +463,9 @@
       const setupRow = (x, pnlField = "paper_pnl") => [
         dt(x.ts_created),
         x.pair.replace("_", "/")
+          + (x.entry_model === d.entry_model_current
+              ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">V2</span>'
+              : ' <span class="muted" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">V1</span>')
           + (x.source === "profe" ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">profe</span>' : "")
           + ((x.source === "bta_paper" || x.bta_paper) ? ' <span class="up" style="font-size:10px;border:1px solid;border-radius:4px;padding:0 3px">BTA</span>' : ""),
         x.poi_tf,
@@ -484,7 +497,8 @@
         rows.length ? rows : [["Aún no se registran setups. Aparecen cuando el indicador genera un plan válido (R:R≥2).", "", "", "", "", "", "", "", "", "", "", "", ""]]);
       // Operaciones SELECTIVAS: el mismo registro pero solo las que cumplen la config
       // óptima (POI 4h/1D + premium/descuento + R:R≥5), marcadas por el backend.
-      const selList = (d.setups || []).filter((x) => x.selective);
+      const selList = (d.setups || []).filter(
+        (x) => x.selective && x.entry_model === d.entry_model_current);
       $("setups-sel-count").textContent = selList.length ? `· ${selList.length}` : "";
       table($("setups-sel-table"), SETUP_HEADERS,
         selList.length ? selList.map((x) => setupRow(x, "paper_pnl_sel"))

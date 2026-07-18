@@ -44,6 +44,17 @@ _REENTRY_COOLDOWN_BARS = 12
 _OPEN = ("pendiente", "activo")
 _CLOSED = ("ganada", "perdida", "anulada")
 
+# Versionado de la semántica de entrada. V1 activaba al tocar cualquier borde del
+# POI pero contabilizaba el fill en el punto medio; eso acreditó fills que nunca
+# ocurrieron. V2 exige un cruce causal del precio de entrada planificado.
+ENTRY_MODEL_V1 = "zone_touch_v1"
+ENTRY_MODEL_V2 = "midpoint_touch_v2"
+CURRENT_PHASE_ID = "phase1_v2_2026-07-18"
+
+
+def is_entry_v2(s: dict) -> bool:
+    return s.get("entry_model") == ENTRY_MODEL_V2
+
 
 def _key(pair: str, plan: dict) -> str:
     """Clave de deduplicación: par + TF del POI + dirección + extremo de la zona."""
@@ -353,7 +364,18 @@ class SetupStore:
                 if (s["status"] in ("ganada", "perdida") and s.get("ts_closed") is not None
                         and (now_s - s["ts_closed"]) < cooldown_s):
                     return False
-            active = plan.get("state") == "activo"
+            entry_model = plan.get("entry_model") or ENTRY_MODEL_V2
+            entry = float(plan["entry"])
+            entry_tol = abs(entry) * _ZONE_BUF
+            long = plan["dir"] == "long"
+            at_entry = abs(float(last_price) - entry) <= entry_tol
+            # Una orden límite V2 solo puede llenarse si existía antes del cruce.
+            # Si el plan nace al otro lado del midpoint, queda desarmado hasta que
+            # el precio vuelva al lado previo y haga un cruce nuevo.
+            entry_armed = ((last_price > entry + entry_tol) if long
+                           else (last_price < entry - entry_tol))
+            active = (plan.get("state") == "activo" and at_entry) if entry_model == ENTRY_MODEL_V2 \
+                else plan.get("state") == "activo"
             s_new = {
                 "key": k,
                 "source": source,
@@ -364,6 +386,11 @@ class SetupStore:
                 "bta_confirmed_at": (int(now_s) if plan.get("bta_paper") else None),
                 "bta_rr_liq": plan.get("bta_rr_liq"),
                 "ts_created": int(now_s),
+                "entry_model": entry_model,
+                "phase_id": (CURRENT_PHASE_ID if entry_model == ENTRY_MODEL_V2
+                             else plan.get("phase_id")),
+                "entry_armed": entry_armed if entry_model == ENTRY_MODEL_V2 else None,
+                "activation_price": float(last_price) if active else None,
                 "pair": pair,
                 "sel_tf": sel_tf,
                 "poi_tf": plan["tf"],
@@ -466,6 +493,29 @@ class SetupStore:
                 self._save()
         return n
 
+    def archive_legacy_pending(self, now_s: float | None = None) -> int:
+        """Cierra solo pendientes V1 al iniciar la cohorte V2.
+
+        Conserva todo el historial y deja los activos V1 terminar normalmente. Los
+        planes V2 actuales no se tocan. Se invoca explícitamente desde el runbook de
+        despliegue; nunca ocurre de manera silenciosa al importar o reiniciar.
+        """
+        now_s = int(now_s or time.time())
+        n = 0
+        with self._lock:
+            for s in self._setups:
+                model = s.get("entry_model") or ENTRY_MODEL_V1
+                if s.get("status") != "pendiente" or model == ENTRY_MODEL_V2:
+                    continue
+                s["status"] = "anulada"
+                s["ts_closed"] = now_s
+                s["ts_updated"] = now_s
+                s["close_reason"] = "phase1_v2_rollover"
+                n += 1
+            if n:
+                self._save()
+        return n
+
     def mark_cdc(self, pair: str, plan: dict, now_s: float) -> bool:
         """Marca cdc_ok=True en el setup ABIERTO de la misma clave: el cambio de
         carácter apareció en el POI (en la dirección correcta) mientras seguía
@@ -561,17 +611,22 @@ class SetupStore:
             return []
         transitions = []
         trailing_live = False   # el runner en trailing mueve su stop cada poll → persistir
+        state_changed = False
         with self._lock:
             for s in self._setups:
                 if s["pair"] != pair or s["status"] in _CLOSED:
                     continue
                 prev = s["status"]
+                armed_before = s.get("entry_armed")
                 for ev in self._update(s, price, now_s):
                     transitions.append({
                         "prev": prev, "status": s["status"], "pair": s["pair"],
                         "dir": s["dir"], "source": s.get("source", "indicador"),
                         "poi_tf": s.get("poi_tf"), "rr": s.get("rr"),
                         "disc_ok": s.get("disc_ok"),
+                        "entry_model": s.get("entry_model") or ENTRY_MODEL_V1,
+                        "phase_id": s.get("phase_id"),
+                        "activation_price": s.get("activation_price"),
                         "paper_only": s.get("paper_only"),
                         "strategy_tag": s.get("strategy_tag"),
                         "bta_paper": s.get("bta_paper"),
@@ -586,9 +641,11 @@ class SetupStore:
                         "margin_override": s.get("margin_override"),
                         **ev,   # type ("activated"|"partial"|"closed") y datos del parcial
                     })
+                if s.get("entry_armed") != armed_before:
+                    state_changed = True
                 if s.get("trailing") and s["status"] not in _CLOSED:
                     trailing_live = True
-            if transitions or trailing_live:
+            if transitions or trailing_live or state_changed:
                 self._save()
         return transitions
 
@@ -601,11 +658,29 @@ class SetupStore:
         lo, hi = s["entry_lo"], s["entry_hi"]
         buf = price * _ZONE_BUF
         if not s["activated"]:
-            # ¿el precio entró a la zona del POI? → se activa la entrada.
-            if (lo - buf) <= price <= (hi + buf):
+            model = s.get("entry_model") or ENTRY_MODEL_V1
+            activate = False
+            if model == ENTRY_MODEL_V2:
+                entry = float(s.get("entry") or 0.0)
+                tol = abs(entry) * _ZONE_BUF
+                armed = bool(s.get("entry_armed"))
+                if not armed:
+                    # Re-armado causal: primero debe volver al lado desde el cual una
+                    # orden límite descansaría antes de un cruce nuevo del midpoint.
+                    armed = (price > entry + tol) if long else (price < entry - tol)
+                    if armed:
+                        s["entry_armed"] = True
+                        s["ts_updated"] = int(now_s)
+                if armed:
+                    activate = (price <= entry + tol) if long else (price >= entry - tol)
+            else:
+                # Compatibilidad histórica V1: borde de zona atribuido al midpoint.
+                activate = (lo - buf) <= price <= (hi + buf)
+            if activate:
                 s["activated"] = True
                 s["status"] = "activo"
                 s["ts_activated"] = int(now_s)
+                s["activation_price"] = float(price)
                 s["ts_updated"] = int(now_s)
                 return [{"type": "activated"}]
             # Pendiente que se fue al TP sin llenarse → oportunidad perdida (anulada).

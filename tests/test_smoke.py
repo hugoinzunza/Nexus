@@ -66,6 +66,8 @@ def test_bot_panel_muestra_fase1_dry_run():
     html = (root / "modules/bot/public/index.html").read_text(encoding="utf-8")
     js = (root / "modules/bot/public/app.js").read_text(encoding="utf-8")
     assert 'id="phase1"' in html
-    assert "Fase 1 dry-run" in html
+    assert "Fase 1 V2 dry-run" in html
+    assert "phase1_v2_2026-07-18" in js
+    assert "cruce causal de la entrada central" in js
     assert "20 trades dry o 3 semanas" in js
     assert "no autoriza live" in js

@@ -49,17 +49,19 @@
 
   <!-- Setups SMC (forward-test) — independiente del colector de Binance -->
   <section id="setups-section" class="bt">
-    <h2 class="bt-h">Setups SMC · forward-test <span class="muted" id="setups-meta"></span></h2>
+    <h2 class="bt-h">Setups SMC · forward-test V2 <span class="muted" id="setups-meta"></span></h2>
     <p class="bt-note">
       Cada plan <strong>TP/SL</strong> que arma el indicador SMC en vivo (⏳ en vigilancia o ● activo)
-      se registra acá y se le sigue el resultado: TP = ganada, SL = perdida, sin llenarse = anulada.
+      se activa solo cuando el precio cruza su <strong>entrada central</strong>; tocar únicamente el borde
+      del POI no cuenta como fill. TP = ganada, SL = perdida, sin llenarse = anulada.
       Es <strong>forward-test</strong> (escenarios de contexto, no recomendaciones ni señales).
     </p>
+    <section id="setups-v1-legacy" class="verdict"></section>
     <section class="metric-grid" id="setups-summary"></section>
-    <h3 class="bt-h" style="font-size:15px">Cuenta paper (dinero simulado) <span class="muted" id="setups-paper-meta"></span></h3>
+    <h3 class="bt-h" style="font-size:15px">Cuenta paper V2 (dinero simulado) <span class="muted" id="setups-paper-meta"></span></h3>
     <section class="metric-grid" id="setups-paper"></section>
     <div class="chart-wrap" id="paper-equity-wrap" hidden><canvas id="paper-equity-chart" class="chart"></canvas></div>
-    <h3 class="bt-h" style="font-size:15px">Cuenta selectiva · config óptima <span class="muted" id="setups-paper-sel-meta"></span></h3>
+    <h3 class="bt-h" style="font-size:15px">Cuenta selectiva V2 · hipótesis <span class="muted" id="setups-paper-sel-meta"></span></h3>
     <p class="bt-note">La misma estrategia pero registrando <strong>solo</strong> los setups de la config óptima del backtest (validada IS/OOS): zona POI de <strong>4h/1D</strong> + disciplina <strong>premium/descuento</strong> + <strong>R:R ≥ 5</strong>. Corre en paralelo a la completa para comparar calidad vs cantidad y decidir a futuro.</p>
     <p class="bt-note" style="background:rgba(201,138,22,.10);border:1px solid rgba(201,138,22,.30);border-radius:10px;padding:10px 12px"><strong>Hipótesis en validación.</strong> Esa config "óptima" salió del backtest; estos números son <strong>paper-trading de muestra chica</strong> en vivo, no una promesa de rendimiento. El pasado no garantiza el futuro.</p>
     <section class="metric-grid" id="setups-paper-sel"></section>

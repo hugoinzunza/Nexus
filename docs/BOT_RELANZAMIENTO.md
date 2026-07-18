@@ -1,9 +1,29 @@
-# Runbook — relanzamiento del bot (tras auditoría 2026-07-04)
+# Runbook — relanzamiento del bot (Fase 1 V2)
 
-**Guía oficial.** Estado al escribir: bot **PAUSADO** (kill-switch activo en el VPS),
-0 posiciones, `live: true` en config (sin efecto por el kill). Filtros
-(`entry_profiles`, `max_entry_slippage_pct`) ya en config; el proceso corriendo
-aún no los carga (los toma en el próximo restart).
+**Guía oficial.** La operación sigue en `live:false`: solo dry-run, sin órdenes
+reales. La Fase 1 V2 empieza con un modelo de fill causal y conserva la Fase 1 V1
+como archivo separado.
+
+## Rollover Fase 1 V1 -> V2 (2026-07-18)
+
+La primera muestra dry cerró con 16 trades, 37.5% WR, -0.305R neto promedio,
+-$39.37 y $35.56 en costos. No se usa para aprobar live porque el Diario V1
+activaba al tocar cualquier borde del POI, pero atribuía el fill al midpoint.
+La auditoría de velas de Binance confirmó casos ganadores donde el midpoint nunca
+se negoció después de la activación.
+
+Fase 1 V2 corrige la medición:
+
+- `entry_model: midpoint_touch_v2` y `phase_id: phase1_v2_2026-07-18` en cada setup nuevo.
+- Una entrada long solo activa al cruzar causalmente el midpoint desde arriba; una
+  short, desde abajo. Si el plan nace después del cruce, primero debe rearmarse.
+- `activation_price` registra el precio observado que causó la activación.
+- Los V1 cerrados se preservan. Los V1 pendientes se archivan como `anulada`; un V1
+  activo se deja terminar con sus reglas originales.
+- Diario y panel del bot separan V2 de V1. El P&L dry se mide con el resultado neto
+  real del BotStore, no con el `result_r` teórico del Diario.
+- El criterio no cambia: primero de >=20 trades V2 o 3 semanas, avgR neto >+0.2R y
+  WR >=55%. El reloj y el contador comienzan con el primer trade V2.
 
 ## Dónde corre qué (no confundir máquinas)
 

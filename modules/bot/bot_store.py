@@ -82,6 +82,9 @@ class BotStore:
                 "dir": rec["dir"],
                 "source": rec.get("source"),
                 "mode": rec.get("mode", "dry"),
+                "phase_id": rec.get("phase_id"),
+                "entry_model": rec.get("entry_model"),
+                "activation_price": rec.get("activation_price"),
                 "leverage": rec.get("leverage"),
                 "qty": rec["qty"],
                 "qty_open": rec["qty"],          # cantidad aún abierta (baja con parciales)

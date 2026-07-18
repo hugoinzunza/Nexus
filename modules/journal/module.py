@@ -97,12 +97,22 @@ class JournalModule(NexusModule):
             source = "macmini"
             age = self._age(ing)
             health = ing.get("macmini")
-        summary = setups_store.summarize(setups)
-        paper = setups_store.paper_account(setups)
-        # Cuenta SELECTIVA en paralelo: solo zonas POI de 4h/1D (el edge robusto del
-        # laboratorio). No anota los setups para no pisar la cuenta completa.
+        v2 = [s for s in setups if setups_store.is_entry_v2(s)]
+        legacy = [s for s in setups if not setups_store.is_entry_v2(s)]
+        summary = setups_store.summarize(setups)  # compatibilidad para clientes viejos
+        summary_v2 = setups_store.summarize(v2)
+        summary_legacy = setups_store.summarize(legacy)
+        # Cada cohorte se dimensiona desde su propio capital inicial. El histórico V1
+        # sigue visible, pero nunca se mezcla con la evaluación causal V2.
+        paper = setups_store.paper_account(setups, annotate=False)
+        paper_v2 = setups_store.paper_account(v2)
+        paper_legacy = setups_store.paper_account(legacy)
         paper_selectivo = setups_store.paper_account(
-            setups, selector=setups_store.is_selective, annotate=True, tag="_sel")
+            setups, selector=setups_store.is_selective, annotate=False)
+        paper_selectivo_v2 = setups_store.paper_account(
+            v2, selector=setups_store.is_selective, annotate=True, tag="_sel")
+        paper_selectivo_legacy = setups_store.paper_account(
+            legacy, selector=setups_store.is_selective, annotate=True, tag="_sel")
         # Más recientes primero; tope para no inflar el payload.
         ordered = sorted(setups, key=lambda s: s.get("ts_created", 0), reverse=True)[:200]
         # Marca cuáles entran en la cuenta SELECTIVA (POI 4h/1D + premium/descuento +
@@ -112,8 +122,16 @@ class JournalModule(NexusModule):
         return self._json(200, {
             "has_data": bool(setups),
             "summary": summary,
+            "summary_v2": summary_v2,
+            "summary_legacy": summary_legacy,
             "paper": paper,
+            "paper_v2": paper_v2,
+            "paper_legacy": paper_legacy,
             "paper_selectivo": paper_selectivo,
+            "paper_selectivo_v2": paper_selectivo_v2,
+            "paper_selectivo_legacy": paper_selectivo_legacy,
+            "entry_model_current": setups_store.ENTRY_MODEL_V2,
+            "phase_id_current": setups_store.CURRENT_PHASE_ID,
             "setups": ordered,
             "source": source,
             "age_seconds": age,

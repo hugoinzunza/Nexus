@@ -346,6 +346,8 @@ class BotExecutor:
         self.store.open_trade({
             "setup_id": sid, "key": t.get("key"), "symbol": symbol, "pair": t["pair"],
             "dir": t["dir"], "source": t.get("source"), "mode": mode,
+            "phase_id": t.get("phase_id"), "entry_model": t.get("entry_model"),
+            "activation_price": t.get("activation_price"),
             "leverage": leverage, "qty": qty, "entry_price": round(entry_price, 8),
             "setup_entry": float(t.get("entry") or px),
             "sl": sl, "tp": t.get("tp"), "risk_usd": round(risk_usd, 2),

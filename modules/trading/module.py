@@ -565,6 +565,9 @@ class TradingModule(NexusModule):
                             # ciego + overrides del profe ignorados → tamaño equivocado).
                             "poi_tf": created.get("poi_tf"), "rr": created.get("rr"),
                             "disc_ok": created.get("disc_ok"),
+                            "entry_model": created.get("entry_model"),
+                            "phase_id": created.get("phase_id"),
+                            "activation_price": created.get("activation_price"),
                             "margin_override": created.get("margin_override"),
                             "leverage_override": created.get("leverage_override"),
                         }], last)
