@@ -119,10 +119,20 @@ async def refresh(args: argparse.Namespace) -> dict[str, Any]:
     cache.fetch("BTCUSDT", start_ms, int(time.time() * 1000))
     snapshot = build_snapshot(forward_start=args.forward_start)
     atomic_json(Path(STATE_PATH), snapshot)
-    publish_remote(snapshot, args.remote_url, args.token)
+    remote_status = "local-only"
+    if args.remote_url:
+        try:
+            publish_remote(snapshot, args.remote_url, args.token)
+            remote_status = "remote-ok"
+        except Exception as exc:  # noqa: BLE001
+            # La captura local es la fuente de verdad. Una caída de Railway no debe
+            # perder mensajes ni convertir el timer en fallido; el próximo ciclo
+            # vuelve a intentar publicar el snapshot completo.
+            remote_status = f"remote-pending ({exc})"
     print(
         f"coinsignals shadow: {message_count} mensajes, "
-        f"{sum(book['metrics']['signals'] for book in snapshot['books'])} registros en libros"
+        f"{sum(book['metrics']['signals'] for book in snapshot['books'])} registros en libros, "
+        f"{remote_status}"
     )
     return snapshot
 
