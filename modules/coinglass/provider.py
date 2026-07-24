@@ -193,17 +193,69 @@ def _latest(values: Any) -> float | None:
 
 def _compact_context(context: dict[str, Any]) -> dict[str, Any]:
     indicators = context.get("indicators", {})
-    oi = indicators.get("open_interest", {}).get("close_btc", [])
+    open_interest = indicators.get("open_interest", {})
+    oi = open_interest.get("close_usd") or open_interest.get("close_btc", [])
     oi_now = _latest(oi)
     oi_prev = _float(oi[-2]) if len(oi) > 1 else None
     return {
         "time": context.get("captured_at"),
         "funding_pct": _latest(indicators.get("funding", {}).get("close_pct")),
-        "oi_btc": oi_now,
+        "oi_usd": oi_now,
         "oi_change_pct": round((oi_now / oi_prev - 1) * 100, 4)
         if oi_now is not None and oi_prev else None,
         "top_long_pct": _latest(indicators.get("top_traders", {}).get("long_pct")),
         "book_ratio": _latest(indicators.get("orderbook", {}).get("bid_ask_ratio")),
+    }
+
+
+def _basic_analysis(basic: dict[str, Any]) -> dict[str, Any]:
+    compact = _compact_context(basic)
+    indicators = basic.get("indicators", {})
+    liquidation = _latest(indicators.get("liquidations", {}).get("bars"))
+    funding = compact.get("funding_pct")
+    oi_change = compact.get("oi_change_pct")
+    top_long = compact.get("top_long_pct")
+    book = compact.get("book_ratio")
+    long_liq = _float(liquidation.get("long_musd")) if isinstance(liquidation, dict) else None
+    short_liq = _float(liquidation.get("short_musd")) if isinstance(liquidation, dict) else None
+    leverage = (
+        "sin datos" if oi_change is None
+        else "apalancamiento entrando" if oi_change > 0.25
+        else "desapalancamiento" if oi_change < -0.25
+        else "OI estable"
+    )
+    funding_state = (
+        "sin datos" if funding is None
+        else "longs pagan elevado" if funding > 0.01
+        else "longs pagan moderado" if funding > 0
+        else "shorts pagan"
+    )
+    liquidation_state = (
+        "sin datos" if long_liq is None or short_liq is None
+        else "flush de longs" if long_liq > short_liq * 2
+        else "flush de shorts" if short_liq > long_liq * 2
+        else "liquidación equilibrada"
+    )
+    positioning = (
+        "sin datos" if top_long is None
+        else "top traders cargados long" if top_long >= 60
+        else "top traders cargados short" if top_long <= 40
+        else "posicionamiento equilibrado"
+    )
+    book_state = (
+        "sin datos" if book is None
+        else "más bids en ±1%" if book >= 1.25
+        else "más asks en ±1%" if book <= 0.8
+        else "profundidad equilibrada"
+    )
+    return {
+        "research_only": True,
+        "interval": basic.get("intervals", {}).get("open_interest", "4h"),
+        "leverage": leverage,
+        "funding": funding_state,
+        "liquidations": liquidation_state,
+        "positioning": positioning,
+        "orderbook": book_state,
     }
 
 
@@ -213,26 +265,34 @@ def _pressure(basic: dict[str, Any], advanced: dict[str, Any]) -> dict[str, Any]
     levels = advanced.get("liquidation_map", [])
     above = sum(row["amount_usd"] for row in levels if price and row["price"] > price)
     below = sum(row["amount_usd"] for row in levels if price and row["price"] < price)
-    liquidity = (above - below) / (above + below) if above + below else 0
+    liquidity = (above - below) / (above + below) if above + below else None
     ratio = compact.get("book_ratio")
     book = (ratio - 1) / (ratio + 1) if ratio is not None and ratio > 0 else 0
     funding = compact.get("funding_pct") or 0
     top_long = compact.get("top_long_pct")
     crowd = -((top_long - 50) / 50) if top_long is not None else 0
     funding_contrarian = -math.tanh(funding / 0.03)
-    score = 100 * (0.45 * liquidity + 0.35 * book + 0.10 * crowd + 0.10 * funding_contrarian)
+    score = (
+        100 * (0.45 * liquidity + 0.35 * book + 0.10 * crowd + 0.10 * funding_contrarian)
+        if liquidity is not None else None
+    )
     return {
         "research_only": True,
         "validated": False,
-        "score": round(max(-100, min(100, score)), 1),
+        "score": round(max(-100, min(100, score)), 1) if score is not None else None,
         "components": {
-            "liquidation_attraction": round(liquidity, 4),
+            "liquidation_attraction": round(liquidity, 4) if liquidity is not None else None,
             "orderbook_imbalance": round(book, 4),
             "positioning_contrarian": round(crowd, 4),
             "funding_contrarian": round(funding_contrarian, 4),
         },
         "liquidation_usd": {"above": round(above, 2), "below": round(below, 2)},
-        "label": "presión alcista" if score >= 15 else "presión bajista" if score <= -15 else "neutral",
+        "label": (
+            "modelo incompleto" if score is None
+            else "presión alcista" if score >= 15
+            else "presión bajista" if score <= -15
+            else "neutral"
+        ),
     }
 
 
@@ -249,6 +309,7 @@ def build_dashboard(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "symbol": "BTCUSDT",
         "basic": basic,
+        "basic_analysis": _basic_analysis(basic),
         "history": history,
         "advanced": advanced,
         "experimental_pressure": {

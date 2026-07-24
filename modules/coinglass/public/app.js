@@ -1,6 +1,13 @@
 const $ = (id) => document.getElementById(id);
 const fmt = (value, digits = 2) => value == null ? "—" : Number(value).toLocaleString("es-CL", { maximumFractionDigits: digits });
 const usd = (value) => value == null ? "—" : `US$${Number(value).toLocaleString("es-CL", { maximumFractionDigits: 0 })}`;
+const compactUsd = (value) => {
+  if (value == null) return "—";
+  const number = Number(value);
+  if (Math.abs(number) >= 1e9) return `US$${fmt(number / 1e9, 2)}B`;
+  if (Math.abs(number) >= 1e6) return `US$${fmt(number / 1e6, 2)}M`;
+  return usd(number);
+};
 const signed = (value, suffix = "", digits = 2) => value == null ? "—" : `${value >= 0 ? "+" : ""}${fmt(value, digits)}${suffix}`;
 let state = null;
 let liquidationMode = "levels";
@@ -55,7 +62,7 @@ function renderHistory() {
   ctx.clearRect(0, 0, width, height);
   grid(ctx, width, height);
   const rows = state.history || [];
-  const oi = rows.map((row) => row.oi_btc);
+  const oi = rows.map((row) => row.oi_usd ?? row.oi_btc);
   const funding = rows.map((row) => row.funding_pct);
   const allOi = oi.filter(Number.isFinite), allFunding = funding.filter(Number.isFinite);
   if (allOi.length < 2) {
@@ -102,7 +109,7 @@ function renderCapabilities() {
 function renderOverview() {
   const basic = state.basic?.indicators || {};
   const intervals = state.basic?.intervals || {};
-  const oi = basic.open_interest?.close_btc || [];
+  const oi = basic.open_interest?.close_usd || basic.open_interest?.close_btc || [];
   const oiNow = latest(oi), oiPrev = oi.length > 1 ? oi[oi.length - 2] : null;
   const oiChange = oiNow != null && oiPrev ? (oiNow / oiPrev - 1) * 100 : null;
   const funding = latest(basic.funding?.close_pct);
@@ -111,13 +118,24 @@ function renderOverview() {
   const book = latest(basic.orderbook?.bid_ask_ratio);
   $("market-metrics").innerHTML =
     metric("Funding OI", signed(funding, "%", 4)) +
-    metric("OI BTC", fmt(oiNow, 1)) +
+    metric("OI agregado", compactUsd(oiNow)) +
     metric(`Cambio OI ${intervals.open_interest || "1h"}`, signed(oiChange, "%"), (oiChange || 0) >= 0 ? "up" : "down") +
     metric("Liquidaciones L/S", liq ? `${fmt(liq.long_musd)}M / ${fmt(liq.short_musd)}M` : "—") +
     metric("Top traders long", top == null ? "—" : `${fmt(top)}%`) +
     metric("Book bid/ask ±1%", fmt(book, 2));
   renderHistory();
   renderCapabilities();
+  const analysis = state.basic_analysis || {};
+  const readings = [
+    ["Apalancamiento", analysis.leverage],
+    ["Funding", analysis.funding],
+    ["Liquidaciones", analysis.liquidations],
+    ["Top traders", analysis.positioning],
+    ["Profundidad", analysis.orderbook],
+  ];
+  $("basic-analysis").innerHTML = readings.map(([label, value]) =>
+    `<div class="regime"><span>${label}</span><b>${value || "sin datos"}</b></div>`
+  ).join("");
 }
 
 function message(id, text) {
@@ -290,16 +308,17 @@ function renderOrderbook() {
 }
 
 function component(label, value) {
-  const number = Number(value || 0) * 100;
+  if (value == null) return `<article><span>${label}</span><b>—</b></article>`;
+  const number = Number(value) * 100;
   return `<article><span>${label}</span><b class="${number >= 0 ? "up" : "down"}">${signed(number, "", 1)}</b></article>`;
 }
 
 function renderModel() {
   const model = state.experimental_pressure || {};
-  const score = Number(model.score);
+  const score = model.score == null ? null : Number(model.score);
   const scoreBox = $("pressure-score");
   scoreBox.querySelector("b").textContent = Number.isFinite(score) ? signed(score, "", 1) : "—";
-  scoreBox.querySelector("b").className = score >= 15 ? "up" : score <= -15 ? "down" : "";
+  scoreBox.querySelector("b").className = Number.isFinite(score) ? score >= 15 ? "up" : score <= -15 ? "down" : "" : "";
   scoreBox.querySelector("span").textContent = model.label || "sin datos";
   const observations = Number(model.observations || 0);
   const minimum = Number(model.minimum_for_calibration || 100);
@@ -322,6 +341,11 @@ function render(data) {
   }
   $("price").textContent = data.advanced?.price ? `${fmt(data.advanced.price, 1)} USDT` : "BTCUSDT";
   $("updated").textContent = `Actualizado hace ${fmt(data.age_seconds, 0)} s`;
+  const capabilities = data.advanced?.capabilities || {};
+  const hasLiquidations = capabilities.liquidation_map?.available || capabilities.liquidation_heatmap?.available;
+  const hasOrderbook = capabilities.orderbook_heatmap?.available || capabilities.large_orders?.available;
+  document.querySelector('[data-tab="liquidations"]').classList.toggle("hidden", !hasLiquidations);
+  document.querySelector('[data-tab="orderbook"]').classList.toggle("hidden", !hasOrderbook);
   renderOverview();
   renderLiquidations();
   renderOrderbook();

@@ -50,7 +50,7 @@ def _summarize(name: str, rows: Any) -> dict[str, Any]:
     if name == "funding":
         return {"close_pct": _series(rows, ("close", "funding_rate"))}
     if name == "open_interest":
-        return {"close_btc": _series(rows, ("close", "open_interest", "aggregated_open_interest"))}
+        return {"close_usd": _series(rows, ("close", "open_interest", "aggregated_open_interest"))}
     if name == "liquidations":
         bars = []
         for row in rows[-4:] if isinstance(rows, list) else []:
@@ -64,7 +64,8 @@ def _summarize(name: str, rows: Any) -> dict[str, Any]:
         return {"bars": bars}
     if name == "top_traders":
         values = _series(rows, (
-            "long_position_percentage", "long_account", "long_account_ratio", "long_ratio",
+            "top_position_long_percent", "long_position_percentage",
+            "long_account", "long_account_ratio", "long_ratio",
         ))
         return {"long_pct": [round(value * 100 if value <= 1 else value, 2) for value in values]}
     if name == "orderbook":

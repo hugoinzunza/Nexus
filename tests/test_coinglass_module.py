@@ -110,7 +110,7 @@ def test_dashboard_is_research_only_and_pressure_is_transparent():
         "captured_at": "2026-07-24T15:00:00+00:00",
         "indicators": {
             "funding": {"close_pct": [0.01]},
-            "open_interest": {"close_btc": [100, 101]},
+            "open_interest": {"close_usd": [100, 101]},
             "top_traders": {"long_pct": [60]},
             "orderbook": {"bid_ask_ratio": [2]},
         },
@@ -140,6 +140,31 @@ def test_dashboard_is_research_only_and_pressure_is_transparent():
         "positioning_contrarian",
         "funding_contrarian",
     }
+    assert dashboard["basic_analysis"]["leverage"] == "apalancamiento entrando"
+    assert dashboard["basic_analysis"]["positioning"] == "top traders cargados long"
+
+
+def test_pressure_is_incomplete_without_real_liquidation_map():
+    basic = {
+        "captured_at": "2026-07-24T15:00:00+00:00",
+        "indicators": {
+            "funding": {"close_pct": [0.01]},
+            "open_interest": {"close_usd": [100, 101]},
+            "top_traders": {"long_pct": [62]},
+            "orderbook": {"bid_ask_ratio": [1.5]},
+        },
+    }
+    advanced = {
+        "captured_at": "2026-07-24T15:00:00+00:00",
+        "price": 65000,
+        "capabilities": {"liquidation_map": {"available": False}},
+    }
+
+    dashboard = build_dashboard(basic, [basic], advanced)
+
+    assert dashboard["experimental_pressure"]["score"] is None
+    assert dashboard["experimental_pressure"]["label"] == "modelo incompleto"
+    assert dashboard["experimental_pressure"]["components"]["liquidation_attraction"] is None
 
 
 def test_dashboard_cache_avoids_requery_and_never_persists_key(tmp_path):

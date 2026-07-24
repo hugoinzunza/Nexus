@@ -48,7 +48,7 @@ def test_fetch_market_context_normalizes_available_indicators_without_leaking_ke
     assert context["research_only"] is True
     assert context["status"] == "ok"
     assert context["indicators"]["funding"]["close_pct"] == [0.007601]
-    assert context["indicators"]["open_interest"]["close_btc"] == [104816.674]
+    assert context["indicators"]["open_interest"]["close_usd"] == [104816.674]
     assert context["indicators"]["liquidations"]["bars"] == [{
         "long_musd": 0.25,
         "short_musd": 1.09,
@@ -121,7 +121,7 @@ def test_update_market_context_keeps_last_valid_data_on_api_failure(tmp_path):
         "research_only": True,
         "captured_at": "2026-07-24T14:00:00+00:00",
         "status": "ok",
-        "indicators": {"open_interest": {"close_btc": [100]}},
+        "indicators": {"open_interest": {"close_usd": [100]}},
     }
     path.write_text(json.dumps({
         "research_only": True,
