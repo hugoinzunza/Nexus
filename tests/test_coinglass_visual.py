@@ -80,9 +80,11 @@ def test_visual_snapshot_is_normalized_and_never_enables_execution():
 
     assert clean["research_only"] is True
     assert clean["execution_enabled"] is False
+    assert clean["mode"] == "research"
     assert clean["source"] == "coinglass_authorized_browser"
     assert clean["symbol"] == "BTCUSDT"
     assert len(clean["liquidation_heatmap"]["levels"]) == 8
+    assert build_visual_indicator(clean, now=NOW)["execution_enabled"] is False
 
 
 def test_visual_indicator_exposes_nearest_levels_and_decelerating_depth():

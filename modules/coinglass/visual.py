@@ -121,6 +121,7 @@ def normalize_visual_snapshot(
     return {
         "research_only": True,
         "execution_enabled": False,
+        "mode": "research",
         "source": "coinglass_authorized_browser",
         "captured_at": captured.isoformat(),
         "symbol": "BTCUSDT",
