@@ -107,13 +107,22 @@ def parse_tooltip(text: str) -> dict[str, Any]:
             or "apalancamiento" in lowered
         ):
             intensity_components.append(value)
+    # `inferred` marca qué campos NO vinieron etiquetados sino de una heurística
+    # de relleno. Los formatos apilados de CoinGlass no etiquetan el precio, así
+    # que las heurísticas son necesarias; lo que no se puede es confundir un
+    # tooltip completo con uno a medio pintar. Quien consume decide.
+    inferred: list[str] = []
     if intensity_components:
         result["intensity_usd"] = sum(intensity_components)
+        # Los buckets 10x/50x/100x se suman; si se renderizaron menos, la
+        # intensidad sale silenciosamente baja. Se registra cuántos hubo.
+        result["intensity_parts"] = len(intensity_components)
     if "price" not in result:
         for line in lines:
             value = parse_money(line)
             if value is not None and 1_000 < value < 1_000_000:
                 result["price"] = value
+                inferred.append("price")
                 break
     if "intensity_usd" not in result:
         monetary = [
@@ -123,8 +132,11 @@ def parse_tooltip(text: str) -> dict[str, Any]:
         monetary = [value for value in monetary if value is not None and value > 100_000]
         if monetary:
             result["intensity_usd"] = monetary[-1]
+            inferred.append("intensity_usd")
     if lines:
         result["timestamp"] = lines[0]
+    if inferred:
+        result["inferred"] = inferred
     return result
 
 
@@ -279,10 +291,46 @@ async def _open_chart(page, url: str) -> None:
     await page.wait_for_timeout(2_000)
 
 
+def _assert_chart_matches_symbol(rows: list[dict[str, Any]], btc_price: float,
+                                 tolerance: float = 0.25) -> None:
+    """Falla cerrado si el gráfico no es el activo que decimos publicar.
+
+    Las URLs de CoinGlass no llevan símbolo: el activo depende del estado guardado
+    en el perfil de Chrome. Si alguien dejó el chart en ETH, o cambia el default,
+    publicaríamos niveles de otro activo etiquetados `BTCUSDT`. La mediana de los
+    niveles tiene que caer cerca del precio real de BTC; con otro activo la
+    diferencia es de un orden de magnitud, no del 25%.
+    """
+    prices = sorted(row["price"] for row in rows if row.get("price"))
+    if not prices or not btc_price:
+        raise RuntimeError("sin niveles o sin precio de referencia para validar el simbolo")
+    median = prices[len(prices) // 2]
+    if abs(median / btc_price - 1) > tolerance:
+        raise RuntimeError(
+            f"el grafico no parece BTCUSDT: mediana de niveles {median:,.0f} vs "
+            f"precio BTC {btc_price:,.0f}; revise el simbolo del perfil"
+        )
+
+
 async def _collect_whale_orders(page) -> list[dict[str, Any]]:
-    checkbox = page.locator("input[type=checkbox]").first
-    if await page.locator("input[type=checkbox]").count() < 1:
-        raise RuntimeError("CoinGlass no expuso el control de ordenes canceladas")
+    # El control de "mostrar canceladas" se busca por su ETIQUETA, no por ser el
+    # primer checkbox del DOM: si CoinGlass agrega otro filtro antes, desmarcar
+    # `.first` apagaría el control equivocado y se publicarían canceladas con
+    # active_only=True (bandera autoafirmada que el servidor cree).
+    checkbox = None
+    for label in ("cancel", "cancelad"):
+        candidate = page.locator(
+            f"label:has-text('{label}') input[type=checkbox], "
+            f"*:has(> input[type=checkbox]):has-text('{label}') input[type=checkbox]"
+        ).first
+        if await candidate.count() > 0:
+            checkbox = candidate
+            break
+    if checkbox is None:
+        raise RuntimeError(
+            "CoinGlass no expuso un control de ordenes canceladas identificable "
+            "por etiqueta; no se publica sin poder excluirlas"
+        )
     if await checkbox.is_checked(timeout=1_000):
         await checkbox.uncheck(force=True)
         await page.wait_for_timeout(2_500)
@@ -302,11 +350,14 @@ async def _collect_whale_orders(page) -> list[dict[str, Any]]:
         )
         if not item:
             continue
+        # `market` entra a la clave: un muro de igual precio y monto en spot y en
+        # futuros son DOS órdenes, no una. Sin esto colapsaban en una sola.
         key = (
             item["side"],
             round(item["price"]),
             round(item["amount_usd"]),
             item["exchange"],
+            item.get("market") or "unknown",
         )
         parsed[key] = item
     return list(parsed.values())
@@ -380,6 +431,7 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
             "revise login, plan o cambios visuales"
         )
     current_price = public_btc_price()
+    _assert_chart_matches_symbol(map_rows + heatmap_rows, current_price)
 
     return {
         "research_only": True,

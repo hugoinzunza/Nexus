@@ -424,3 +424,73 @@ def test_radar_declara_pesos_frescura_y_dependencia_de_la_muestra():
     assert "no solapadas" in script, "no presentar 2.016 capturas como independientes"
     assert "Math.abs(c.heatmap_attraction + c.map_attraction)" not in script, \
         "el consenso debe conservar el signo"
+
+
+def test_reason_escapa_html_del_payload_de_ingesta():
+    """El texto de `reason` viene del payload (token compartido) y se interpola
+    en innerHTML. Debe escaparse en la fuente (auditoría 2026-07-24)."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    cuerpo = script.split("function reason(capability)")[1].split("\n}")[0]
+
+    assert "escapeHtml(" in cuerpo, "reason() debe escapar antes de devolver"
+
+
+def test_fail_closed_de_canceladas_busca_el_control_por_etiqueta():
+    """`.first` sobre input[type=checkbox] apaga el control equivocado si
+    CoinGlass agrega otro filtro antes."""
+    source = (ROOT / "modules/coinglass/visual_collector.py").read_text()
+    bloque = source.split("async def _collect_whale_orders")[1].split("async def")[0]
+
+    assert 'locator("input[type=checkbox]").first' not in bloque
+    assert "has-text" in bloque, "el checkbox debe identificarse por su etiqueta"
+
+
+def test_dedup_de_muros_distingue_spot_de_futuros():
+    """Un muro de igual precio y monto en spot y en futuros son DOS órdenes."""
+    source = (ROOT / "modules/coinglass/visual_collector.py").read_text()
+    bloque = source.split("async def _collect_whale_orders")[1].split("async def")[0]
+    clave = bloque.split("key = (")[1].split("parsed[key]")[0]
+
+    assert "market" in clave, "la clave de dedup debe incluir el venue"
+
+
+def test_tooltip_marca_los_campos_inferidos():
+    """Las heurísticas de relleno son necesarias (formatos sin etiqueta), pero un
+    tooltip a medio pintar no puede confundirse con uno completo."""
+    completo = parse_tooltip(
+        "2026-07-24 14:50\nPrecio: 64,482.8\n"
+        "Apalancamiento Liquidación: $8.85M\nLiquidación acumulada: $118.57M"
+    )
+    assert "inferred" not in completo
+
+    apilado = parse_tooltip(
+        "65688\nApalancamiento de Liquidación Corta Acumulada\n342.89M\n"
+        "Apalancamiento 10x\n1.20M\nApalancamiento 50x\n7.93M\n"
+        "Apalancamiento 100x\n21.87M"
+    )
+    assert apilado["inferred"] == ["price"], "el precio sin etiqueta es inferido"
+    assert apilado["intensity_parts"] == 3, "deben registrarse los buckets sumados"
+
+
+def test_colector_falla_cerrado_si_el_grafico_no_es_btc():
+    """Las URLs no llevan símbolo: el activo depende del perfil de Chrome."""
+    from modules.coinglass.visual_collector import _assert_chart_matches_symbol
+
+    niveles_btc = [{"price": p} for p in (63_000, 64_000, 65_000)]
+    _assert_chart_matches_symbol(niveles_btc, 64_238)      # no levanta
+
+    niveles_eth = [{"price": p} for p in (3_100, 3_200, 3_300)]
+    with pytest.raises(RuntimeError, match="no parece BTCUSDT"):
+        _assert_chart_matches_symbol(niveles_eth, 64_238)
+
+
+def test_historial_publico_se_recorta_por_tiempo_no_por_conteo():
+    """288 entradas son 24 h solo si el timer nunca falló."""
+    from modules.coinglass.module import _recent_by_time
+
+    viejas = [{"captured_at": (NOW - timedelta(days=3)).isoformat()} for _ in range(5)]
+    frescas = [{"captured_at": (NOW - timedelta(hours=2)).isoformat()} for _ in range(3)]
+    recortado = _recent_by_time(viejas + frescas, hours=24, cap=288)
+
+    assert len(recortado) == 3, "las entradas de hace 3 días no son 'últimas 24 h'"
+    assert _recent_by_time([{"captured_at": "sin-formato"}], hours=24, cap=288) == []

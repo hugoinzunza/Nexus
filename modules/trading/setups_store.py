@@ -222,6 +222,23 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
     wins = 0
     comisiones = 0.0
     curve = []
+    # Línea de tiempo del equity para poder dimensionar por el capital que había
+    # al ABRIR cada operación. Los trades se recorren por cierre, pero el 99% se
+    # solapa: dimensionar con el equity del cierre le presta a una operación las
+    # ganancias de otras que seguían abiertas cuando ella nació (sesgo al alza,
+    # medido en +16,8 puntos sobre la muestra real). Como todo trade que cerró
+    # antes de que este abriera ya fue procesado, el dato está disponible.
+    hitos: list[tuple[float, float]] = [(0.0, capital)]
+
+    def _equity_al_abrir(ts_open) -> float:
+        base = capital
+        for ts_close, eq_tras in hitos:
+            if ts_close <= (ts_open or 0):
+                base = eq_tras
+            else:
+                break
+        return base
+
     for s in closed:
         entry, sl = s.get("entry") or 0.0, s.get("sl") or 0.0
         slf = abs(entry - sl) / entry if entry else 0.0
@@ -231,11 +248,13 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         # ganada = TP límite (maker), perdida = SL market (taker+slippage). Con SL
         # ajustado el nocional es grande → la comisión pesa más por trade.
         cf = _cost_fraction(s["result_r"] > 0, override=cost_rate)
-        cost_usd = (cf / slf) * (risk_pct * eq)
+        base = _equity_al_abrir(s.get("ts_created"))
+        cost_usd = (cf / slf) * (risk_pct * base)
         comisiones += cost_usd
         net_r = s["result_r"] - cf / slf
-        pnl = net_r * (risk_pct * eq)
+        pnl = net_r * (risk_pct * base)
         eq += pnl
+        hitos.append((s["ts_closed"], eq))
         if s["result_r"] > 0:
             wins += 1
         peak = max(peak, eq)
@@ -311,6 +330,48 @@ def paper_account(setups: list, capital: float = PAPER_CAPITAL,
         "trades": n,
         "win_rate": round(wins / n * 100, 1) if n else None,
         "curve": curve[-300:],
+        # El drawdown de una curva secuencial NO puede mostrar el golpe de varias
+        # posiciones abiertas a la vez: aplica los trades de a uno. Estas dos
+        # métricas dicen cuánto capital estuvo realmente comprometido en simultáneo
+        # y cuánto de eso iba en la misma dirección (riesgo correlacionado).
+        **_riesgo_simultaneo(closed, risk_pct),
+    }
+
+
+def _riesgo_simultaneo(closed: list, risk_pct: float) -> dict:
+    """Máximo de posiciones concurrentes y % de capital en riesgo a la vez.
+
+    Barrido de eventos apertura/cierre. `misma_dir` es el peor caso correlacionado:
+    en cripto, varias posiciones del mismo lado se mueven juntas.
+    """
+    eventos = []
+    for s in closed:
+        # Comparación explícita con None: un ts_created == 0 es falsy y con `or`
+        # se convertía en la hora de cierre, borrando el solape.
+        abre = s.get("ts_created")
+        if abre is None:
+            abre = s.get("ts_closed")
+        cierra = s.get("ts_closed")
+        if abre is None or cierra is None:
+            continue
+        eventos.append((abre, 1, s.get("dir")))
+        eventos.append((cierra, -1, s.get("dir")))
+    if not eventos:
+        return {"max_concurrentes": 0, "max_concurrentes_misma_dir": 0,
+                "riesgo_simultaneo_pct": 0.0}
+    eventos.sort()
+    vivos = {"long": 0, "short": 0}
+    peor = peor_dir = 0
+    for _t, delta, direccion in eventos:
+        if direccion in vivos:
+            vivos[direccion] += delta
+        total = vivos["long"] + vivos["short"]
+        peor = max(peor, total)
+        peor_dir = max(peor_dir, vivos["long"], vivos["short"])
+    return {
+        "max_concurrentes": peor,
+        "max_concurrentes_misma_dir": peor_dir,
+        "riesgo_simultaneo_pct": round(peor_dir * risk_pct * 100, 1),
     }
 
 

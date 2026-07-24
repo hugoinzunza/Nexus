@@ -91,3 +91,64 @@ def test_rollover_archiva_solo_pendientes_v1(tmp_path):
     assert legacy_pending["close_reason"] == "phase1_v2_rollover"
     assert legacy_active["status"] == "activo"
     assert v2_pending["status"] == "pendiente"
+
+
+def _cerrado(key, pair, dir_, entry, sl, r, t_open, t_close):
+    return {"key": key, "pair": pair, "dir": dir_, "poi_tf": "1h",
+            "entry": entry, "sl": sl, "entry_lo": entry, "entry_hi": entry,
+            "result_r": r, "status": "ganada" if r > 0 else "perdida",
+            "ts_created": t_open, "ts_closed": t_close}
+
+
+def test_paper_account_dimensiona_con_el_capital_al_abrir():
+    """Dos trades que se SOLAPAN: el segundo abre antes de que cierre el primero,
+    así que no puede dimensionarse con las ganancias del primero (auditoría
+    2026-07-24). Antes se usaba el equity al cierre y eso inflaba el resultado.
+    """
+    from modules.trading import setups_store as ss
+
+    base = 10_000.0
+    setups = [
+        _cerrado("a", "BTC_USDT", "long", 100.0, 99.0, 4.0, t_open=0, t_close=100),
+        # abre en t=50, cuando A seguía abierto -> mismo capital base que A
+        _cerrado("b", "ETH_USDT", "long", 200.0, 198.0, 4.0, t_open=50, t_close=200),
+    ]
+    acc = ss.paper_account(setups, capital=base, risk_pct=0.02, cost_rate=0.0)
+
+    riesgo = 0.02 * base
+    esperado = base + 4.0 * riesgo + 4.0 * riesgo    # ambos sobre el capital inicial
+    assert abs(acc["equity"] - esperado) < 1e-6, \
+        "el segundo trade se dimensionó con ganancias de uno que seguía abierto"
+
+
+def test_paper_account_dimensiona_compuesto_cuando_no_hay_solape():
+    """Sin solape sí corresponde componer: el segundo abre después del cierre."""
+    from modules.trading import setups_store as ss
+
+    base = 10_000.0
+    setups = [
+        _cerrado("a", "BTC_USDT", "long", 100.0, 99.0, 4.0, t_open=0, t_close=100),
+        _cerrado("b", "ETH_USDT", "long", 200.0, 198.0, 4.0, t_open=150, t_close=200),
+    ]
+    acc = ss.paper_account(setups, capital=base, risk_pct=0.02, cost_rate=0.0)
+
+    tras_a = base + 4.0 * (0.02 * base)
+    esperado = tras_a + 4.0 * (0.02 * tras_a)
+    assert abs(acc["equity"] - esperado) < 1e-6
+
+
+def test_paper_account_reporta_riesgo_simultaneo_correlacionado():
+    """El DD secuencial no puede mostrar varias posiciones abiertas a la vez."""
+    from modules.trading import setups_store as ss
+
+    setups = [
+        _cerrado("a", "BTC_USDT", "long", 100.0, 99.0, 1.0, t_open=0, t_close=300),
+        _cerrado("b", "ETH_USDT", "long", 200.0, 198.0, 1.0, t_open=10, t_close=300),
+        _cerrado("c", "SOL_USDT", "long", 50.0, 49.0, 1.0, t_open=20, t_close=300),
+        _cerrado("d", "XRP_USDT", "short", 2.0, 2.02, 1.0, t_open=30, t_close=300),
+    ]
+    acc = ss.paper_account(setups, capital=10_000.0, risk_pct=0.02, cost_rate=0.0)
+
+    assert acc["max_concurrentes"] == 4
+    assert acc["max_concurrentes_misma_dir"] == 3          # los tres long
+    assert acc["riesgo_simultaneo_pct"] == 6.0             # 3 × 2%

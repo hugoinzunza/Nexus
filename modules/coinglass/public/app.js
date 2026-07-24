@@ -90,9 +90,12 @@ function renderHistory() {
 
 function reason(capability) {
   if (capability?.available) return "Disponible";
-  const text = capability?.reason || "No disponible";
+  const text = String(capability?.reason || "No disponible");
   if (/plan|upgrade|permission|professional|403/i.test(text)) return "No incluido en el plan API";
-  return text.length > 90 ? `${text.slice(0, 87)}...` : text;
+  // Se escapa acá: el texto viene del payload de ingesta (token compartido) y se
+  // interpola en innerHTML. Sin esto, quien tenga el token planta HTML en el
+  // panel de un usuario logueado que sí puede llamar /m/bot/api/command.
+  return escapeHtml(text.length > 90 ? `${text.slice(0, 87)}...` : text);
 }
 
 function renderCapabilities() {

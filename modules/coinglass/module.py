@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 
 from core.module_base import NexusModule
 from core.paths import persist_dir
@@ -25,6 +26,31 @@ VISUAL_BOOK_HISTORY_PATH = os.path.join(
     "coinglass_visual_book_history.json",
 )
 MAX_BODY = 8_000_000
+def _recent_by_time(rows: list, *, hours: int, cap: int) -> list:
+    """Últimas `hours` horas reales según `captured_at`, con tope de seguridad.
+
+    Recortar por conteo asume que el colector nunca falla; recortar por tiempo
+    deja los huecos visibles, que es lo que hay que ver.
+    """
+    if not isinstance(rows, list) or not rows:
+        return []
+    corte = datetime.now(timezone.utc) - timedelta(hours=hours)
+    frescas = []
+    for row in rows:
+        stamp = row.get("captured_at") if isinstance(row, dict) else None
+        if not isinstance(stamp, str):
+            continue
+        try:
+            when = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if when.tzinfo is None:
+            continue
+        if when >= corte:
+            frescas.append(row)
+    return frescas[-cap:]
+
+
 MAX_VISUAL_BOOK_HISTORY = 2_016
 PUBLIC_VISUAL_BOOK_HISTORY = 288
 
@@ -56,9 +82,12 @@ class CoinGlassModule(NexusModule):
             data["visual_snapshot"] = visual
             book_history = self._read_path(VISUAL_BOOK_HISTORY_PATH) or []
             if isinstance(book_history, list):
-                data["visual_orderbook_history"] = book_history[
-                    -PUBLIC_VISUAL_BOOK_HISTORY:
-                ]
+                # Recorte por TIEMPO, no por conteo: "las últimas 288 entradas"
+                # equivale a 24 h solo si el timer nunca falló. Con el colector
+                # caído medio día, esas 288 abarcaban 2-3 días y el gráfico las
+                # dibujaba contiguas, borrando los huecos.
+                data["visual_orderbook_history"] = _recent_by_time(
+                    book_history, hours=24, cap=PUBLIC_VISUAL_BOOK_HISTORY)
             try:
                 indicator = build_visual_indicator(visual)
                 data["visual_indicator"] = indicator
