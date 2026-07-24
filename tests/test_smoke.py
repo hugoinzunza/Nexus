@@ -127,6 +127,7 @@ def test_modulos_montan_navegacion_global():
         html = (root / page).read_text(encoding="utf-8")
         assert "/static/nexux-shell.css" in html, page
         assert "/static/nexux-shell.js" in html, page
+        assert 'href="/favicon.ico?v=3"' in html, page
 
     shell = (root / "static/nexux-shell.js").read_text(encoding="utf-8")
     assert '{ href: "/", text: "Inicio"' in shell
@@ -134,6 +135,7 @@ def test_modulos_montan_navegacion_global():
     assert "M28 28 L72 72" in shell
     assert '{ href: "/account", text: "Mi cuenta"' in shell
     assert '{ href: "/m/trading/research-diario-v1", text: "Diario V1"' in shell
+    assert 'favicon.href = "/favicon.ico?v=3"' in shell
     assert 'user.role !== "admin"' in shell
 
 

@@ -6,7 +6,7 @@
     const favicon = document.createElement("link");
     favicon.rel = "icon";
     favicon.type = "image/svg+xml";
-    favicon.href = "/favicon.ico?v=2";
+    favicon.href = "/favicon.ico?v=3";
     document.head.appendChild(favicon);
   }
   const sections = [
