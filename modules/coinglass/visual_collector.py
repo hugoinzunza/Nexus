@@ -170,10 +170,17 @@ async def _tooltip_text(page) -> str:
 
 async def _scan_vertical(page, *, x_ratio: float, samples: int = 150) -> list[dict[str, Any]]:
     canvas, box = await _largest_canvas(page)
+    await canvas.scroll_into_view_if_needed()
+    box = await canvas.bounding_box()
+    if not box:
+        raise RuntimeError("Canvas de CoinGlass sin geometria visible")
     seen: dict[tuple[int, int], dict[str, Any]] = {}
     for index in range(samples):
         y = 12 + index / max(1, samples - 1) * (box["height"] - 24)
-        await canvas.hover(position={"x": box["width"] * x_ratio, "y": y})
+        await page.mouse.move(
+            box["x"] + box["width"] * x_ratio,
+            box["y"] + y,
+        )
         parsed = parse_tooltip(await _tooltip_text(page))
         price = parsed.get("price")
         intensity = parsed.get("intensity_usd")
@@ -189,10 +196,17 @@ async def _scan_levels_horizontal(
     samples: int = 160,
 ) -> list[dict[str, Any]]:
     canvas, box = await _largest_canvas(page)
+    await canvas.scroll_into_view_if_needed()
+    box = await canvas.bounding_box()
+    if not box:
+        raise RuntimeError("Canvas de CoinGlass sin geometria visible")
     seen: dict[tuple[int, int], dict[str, Any]] = {}
     for index in range(samples):
         x = 12 + index / max(1, samples - 1) * (box["width"] - 24)
-        await canvas.hover(position={"x": x, "y": box["height"] * y_ratio})
+        await page.mouse.move(
+            box["x"] + x,
+            box["y"] + box["height"] * y_ratio,
+        )
         parsed = parse_tooltip(await _tooltip_text(page))
         price = parsed.get("price")
         intensity = parsed.get("intensity_usd")
@@ -203,10 +217,17 @@ async def _scan_levels_horizontal(
 
 async def _scan_horizontal(page, *, y_ratio: float = 0.5, samples: int = 48) -> list[dict[str, Any]]:
     canvas, box = await _largest_canvas(page)
+    await canvas.scroll_into_view_if_needed()
+    box = await canvas.bounding_box()
+    if not box:
+        raise RuntimeError("Canvas de CoinGlass sin geometria visible")
     seen: dict[str, dict[str, Any]] = {}
     for index in range(samples):
         x = box["width"] * (0.45 + index / max(1, samples - 1) * 0.53)
-        await canvas.hover(position={"x": x, "y": box["height"] * y_ratio})
+        await page.mouse.move(
+            box["x"] + x,
+            box["y"] + box["height"] * y_ratio,
+        )
         parsed = parse_tooltip(await _tooltip_text(page))
         if parsed.get("delta_usd") is not None and parsed.get("price"):
             seen[str(parsed.get("timestamp"))] = parsed
