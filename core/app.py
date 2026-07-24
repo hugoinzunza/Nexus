@@ -93,8 +93,9 @@ def health():
 
 @app.get("/favicon.ico")
 def favicon():
-    return Response(content=_FAVICON, media_type="image/svg+xml",
-                    headers={"Cache-Control": "no-cache, must-revalidate"})
+    with open(_FAVICON_PATH, "rb") as fh:
+        return Response(content=fh.read(), media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/manifest.webmanifest")
@@ -525,19 +526,6 @@ def module_static(slug: str, relpath: str, request: Request):
         return Response(content=fh.read(), media_type=ctype, headers=headers)
 
 
-# Favicon SVG con el isotipo cruzado oficial de NexUX.
-_FAVICON = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-    '<rect width="32" height="32" rx="7" fill="#10141b"/>'
-    '<defs>'
-    '<linearGradient id="v" x1="0" y1="0" x2="1" y2="1">'
-    '<stop offset="0" stop-color="#8b80ff"/><stop offset="1" stop-color="#6c5ce7"/>'
-    '</linearGradient>'
-    '<linearGradient id="c" x1="1" y1="0" x2="0" y2="1">'
-    '<stop offset="0" stop-color="#26d6f0"/><stop offset="1" stop-color="#0b96ad"/>'
-    '</linearGradient>'
-    '</defs>'
-    '<path d="M9 9 L23 23" stroke="url(#v)" stroke-width="4.2" stroke-linecap="round"/>'
-    '<path d="M23 9 L9 23" stroke="url(#c)" stroke-width="4.2" stroke-linecap="round"/>'
-    '</svg>'
-).encode("utf-8")
+# Fallback para navegadores que solicitan /favicon.ico aunque la página declare
+# el PNG explícito. Servimos el mismo isotipo en formato compatible.
+_FAVICON_PATH = os.path.join(STATIC_DIR, "icons", "nexux-favicon-32.png")

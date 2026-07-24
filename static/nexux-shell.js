@@ -5,8 +5,9 @@
   if (!document.querySelector('link[rel~="icon"]')) {
     const favicon = document.createElement("link");
     favicon.rel = "icon";
-    favicon.type = "image/svg+xml";
-    favicon.href = "/favicon.ico?v=3";
+    favicon.type = "image/png";
+    favicon.sizes = "32x32";
+    favicon.href = "/static/icons/nexux-favicon-32.png?v=4";
     document.head.appendChild(favicon);
   }
   const sections = [

@@ -18,6 +18,16 @@ def test_import_core_app():
     importlib.import_module("core.app")
 
 
+def test_favicon_es_png_compatible():
+    from fastapi.testclient import TestClient
+    from core import app
+
+    response = TestClient(app.app).get("/favicon.ico")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
 @pytest.mark.parametrize("mod", [
     "core.db", "core.auth", "core.store", "core.vault", "core.push",
     "modules.journal.module", "modules.journal.collector",
@@ -127,7 +137,7 @@ def test_modulos_montan_navegacion_global():
         html = (root / page).read_text(encoding="utf-8")
         assert "/static/nexux-shell.css" in html, page
         assert "/static/nexux-shell.js" in html, page
-        assert 'href="/favicon.ico?v=3"' in html, page
+        assert 'href="/static/icons/nexux-favicon-32.png?v=4"' in html, page
 
     shell = (root / "static/nexux-shell.js").read_text(encoding="utf-8")
     assert '{ href: "/", text: "Inicio"' in shell
@@ -135,7 +145,7 @@ def test_modulos_montan_navegacion_global():
     assert "M28 28 L72 72" in shell
     assert '{ href: "/account", text: "Mi cuenta"' in shell
     assert '{ href: "/m/trading/research-diario-v1", text: "Diario V1"' in shell
-    assert 'favicon.href = "/favicon.ico?v=3"' in shell
+    assert 'favicon.href = "/static/icons/nexux-favicon-32.png?v=4"' in shell
     assert 'user.role !== "admin"' in shell
 
 

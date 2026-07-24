@@ -108,7 +108,7 @@ _LANDING_TEMPLATE = """<!doctype html>
   <meta name="description" content="NexUX · el hub personal de Hugo">
   <title>NexUX · Hub personal</title>
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/favicon.ico?v=3" type="image/svg+xml">
+  <link rel="icon" href="/static/icons/nexux-favicon-32.png?v=4" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
