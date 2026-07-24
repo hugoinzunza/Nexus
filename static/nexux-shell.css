@@ -52,15 +52,10 @@ body.nx-has-shell {
 }
 
 .nx-shell-mark {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: 1px solid #42606f;
-  border-radius: 6px;
-  color: var(--nx-shell-cyan);
-  font-size: 16px;
-  font-weight: 800;
+  width: 30px;
+  height: 30px;
+  display: block;
+  flex: 0 0 auto;
 }
 
 .nx-shell-word {

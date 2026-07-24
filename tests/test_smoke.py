@@ -76,22 +76,15 @@ def test_bot_panel_muestra_fase1_dry_run():
 
 
 def test_hub_expone_todo_el_workspace():
-    """La portada operativa enlaza cada producto y cada vista de research."""
+    """La portada conserva el Home comercial aprobado y su identidad NexUX."""
     root = Path(__file__).resolve().parents[1]
     html = (root / "docs/diseno/home-clean.html").read_text(encoding="utf-8")
-    routes = [
-        "/m/trading/",
-        "/m/journal/",
-        "/m/bot/",
-        "/m/coinsignals/",
-        "/m/coinglass/",
-        "/m/trading/backtest",
-        "/m/trading/research-bta-v2",
-    ]
-    assert "Centro de control" in html
-    assert "Menos pantallas" not in html
-    for route in routes:
-        assert f'href="{route}"' in html
+    assert "Menos pantallas" in html
+    assert "hero-brand" in html
+    assert 'class="iso"' in html
+    assert 'href="/login"' in html
+    assert 'href="/m/trading/"' in html
+    assert 'href="/m/journal/"' in html
 
 
 def test_modulos_montan_navegacion_global():
@@ -113,3 +106,5 @@ def test_modulos_montan_navegacion_global():
 
     shell = (root / "static/nexux-shell.js").read_text(encoding="utf-8")
     assert '{ href: "/", text: "Inicio"' in shell
+    assert 'class="nx-shell-mark"' in shell
+    assert "M28 28 L72 72" in shell

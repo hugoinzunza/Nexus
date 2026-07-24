@@ -70,7 +70,20 @@
   shell.innerHTML = `
     <div class="nx-shell-brand">
       <a href="/">
-        <span class="nx-shell-mark" aria-hidden="true">N</span>
+        <svg class="nx-shell-mark" viewBox="0 0 100 100" aria-hidden="true">
+          <defs>
+            <linearGradient id="nx-mark-violet" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#8b80ff"></stop>
+              <stop offset="1" stop-color="#6c5ce7"></stop>
+            </linearGradient>
+            <linearGradient id="nx-mark-cyan" x1="1" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#26d6f0"></stop>
+              <stop offset="1" stop-color="#0b96ad"></stop>
+            </linearGradient>
+          </defs>
+          <path d="M28 28 L72 72" stroke="url(#nx-mark-violet)" stroke-width="13" stroke-linecap="round" fill="none"></path>
+          <path d="M72 28 L28 72" stroke="url(#nx-mark-cyan)" stroke-width="13" stroke-linecap="round" fill="none"></path>
+        </svg>
         <span class="nx-shell-word">Nex<span>UX</span></span>
       </a>
       <button class="nx-shell-close" type="button" aria-label="Cerrar menú">×</button>
