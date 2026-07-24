@@ -153,14 +153,16 @@ async def _scan_horizontal(page, *, y_ratio: float = 0.5, samples: int = 48) -> 
 async def _open_chart(page, url: str) -> None:
     await page.goto(url, wait_until="domcontentloaded", timeout=90_000)
     await page.wait_for_selector("canvas", timeout=90_000)
+    await page.wait_for_timeout(4_000)
     await _dismiss_consent(page)
-    await page.wait_for_timeout(6_000)
+    await page.wait_for_timeout(2_000)
 
 
 async def _dismiss_consent(page) -> None:
     """Remove Funding Choices overlay, preferring the least permissive action."""
     selectors = (
         "button.fc-cta-do-not-consent",
+        "button:has-text('Do not consent')",
         "button:has-text('No consentir')",
         "button:has-text('Rechazar')",
         "button:has-text('Reject')",
