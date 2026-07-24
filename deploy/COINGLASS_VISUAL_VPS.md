@@ -40,10 +40,17 @@ set -a; source deploy/collector.env; set +a
   --once --output data/coinglass_visual_latest.json
 ```
 
-Si CoinGlass exige login, se abre una única vez el perfil dedicado con
-`--headed` dentro de una sesión gráfica/VNC privada del VPS. El usuario inicia
-sesión directamente en CoinGlass; NexUX no recibe ni almacena la contraseña.
-Después se cierra el navegador y el timer reutiliza ese perfil en headless.
+Si CoinGlass exige login, se abre una única vez el perfil dedicado dentro de
+una sesión gráfica/VNC privada del VPS:
+
+```bash
+DISPLAY=:99 .venv-coinglass/bin/python3 \
+  modules/coinglass/visual_collector.py --bootstrap
+```
+
+El usuario inicia sesión directamente en CoinGlass; NexUX no recibe ni almacena
+la contraseña. El bootstrap termina cuando aparece el canvas del mapa. Después,
+el timer reutiliza ese perfil en headless.
 
 ## Activación
 
@@ -70,4 +77,3 @@ sudo systemctl stop nexus-coinglass-visual.service
 ```
 
 Esto no afecta el colector CoinSignals, el diario, el dry-run ni el bot.
-

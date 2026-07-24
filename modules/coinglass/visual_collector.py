@@ -234,6 +234,35 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
     }
 
 
+async def bootstrap(profile: Path) -> None:
+    """Open the dedicated profile and wait for the user to complete login."""
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError as exc:
+        raise RuntimeError(
+            "Falta Playwright: pip install playwright && playwright install chromium"
+        ) from exc
+
+    profile.mkdir(parents=True, exist_ok=True)
+    async with async_playwright() as playwright:
+        context = await playwright.chromium.launch_persistent_context(
+            str(profile),
+            headless=False,
+            viewport={"width": 1500, "height": 940},
+            locale="es-CL",
+        )
+        page = context.pages[0] if context.pages else await context.new_page()
+        await page.goto(MAP_URL, wait_until="domcontentloaded", timeout=90_000)
+        print(
+            "Ventana CoinGlass lista. Inicie sesion directamente en el navegador; "
+            "el bootstrap terminara cuando aparezca el mapa."
+        )
+        await page.wait_for_selector("canvas", timeout=20 * 60 * 1000)
+        await page.wait_for_timeout(5_000)
+        await context.close()
+        print("Sesion CoinGlass guardada en el perfil dedicado.")
+
+
 def publish(snapshot: dict[str, Any], remote_url: str, token: str) -> None:
     request = urllib.request.Request(
         remote_url.rstrip("/") + "/m/coinglass/api/visual-ingest",
@@ -253,12 +282,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token", default=os.environ.get("NEXUS_INGEST_TOKEN", ""))
     parser.add_argument("--output", type=Path)
     parser.add_argument("--headed", action="store_true")
+    parser.add_argument("--bootstrap", action="store_true")
     parser.add_argument("--interval", type=int, default=300)
     parser.add_argument("--once", action="store_true")
     return parser.parse_args()
 
 
 async def run(args: argparse.Namespace) -> None:
+    if args.bootstrap:
+        await bootstrap(args.profile)
+        return
     while True:
         snapshot = await collect(args.profile, headless=not args.headed)
         if args.output:
