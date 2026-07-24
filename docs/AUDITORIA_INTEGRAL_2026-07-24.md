@@ -255,17 +255,73 @@ trabajo ejemplar:
   convertirlos en filtro.
 - Veredicto: **no conectar al bot**. Negativo y publicado como negativo.
 
-El estudio visual del Radar (`coinglass_visual_study_2026-07-24.md`), dos días
-después, **no menciona** solapamiento, autocorrelación, bootstrap por bloques ni
-tamaño efectivo, y propone "al menos 100 decisiones forward" para horizontes de
-hasta 12 h. La misma casa que hizo bootstrap por bloques sobre 61 meses pasó a
-contar capturas cada 5 min como observaciones.
+El estudio de CoinGlass API (`coinglass_hobbyist_study_2026-07-24.md`) mantiene
+ese mismo estándar: split temporal 70/30, **operaciones no solapadas por
+horizonte**, costo 0,10%, umbrales fijos con variantes inversas etiquetadas como
+post-hoc, IC bootstrap 95%, y un veredicto igual de duro — *"No aparece un edge
+robusto. Ninguna regla positiva mantiene su IC 95% completamente sobre cero"*,
+refutando explícitamente sus propias hipótesis (Precio+OI y liquidaciones como
+continuación) y señalando que el funding a 8 h usa solo 19 operaciones OOS.
+
+Por lo tanto **no hay una degradación cronológica del estándar**: hay un único
+**outlier**. El estudio visual del Radar
+(`coinglass_visual_study_2026-07-24.md`), del mismo día que el anterior, **no
+menciona** solapamiento, autocorrelación, bootstrap por bloques ni tamaño
+efectivo, y propone "al menos 100 decisiones forward" para horizontes de hasta
+12 h. La casa sabe hacerlo bien y lo hace bien dos de cada tres veces; el Radar
+visual es la excepción.
 
 - **Propuesta**: adoptar el estudio de CoinSignals como **plantilla obligatoria**
   para toda validación futura (submuestreo no solapado o bloques, IC, sesgos
   cuantificados, cortes post-hoc etiquetados, veredicto de descarte explícito).
 - **Naturaleza**: proceso/research. Es la mejora con mayor relación
   evidencia/riesgo de toda la auditoría: no toca código y evita promover ruido.
+
+### P1-16 · El crecimiento del Diario es reproducible, pero optimista y con el drawdown subestimado
+
+Respuesta directa a "¿el crecimiento mostrado es reproducible o contiene errores
+contables?". Verificado ejecutando `paper_account` sobre los setups reales del
+VPS (294 cerrados, 272 contados tras dedup): **equity $142.840, +275,9%,
+DD −17,6%, WR 64%**, con capital base $38.000 y 2% de riesgo por trade.
+
+**Lo que está bien hecho** (`modules/trading/setups_store.py`):
+- Solo `ganada`/`perdida` entran al desempeño; las `anuladas` se informan aparte.
+- **Colapso de la misma idea**: replica sobre el histórico las guardias vivas —
+  re-entradas de la misma `key` dentro del cooldown y zonas solapadas
+  concurrentes del mismo par+dirección se descartan. Esto elimina el doble conteo
+  que originó el "spam DOGE" y el "doble ETH". De 294 cerrados, 272 cuentan.
+- Costos **maker-aware** por trade (`cost_R = cost_frac / SL%`), que con SL
+  ajustado pesan mucho: $30.943 de comisiones sobre $104.840 de P&L.
+- El compounding está declarado en el docstring, no escondido.
+
+**Los dos problemas reales**:
+
+1. **Sizing al cierre en vez de a la apertura.** La curva ordena por `ts_closed`
+   y dimensiona cada trade con el equity vigente *en ese momento*
+   (`pnl = net_r × risk_pct × eq`). Como el 99% de los trades se solapó, un trade
+   que **abrió** temprano pero **cerró** tarde se dimensiona con capital que ya
+   incluye las ganancias de operaciones que seguían abiertas cuando él se abrió.
+   Recalculado dimensionando con el equity al **abrir**: **+259,1% en vez de
+   +275,9%** → la cifra publicada está inflada en **16,8 puntos porcentuales**
+   (~6% relativo). Real, medido, y no catastrófico.
+2. **El drawdown está estructuralmente subestimado.** El modelo aplica los trades
+   de a uno. En los datos reales hubo hasta **13 posiciones simultáneas, todas en
+   la misma dirección**, es decir **26% del capital en riesgo a la vez y
+   correlacionado** (son pares cripto). Una curva secuencial nunca puede mostrar
+   ese golpe: el −17,6% reportado no es el drawdown que habría producido esa
+   concentración.
+
+- **Veredicto**: el crecimiento **es reproducible** (lo reproduje) y la mecánica
+  es honesta y cuidadosa; pero el titular es optimista y el DD no es el riesgo
+  real. Para una integración futura, el número que importa no es +275,9% sino la
+  exposición concurrente correlacionada.
+- **Propuesta**: dimensionar por equity a la apertura y reportar, junto al DD,
+  el **máximo riesgo simultáneo** (posiciones concurrentes × riesgo, y cuántas
+  comparten dirección). Es cambio en capa de reporte, no en ejecución.
+- **Esfuerzo**: bajo. **Naturaleza**: research/UI (afecta cómo se lee, no cómo se
+  opera). **Riesgo**: bajo.
+- **Criterio**: si el máximo riesgo simultáneo correlacionado supera el tope
+  diario configurado (15%), el sizing del Diario no representa la política real.
 
 ### P3-14 · Deriva de versión y umbrales inconsistentes
 
@@ -352,6 +408,7 @@ realizada y tendencia).
 | 5 | Verificar sesión y símbolo en el colector (P1-5) | Bajo | Bajo | Research |
 | 6 | Retención por tiempo + eje temporal con huecos (P2-10) | Bajo | Bajo | UI/datos |
 | 7 | Parser estricto de tooltips y dedup por venue (P2-11/13) | Bajo | Medio | Research |
+| 8 | Sizing a la apertura + reportar riesgo simultáneo (P1-16) | Bajo | Bajo | Research/UI |
 
 ---
 
@@ -364,8 +421,11 @@ realizada y tendencia).
   escribir/desplegar sin autorización.
 - La muestra V2 (n=7) es demasiado pequeña para cualquier conclusión sobre
   desempeño; solo la usé para demostrar la falta de potencia del criterio.
-- Los estudios de CoinSignals y CoinGlass API se auditaron en paralelo; sus
-  hallazgos se integran en la sección correspondiente cuando cierran.
+- Los estudios de CoinSignals y CoinGlass API fueron verificados directamente
+  (ver P1-15); la contabilidad del Diario se reprodujo ejecutando
+  `paper_account` sobre datos reales del VPS (ver P1-16).
+- No audité en profundidad el parsing de Telegram de CoinSignals ni la capa de
+  caché/rate-limit del proveedor CoinGlass; ambos quedan como brecha conocida.
 
 ## 10. Confirmación operativa
 
