@@ -420,7 +420,9 @@ def update_dashboard(
             cached["advanced"]["captured_at"].replace("Z", "+00:00")
         )
         if (now - captured).total_seconds() < max_age_seconds:
-            return build_dashboard(basic, basic_history, cached["advanced"])
+            dashboard = build_dashboard(basic, basic_history, cached["advanced"])
+            _write_dashboard(path, dashboard)
+            return dashboard
     except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
         pass
     try:
@@ -439,9 +441,13 @@ def update_dashboard(
                 "last_error": str(exc)[:180],
             }
     dashboard = build_dashboard(basic, basic_history, advanced)
+    _write_dashboard(path, dashboard)
+    return dashboard
+
+
+def _write_dashboard(path: Path, dashboard: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(".tmp")
     temp.write_text(json.dumps(dashboard, ensure_ascii=False), encoding="utf-8")
     os.chmod(temp, 0o600)
     temp.replace(path)
-    return dashboard

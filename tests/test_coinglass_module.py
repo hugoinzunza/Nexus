@@ -228,7 +228,12 @@ def test_dashboard_separates_backfill_from_forward_observations():
 def test_dashboard_cache_avoids_requery_and_never_persists_key(tmp_path):
     basic = {
         "captured_at": "2026-07-24T15:00:00+00:00",
-        "indicators": {},
+        "indicators": {"open_interest": {"close_usd": [100], "times": [2]}},
+    }
+    historical = {
+        "history_origin": "backfill",
+        "captured_at": "2026-07-24T11:00:00+00:00",
+        "indicators": {"open_interest": {"close_usd": [99], "times": [1]}},
     }
     advanced = {
         "captured_at": "2026-07-24T15:00:00+00:00",
@@ -248,12 +253,13 @@ def test_dashboard_cache_avoids_requery_and_never_persists_key(tmp_path):
         "private-key",
         path,
         basic,
-        [basic],
+        [historical, basic],
         now=datetime(2026, 7, 24, 15, 4, tzinfo=timezone.utc),
         advanced_fetcher=lambda _key: (_ for _ in ()).throw(AssertionError("cache miss")),
     )
 
     assert first["advanced"] == second["advanced"]
+    assert json.loads(path.read_text())["experimental_pressure"]["observations"] == 2
     assert path.stat().st_mode & 0o777 == 0o600
     assert "private-key" not in path.read_text()
 
