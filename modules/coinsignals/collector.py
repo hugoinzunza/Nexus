@@ -20,8 +20,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from research.coinsignals_backtest import KlineCache
-from modules.coinsignals.coinglass import update_market_context
-from modules.coinglass.provider import update_dashboard
+from modules.coinsignals.coinglass import fetch_market_context, update_market_context
+from modules.coinglass.provider import fetch_advanced, update_dashboard
 from modules.coinsignals.module import STATE_PATH
 from modules.coinsignals.shadow import HISTORY_PATH, build_snapshot
 
@@ -134,6 +134,10 @@ async def refresh(args: argparse.Namespace) -> dict[str, Any]:
             args.coinglass_api_key,
             COINGLASS_PATH,
             max_age_seconds=args.coinglass_interval,
+            fetcher=lambda key: fetch_market_context(
+                key,
+                preferred_interval=args.coinglass_data_interval,
+            ),
         )
         dashboard = update_dashboard(
             args.coinglass_api_key,
@@ -141,6 +145,10 @@ async def refresh(args: argparse.Namespace) -> dict[str, Any]:
             market_context,
             market_history,
             max_age_seconds=args.coinglass_interval,
+            advanced_fetcher=lambda key: fetch_advanced(
+                key,
+                preferred_interval=args.coinglass_data_interval,
+            ),
         )
     snapshot = build_snapshot(
         forward_start=args.forward_start,
@@ -187,6 +195,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token", default=os.environ.get("NEXUS_INGEST_TOKEN", ""))
     parser.add_argument("--coinglass-api-key", default=os.environ.get("COINGLASS_API_KEY", ""))
     parser.add_argument("--coinglass-interval", type=int, default=300)
+    parser.add_argument(
+        "--coinglass-data-interval",
+        choices=("1h", "4h"),
+        default=os.environ.get("COINGLASS_DATA_INTERVAL", "1h"),
+    )
     return parser.parse_args()
 
 

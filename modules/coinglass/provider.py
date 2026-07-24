@@ -151,6 +151,7 @@ def fetch_advanced(
     api_key: str,
     *,
     opener: Callable[..., Any] = urllib.request.urlopen,
+    preferred_interval: str = "1h",
 ) -> dict[str, Any]:
     data: dict[str, Any] = {}
     capabilities: dict[str, dict[str, Any]] = {}
@@ -161,8 +162,9 @@ def fetch_advanced(
         "large_orders": _large_orders,
     }
     for name, path, params in ADVANCED_ENDPOINTS:
-        attempts = [params]
-        if params.get("interval") == "1h":
+        selected = {**params, "interval": preferred_interval} if params.get("interval") else params
+        attempts = [selected]
+        if preferred_interval == "1h" and params.get("interval") == "1h":
             attempts.append({**params, "interval": "4h"})
         last_error = ""
         for attempt in attempts:

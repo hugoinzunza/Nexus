@@ -83,6 +83,7 @@ def fetch_market_context(
     *,
     opener: Callable[..., Any] = urllib.request.urlopen,
     captured_at: str | None = None,
+    preferred_interval: str = "1h",
 ) -> dict[str, Any]:
     if not api_key.strip():
         raise ValueError("CoinGlass API key is required")
@@ -91,8 +92,9 @@ def fetch_market_context(
     intervals: dict[str, str] = {}
     quota: dict[str, int] = {}
     for name, path, params in ENDPOINTS:
-        attempts = [params]
-        if params.get("interval") == "1h":
+        selected = {**params, "interval": preferred_interval} if params.get("interval") else params
+        attempts = [selected]
+        if preferred_interval == "1h" and params.get("interval") == "1h":
             attempts.append({**params, "interval": "4h"})
         last_error = ""
         for attempt in attempts:
