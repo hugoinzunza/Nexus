@@ -119,7 +119,7 @@ async def _largest_canvas(page):
 async def _tooltip_text(page) -> str:
     tooltip = page.locator(".cg-toolti-box:visible").last
     try:
-        return await tooltip.inner_text(timeout=500)
+        return await tooltip.inner_text(timeout=80)
     except Exception:  # noqa: BLE001
         return ""
 
