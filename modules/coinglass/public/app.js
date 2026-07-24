@@ -322,7 +322,7 @@ function renderModel() {
   scoreBox.querySelector("span").textContent = model.label || "sin datos";
   const observations = Number(model.observations || 0);
   const minimum = Number(model.minimum_for_calibration || 100);
-  $("calibration-label").textContent = `${observations} / ${minimum} observaciones`;
+  $("calibration-label").textContent = `${observations} / ${minimum} barras 4h`;
   $("calibration-progress").max = minimum;
   $("calibration-progress").value = Math.min(observations, minimum);
   const c = model.components || {};

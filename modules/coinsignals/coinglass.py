@@ -46,28 +46,43 @@ def _series(rows: Any, keys: tuple[str, ...]) -> list[float]:
     return values
 
 
+def _times(rows: Any) -> list[int]:
+    if not isinstance(rows, list):
+        return []
+    return [int(row["time"]) for row in rows[-4:] if isinstance(row, dict) and row.get("time")]
+
+
 def _summarize(name: str, rows: Any) -> dict[str, Any]:
     if name == "funding":
-        return {"close_pct": _series(rows, ("close", "funding_rate"))}
+        return {"close_pct": _series(rows, ("close", "funding_rate")), "times": _times(rows)}
     if name == "open_interest":
-        return {"close_usd": _series(rows, ("close", "open_interest", "aggregated_open_interest"))}
+        return {
+            "close_usd": _series(rows, ("close", "open_interest", "aggregated_open_interest")),
+            "times": _times(rows),
+        }
     if name == "liquidations":
         bars = []
         for row in rows[-4:] if isinstance(rows, list) else []:
             long_usd = _number(row.get("aggregated_long_liquidation_usd"))
             short_usd = _number(row.get("aggregated_short_liquidation_usd"))
             if long_usd is not None or short_usd is not None:
-                bars.append({
+                bar = {
                     "long_musd": round((long_usd or 0) / 1_000_000, 3),
                     "short_musd": round((short_usd or 0) / 1_000_000, 3),
-                })
+                }
+                if row.get("time"):
+                    bar["time"] = int(row["time"])
+                bars.append(bar)
         return {"bars": bars}
     if name == "top_traders":
         values = _series(rows, (
             "top_position_long_percent", "long_position_percentage",
             "long_account", "long_account_ratio", "long_ratio",
         ))
-        return {"long_pct": [round(value * 100 if value <= 1 else value, 2) for value in values]}
+        return {
+            "long_pct": [round(value * 100 if value <= 1 else value, 2) for value in values],
+            "times": _times(rows),
+        }
     if name == "orderbook":
         ratios = []
         for row in rows[-4:] if isinstance(rows, list) else []:
@@ -75,7 +90,7 @@ def _summarize(name: str, rows: Any) -> dict[str, Any]:
             asks = _number(row.get("asks_usd"))
             if bids is not None and asks:
                 ratios.append(round(bids / asks, 3))
-        return {"bid_ask_ratio": ratios}
+        return {"bid_ask_ratio": ratios, "times": _times(rows)}
     return {}
 
 

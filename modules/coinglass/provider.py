@@ -199,6 +199,7 @@ def _compact_context(context: dict[str, Any]) -> dict[str, Any]:
     oi_prev = _float(oi[-2]) if len(oi) > 1 else None
     return {
         "time": context.get("captured_at"),
+        "bar_time": (open_interest.get("times") or [None])[-1],
         "funding_pct": _latest(indicators.get("funding", {}).get("close_pct")),
         "oi_usd": oi_now,
         "oi_change_pct": round((oi_now / oi_prev - 1) * 100, 4)
@@ -302,7 +303,12 @@ def build_dashboard(
     basic_history: list[dict[str, Any]],
     advanced: dict[str, Any],
 ) -> dict[str, Any]:
-    history = [_compact_context(row) for row in basic_history[-288:]]
+    by_bar = {}
+    for row in basic_history:
+        compact = _compact_context(row)
+        key = compact.get("bar_time") or compact.get("time")
+        by_bar[key] = compact
+    history = list(by_bar.values())[-540:]
     return {
         "research_only": True,
         "execution_enabled": False,
