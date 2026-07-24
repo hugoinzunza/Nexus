@@ -323,6 +323,116 @@ DD −17,6%, WR 64%**, con capital base $38.000 y 2% de riesgo por trade.
 - **Criterio**: si el máximo riesgo simultáneo correlacionado supera el tope
   diario configurado (15%), el sizing del Diario no representa la política real.
 
+### P0-17 · CoinSignals: el 94% de los cierres no vienen de una asociación causal
+
+Auditado el pipeline completo sobre el export real (17.291 mensajes). Cuando un
+mensaje de gestión **no** es reply, `research/coinsignals_btc_swing.py:159-181`
+lo aplica a **todas** las señales de los 120 días previos. Medido sobre las 194
+señales BTC: 280 eventos por `reply_to_msg_id` (correcto) vs **363 por fan-out**,
+y **349 de los 363 cierres (94%) del libro primario** salen de ese broadcast.
+Solo 24 mensajes generan esos 363 vínculos; el mayor se reparte a **43 señales**
+a la vez, con antigüedad mediana de 56 días. Textos como *"Close #BTC & #ETH in
+Profits."* se refieren a **una** operación y se aplican a decenas.
+
+Agravantes: el 93% de las señales BTC convive con otra del mismo par (hasta 13
+concurrentes), y el fan-out **siempre empuja al alza** porque `close_be` rescata
+a break-even posiciones perdedoras. Impacto medido: **+41% en R total** sobre el
+set completo (2,09R con fan-out vs 1,48R sin él).
+
+- **Reparado (`03ffd16`)** el sub-caso más claro: la rama `close_be` se evaluaba
+  antes que las direccionales y devolvía siempre `direction=None`, así que
+  *"Shorts closed near entry point"* cerraba **también los LONG** (21 vínculos
+  con dirección contraria al texto). Ahora conserva la dirección que el texto
+  nombra, con test.
+- **NO reparado**: el fan-out en sí. Restringirlo cambia la metodología del
+  estudio y es decisión tuya. Opciones: vincular solo a la señal abierta más
+  reciente del par+dirección, o marcar esas filas `attribution="ambiguous"` y
+  publicar la métrica primaria sin ellas.
+- **Lectura importante**: el sesgo va **a favor del canal**, y el estudio ya
+  concluyó **negativo**. Corregirlo hace el veredicto *más* negativo, no menos.
+  La recomendación de no conectar CoinSignals al bot se refuerza.
+
+### P0-18 · CoinSignals: las ediciones se excluyen en la señal pero no en la gestión
+
+El estudio dice controlar el look-ahead de ediciones, y lo hace — **solo del lado
+de la señal** (`modules/coinsignals/shadow.py:73-82`). `parse_management` y
+`parse_global_management` reciben solo `text` y **nunca miran `edit_date`**.
+Medido: de 643 eventos de gestión usados, **206 (32%) vienen de mensajes
+editados**, y **128 de ellos fijan el precio de ENTRADA** con el que se calcula
+el P&L. Es exactamente el sesgo que el estudio declara haber controlado.
+
+Además el escape `/HOLD` (`shadow.py:78-81`) readmite señales editadas si el
+texto **final** contiene "/hold", sin probar que la edición fuera solo eso: hay
+señales readmitidas con lag de edición de hasta **289 horas** (12 días).
+
+- **NO reparado**: propagar `edit_date` a los eventos de gestión y añadir una
+  variante `unedited_management` cambia los números publicados del estudio.
+  Requiere tu visto bueno. Igual que P0-17, el sesgo favorece al canal.
+
+### P1-19 · CoinSignals: el denominador de cobertura es circular
+
+`research/coinsignals_backtest.py:177-189` define "candidatos" con la **misma**
+condición con que selecciona, así que reporta 99,6% de cobertura por
+construcción. Universo real medido: **3.114 mensajes con header LONG/SHORT**, de
+los cuales solo 2.006 tienen `Entry:` → **1.108 descartados en silencio**, más
+299 near-miss por vocabulario (`Buy:`, `Open:`, `TP:`, `SL:` no soportados) y
+3.383 fotos sin OCR. Nada en el pipeline publica el porcentaje real cubierto.
+
+### P0-20 · CoinGlass: datos cacheados presentados como vigentes — **reparado**
+
+`update_dashboard` conserva el payload cuando la API falla y lo marca
+`stale` (`provider.py:454`), pero **el front nunca leía ese flag**: mostraba
+`age_seconds`, que es el **mtime del archivo**, y el archivo se reescribe en cada
+ciclo aunque no haya dato nuevo. El panel decía "Actualizado hace 12 s" con un
+precio de horas atrás. Reparado en `03ffd16`: ahora declara `DATO CACHEADO` con
+la edad real de `advanced.captured_at`.
+
+### P1-21 · CoinGlass: imputación de ceros y observaciones infladas — **reparado**
+
+- `_pressure` imputaba **0** a los componentes de endpoints caídos y los
+  promediaba con peso completo: con solo el mapa vivo el score quedaba diluido al
+  45% y "neutral" era indistinguible de "sin datos". El modelo **visual** sí
+  renormalizaba — la asimetría confirmaba el bug. Reparado: renormaliza por peso
+  disponible y los ausentes salen `None`, no `0`.
+- Si el endpoint de OI fallaba, `bar_time` era `None` y la clave de dedup caía en
+  `captured_at`: **cada captura de 5 min se volvía una observación
+  "independiente"** (~12/hora), llenando el gate de calibración con datos rotos.
+  Reparado: se marcan y quedan fuera del conteo.
+
+### P1-22 · CoinGlass: sin backoff y el peor caso de 429 dispara más requests
+
+No hay manejo de rate limit en toda la capa API: cero `sleep`/`retry`/`backoff`,
+y `except Exception` trata un 429 igual que "el plan no tiene 1h". Con el default
+`1h` una corrida hace **~30 requests seguidos sin pausa**, y el escenario de
+rate-limit es justamente el que dispara **el doble** de llamadas. Las cabeceras
+de cuota se leen (`API-KEY-USE-LIMIT`) y **se descartan**. El backfill no tiene
+`try` y persiste solo al final: un 429 a mitad pierde la corrida completa.
+
+- **NO reparado**: requiere diseño (backoff con jitter, discriminar 429 de
+  "fuera de plan", throttle desde la cuota leída). Riesgo bajo, esfuerzo medio.
+
+### P1-23 · CoinGlass: el intervalo registrado es el pedido, no el recibido
+
+La negociación reintenta `4h` ante **cualquier** excepción y registra el
+intervalo **solicitado**. No existe ninguna verificación del delta entre
+`row["time"]` consecutivos, así que una degradación server-side pasaría
+inadvertida. Peor: la negociación es **por endpoint**, así que `price` puede
+quedar en 1h y `open_interest` en 4h **en la misma fila**, y `_basic_analysis`
+los compara contra el mismo umbral emitiendo "precio sube + OI sube · nuevos
+longs". `_compact_context` no incluye ningún campo de intervalo por fila.
+
+- **NO reparado**: la corrección honesta es medir el delta real de `times` y
+  sellarlo por fila. Esfuerzo medio, alto valor para cualquier estudio futuro.
+
+### P1-24 · CoinGlass: el backfill pierde contra barras forward incompletas
+
+`coinglass.py:409` hace `for row in [*historical, *existing]`: las filas forward
+sobrescriben a las históricas de la misma barra. La forward es la última captura
+**dentro** de la barra (vela **incompleta**); el backfill trae la barra
+**cerrada**. Se conserva la peor. Y está **testeado como comportamiento deseado**
+(`test_coinsignals_coinglass.py:251-273`), así que es decisión de diseño, no bug
+de implementación — por eso no lo toqué.
+
 ### P3-14 · Deriva de versión y umbrales inconsistentes
 
 `visual_context_v0` (shadow) vs `Visual Context v1` (indicador) vs `RADAR VISUAL
@@ -424,8 +534,10 @@ realizada y tendencia).
 - Los estudios de CoinSignals y CoinGlass API fueron verificados directamente
   (ver P1-15); la contabilidad del Diario se reprodujo ejecutando
   `paper_account` sobre datos reales del VPS (ver P1-16).
-- No audité en profundidad el parsing de Telegram de CoinSignals ni la capa de
-  caché/rate-limit del proveedor CoinGlass; ambos quedan como brecha conocida.
+- Ambas brechas quedaron cubiertas: parsing de Telegram (P0-17, P0-18, P1-19) y
+  capa de caché/rate-limit del proveedor (P0-20 a P1-24).
+- No verifiqué contra la API real de CoinGlass si alguna vez degrada el intervalo
+  server-side (P1-23); el hallazgo es que **no se podría detectar**, no que ocurra.
 
 ## 10. Confirmación operativa
 
