@@ -8,8 +8,17 @@ from modules.coinsignals.shadow import BOOKS, build_snapshot
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_shadow_snapshot_has_three_books_and_no_execution():
-    snapshot = build_snapshot(forward_start="2026-07-22T00:00:00+00:00")
+def test_shadow_snapshot_has_three_books_and_no_execution(tmp_path):
+    history_path = tmp_path / "coinsignals-history.json"
+    history_path.write_text(
+        json.dumps({"exported_at": None, "messages": []}),
+        encoding="utf-8",
+    )
+    snapshot = build_snapshot(
+        history_path,
+        forward_start="2026-07-22T00:00:00+00:00",
+        candles=[],
+    )
     assert snapshot["research_only"] is True
     assert snapshot["execution_enabled"] is False
     assert snapshot["mode"] == "shadow"
