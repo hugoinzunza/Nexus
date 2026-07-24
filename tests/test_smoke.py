@@ -18,14 +18,28 @@ def test_import_core_app():
     importlib.import_module("core.app")
 
 
-def test_favicon_es_png_compatible():
+def test_favicon_es_ico_compatible():
     from fastapi.testclient import TestClient
     from core import app
 
     response = TestClient(app.app).get("/favicon.ico")
     assert response.status_code == 200
-    assert response.headers["content-type"] == "image/png"
-    assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
+    assert response.headers["content-type"] == "image/x-icon"
+    assert response.content.startswith(b"\x00\x00\x01\x00")
+
+
+def test_todas_las_vistas_html_declaran_favicon_nexux():
+    root = Path(__file__).resolve().parents[1]
+    pages = [
+        *sorted((root / "core").glob("*.html")),
+        *sorted((root / "docs" / "diseno").glob("*.html")),
+        *sorted((root / "modules").glob("*/public/*.html")),
+        *sorted((root / "research").glob("*.html")),
+    ]
+    assert pages
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        assert 'href="/static/icons/nexux-favicon-v5.ico"' in html, page
 
 
 @pytest.mark.parametrize("mod", [
@@ -137,7 +151,7 @@ def test_modulos_montan_navegacion_global():
         html = (root / page).read_text(encoding="utf-8")
         assert "/static/nexux-shell.css" in html, page
         assert "/static/nexux-shell.js" in html, page
-        assert 'href="/static/icons/nexux-favicon-32.png?v=4"' in html, page
+        assert 'href="/static/icons/nexux-favicon-v5.ico"' in html, page
 
     shell = (root / "static/nexux-shell.js").read_text(encoding="utf-8")
     assert '{ href: "/", text: "Inicio"' in shell
@@ -145,7 +159,7 @@ def test_modulos_montan_navegacion_global():
     assert "M28 28 L72 72" in shell
     assert '{ href: "/account", text: "Mi cuenta"' in shell
     assert '{ href: "/m/trading/research-diario-v1", text: "Diario V1"' in shell
-    assert 'favicon.href = "/static/icons/nexux-favicon-32.png?v=4"' in shell
+    assert 'favicon.href = "/static/icons/nexux-favicon-v5.ico"' in shell
     assert 'user.role !== "admin"' in shell
 
 

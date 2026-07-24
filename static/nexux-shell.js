@@ -2,14 +2,12 @@
   "use strict";
 
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
-  if (!document.querySelector('link[rel~="icon"]')) {
-    const favicon = document.createElement("link");
-    favicon.rel = "icon";
-    favicon.type = "image/png";
-    favicon.sizes = "32x32";
-    favicon.href = "/static/icons/nexux-favicon-32.png?v=4";
-    document.head.appendChild(favicon);
-  }
+  document.querySelectorAll('link[rel~="icon"]').forEach((link) => link.remove());
+  const favicon = document.createElement("link");
+  favicon.rel = "icon";
+  favicon.type = "image/x-icon";
+  favicon.href = "/static/icons/nexux-favicon-v5.ico";
+  document.head.appendChild(favicon);
   const sections = [
     {
       label: "NexUX",

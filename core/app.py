@@ -94,7 +94,7 @@ def health():
 @app.get("/favicon.ico")
 def favicon():
     with open(_FAVICON_PATH, "rb") as fh:
-        return Response(content=fh.read(), media_type="image/png",
+        return Response(content=fh.read(), media_type="image/x-icon",
                         headers={"Cache-Control": "public, max-age=86400"})
 
 
@@ -528,4 +528,4 @@ def module_static(slug: str, relpath: str, request: Request):
 
 # Fallback para navegadores que solicitan /favicon.ico aunque la página declare
 # el PNG explícito. Servimos el mismo isotipo en formato compatible.
-_FAVICON_PATH = os.path.join(STATIC_DIR, "icons", "nexux-favicon-32.png")
+_FAVICON_PATH = os.path.join(STATIC_DIR, "icons", "nexux-favicon-v5.ico")
