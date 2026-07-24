@@ -23,7 +23,8 @@ HEATMAP_URL = "https://www.coinglass.com/es/pro/futures/LiquidationHeatMapNew"
 DEPTH_URL = "https://www.coinglass.com/es/pro/depth-delta"
 LARGE_ORDERBOOK_URL = "https://www.coinglass.com/large-orderbook-statistics"
 DEFAULT_PROFILE = Path.home() / ".config/nexux/coinglass-visual-profile"
-COLLECTOR_VERSION = "0.2.0"
+COLLECTOR_VERSION = "0.2.1"
+DEFAULT_COLLECTION_ATTEMPTS = 2
 MONEY_RE = re.compile(r"([-+]?\$?\s*[\d.,]+)\s*([KMB])?", re.IGNORECASE)
 BINANCE_PRICE_URL = "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT"
 EXCHANGE_ALIASES = {
@@ -429,6 +430,30 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
     }
 
 
+async def collect_with_retry(
+    profile: Path,
+    *,
+    headless: bool = True,
+    attempts: int = DEFAULT_COLLECTION_ATTEMPTS,
+) -> dict[str, Any]:
+    """Retry a full browser session after transient Chrome/page failures."""
+    last_error: Exception | None = None
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            return await collect(profile, headless=headless)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            if attempt >= max(1, attempts):
+                raise
+            print(
+                f"CoinGlass visual intento {attempt} fallo "
+                f"({type(exc).__name__}); reiniciando navegador",
+                flush=True,
+            )
+            await asyncio.sleep(3)
+    raise RuntimeError("CoinGlass visual no pudo iniciar") from last_error
+
+
 async def bootstrap(profile: Path) -> None:
     """Open the dedicated profile and wait for the user to complete login."""
     try:
@@ -481,6 +506,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--bootstrap", action="store_true")
     parser.add_argument("--interval", type=int, default=300)
+    parser.add_argument(
+        "--attempts",
+        type=int,
+        default=DEFAULT_COLLECTION_ATTEMPTS,
+    )
     parser.add_argument("--once", action="store_true")
     return parser.parse_args()
 
@@ -490,7 +520,11 @@ async def run(args: argparse.Namespace) -> None:
         await bootstrap(args.profile)
         return
     while True:
-        snapshot = await collect(args.profile, headless=not args.headed)
+        snapshot = await collect_with_retry(
+            args.profile,
+            headless=not args.headed,
+            attempts=args.attempts,
+        )
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(

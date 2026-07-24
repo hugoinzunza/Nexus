@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -11,6 +12,7 @@ from modules.coinglass.visual import (
     normalize_visual_snapshot,
 )
 from modules.coinglass.visual_collector import (
+    collect_with_retry,
     parse_money,
     parse_tooltip,
     parse_whale_order,
@@ -215,6 +217,36 @@ def test_visual_whale_order_parser_uses_side_exchange_and_duration():
         "market": "S",
         "exchange": "Coinbase",
     }
+
+
+def test_visual_collector_retries_with_a_fresh_browser_session(monkeypatch):
+    calls = 0
+
+    async def flaky_collect(profile, *, headless=True):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("browser closed")
+        return {"research_only": True}
+
+    async def no_wait(_seconds):
+        return None
+
+    monkeypatch.setattr(
+        "modules.coinglass.visual_collector.collect",
+        flaky_collect,
+    )
+    monkeypatch.setattr(
+        "modules.coinglass.visual_collector.asyncio.sleep",
+        no_wait,
+    )
+
+    result = asyncio.run(
+        collect_with_retry(Path("/tmp/profile"), attempts=2)
+    )
+
+    assert result == {"research_only": True}
+    assert calls == 2
 
 
 def test_visual_snapshot_rejects_canceled_whale_orders():
