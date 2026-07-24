@@ -574,7 +574,18 @@ function render(data) {
     return;
   }
   $("price").textContent = data.advanced?.price ? `${fmt(data.advanced.price, 1)} USDT` : "BTCUSDT";
-  $("updated").textContent = `Actualizado hace ${fmt(data.age_seconds, 0)} s`;
+  // `age_seconds` es la edad del ARCHIVO, y el archivo se reescribe en cada ciclo
+  // aunque la API haya fallado y el contenido sea el cacheado. Sin esto el panel
+  // decía "hace 12 s" mostrando un precio de hace horas.
+  const edadArchivo = `Actualizado hace ${fmt(data.age_seconds, 0)} s`;
+  const capturaDato = data.advanced?.captured_at ? Date.parse(data.advanced.captured_at) : NaN;
+  const edadDato = Number.isFinite(capturaDato)
+    ? Math.round((Date.now() - capturaDato) / 60000) : null;
+  $("updated").textContent = data.advanced?.stale
+    ? `${edadArchivo} · DATO CACHEADO${edadDato != null ? ` de hace ${edadDato} min` : ""}: la API falló`
+    : (edadDato != null && edadDato > 30
+        ? `${edadArchivo} · el dato de mercado es de hace ${edadDato} min`
+        : edadArchivo);
   const capabilities = data.advanced?.capabilities || {};
   const hasLiquidations = capabilities.liquidation_map?.available || capabilities.liquidation_heatmap?.available;
   const hasOrderbook = capabilities.orderbook_heatmap?.available ||

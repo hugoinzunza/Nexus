@@ -318,3 +318,45 @@ def test_panel_exposes_real_research_views_and_no_signal_language():
     assert "drawLiquidationHeatmap" in script
     assert "drawOrderbook" in script
     assert "renderFlow" in script
+
+
+def test_score_api_renormaliza_por_peso_disponible():
+    """Un endpoint caído no es una lectura neutral: antes se imputaba 0 y entraba
+    al promedio con peso completo (auditoría 2026-07-24). El modelo visual ya
+    renormalizaba; este no."""
+    from modules.coinglass.provider import _pressure
+
+    solo_liquidez = _pressure(
+        {"context": {}},
+        {"price": 64_000.0, "liquidation_map": [
+            {"price": 65_000.0, "amount_usd": 30_000_000.0},
+        ]},
+    )
+    # Con liquidez = +1 y todo lo demás ausente, el score debe ser +100, no +45.
+    assert solo_liquidez["score"] == 100.0
+    assert solo_liquidez["components"]["orderbook_imbalance"] is None
+    assert solo_liquidez["components"]["funding_contrarian"] is None
+    assert solo_liquidez["components"]["positioning_contrarian"] is None
+
+
+def test_capturas_sin_barra_no_cuentan_como_observaciones_independientes():
+    """Sin `bar_time` (endpoint de OI caído) la clave caía en captured_at y cada
+    captura de 5 min se volvía una observación 'independiente'."""
+    from modules.coinglass.provider import build_dashboard
+
+    filas = [
+        {"captured_at": f"2026-07-24T10:{minuto:02d}:00+00:00", "context": {}}
+        for minuto in (0, 5, 10, 15)
+    ]
+    panel = build_dashboard({"context": {}}, filas, {"price": 1.0, "liquidation_map": []})
+
+    assert panel["experimental_pressure"]["forward_observations"] == 0, \
+        "capturas sin barra no pueden inflar el gate de calibración"
+
+
+def test_panel_avisa_cuando_el_dato_de_mercado_esta_cacheado():
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+
+    assert "advanced?.stale" in script or "advanced.stale" in script
+    assert "DATO CACHEADO" in script
+    assert "captured_at" in script

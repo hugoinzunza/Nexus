@@ -119,6 +119,14 @@ def parse_global_management(text: str) -> Optional[dict[str, Any]]:
         or "closed near entry" in low
         or re.search(r"closed\s+btc\s+long\s+@\s*entry", low)
     ):
+        # La dirección se conserva si el propio texto la nombra. Antes esta rama
+        # se evaluaba antes que las direccionales y devolvía siempre None, así que
+        # "Shorts closed near entry point" cerraba también los LONG a break-even
+        # (21 vínculos con dirección contraria al texto en el export real).
+        if "short" in low and "long" not in low:
+            return {"kind": "close_be", "direction": "short"}
+        if "long" in low and "short" not in low:
+            return {"kind": "close_be", "direction": "long"}
         return {"kind": "close_be", "direction": None}
     if "close all shorts" in low or "closed all short positions" in low or "shorts closed" in low:
         return {"kind": "close_market", "direction": "short"}

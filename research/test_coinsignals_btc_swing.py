@@ -276,3 +276,23 @@ def test_custom_target_weights_change_runner_payoff():
         target_weights_override=(0.1, 0.2, 0.3, 0.4),
     )
     assert runner["pnl_r_net"] > front["pnl_r_net"]
+
+
+def test_close_be_conserva_la_direccion_que_nombra_el_texto():
+    """"Shorts closed near entry point" no puede cerrar LONGs a break-even.
+
+    La rama close_be se evaluaba antes que las direccionales y devolvía siempre
+    direction=None, así que el filtro por dirección nunca aplicaba: 21 vínculos
+    con dirección contraria al texto en el export real (auditoría 2026-07-24).
+    """
+    from research.coinsignals_btc_swing import parse_global_management
+
+    shorts = parse_global_management("#BTC & #ETH Shorts closed near entry point.")
+    assert shorts == {"kind": "close_be", "direction": "short"}
+
+    longs = parse_global_management("#BTC Longs closed near entry.")
+    assert longs == {"kind": "close_be", "direction": "long"}
+
+    # Sin dirección explícita se mantiene el comportamiento anterior.
+    ambiguo = parse_global_management("#BTC close near entry")
+    assert ambiguo == {"kind": "close_be", "direction": None}

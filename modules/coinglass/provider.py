@@ -332,24 +332,35 @@ def _pressure(basic: dict[str, Any], advanced: dict[str, Any]) -> dict[str, Any]
     below = sum(row["amount_usd"] for row in levels if price and row["price"] < price)
     liquidity = (above - below) / (above + below) if above + below else None
     ratio = compact.get("book_ratio")
-    book = (ratio - 1) / (ratio + 1) if ratio is not None and ratio > 0 else 0
-    funding = compact.get("funding_pct") or 0
+    # Un endpoint caído (403/429/timeout) NO es una lectura neutral: antes se
+    # imputaba 0 y entraba al promedio con su peso completo, así que con solo el
+    # mapa vivo el score quedaba diluido al 45% y "neutral" era indistinguible de
+    # "sin datos". Se renormaliza por peso disponible, igual que el modelo visual.
+    book = (ratio - 1) / (ratio + 1) if ratio is not None and ratio > 0 else None
+    funding = compact.get("funding_pct")
     top_long = compact.get("top_long_pct")
-    crowd = -((top_long - 50) / 50) if top_long is not None else 0
-    funding_contrarian = -math.tanh(funding / 0.03)
+    crowd = -((top_long - 50) / 50) if top_long is not None else None
+    funding_contrarian = -math.tanh(funding / 0.03) if funding is not None else None
+    componentes = [(liquidity, 0.45), (book, 0.35), (crowd, 0.10),
+                   (funding_contrarian, 0.10)]
+    peso_disponible = sum(w for valor, w in componentes if valor is not None)
     score = (
-        100 * (0.45 * liquidity + 0.35 * book + 0.10 * crowd + 0.10 * funding_contrarian)
-        if liquidity is not None else None
+        100 * sum(valor * w for valor, w in componentes if valor is not None)
+        / peso_disponible
+        if liquidity is not None and peso_disponible else None
     )
     return {
         "research_only": True,
         "validated": False,
         "score": round(max(-100, min(100, score)), 1) if score is not None else None,
         "components": {
+            # None = no medido (endpoint caído). Antes se publicaba 0, que la UI
+            # pinta igual que una lectura neutral real.
             "liquidation_attraction": round(liquidity, 4) if liquidity is not None else None,
-            "orderbook_imbalance": round(book, 4),
-            "positioning_contrarian": round(crowd, 4),
-            "funding_contrarian": round(funding_contrarian, 4),
+            "orderbook_imbalance": round(book, 4) if book is not None else None,
+            "positioning_contrarian": round(crowd, 4) if crowd is not None else None,
+            "funding_contrarian": (round(funding_contrarian, 4)
+                                   if funding_contrarian is not None else None),
         },
         "liquidation_usd": {"above": round(above, 2), "below": round(below, 2)},
         "label": (
@@ -367,15 +378,25 @@ def build_dashboard(
     advanced: dict[str, Any],
 ) -> dict[str, Any]:
     by_bar = {}
+    sin_barra = 0
     for row in basic_history:
         compact = _compact_context(row)
-        key = compact.get("bar_time") or compact.get("time")
+        key = compact.get("bar_time")
+        if key is None:
+            # Sin `bar_time` (endpoint de OI caído) la clave caía en captured_at y
+            # CADA captura de 5 min se volvía una observación "independiente":
+            # ~12 por hora, llenando el gate de calibración con datos rotos. Se
+            # conservan para no perder el dato, pero marcadas y fuera del conteo.
+            sin_barra += 1
+            compact["bar_time_missing"] = True
+            key = compact.get("time")
         by_bar[key] = compact
     history = list(by_bar.values())[-1100:]
+    independientes = [row for row in history if not row.get("bar_time_missing")]
     historical_observations = sum(
-        row.get("origin") == "backfill" for row in history
+        row.get("origin") == "backfill" for row in independientes
     )
-    forward_observations = len(history) - historical_observations
+    forward_observations = len(independientes) - historical_observations
     pressure = _pressure(basic, advanced)
     return {
         "research_only": True,
