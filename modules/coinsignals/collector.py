@@ -20,11 +20,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from research.coinsignals_backtest import KlineCache
+from modules.coinsignals.coinglass import update_market_context
 from modules.coinsignals.module import STATE_PATH
 from modules.coinsignals.shadow import HISTORY_PATH, build_snapshot
 
 DEFAULT_CONFIG = Path.home() / ".config/nexux/telegram.env"
 DEFAULT_SESSION = Path.home() / ".config/nexux/coinsignals"
+COINGLASS_PATH = ROOT / "data/coinsignals_coinglass.json"
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -117,7 +119,17 @@ async def refresh(args: argparse.Namespace) -> dict[str, Any]:
     cached = cache.load("BTCUSDT")
     start_ms = int(cached[0]["t"]) if cached else int((time.time() - 6 * 365 * 86400) * 1000)
     cache.fetch("BTCUSDT", start_ms, int(time.time() * 1000))
-    snapshot = build_snapshot(forward_start=args.forward_start)
+    market_context = None
+    if args.coinglass_api_key:
+        market_context, _history = update_market_context(
+            args.coinglass_api_key,
+            COINGLASS_PATH,
+            max_age_seconds=args.coinglass_interval,
+        )
+    snapshot = build_snapshot(
+        forward_start=args.forward_start,
+        market_context=market_context,
+    )
     atomic_json(Path(STATE_PATH), snapshot)
     remote_status = "local-only"
     if args.remote_url:
@@ -147,6 +159,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--remote-url", default=os.environ.get("NEXUS_REMOTE_URL", ""))
     parser.add_argument("--token", default=os.environ.get("NEXUS_INGEST_TOKEN", ""))
+    parser.add_argument("--coinglass-api-key", default=os.environ.get("COINGLASS_API_KEY", ""))
+    parser.add_argument("--coinglass-interval", type=int, default=300)
     return parser.parse_args()
 
 

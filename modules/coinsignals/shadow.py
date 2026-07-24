@@ -65,6 +65,7 @@ def build_snapshot(
     *,
     forward_start: str,
     candles: list[dict[str, Any]] | None = None,
+    market_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     history = json.loads(history_path.read_text(encoding="utf-8"))
     messages = {message["id"]: message for message in history["messages"]}
@@ -144,6 +145,7 @@ def build_snapshot(
             "round_trip_cost_pct": ROUND_TRIP_COST_PCT,
         },
         "parse_stats": parse_stats,
+        "market_context": market_context,
         "reference": _metrics(reference_rows),
         "books": books,
     }

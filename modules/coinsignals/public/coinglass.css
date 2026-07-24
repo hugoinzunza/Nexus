@@ -1,0 +1,56 @@
+.market {
+  margin-top: 34px;
+}
+
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.market-grid .metric {
+  min-width: 0;
+  padding: 15px 18px;
+}
+
+.market-grid .metric + .metric {
+  border-left: 1px solid var(--line);
+}
+
+.market-grid .metric b {
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .market-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .market-grid .metric:nth-child(4) {
+    border-left: 0;
+  }
+
+  .market-grid .metric:nth-child(n + 4) {
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 560px) {
+  .market-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-grid .metric:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .market-grid .metric:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
+  .market-grid .metric:nth-child(4) {
+    border-left: 1px solid var(--line);
+  }
+}

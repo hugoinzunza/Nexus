@@ -45,6 +45,9 @@ def test_ingest_rejects_any_execution_enabled_snapshot(monkeypatch, tmp_path):
 
 def test_panel_names_planned_and_confirmed_entry_separately():
     html = (ROOT / "modules/coinsignals/public/index.html").read_text(encoding="utf-8")
+    script = (ROOT / "modules/coinsignals/public/app.js").read_text(encoding="utf-8")
     assert "Entrada plan" in html
     assert "Promedio confirmado" in html
     assert "SHADOW ONLY" in html
+    assert "COINGLASS · RESEARCH ONLY" in html
+    assert "Cambio OI 1h" in script
