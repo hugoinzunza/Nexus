@@ -125,6 +125,31 @@ def test_visual_tooltip_parser_handles_coinglass_spanish_values():
     assert parsed["cumulative_usd"] == 118_570_000
 
 
+def test_visual_tooltip_parser_handles_new_stacked_tooltip_markup():
+    parsed = parse_tooltip(
+        "65688\n"
+        "Apalancamiento de Liquidación Corta Acumulada\n"
+        "342.89M\n"
+        "Apalancamiento 10x\n"
+        "1.20M\n"
+        "Apalancamiento 50x\n"
+        "7.93M\n"
+        "Apalancamiento 100x\n"
+        "21.87M"
+    )
+
+    assert parsed["price"] == 65_688
+    assert parsed["cumulative_usd"] == 342_890_000
+    assert parsed["intensity_usd"] == 31_000_000
+
+
+def test_visual_tooltip_parser_handles_depth_delta_pairs():
+    parsed = parse_tooltip("Delta\n-$11.82M\nPrecio BTC\n$65.07K")
+
+    assert parsed["delta_usd"] == -11_820_000
+    assert parsed["price"] == 65_070
+
+
 def test_shadow_plan_and_replay_are_virtual_forward_only():
     indicator = build_visual_indicator(snapshot(), now=NOW)
     indicator.update({

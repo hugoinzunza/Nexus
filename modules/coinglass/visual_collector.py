@@ -21,7 +21,7 @@ MAP_URL = "https://www.coinglass.com/es/pro/futures/LiquidationMap"
 HEATMAP_URL = "https://www.coinglass.com/es/pro/futures/LiquidationHeatMapNew"
 DEPTH_URL = "https://www.coinglass.com/es/pro/depth-delta"
 DEFAULT_PROFILE = Path.home() / ".config/nexux/coinglass-visual-profile"
-COLLECTOR_VERSION = "0.1.0"
+COLLECTOR_VERSION = "0.2.0"
 MONEY_RE = re.compile(r"([-+]?\$?\s*[\d.,]+)\s*([KMB])?", re.IGNORECASE)
 BINANCE_PRICE_URL = "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT"
 
@@ -50,13 +50,14 @@ def parse_money(text: str) -> float | None:
     multiplier = {"K": 1e3, "M": 1e6, "B": 1e9}.get(
         (match.group(2) or "").upper(), 1
     )
-    return value * multiplier
+    return round(value * multiplier, 6)
 
 
 def parse_tooltip(text: str) -> dict[str, Any]:
     """Parse Spanish/English ECharts tooltip text without fixed line order."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     result: dict[str, Any] = {"raw": " | ".join(lines)[:600]}
+    intensity_components: list[float] = []
     for line in lines:
         lowered = line.casefold()
         value = parse_money(line)
@@ -74,6 +75,33 @@ def parse_tooltip(text: str) -> dict[str, Any]:
             or "leverage" in lowered
         ):
             result["intensity_usd"] = value
+    for index, label in enumerate(lines[:-1]):
+        lowered = label.casefold()
+        has_inline_amount = (
+            ":" in label
+            or "$" in label
+            or re.search(r"\d[\d.,]*\s*[KMB]\b", label, re.IGNORECASE)
+        )
+        if has_inline_amount:
+            continue
+        value = parse_money(lines[index + 1])
+        if value is None:
+            continue
+        if "precio" in lowered or "price" in lowered:
+            result["price"] = value
+        elif "acumul" in lowered or "cumulative" in lowered:
+            result["cumulative_usd"] = value
+        elif "delta" in lowered:
+            result["delta_usd"] = value
+        elif (
+            "liquida" in lowered
+            or "intens" in lowered
+            or "leverage" in lowered
+            or "apalancamiento" in lowered
+        ):
+            intensity_components.append(value)
+    if intensity_components:
+        result["intensity_usd"] = sum(intensity_components)
     if "price" not in result:
         for line in lines:
             value = parse_money(line)
@@ -117,11 +145,19 @@ async def _largest_canvas(page):
 
 
 async def _tooltip_text(page) -> str:
-    tooltip = page.locator(".cg-toolti-box:visible").last
-    try:
-        return await tooltip.inner_text(timeout=80)
-    except Exception:  # noqa: BLE001
-        return ""
+    selectors = (
+        ".cg-toolti-box:visible",
+        ".cg-tooltip-item:visible",
+    )
+    for selector in selectors:
+        tooltip = page.locator(selector).last
+        try:
+            if selector == ".cg-tooltip-item:visible":
+                tooltip = tooltip.locator("xpath=..")
+            return await tooltip.inner_text(timeout=80)
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
 
 
 async def _scan_vertical(page, *, x_ratio: float, samples: int = 150) -> list[dict[str, Any]]:
@@ -194,10 +230,12 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
         ) from exc
 
     profile.mkdir(parents=True, exist_ok=True)
+    chrome_path = os.environ.get("COINGLASS_CHROME_PATH")
     async with async_playwright() as playwright:
         context = await playwright.chromium.launch_persistent_context(
             str(profile),
             headless=headless,
+            executable_path=chrome_path or None,
             viewport={"width": 1600, "height": 1000},
             locale="es-CL",
         )
