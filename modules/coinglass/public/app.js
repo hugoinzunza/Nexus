@@ -347,11 +347,19 @@ function drawOrderbook() {
 }
 
 function renderLargeOrders() {
-  const rows = state.advanced?.large_orders || [];
-  const price = Number(state.advanced?.price);
+  const apiRows = state.advanced?.large_orders || [];
+  const visualRows = state.visual_snapshot?.whale_orders?.rows || [];
+  const rows = apiRows.length ? apiRows : visualRows.map((row) => ({
+    ...row,
+    side: row.side === "bid" ? "buy" : "sell",
+    usd: row.amount_usd,
+  }));
+  const price = Number(state.visual_indicator?.price || state.advanced?.price);
   $("large-orders").innerHTML = rows.length ? rows.slice(0, 30).map((row) => {
     const distance = Number.isFinite(price) ? (row.price / price - 1) * 100 : null;
-    return `<tr><td class="${row.side}">${row.side === "buy" ? "COMPRA" : "VENTA"}</td><td>${fmt(row.price, 1)}</td><td>${signed(distance, "%")}</td><td>${usd(row.usd)}</td><td>${row.started_at ? new Date(row.started_at).toLocaleString("es-CL") : "—"}</td></tr>`;
+    const age = row.duration || (row.started_at ? new Date(row.started_at).toLocaleString("es-CL") : "—");
+    const exchange = row.exchange && row.exchange !== "unknown" ? ` · ${escapeHtml(row.exchange)}` : "";
+    return `<tr><td class="${row.side}">${row.side === "buy" ? "COMPRA" : "VENTA"}${exchange}</td><td>${fmt(row.price, 1)}</td><td>${signed(distance, "%")}</td><td>${usd(row.usd)}</td><td>${escapeHtml(age)}</td></tr>`;
   }).join("") : `<tr><td colspan="5" class="empty">${reason(state.advanced?.capabilities?.large_orders)}</td></tr>`;
 }
 
@@ -459,6 +467,7 @@ function renderVisual() {
     component("Heatmap: atracción", c.heatmap_attraction) +
     component("Mapa: atracción", c.map_attraction) +
     component("Delta del libro", c.depth_delta) +
+    component("Muros ballena", c.whale_bid_pressure) +
     component("Consenso", (c.heatmap_attraction != null && c.map_attraction != null)
       ? (Math.sign(c.heatmap_attraction) === Math.sign(c.map_attraction) ? Math.abs(c.heatmap_attraction + c.map_attraction) / 2 : 0)
       : null);
@@ -468,6 +477,7 @@ function renderVisual() {
     ["Mapa acumulado", coverage.map_levels, snapshot.liquidation_map?.range],
     ["Heatmap Model 2", coverage.heatmap_levels, snapshot.liquidation_heatmap?.range],
     ["Delta order book", coverage.depth_points, `${snapshot.depth_delta?.interval} · ±${snapshot.depth_delta?.range_pct}%`],
+    ["Órdenes ballena activas", coverage.whale_orders, snapshot.whale_orders?.range],
   ].map(([layer, count, range]) =>
     `<tr><td>${escapeHtml(layer)}</td><td>${fmt(count, 0)}</td><td>${escapeHtml(range)}</td><td>Tooltips ECharts</td><td>Research · sin órdenes</td></tr>`
   ).join("");
@@ -524,7 +534,9 @@ function render(data) {
   $("updated").textContent = `Actualizado hace ${fmt(data.age_seconds, 0)} s`;
   const capabilities = data.advanced?.capabilities || {};
   const hasLiquidations = capabilities.liquidation_map?.available || capabilities.liquidation_heatmap?.available;
-  const hasOrderbook = capabilities.orderbook_heatmap?.available || capabilities.large_orders?.available;
+  const hasOrderbook = capabilities.orderbook_heatmap?.available ||
+    capabilities.large_orders?.available ||
+    Boolean(data.visual_snapshot?.whale_orders?.rows?.length);
   document.querySelector('[data-tab="liquidations"]').classList.toggle("hidden", !hasLiquidations);
   document.querySelector('[data-tab="orderbook"]').classList.toggle("hidden", !hasOrderbook);
   renderOverview();

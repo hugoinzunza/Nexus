@@ -16,10 +16,12 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 MAP_URL = "https://www.coinglass.com/es/pro/futures/LiquidationMap"
 HEATMAP_URL = "https://www.coinglass.com/es/pro/futures/LiquidationHeatMapNew"
 DEPTH_URL = "https://www.coinglass.com/es/pro/depth-delta"
+LARGE_ORDERBOOK_URL = "https://www.coinglass.com/large-orderbook-statistics"
 DEFAULT_PROFILE = Path.home() / ".config/nexux/coinglass-visual-profile"
 COLLECTOR_VERSION = "0.2.0"
 MONEY_RE = re.compile(r"([-+]?\$?\s*[\d.,]+)\s*([KMB])?", re.IGNORECASE)
@@ -119,6 +121,35 @@ def parse_tooltip(text: str) -> dict[str, Any]:
     if lines:
         result["timestamp"] = lines[0]
     return result
+
+
+def parse_whale_order(
+    text: str,
+    *,
+    background_class: str,
+    exchange_src: str,
+) -> dict[str, Any] | None:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) < 4:
+        return None
+    price = _number(lines[1])
+    amount = parse_money(lines[2])
+    side = (
+        "bid" if "ovv2-item-bg-l" in background_class
+        else "ask" if "ovv2-item-bg-s" in background_class
+        else None
+    )
+    if price is None or price <= 0 or amount is None or amount <= 0 or side is None:
+        return None
+    exchange = unquote(Path(urlparse(exchange_src).path).stem) if exchange_src else "unknown"
+    return {
+        "side": side,
+        "price": price,
+        "amount_usd": amount,
+        "duration": lines[3][:80],
+        "market": lines[0][:20],
+        "exchange": exchange[:80],
+    }
 
 
 def public_btc_price() -> float:
@@ -242,6 +273,38 @@ async def _open_chart(page, url: str) -> None:
     await page.wait_for_timeout(2_000)
 
 
+async def _collect_whale_orders(page) -> list[dict[str, Any]]:
+    checkbox = page.locator("input[type=checkbox]").first
+    try:
+        if await checkbox.is_checked(timeout=1_000):
+            await checkbox.uncheck(force=True)
+            await page.wait_for_timeout(2_500)
+    except Exception:  # noqa: BLE001
+        pass
+    rows = page.locator(".large-order-item")
+    parsed: dict[tuple[str, int, int, str], dict[str, Any]] = {}
+    for index in range(await rows.count()):
+        row = rows.nth(index)
+        item = parse_whale_order(
+            await row.inner_text(),
+            background_class=(
+                await row.locator(".large-order-item-bg").first.get_attribute("class")
+                or ""
+            ),
+            exchange_src=await row.locator("img").first.get_attribute("src") or "",
+        )
+        if not item:
+            continue
+        key = (
+            item["side"],
+            round(item["price"]),
+            round(item["amount_usd"]),
+            item["exchange"],
+        )
+        parsed[key] = item
+    return list(parsed.values())
+
+
 async def _dismiss_consent(page) -> None:
     """Remove Funding Choices overlay, preferring the least permissive action."""
     selectors = (
@@ -297,6 +360,9 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
 
         await _open_chart(page, DEPTH_URL)
         depth_rows = await _scan_horizontal(page)
+
+        await _open_chart(page, LARGE_ORDERBOOK_URL)
+        whale_rows = await _collect_whale_orders(page)
         await context.close()
 
     if len(map_rows) < 4 or len(heatmap_rows) < 4:
@@ -343,9 +409,14 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
                 "price": row["price"],
             } for row in depth_rows],
         },
+        "whale_orders": {
+            "active_only": True,
+            "range": "visible_near_price",
+            "rows": whale_rows,
+        },
         "provenance": {
             "method": "tooltip_scan",
-            "urls": [MAP_URL, HEATMAP_URL, DEPTH_URL],
+            "urls": [MAP_URL, HEATMAP_URL, DEPTH_URL, LARGE_ORDERBOOK_URL],
             "collector_version": COLLECTOR_VERSION,
         },
     }
@@ -429,7 +500,8 @@ async def run(args: argparse.Namespace) -> None:
             f"CoinGlass visual {indicator_time}: "
             f"{len(snapshot['liquidation_map']['levels'])} mapa, "
             f"{len(snapshot['liquidation_heatmap']['levels'])} heatmap, "
-            f"{len(snapshot['depth_delta']['series'])} delta"
+            f"{len(snapshot['depth_delta']['series'])} delta, "
+            f"{len(snapshot['whale_orders']['rows'])} whale"
         )
         if args.once:
             return

@@ -7,6 +7,7 @@ from typing import Any
 
 MAX_LEVELS = 400
 MAX_DEPTH_POINTS = 500
+MAX_WHALE_ORDERS = 500
 MAX_SNAPSHOT_AGE_SECONDS = 30 * 60
 
 
@@ -110,6 +111,32 @@ def normalize_visual_snapshot(
             "price": round(point_price, 2),
         })
 
+    whale_data = snapshot.get("whale_orders") or {
+        "active_only": True,
+        "rows": [],
+    }
+    if whale_data.get("active_only") is not True:
+        raise VisualSnapshotError("solo se aceptan ordenes ballena activas")
+    raw_whales = whale_data.get("rows", [])
+    if not isinstance(raw_whales, list) or len(raw_whales) > MAX_WHALE_ORDERS:
+        raise VisualSnapshotError("ordenes ballena invalidas")
+    whale_orders = []
+    for row in raw_whales:
+        if not isinstance(row, dict) or row.get("side") not in {"bid", "ask"}:
+            continue
+        order_price = _float(row.get("price"))
+        amount = _float(row.get("amount_usd"))
+        if order_price is None or order_price <= 0 or amount is None or amount <= 0:
+            continue
+        whale_orders.append({
+            "side": row["side"],
+            "price": round(order_price, 2),
+            "amount_usd": round(amount, 2),
+            "duration": str(row.get("duration") or "unknown")[:80],
+            "market": str(row.get("market") or "unknown")[:20],
+            "exchange": str(row.get("exchange") or "unknown")[:80],
+        })
+
     if len(map_levels) < 4 or len(heatmap_levels) < 4:
         raise VisualSnapshotError("cobertura insuficiente del mapa visual")
 
@@ -139,6 +166,11 @@ def normalize_visual_snapshot(
             "range_pct": _float(depth_data.get("range_pct")),
             "interval": str(depth_data.get("interval") or "unknown"),
             "series": depth_series,
+        },
+        "whale_orders": {
+            "active_only": True,
+            "range": str(whale_data.get("range") or "unknown"),
+            "rows": whale_orders,
         },
         "provenance": {
             "method": "tooltip_scan",
@@ -222,6 +254,7 @@ def build_visual_indicator(
     price = clean["price"]
     map_levels = clean["liquidation_map"]["levels"]
     heatmap_levels = clean["liquidation_heatmap"]["levels"]
+    whale_orders = clean["whale_orders"]["rows"]
 
     map_up = _weighted_side(map_levels, price, amount_key="intensity_usd", above=True)
     map_down = _weighted_side(map_levels, price, amount_key="intensity_usd", above=False)
@@ -242,6 +275,31 @@ def build_visual_indicator(
         latest_delta - previous_delta
         if latest_delta is not None and previous_delta is not None else None
     )
+    nearby_whales = [
+        row for row in whale_orders
+        if abs(row["price"] / price - 1) * 100 <= 5
+    ]
+    whale_bids = sum(
+        row["amount_usd"] for row in nearby_whales if row["side"] == "bid"
+    )
+    whale_asks = sum(
+        row["amount_usd"] for row in nearby_whales if row["side"] == "ask"
+    )
+    whale_pressure = _asymmetry(whale_bids, whale_asks)
+
+    def whale_level(side: str, *, strongest: bool) -> dict[str, Any] | None:
+        candidates = [row for row in nearby_whales if row["side"] == side]
+        if not candidates:
+            return None
+        row = (
+            max(candidates, key=lambda item: item["amount_usd"])
+            if strongest
+            else min(candidates, key=lambda item: abs(item["price"] - price))
+        )
+        return {
+            **row,
+            "distance_pct": round((row["price"] / price - 1) * 100, 3),
+        }
 
     components = [
         (heatmap_asymmetry, 0.50),
@@ -263,7 +321,7 @@ def build_visual_indicator(
         "research_only": True,
         "execution_enabled": False,
         "validated": False,
-        "name": "CoinGlass Visual Context v0",
+        "name": "CoinGlass Visual Context v1",
         "captured_at": clean["captured_at"],
         "age_seconds": round(age),
         "price": price,
@@ -281,6 +339,8 @@ def build_visual_indicator(
             if map_asymmetry is not None else None,
             "depth_delta": round(depth_component, 4)
             if depth_component is not None else None,
+            "whale_bid_pressure": round(whale_pressure, 4)
+            if whale_pressure is not None else None,
         },
         "depth": {
             "latest_delta_usd": latest_delta,
@@ -299,14 +359,19 @@ def build_visual_indicator(
             ),
             "strongest_above": _strongest(heatmap_levels, price, above=True),
             "strongest_below": _strongest(heatmap_levels, price, above=False),
+            "nearest_whale_ask": whale_level("ask", strongest=False),
+            "nearest_whale_bid": whale_level("bid", strongest=False),
+            "strongest_whale_ask": whale_level("ask", strongest=True),
+            "strongest_whale_bid": whale_level("bid", strongest=True),
         },
         "coverage": {
             "map_levels": len(map_levels),
             "heatmap_levels": len(heatmap_levels),
             "depth_points": len(depth),
+            "whale_orders": len(whale_orders),
         },
         "warning": (
-            "Contexto experimental: localiza liquidez y desequilibrios; "
-            "no predice por sí solo la dirección ni habilita órdenes."
+            "Contexto experimental: localiza liquidez, muros ballena y "
+            "desequilibrios; no predice por sí solo la dirección ni habilita órdenes."
         ),
     }

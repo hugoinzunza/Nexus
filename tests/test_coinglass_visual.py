@@ -10,7 +10,11 @@ from modules.coinglass.visual import (
     build_visual_indicator,
     normalize_visual_snapshot,
 )
-from modules.coinglass.visual_collector import parse_money, parse_tooltip
+from modules.coinglass.visual_collector import (
+    parse_money,
+    parse_tooltip,
+    parse_whale_order,
+)
 from modules.coinglass.shadow import replay_shadow, shadow_plan
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,6 +68,36 @@ def snapshot():
                 {"timestamp": "14:30", "delta_usd": 12_470_000, "price": 64_238},
             ],
         },
+        "whale_orders": {
+            "active_only": True,
+            "range": "visible_near_price",
+            "rows": [
+                {
+                    "side": "ask",
+                    "price": 64_750,
+                    "amount_usd": 1_630_000,
+                    "duration": "4H 15m",
+                    "market": "S",
+                    "exchange": "binance",
+                },
+                {
+                    "side": "bid",
+                    "price": 63_750,
+                    "amount_usd": 1_800_000,
+                    "duration": "4H 31m",
+                    "market": "S",
+                    "exchange": "coinbase pro",
+                },
+                {
+                    "side": "bid",
+                    "price": 61_300,
+                    "amount_usd": 78_600_000,
+                    "duration": "1D 3H",
+                    "market": "S",
+                    "exchange": "binance",
+                },
+            ],
+        },
         "provenance": {
             "method": "tooltip_scan",
             "urls": [
@@ -84,6 +118,7 @@ def test_visual_snapshot_is_normalized_and_never_enables_execution():
     assert clean["source"] == "coinglass_authorized_browser"
     assert clean["symbol"] == "BTCUSDT"
     assert len(clean["liquidation_heatmap"]["levels"]) == 8
+    assert len(clean["whale_orders"]["rows"]) == 3
     assert build_visual_indicator(clean, now=NOW)["execution_enabled"] is False
 
 
@@ -97,6 +132,9 @@ def test_visual_indicator_exposes_nearest_levels_and_decelerating_depth():
     assert indicator["levels"]["strongest_below"]["price"] == 63_377.8
     assert indicator["depth"]["latest_delta_usd"] == 12_470_000
     assert indicator["depth"]["decelerating"] is True
+    assert indicator["components"]["whale_bid_pressure"] > 0
+    assert indicator["levels"]["nearest_whale_ask"]["price"] == 64_750
+    assert indicator["coverage"]["whale_orders"] == 3
     assert -100 <= indicator["score"] <= 100
     assert "no predice" in indicator["warning"]
 
@@ -150,6 +188,33 @@ def test_visual_tooltip_parser_handles_depth_delta_pairs():
 
     assert parsed["delta_usd"] == -11_820_000
     assert parsed["price"] == 65_070
+
+
+def test_visual_whale_order_parser_uses_side_exchange_and_duration():
+    parsed = parse_whale_order(
+        "S\n61300\n$78.60M\n1D 3H",
+        background_class="large-order-item-bg ovv2-item-bg-l",
+        exchange_src=(
+            "https://cdn.coinglasscdn.com/static/exchanges/coinbase%20pro.png"
+        ),
+    )
+
+    assert parsed == {
+        "side": "bid",
+        "price": 61_300,
+        "amount_usd": 78_600_000,
+        "duration": "1D 3H",
+        "market": "S",
+        "exchange": "coinbase pro",
+    }
+
+
+def test_visual_snapshot_rejects_canceled_whale_orders():
+    unsafe = snapshot()
+    unsafe["whale_orders"]["active_only"] = False
+
+    with pytest.raises(VisualSnapshotError, match="activas"):
+        normalize_visual_snapshot(unsafe, now=NOW)
 
 
 def test_shadow_plan_and_replay_are_virtual_forward_only():
