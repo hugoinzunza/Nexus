@@ -88,6 +88,23 @@ def test_advanced_provider_marks_unavailable_capability_without_failing_everythi
     assert advanced["capabilities"]["large_orders"]["available"] is True
 
 
+def test_orderbook_heatmap_negotiates_4h_when_1h_is_not_in_plan():
+    def opener(request, timeout):
+        url = request.full_url
+        if "fapi.binance.com" in url:
+            return FakeResponse({"price": "65000"})
+        if "orderbook/history" in url and "interval=1h" in url:
+            return FakeResponse({"code": "400", "msg": "interval unavailable"})
+        return FakeResponse({"code": "0", "msg": "success", "data": []})
+
+    advanced = fetch_advanced("key", opener=opener)
+
+    assert advanced["capabilities"]["orderbook_heatmap"] == {
+        "available": True,
+        "interval": "4h",
+    }
+
+
 def test_dashboard_is_research_only_and_pressure_is_transparent():
     basic = {
         "captured_at": "2026-07-24T15:00:00+00:00",

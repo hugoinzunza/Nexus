@@ -22,6 +22,7 @@ function renderMarket(context) {
     return;
   }
   const i = context.indicators || {};
+  const intervals = context.intervals || {};
   const funding = last(i.funding?.close_pct);
   const oi = i.open_interest?.close_btc || [];
   const oiNow = last(oi), oiPrev = oi.length > 1 ? oi[oi.length - 2] : null;
@@ -33,7 +34,7 @@ function renderMarket(context) {
   $("market-context").innerHTML =
     metric("Funding OI", funding == null ? "—" : `${funding >= 0 ? "+" : ""}${num(funding, 4)}%`) +
     metric("OI BTC", oiNow == null ? "—" : num(oiNow, 1)) +
-    metric("Cambio OI 1h", oiChange == null ? "—" : signed(oiChange, "%"), (oiChange || 0) >= 0 ? "up" : "down") +
+    metric(`Cambio OI ${intervals.open_interest || "1h"}`, oiChange == null ? "—" : signed(oiChange, "%"), (oiChange || 0) >= 0 ? "up" : "down") +
     metric("Liquidaciones L/S", liq ? `${num(liq.long_musd)}M / ${num(liq.short_musd)}M` : "—") +
     metric("Top traders long", topLong == null ? "—" : `${num(topLong)}%`) +
     metric("Book bid/ask ±1%", book == null ? "—" : num(book, 2));

@@ -161,11 +161,22 @@ def fetch_advanced(
         "large_orders": _large_orders,
     }
     for name, path, params in ADVANCED_ENDPOINTS:
-        try:
-            data[name] = normalizers[name](_request(path, params, api_key, opener))
-            capabilities[name] = {"available": True}
-        except Exception as exc:  # noqa: BLE001
-            capabilities[name] = {"available": False, "reason": str(exc)[:180]}
+        attempts = [params]
+        if params.get("interval") == "1h":
+            attempts.append({**params, "interval": "4h"})
+        last_error = ""
+        for attempt in attempts:
+            try:
+                data[name] = normalizers[name](_request(path, attempt, api_key, opener))
+                capabilities[name] = {
+                    "available": True,
+                    "interval": attempt.get("interval", "realtime"),
+                }
+                break
+            except Exception as exc:  # noqa: BLE001
+                last_error = str(exc)[:180]
+        if name not in data:
+            capabilities[name] = {"available": False, "reason": last_error}
     return {
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "price": _current_price(opener),

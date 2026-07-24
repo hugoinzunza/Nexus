@@ -59,6 +59,29 @@ def test_fetch_market_context_normalizes_available_indicators_without_leaking_ke
     assert "private-key" not in json.dumps(context)
 
 
+def test_fetch_market_context_falls_back_to_4h_and_reports_real_interval():
+    def opener(request, timeout):
+        if "interval=1h" in request.full_url:
+            return FakeResponse({"code": "400", "msg": "interval unavailable"})
+        if "liquidation" in request.full_url:
+            data = [{
+                "aggregated_long_liquidation_usd": 1,
+                "aggregated_short_liquidation_usd": 2,
+            }]
+        elif "top-long-short" in request.full_url:
+            data = [{"long_position_percentage": 0.6}]
+        elif "orderbook" in request.full_url:
+            data = [{"bids_usd": 2, "asks_usd": 1}]
+        else:
+            data = [{"close": "1"}]
+        return FakeResponse({"code": "0", "msg": "success", "data": data})
+
+    context = fetch_market_context("key", opener=opener)
+
+    assert context["status"] == "ok"
+    assert set(context["intervals"].values()) == {"4h"}
+
+
 def test_update_market_context_uses_cache_and_writes_private_file(tmp_path):
     path = tmp_path / "context.json"
     calls = []

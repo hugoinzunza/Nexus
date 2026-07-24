@@ -101,6 +101,7 @@ function renderCapabilities() {
 
 function renderOverview() {
   const basic = state.basic?.indicators || {};
+  const intervals = state.basic?.intervals || {};
   const oi = basic.open_interest?.close_btc || [];
   const oiNow = latest(oi), oiPrev = oi.length > 1 ? oi[oi.length - 2] : null;
   const oiChange = oiNow != null && oiPrev ? (oiNow / oiPrev - 1) * 100 : null;
@@ -111,7 +112,7 @@ function renderOverview() {
   $("market-metrics").innerHTML =
     metric("Funding OI", signed(funding, "%", 4)) +
     metric("OI BTC", fmt(oiNow, 1)) +
-    metric("Cambio OI 1h", signed(oiChange, "%"), (oiChange || 0) >= 0 ? "up" : "down") +
+    metric(`Cambio OI ${intervals.open_interest || "1h"}`, signed(oiChange, "%"), (oiChange || 0) >= 0 ? "up" : "down") +
     metric("Liquidaciones L/S", liq ? `${fmt(liq.long_musd)}M / ${fmt(liq.short_musd)}M` : "—") +
     metric("Top traders long", top == null ? "—" : `${fmt(top)}%`) +
     metric("Book bid/ask ±1%", fmt(book, 2));
@@ -280,6 +281,10 @@ function renderLargeOrders() {
 }
 
 function renderOrderbook() {
+  const interval = state.advanced?.capabilities?.orderbook_heatmap?.interval;
+  $("book-interval").textContent = interval
+    ? `48 snapshots · intervalos de ${interval}`
+    : "Intervalo no disponible en el plan";
   drawOrderbook();
   renderLargeOrders();
 }

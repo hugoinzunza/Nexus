@@ -88,27 +88,39 @@ def fetch_market_context(
         raise ValueError("CoinGlass API key is required")
     indicators: dict[str, Any] = {}
     errors: dict[str, str] = {}
+    intervals: dict[str, str] = {}
     quota: dict[str, int] = {}
     for name, path, params in ENDPOINTS:
-        request = urllib.request.Request(
-            f"{BASE_URL}{path}?{urllib.parse.urlencode(params)}",
-            headers={"accept": "application/json", "CG-API-KEY": api_key},
-        )
-        try:
-            with opener(request, timeout=20) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-                if str(payload.get("code")) != "0":
-                    raise RuntimeError(payload.get("msg") or f"CoinGlass code {payload.get('code')}")
-                indicators[name] = _summarize(name, payload.get("data"))
-                for header, field in (
-                    ("API-KEY-MAX-LIMIT", "max_per_minute"),
-                    ("API-KEY-USE-LIMIT", "used_this_minute"),
-                ):
-                    value = response.headers.get(header)
-                    if value and value.isdigit():
-                        quota[field] = int(value)
-        except Exception as exc:  # noqa: BLE001
-            errors[name] = str(exc)[:160]
+        attempts = [params]
+        if params.get("interval") == "1h":
+            attempts.append({**params, "interval": "4h"})
+        last_error = ""
+        for attempt in attempts:
+            request = urllib.request.Request(
+                f"{BASE_URL}{path}?{urllib.parse.urlencode(attempt)}",
+                headers={"accept": "application/json", "CG-API-KEY": api_key},
+            )
+            try:
+                with opener(request, timeout=20) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                    if str(payload.get("code")) != "0":
+                        raise RuntimeError(
+                            payload.get("msg") or f"CoinGlass code {payload.get('code')}"
+                        )
+                    indicators[name] = _summarize(name, payload.get("data"))
+                    intervals[name] = attempt.get("interval", "realtime")
+                    for header, field in (
+                        ("API-KEY-MAX-LIMIT", "max_per_minute"),
+                        ("API-KEY-USE-LIMIT", "used_this_minute"),
+                    ):
+                        value = response.headers.get(header)
+                        if value and value.isdigit():
+                            quota[field] = int(value)
+                break
+            except Exception as exc:  # noqa: BLE001
+                last_error = str(exc)[:160]
+        if name not in indicators:
+            errors[name] = last_error
     if not indicators:
         raise RuntimeError(f"all CoinGlass endpoints failed: {errors}")
     return {
@@ -117,7 +129,7 @@ def fetch_market_context(
         "status": "ok" if not errors else "partial",
         "captured_at": captured_at or datetime.now(timezone.utc).isoformat(),
         "symbol": "BTC",
-        "interval": "1h",
+        "intervals": intervals,
         "indicators": indicators,
         "errors": errors,
         "quota": quota,
