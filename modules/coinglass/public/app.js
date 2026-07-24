@@ -364,6 +364,128 @@ function renderOrderbook() {
   renderLargeOrders();
 }
 
+function visualLevelRows() {
+  return state.visual_snapshot?.liquidation_heatmap?.levels || [];
+}
+
+function drawVisualLevels() {
+  const canvas = $("visual-level-chart");
+  const { ctx, width, height } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+  const visual = state.visual_indicator;
+  const price = Number(visual?.price);
+  const rows = visualLevelRows().filter((row) =>
+    Number(row.intensity_usd) >= 5e6 && Math.abs(Number(row.price) / price - 1) <= 0.06
+  );
+  if (!Number.isFinite(price) || !rows.length) {
+    message("visual-level-message", state.visual_error || "Esperando mapa visual autorizado");
+    return;
+  }
+  message("visual-level-message", "");
+  const prices = rows.map((row) => Number(row.price)).concat(price);
+  const min = Math.min(...prices), max = Math.max(...prices);
+  const strongest = Math.max(...rows.map((row) => Number(row.intensity_usd)), 1);
+  const y = (value) => 24 + (max - value) / (max - min || 1) * (height - 48);
+  grid(ctx, width, height, 102, 24);
+  rows.slice().sort((a, b) => Number(a.price) - Number(b.price)).forEach((row) => {
+    const rowPrice = Number(row.price);
+    const amount = Number(row.intensity_usd);
+    const py = y(rowPrice);
+    const barWidth = Math.max(5, amount / strongest * (width - 240));
+    ctx.fillStyle = rowPrice > price ? "rgba(239,99,112,.74)" : "rgba(36,200,138,.74)";
+    ctx.fillRect(104, py - 4, barWidth, 8);
+    if (amount / strongest >= 0.55) {
+      ctx.fillStyle = "#b9c1ce";
+      ctx.font = "10px ui-monospace, monospace";
+      ctx.fillText(
+        `${fmt(rowPrice, 0)} · ${compactUsd(amount)}`,
+        Math.min(width - 170, 112 + barWidth),
+        py + 4,
+      );
+    }
+  });
+  const currentY = y(price);
+  ctx.strokeStyle = "#edf1f7";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(92, currentY);
+  ctx.lineTo(width - 12, currentY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#edf1f7";
+  ctx.font = "11px ui-monospace, monospace";
+  ctx.fillText(`BTC ${fmt(price, 0)}`, 10, currentY + 4);
+}
+
+function levelText(level) {
+  return level ? `${fmt(level.price, 0)} USDT` : "—";
+}
+
+function levelMeta(level) {
+  return level ? `${signed(level.distance_pct, "%", 2)} · ${compactUsd(level.intensity_usd)}` : "—";
+}
+
+function renderVisual() {
+  const visual = state.visual_indicator;
+  const snapshot = state.visual_snapshot;
+  const fresh = $("visual-freshness");
+  if (!visual || !snapshot) {
+    fresh.querySelector("b").textContent = "—";
+    fresh.querySelector("span").textContent = "sin captura";
+    $("visual-warning").textContent = state.visual_error || "Esperando la primera captura del colector dedicado.";
+    drawVisualLevels();
+    return;
+  }
+  const score = Number(visual.score);
+  $("visual-score").textContent = Number.isFinite(score) ? signed(score, "", 1) : "—";
+  $("visual-score").className = Number.isFinite(score) ? score >= 18 ? "up" : score <= -18 ? "down" : "" : "";
+  $("visual-label").textContent = visual.label || "No validado";
+  const levels = visual.levels || {};
+  $("visual-nearest-up").textContent = levelText(levels.nearest_above);
+  $("visual-nearest-up-meta").textContent = levelMeta(levels.nearest_above);
+  $("visual-nearest-down").textContent = levelText(levels.nearest_below);
+  $("visual-nearest-down-meta").textContent = levelMeta(levels.nearest_below);
+  $("visual-depth").textContent = compactUsd(visual.depth?.latest_delta_usd);
+  $("visual-depth").className = pctClass(visual.depth?.latest_delta_usd);
+  $("visual-depth-meta").textContent = visual.depth?.decelerating ? "positivo, desacelerando" :
+    visual.depth?.slope_usd == null ? "sin pendiente" :
+    `pendiente ${signed(visual.depth.slope_usd / 1e6, "M", 2)}`;
+  fresh.querySelector("b").textContent = `${fmt(visual.age_seconds, 0)} s`;
+  fresh.querySelector("span").textContent = visual.age_seconds <= 600 ? "captura vigente" : "captura antigua";
+  $("visual-warning").textContent = visual.warning;
+  const c = visual.components || {};
+  $("visual-components").innerHTML =
+    component("Heatmap: atracción", c.heatmap_attraction) +
+    component("Mapa: atracción", c.map_attraction) +
+    component("Delta del libro", c.depth_delta) +
+    component("Consenso", (c.heatmap_attraction != null && c.map_attraction != null)
+      ? (Math.sign(c.heatmap_attraction) === Math.sign(c.map_attraction) ? Math.abs(c.heatmap_attraction + c.map_attraction) / 2 : 0)
+      : null);
+  const coverage = visual.coverage || {};
+  $("visual-source").textContent = `Captura ${new Date(snapshot.captured_at).toLocaleString("es-CL")} · tooltip scan`;
+  $("visual-coverage").innerHTML = [
+    ["Mapa acumulado", coverage.map_levels, snapshot.liquidation_map?.range],
+    ["Heatmap Model 2", coverage.heatmap_levels, snapshot.liquidation_heatmap?.range],
+    ["Delta order book", coverage.depth_points, `${snapshot.depth_delta?.interval} · ±${snapshot.depth_delta?.range_pct}%`],
+  ].map(([layer, count, range]) =>
+    `<tr><td>${escapeHtml(layer)}</td><td>${fmt(count, 0)}</td><td>${escapeHtml(range)}</td><td>Tooltips ECharts</td><td>Research · sin órdenes</td></tr>`
+  ).join("");
+  const shadow = state.visual_shadow || {};
+  const metrics = shadow.metrics || {};
+  $("shadow-decisions").textContent = fmt(shadow.decisions, 0);
+  $("shadow-trades").textContent = fmt(shadow.closed_trades, 0);
+  $("shadow-open").textContent = shadow.open_trade
+    ? `${shadow.open_trade.direction} virtual desde ${fmt(shadow.open_trade.entry, 0)}`
+    : "sin posición virtual";
+  $("shadow-wr").textContent = metrics.win_rate_pct == null ? "—" : `${fmt(metrics.win_rate_pct, 1)}%`;
+  $("shadow-result").textContent = metrics.total_net_pct == null ? "—" : signed(metrics.total_net_pct, "%", 2);
+  $("shadow-result").className = pctClass(metrics.total_net_pct);
+  $("shadow-dd").textContent = metrics.max_drawdown_pct == null ? "—" : `DD ${fmt(metrics.max_drawdown_pct, 2)}%`;
+  $("shadow-warning").textContent = shadow.warning || "Esperando datos forward";
+  drawVisualLevels();
+}
+
 function component(label, value) {
   if (value == null) return `<article><span>${label}</span><b>—</b></article>`;
   const number = Number(value) * 100;
@@ -409,6 +531,7 @@ function render(data) {
   renderFlow();
   renderLiquidations();
   renderOrderbook();
+  renderVisual();
   renderModel();
 }
 
@@ -422,6 +545,7 @@ function activateTab(button) {
       if (button.dataset.tab === "flow") renderFlow();
       if (button.dataset.tab === "liquidations") renderLiquidations();
       if (button.dataset.tab === "orderbook") renderOrderbook();
+      if (button.dataset.tab === "visual") renderVisual();
     });
 }
 

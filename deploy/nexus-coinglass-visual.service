@@ -1,0 +1,17 @@
+[Unit]
+Description=NexUX CoinGlass authorized visual research collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hugo
+WorkingDirectory=/home/hugo/Nexus
+EnvironmentFile=/home/hugo/Nexus/deploy/collector.env
+UMask=0077
+ExecStart=/home/hugo/Nexus/.venv-coinglass/bin/python3 /home/hugo/Nexus/modules/coinglass/visual_collector.py --once --remote-url https://nexux.cl --output /home/hugo/Nexus/data/coinglass_visual_latest.json
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/hugo/.config/nexux/coinglass-visual-profile /home/hugo/Nexus/data
+

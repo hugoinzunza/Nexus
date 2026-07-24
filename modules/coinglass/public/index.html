@@ -33,6 +33,7 @@
       <button data-tab="flow">Flujo 4h</button>
       <button data-tab="liquidations">Liquidaciones</button>
       <button data-tab="orderbook">Libro de órdenes</button>
+      <button data-tab="visual">Mapa visual</button>
       <button data-tab="model">Radar</button>
     </nav>
 
@@ -143,6 +144,61 @@
           <tbody id="large-orders"><tr><td colspan="5" class="empty">Esperando datos</td></tr></tbody>
         </table>
       </div>
+
+      <div class="section-head">
+        <div><p class="eyebrow">SHADOW · SIN CREDENCIALES</p><h2>Bot virtual CoinGlass</h2></div>
+        <span id="shadow-warning">Esperando datos forward</span>
+      </div>
+      <div class="visual-score-strip shadow-strip">
+        <div><span>Decisiones</span><b id="shadow-decisions">—</b><small>snapshots evaluados</small></div>
+        <div><span>Trades cerrados</span><b id="shadow-trades">—</b><small id="shadow-open">sin posición virtual</small></div>
+        <div><span>Win rate</span><b id="shadow-wr">—</b><small>neto de costos</small></div>
+        <div><span>Resultado / DD</span><b id="shadow-result">—</b><small id="shadow-dd">—</small></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-visual">
+      <div class="visual-status">
+        <div>
+          <p class="eyebrow">SESIÓN AUTORIZADA · TOOLTIP SCAN</p>
+          <h2>Mapa visual CoinGlass</h2>
+          <p id="visual-warning">Esperando la primera captura del colector dedicado.</p>
+        </div>
+        <div class="freshness" id="visual-freshness"><b>—</b><span>sin captura</span></div>
+      </div>
+
+      <div class="visual-score-strip">
+        <div><span>Índice contextual</span><b id="visual-score">—</b><small id="visual-label">No validado</small></div>
+        <div><span>Nivel cercano arriba</span><b id="visual-nearest-up">—</b><small id="visual-nearest-up-meta">—</small></div>
+        <div><span>Nivel cercano abajo</span><b id="visual-nearest-down">—</b><small id="visual-nearest-down-meta">—</small></div>
+        <div><span>Delta libro ±1%</span><b id="visual-depth">—</b><small id="visual-depth-meta">—</small></div>
+      </div>
+
+      <div class="section-head">
+        <div><p class="eyebrow">HEATMAP MODEL 2 · NIVELES ≥ US$5M</p><h2>Bandas de liquidación cercanas</h2></div>
+        <span>Distancia respecto al precio actual</span>
+      </div>
+      <div class="chart-frame visual-levels">
+        <canvas id="visual-level-chart" aria-label="Niveles visuales CoinGlass alrededor del precio"></canvas>
+        <div class="canvas-message" id="visual-level-message"></div>
+      </div>
+
+      <div class="section-head">
+        <div><p class="eyebrow">DESCOMPOSICIÓN</p><h2>Qué está viendo el índice</h2></div>
+        <span>Atracción no equivale a dirección</span>
+      </div>
+      <div class="components" id="visual-components"></div>
+
+      <div class="section-head">
+        <div><p class="eyebrow">TRAZABILIDAD</p><h2>Cobertura del colector</h2></div>
+        <span id="visual-source">Sin fuente visual</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Capa</th><th>Muestras</th><th>Rango</th><th>Método</th><th>Uso permitido</th></tr></thead>
+          <tbody id="visual-coverage"><tr><td colspan="5" class="empty">Esperando captura autorizada</td></tr></tbody>
+        </table>
+      </div>
     </section>
 
     <section class="view" id="view-model">
@@ -163,6 +219,7 @@
         <h3>Fórmula pre-registrada</h3>
         <p>45% atracción de liquidaciones · 35% imbalance bid/ask · 10% posicionamiento contrarian · 10% funding contrarian.</p>
         <p>La fórmula queda fija mientras recolectamos. Después se evaluará contra retornos BTC a 1h, 4h y 12h, incluyendo precisión, calibración, retorno y drawdown.</p>
+        <p>El índice visual es paralelo y no modifica esta fórmula: primero debe acumular snapshots forward y demostrar valor incremental sobre el plan Hobbyist.</p>
       </div>
     </section>
   </main>

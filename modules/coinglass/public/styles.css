@@ -329,6 +329,52 @@ progress::-webkit-progress-value { background: var(--cyan); }
   line-height: 1.5;
 }
 
+.visual-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.visual-status p:last-child {
+  max-width: 760px;
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.freshness {
+  flex: 0 0 130px;
+  text-align: right;
+}
+
+.freshness b, .freshness span { display: block; }
+.freshness b { font-size: 24px; font-variant-numeric: tabular-nums; }
+.freshness span { margin-top: 4px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+
+.visual-score-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 24px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.visual-score-strip > div {
+  min-width: 0;
+  padding: 16px 17px;
+}
+
+.visual-score-strip > div + div { border-left: 1px solid var(--line); }
+.visual-score-strip span, .visual-score-strip small { display: block; }
+.visual-score-strip span { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.visual-score-strip b { display: block; margin-top: 6px; font-size: 17px; white-space: nowrap; }
+.visual-score-strip small { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.chart-frame.visual-levels { height: 440px; }
+
 @media (max-width: 920px) {
   .metric-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .flow-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -342,6 +388,9 @@ progress::-webkit-progress-value { background: var(--cyan); }
   .regime:nth-child(4) { border-left: 0; }
   .regime:nth-child(n + 4) { border-top: 1px solid var(--line); }
   .chart-frame.tall { height: 430px; }
+  .visual-score-strip { grid-template-columns: 1fr 1fr; }
+  .visual-score-strip > div:nth-child(3) { border-left: 0; }
+  .visual-score-strip > div:nth-child(n + 3) { border-top: 1px solid var(--line); }
 }
 
 @media (max-width: 620px) {
@@ -370,6 +419,10 @@ progress::-webkit-progress-value { background: var(--cyan); }
   .chart-frame { height: 240px; }
   .chart-frame.tall { height: 390px; }
   .model-head { align-items: flex-start; }
+  .visual-status { align-items: flex-start; }
+  .visual-score-strip { grid-template-columns: 1fr; }
+  .visual-score-strip > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .chart-frame.visual-levels { height: 380px; }
   .score { flex-basis: 90px; }
   .score b { font-size: 34px; }
   .calibration div { gap: 12px; }
