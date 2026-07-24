@@ -282,11 +282,21 @@ async def bootstrap(profile: Path) -> None:
         )
         page = context.pages[0] if context.pages else await context.new_page()
         await page.goto(MAP_URL, wait_until="domcontentloaded", timeout=90_000)
+        await page.wait_for_selector("canvas", timeout=90_000)
+        await page.wait_for_timeout(4_000)
+        await _dismiss_consent(page)
         print(
             "Ventana CoinGlass lista. Inicie sesion directamente en el navegador; "
             "el bootstrap terminara cuando aparezca el mapa."
         )
-        await page.wait_for_selector("canvas", timeout=20 * 60 * 1000)
+        await page.locator("button:has-text('Continuar con Google'):visible").wait_for(
+            state="hidden",
+            timeout=20 * 60 * 1000,
+        )
+        await page.locator(".MuiModal-backdrop:visible").wait_for(
+            state="hidden",
+            timeout=20 * 60 * 1000,
+        )
         await page.wait_for_timeout(5_000)
         await context.close()
         print("Sesion CoinGlass guardada en el perfil dedicado.")
