@@ -87,6 +87,27 @@ def test_hub_expone_todo_el_workspace():
     assert 'href="#producto"' in html
     assert 'href="#seguridad"' in html
     assert 'rel="icon"' in html
+    assert 'target="_blank" rel="noopener noreferrer"' in html
+    assert "safeHttpUrl(n.url)" in html
+
+
+def test_feed_de_noticias_conserva_solo_enlaces_web(monkeypatch):
+    from modules.trading import dashboard
+
+    rss = """<?xml version="1.0"?>
+    <rss><channel>
+      <item><title>Noticia segura</title><link>https://example.com/article</link></item>
+      <item><title>Noticia sin enlace seguro</title><link>javascript:alert(1)</link></item>
+    </channel></rss>"""
+    monkeypatch.setattr(dashboard, "_FEEDS", [("https://feed.test/rss", "Test", "es")])
+    monkeypatch.setattr(dashboard, "_fetch_text", lambda url: rss)
+    monkeypatch.setattr(dashboard.time, "time", lambda: 1000)
+    dashboard._CACHE.pop("_news_feed", None)
+
+    rows = dashboard._news_feed()
+
+    assert rows[0]["url"] == "https://example.com/article"
+    assert rows[1]["url"] is None
 
 
 def test_modulos_montan_navegacion_global():

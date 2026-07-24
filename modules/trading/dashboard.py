@@ -18,6 +18,7 @@ from __future__ import annotations
 import email.utils
 import json
 import time
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -88,6 +89,18 @@ def _fetch_text(url: str, timeout: float = 10.0):
         return None
 
 
+def _safe_news_url(value: str | None) -> str | None:
+    """Acepta solo enlaces web absolutos provenientes del RSS."""
+    candidate = (value or "").strip()
+    try:
+        parsed = urllib.parse.urlsplit(candidate)
+    except ValueError:
+        return None
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    return candidate
+
+
 def _news_feed(max_keep: int = 6):
     """Titulares cripto recientes de los feeds RSS, ordenados por fecha. Cacheado
     20 min en memoria; tolerante (si un feed cae, sigue con los demás)."""
@@ -109,6 +122,7 @@ def _news_feed(max_keep: int = 6):
             title = (it.findtext("title") or "").strip()
             if not title:
                 continue
+            link = _safe_news_url(it.findtext("link"))
             ts = None
             pub = it.findtext("pubDate")
             if pub:
@@ -120,7 +134,8 @@ def _news_feed(max_keep: int = 6):
             impact = "high" if any(w in low for w in _HOT) else "med"
             age_min = int((now - ts) / 60) if ts else None
             out.append({"title": title, "source": source, "lang": lang,
-                        "ts": ts, "age_min": age_min, "impact": impact})
+                        "url": link, "ts": ts, "age_min": age_min,
+                        "impact": impact})
     # Más recientes primero (los sin fecha al final).
     out.sort(key=lambda x: x["ts"] or 0, reverse=True)
     out = out[:max_keep]

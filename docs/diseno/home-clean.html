@@ -115,7 +115,8 @@
   .livedot.on{background:#0a9d63;box-shadow:0 0 0 0 rgba(10,157,99,.5);animation:pulse 1.8s infinite}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(10,157,99,.45)}70%{box-shadow:0 0 0 6px rgba(10,157,99,0)}100%{box-shadow:0 0 0 0 rgba(10,157,99,0)}}
 
-  .news .it{display:flex;gap:13px;padding:14px 0;border-bottom:1px solid var(--line)}.news .it:last-child{border-bottom:0}
+  .news .it{display:flex;gap:13px;padding:14px 0;border-bottom:1px solid var(--line);text-decoration:none;border-radius:6px;transition:background .15s ease,transform .15s ease}.news .it:last-child{border-bottom:0}
+  .news a.it:hover{background:var(--soft);transform:translateX(3px)}.news a.it:focus-visible{outline:2px solid var(--accent2);outline-offset:3px}
   .news .ti{font-size:14.5px;line-height:1.45;color:var(--ink)}.news .me{font-size:12px;color:var(--muted);margin-top:4px}
   .pin{font-size:10px;font-weight:700;letter-spacing:.5px;padding:4px 8px;border-radius:6px;height:fit-content}
   .pin.hi{color:var(--red);background:#fdeaec}.pin.md{color:var(--amber);background:#fbf2dd}
@@ -486,6 +487,8 @@ const fmtPx=n=>{ if(n==null) return '—'; if(n>=1000) return '$'+n.toLocaleStri
   if(n>=1) return '$'+n.toLocaleString('en-US',{maximumFractionDigits:2}); return '$'+n.toFixed(n<0.01?5:4); };
 const pct=n=>(n>0?'▲ ':n<0?'▼ ':'')+(n>0?'+':'')+n+'%';
 const DAYS=['dom','lun','mar','mié','jue','vie','sáb'];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function safeHttpUrl(value){try{const u=new URL(value);return /^(https?):$/.test(u.protocol)?u.href:''}catch(e){return ''}}
 function rel(min){ const p=min<0, a=Math.abs(min); let s;
   if(a<60) s=a+'m'; else { const h=Math.floor(a/60),m=a%60;
     s = h<24 ? (h+'h'+(m?' '+m+'m':'')) : (Math.floor(h/24)+'d'); }
@@ -561,8 +564,10 @@ async function loadDashboard(){
   const nw=d.news||[];
   if(nw.length){ $('news').innerHTML=nw.map(n=>{ const hi=(n.impact||'')==='high';
     const ago=n.age_min==null?'':(n.age_min<60?'hace '+n.age_min+'m':'hace '+Math.floor(n.age_min/60)+'h');
-    return `<div class="it"><span class="pin ${hi?'hi':'md'}">${hi?'ALTO':'MEDIO'}</span>`
-      +`<div><div class="ti">${n.title}</div><div class="me">${n.source}${ago?' · '+ago:''}</div></div></div>`; }).join(''); }
+    const url=safeHttpUrl(n.url), tag=url?'a':'div';
+    const attrs=url?` href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir noticia: ${esc(n.title)}"`:'';
+    return `<${tag} class="it"${attrs}><span class="pin ${hi?'hi':'md'}">${hi?'ALTO':'MEDIO'}</span>`
+      +`<div><div class="ti">${esc(n.title)}</div><div class="me">${esc(n.source)}${ago?' · '+esc(ago):''}</div></div></${tag}>`; }).join(''); }
 }
 
 async function loadBrief(){
