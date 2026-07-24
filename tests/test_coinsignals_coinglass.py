@@ -271,3 +271,43 @@ def test_backfill_market_history_preserves_forward_bar(monkeypatch, tmp_path):
     assert latest == forward
     assert history == [historical, forward]
     assert json.loads(path.read_text())["history"] == history
+
+
+def test_backfill_gana_el_empate_en_la_misma_barra(monkeypatch, tmp_path):
+    """Misma barra: la fila forward es una captura a MITAD de barra (vela
+    incompleta) y la del backfill es la barra cerrada. Debe ganar el backfill
+    (auditoría 2026-07-24); antes se conservaba la incompleta."""
+    path = tmp_path / "context.json"
+    forward = {
+        "captured_at": "2026-07-24T18:31:00+00:00",   # a mitad de la barra 4h
+        "indicators": {"open_interest": {"times": [100], "close_usd": [10]}},
+    }
+    historical = {
+        "history_origin": "backfill",
+        "captured_at": "2026-07-24T20:00:00+00:00",   # barra cerrada
+        "indicators": {"open_interest": {"times": [100], "close_usd": [17]}},
+    }
+    path.write_text(json.dumps({"latest": forward, "history": [forward]}))
+    monkeypatch.setattr(
+        coinglass, "fetch_historical_contexts", lambda *_a, **_k: [historical]
+    )
+
+    _latest, history = backfill_market_history("key", path)
+
+    assert len(history) == 1, "la misma barra no puede quedar dos veces"
+    assert history[0]["history_origin"] == "backfill"
+    assert history[0]["indicators"]["open_interest"]["close_usd"] == [17]
+
+
+def test_intervalo_observado_se_mide_de_los_datos():
+    """Lo que se pidió no es lo que necesariamente llegó."""
+    from modules.coinsignals.coinglass import _interval_observado
+
+    cuatro_horas = {"times": [0, 14_400_000, 28_800_000, 43_200_000]}
+    assert _interval_observado(cuatro_horas) == "4h"
+
+    una_hora = {"times": [0, 3_600_000, 7_200_000, 10_800_000]}
+    assert _interval_observado(una_hora) == "1h"
+
+    assert _interval_observado({"times": [0]}) is None
+    assert _interval_observado({}) is None

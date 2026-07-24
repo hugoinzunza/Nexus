@@ -144,8 +144,16 @@ def parse_global_management(text: str) -> Optional[dict[str, Any]]:
 
 
 def management_by_signal(
-    history: dict[str, Any], signals: Iterable[Signal]
+    history: dict[str, Any], signals: Iterable[Signal], *, include_global: bool = True
 ) -> dict[int, list[dict[str, Any]]]:
+    """Eventos de gestión por señal.
+
+    `include_global=False` deja SOLO los que responden explícitamente a la señal
+    (`reply_to_msg_id`). El camino global adjunta un mensaje a todas las señales
+    de los últimos 120 días: en el export real son 24 mensajes generando 363
+    vínculos, con sesgo sistemático al alza. Para métricas forward, la atribución
+    heurística no debe contar (auditoría 2026-07-24).
+    """
     signal_ids = {signal.message_id for signal in signals}
     events: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for message in history["messages"]:
@@ -160,11 +168,15 @@ def management_by_signal(
                 "message_id": message["id"],
                 "date": message["date"],
                 "effective_ms": next_bar(timestamp_ms(message["date"])),
+                # Atribución causal: este evento responde explícitamente a ESTA
+                # señal. Ver `global` más abajo para el caso heurístico.
+                "attribution": "reply",
+                "edited": message.get("edit_date") is not None,
                 **parsed,
             }
         )
     max_age_ms = GLOBAL_EVENT_LOOKBACK_DAYS * 86_400_000
-    for message in history["messages"]:
+    for message in history["messages"] if include_global else []:
         if message.get("reply_to_msg_id") is not None or message["id"] in signal_ids:
             continue
         parsed = parse_global_management(message.get("text") or "")
@@ -184,6 +196,13 @@ def management_by_signal(
                     "date": message["date"],
                     "effective_ms": next_bar(event_ms),
                     "source": "global",
+                    # Atribución HEURÍSTICA: el mensaje no responde a esta señal;
+                    # se le adjunta por proximidad temporal. En el export real,
+                    # 24 mensajes generan 363 vínculos (uno llega a 43 señales) y
+                    # el sesgo va siempre al alza porque close_be rescata a BE
+                    # posiciones perdedoras. No debe alimentar la métrica primaria.
+                    "attribution": "global",
+                    "edited": message.get("edit_date") is not None,
                     **parsed,
                 }
             )

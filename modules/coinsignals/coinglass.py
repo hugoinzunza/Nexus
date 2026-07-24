@@ -262,6 +262,8 @@ def fetch_market_context(
     indicators: dict[str, Any] = {}
     errors: dict[str, str] = {}
     intervals: dict[str, str] = {}
+    intervals_observed: dict[str, str] = {}
+    rate_limited: list[str] = []
     quota: dict[str, int] = {}
     for name, path, params in ENDPOINTS:
         selected = {**params, "interval": preferred_interval} if params.get("interval") else params
@@ -283,6 +285,12 @@ def fetch_market_context(
                         )
                     indicators[name] = _summarize(name, payload.get("data"))
                     intervals[name] = attempt.get("interval", "realtime")
+                    # Lo que se PIDIÓ no es necesariamente lo que llegó. Se mide
+                    # el paso real entre marcas de tiempo consecutivas para poder
+                    # detectar una degradación de granularidad del lado servidor.
+                    observado = _interval_observado(indicators[name])
+                    if observado:
+                        intervals_observed[name] = observado
                     for header, field in (
                         ("API-KEY-MAX-LIMIT", "max_per_minute"),
                         ("API-KEY-USE-LIMIT", "used_this_minute"),
@@ -291,10 +299,23 @@ def fetch_market_context(
                         if value and value.isdigit():
                             quota[field] = int(value)
                 break
+            except urllib.error.HTTPError as exc:
+                last_error = f"HTTP {exc.code}: {str(exc)[:140]}"
+                if exc.code == 429:
+                    # Un 429 NO es "el plan no tiene este intervalo": reintentar
+                    # con 4h duplicaba las llamadas justo cuando ya sobrábamos de
+                    # cuota. Se anota como rate limit, se pausa y se corta.
+                    rate_limited.append(name)
+                    time.sleep(_RATE_LIMIT_PAUSE)
+                    break
             except Exception as exc:  # noqa: BLE001
                 last_error = str(exc)[:160]
         if name not in indicators:
             errors[name] = last_error
+        # Espaciado entre endpoints cuando la cuota leída viene apretada.
+        if quota.get("max_per_minute") and quota.get("used_this_minute"):
+            if quota["used_this_minute"] > quota["max_per_minute"] * 0.8:
+                time.sleep(_RATE_LIMIT_PAUSE)
     if not indicators:
         raise RuntimeError(f"all CoinGlass endpoints failed: {errors}")
     return {
@@ -304,6 +325,14 @@ def fetch_market_context(
         "captured_at": captured_at or datetime.now(timezone.utc).isoformat(),
         "symbol": "BTC",
         "intervals": intervals,
+        # Intervalo MEDIDO en los datos que llegaron, no el que se pidió. Si
+        # difiere de `intervals`, la granularidad se degradó del lado servidor.
+        "intervals_observed": intervals_observed,
+        "interval_mismatch": sorted(
+            name for name, pedido in intervals.items()
+            if name in intervals_observed and intervals_observed[name] != pedido
+        ),
+        "rate_limited": rate_limited,
         "indicators": indicators,
         "errors": errors,
         "quota": quota,
@@ -406,7 +435,11 @@ def backfill_market_history(
     existing = store.get("history") if isinstance(store.get("history"), list) else []
     historical = fetch_historical_contexts(api_key, **fetch_options)
     by_bar: dict[int | str, dict[str, Any]] = {}
-    for row in [*historical, *existing]:
+    # Las filas del backfill van DESPUÉS para ganar el empate: para una barra ya
+    # cerrada, el backfill trae la vela completa y la fila forward es una captura
+    # a mitad de barra (incompleta). Antes se conservaba la incompleta. La barra
+    # en curso no está en el backfill, así que su fila forward sobrevive igual.
+    for row in [*existing, *historical]:
         times = row.get("indicators", {}).get("open_interest", {}).get("times", [])
         key = times[-1] if times else row.get("captured_at", "")
         by_bar[key] = row
@@ -436,6 +469,34 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     os.chmod(temp, 0o600)
     temp.replace(path)
+
+
+_RATE_LIMIT_PAUSE = 2.0     # segundos de espera tras un 429 o cuota apretada
+_PASOS_CONOCIDOS = {900_000: "15m", 1_800_000: "30m", 3_600_000: "1h",
+                    14_400_000: "4h", 86_400_000: "1d"}
+
+
+def _interval_observado(indicator: Any) -> str | None:
+    """Paso REAL entre marcas de tiempo consecutivas, como etiqueta ('1h','4h').
+
+    Devuelve None si el indicador no trae `times` o no alcanzan para medir. Se
+    usa la mediana de los deltas para no dejarse llevar por un hueco puntual.
+    """
+    if not isinstance(indicator, dict):
+        return None
+    times = indicator.get("times")
+    if not isinstance(times, list) or len(times) < 3:
+        return None
+    try:
+        marcas = sorted(int(t) for t in times)
+    except (TypeError, ValueError):
+        return None
+    deltas = sorted(b - a for a, b in zip(marcas, marcas[1:]) if b > a)
+    if not deltas:
+        return None
+    paso = deltas[len(deltas) // 2]
+    etiqueta = _PASOS_CONOCIDOS.get(paso)
+    return etiqueta or f"{round(paso / 60_000)}m"
 
 
 def update_market_context(

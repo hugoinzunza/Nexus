@@ -296,3 +296,35 @@ def test_close_be_conserva_la_direccion_que_nombra_el_texto():
     # Sin dirección explícita se mantiene el comportamiento anterior.
     ambiguo = parse_global_management("#BTC close near entry")
     assert ambiguo == {"kind": "close_be", "direction": None}
+
+
+def test_management_puede_excluir_la_atribucion_heuristica():
+    """El camino global reparte un mensaje a todas las señales de 120 días.
+    Para métricas forward debe poder excluirse (auditoría 2026-07-24)."""
+    from research.coinsignals_btc_swing import Signal, management_by_signal
+
+    from research.coinsignals_btc_swing import timestamp_ms
+
+    inicio = "2026-01-01T00:00:00+00:00"
+    señal = Signal(
+        message_id=10, date=inicio, date_ms=timestamp_ms(inicio),
+        edit_date=None, edit_lag_seconds=None, direction="long",
+        symbol="BTCUSDT", asset_class="crypto",
+        entry_first=100.0, entry_second=None, entry_low=99.0, entry_high=101.0,
+        stop=95.0, targets=(110.0,), leverage=None, reply_events=(),
+    )
+    history = {"messages": [
+        {"id": 11, "reply_to_msg_id": 10, "date": "2026-01-02T00:00:00+00:00",
+         "text": "Close #BTC at Entry"},
+        {"id": 12, "reply_to_msg_id": None, "date": "2026-01-03T00:00:00+00:00",
+         "text": "Close #BTC in Profits."},
+    ]}
+
+    con_global = management_by_signal(history, [señal])
+    solo_reply = management_by_signal(history, [señal], include_global=False)
+
+    assert len(con_global[10]) == 2
+    assert [e["attribution"] for e in con_global[10]] == ["reply", "global"]
+    assert len(solo_reply[10]) == 1
+    assert solo_reply[10][0]["attribution"] == "reply"
+    assert solo_reply[10][0]["edited"] is False

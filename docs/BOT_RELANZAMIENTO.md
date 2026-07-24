@@ -144,9 +144,34 @@ El bot simulará (mode=dry) con los filtros. El P&L dry se ve **separado** en el
 panel (`summary().by_mode`); no se mezcla con el P&L live histórico.
 
 ## FASE 2 — Criterio de decisión (pre-registrado; NO moverlo después)
+
+> **Qué puede y qué NO puede certificar esta fase** (auditoría 2026-07-24).
+> El umbral original se mantiene sin tocar, pero hay que ser honesto sobre su
+> alcance: **con 20 trades no se puede distinguir éxito de fracaso.** Con un 70%
+> observado sobre n=20, el intervalo de confianza inferior del win rate es 48% —
+> bajo el umbral de 55%. Se necesitan ~50 trades para separarlos. Y con la
+> muestra de hoy (n=7, 71%) el IC es [36%, 92%] y el del avgR [−0.41, +1.09],
+> o sea contiene el cero.
+>
+> Por eso la Fase 2 se lee como **PUERTA DE SEGURIDAD**, no como prueba de edge:
+> - **¿Está roto?** Eso sí lo responde una muestra chica: fills absurdos, SL que
+>   no dispara, slippage sistemático, idempotencia, reconciliación, doble
+>   apertura. Con 20 trades se ve.
+> - **¿Tiene edge?** Ninguna muestra que se junte en 3 semanas lo responde. Esa
+>   pregunta queda **explícitamente abierta** después de la Fase 2.
+
 Tras **≥20 trades dry o 3 semanas** (lo primero que ocurra):
-- avgR neto > **+0.2R** **Y** win rate ≥ **55%** → pasa a Fase 3.
-- Si no cumple → NO activar live; el edge era in-sample, volver a analizar.
+- avgR neto > **+0.2R** **Y** win rate ≥ **55%** → la puerta de seguridad pasa.
+- Si no cumple → NO activar live; volver a analizar.
+
+**Regla dura de muestra (agregada 2026-07-24, no reemplaza lo anterior):**
+- Si a las 3 semanas hay **menos de 20 trades cerrados**, la respuesta es
+  **"seguir midiendo"**, nunca "evaluar con lo que haya". El reloj no habilita
+  una decisión sin muestra.
+- Al reportar el resultado, publicar el **intervalo de confianza** del win rate
+  y del avgR junto al estimador puntual. Un punto sin intervalo no es evidencia.
+- Ningún resultado de la Fase 2 debe describirse como "la estrategia funciona".
+  Como máximo: "no se detectaron fallas de ejecución en n trades".
 
 ## FASE 3 — LIVE (solo si Fase 2 pasó)
 ```bash

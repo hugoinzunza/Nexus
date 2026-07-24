@@ -80,7 +80,11 @@ def build_snapshot(
             or has_hold_annotation(messages[signal.message_id].get("text") or "")
         )
     ]
-    events = management_by_signal(history, signals)
+    # Solo gestión con atribución CAUSAL (reply a esta señal). El camino global
+    # reparte un mensaje a todas las señales de 120 días —hasta 43 de una vez— y
+    # su sesgo es sistemáticamente al alza. Un libro forward no puede acumularse
+    # sobre atribución heurística (auditoría 2026-07-24).
+    events = management_by_signal(history, signals, include_global=False)
     candles = candles if candles is not None else KlineCache().load("BTCUSDT")
     times = [int(candle["t"]) for candle in candles]
     rows = []
