@@ -4,6 +4,12 @@
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   const sections = [
     {
+      label: "NexUX",
+      links: [
+        { href: "/", text: "Inicio", icon: "NX", match: ["/"] },
+      ],
+    },
+    {
       label: "Mercado",
       links: [
         { href: "/m/trading/", text: "Trading", icon: "TV", match: ["/m/trading"] },
@@ -34,6 +40,9 @@
 
   function isActive(item) {
     const matches = item.match || [];
+    if (item.href === "/") {
+      return path === "/";
+    }
     if (item.href === "/m/trading/") {
       return path === "/m/trading";
     }

@@ -110,3 +110,6 @@ def test_modulos_montan_navegacion_global():
         html = (root / page).read_text(encoding="utf-8")
         assert "/static/nexux-shell.css" in html, page
         assert "/static/nexux-shell.js" in html, page
+
+    shell = (root / "static/nexux-shell.js").read_text(encoding="utf-8")
+    assert '{ href: "/", text: "Inicio"' in shell
