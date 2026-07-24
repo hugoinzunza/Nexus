@@ -202,6 +202,7 @@ def _compact_context(context: dict[str, Any]) -> dict[str, Any]:
     oi_prev = _float(oi[-2]) if len(oi) > 1 else None
     return {
         "time": context.get("captured_at"),
+        "origin": context.get("history_origin", "forward"),
         "bar_time": (open_interest.get("times") or [None])[-1],
         "price": price_now,
         "price_change_pct": round((price_now / price_prev - 1) * 100, 4)
@@ -370,7 +371,12 @@ def build_dashboard(
         compact = _compact_context(row)
         key = compact.get("bar_time") or compact.get("time")
         by_bar[key] = compact
-    history = list(by_bar.values())[-540:]
+    history = list(by_bar.values())[-1100:]
+    historical_observations = sum(
+        row.get("origin") == "backfill" for row in history
+    )
+    forward_observations = len(history) - historical_observations
+    pressure = _pressure(basic, advanced)
     return {
         "research_only": True,
         "execution_enabled": False,
@@ -382,10 +388,16 @@ def build_dashboard(
         "history": history,
         "advanced": advanced,
         "experimental_pressure": {
-            **_pressure(basic, advanced),
+            **pressure,
             "observations": len(history),
+            "historical_observations": historical_observations,
+            "forward_observations": forward_observations,
             "minimum_for_calibration": 100,
-            "status": "collecting" if len(history) < 100 else "ready_for_backtest",
+            "status": (
+                "model_incomplete" if pressure["score"] is None
+                else "collecting" if len(history) < 100
+                else "ready_for_backtest"
+            ),
         },
     }
 

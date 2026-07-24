@@ -200,6 +200,31 @@ def test_dashboard_classifies_price_oi_flow_and_cross_exchange_context():
     assert dashboard["history"][0]["taker_buy_pct"] == 46
 
 
+def test_dashboard_separates_backfill_from_forward_observations():
+    historical = {
+        "history_origin": "backfill",
+        "captured_at": "2026-07-24T12:00:00+00:00",
+        "indicators": {"open_interest": {"close_usd": [100], "times": [1]}},
+    }
+    forward = {
+        "captured_at": "2026-07-24T16:00:00+00:00",
+        "indicators": {"open_interest": {"close_usd": [101], "times": [2]}},
+    }
+
+    dashboard = build_dashboard(
+        forward,
+        [historical, forward],
+        {"price": 65_000, "capabilities": {}},
+    )
+    model = dashboard["experimental_pressure"]
+
+    assert model["observations"] == 2
+    assert model["historical_observations"] == 1
+    assert model["forward_observations"] == 1
+    assert model["status"] == "model_incomplete"
+    assert [row["origin"] for row in dashboard["history"]] == ["backfill", "forward"]
+
+
 def test_dashboard_cache_avoids_requery_and_never_persists_key(tmp_path):
     basic = {
         "captured_at": "2026-07-24T15:00:00+00:00",

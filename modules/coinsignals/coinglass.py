@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -43,6 +44,10 @@ ENDPOINTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ("orderbook_aggregated", "/api/futures/orderbook/aggregated-ask-bids-history",
      {"exchange_list": "Binance,OKX,Bybit", "symbol": "BTC", "interval": "1h",
       "range": "1", "limit": 4}),
+)
+
+HISTORICAL_ENDPOINTS = tuple(
+    endpoint for endpoint in ENDPOINTS if endpoint[2].get("interval")
 )
 
 
@@ -303,6 +308,118 @@ def fetch_market_context(
         "errors": errors,
         "quota": quota,
     }
+
+
+def fetch_historical_contexts(
+    api_key: str,
+    *,
+    opener: Callable[..., Any] = urllib.request.urlopen,
+    now: datetime | None = None,
+    days: int = 180,
+    window_days: int = 90,
+    interval: str = "4h",
+    pause_seconds: float = 0,
+) -> list[dict[str, Any]]:
+    """Fetch aligned, causal historical contexts without counting them as forward."""
+    if not api_key.strip():
+        raise ValueError("CoinGlass API key is required")
+    now = now or datetime.now(timezone.utc)
+    start = now - timedelta(days=days)
+    raw_by_indicator: dict[str, dict[int, dict[str, Any]]] = {}
+    intervals: dict[str, str] = {}
+
+    for name, path, base_params in HISTORICAL_ENDPOINTS:
+        by_time: dict[int, dict[str, Any]] = {}
+        cursor = start
+        while cursor < now:
+            window_end = min(cursor + timedelta(days=window_days), now)
+            params = {
+                **base_params,
+                "interval": interval,
+                "limit": 1000,
+                "start_time": int(cursor.timestamp() * 1000),
+                "end_time": int(window_end.timestamp() * 1000),
+            }
+            request = urllib.request.Request(
+                f"{BASE_URL}{path}?{urllib.parse.urlencode(params)}",
+                headers={"accept": "application/json", "CG-API-KEY": api_key},
+            )
+            with opener(request, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if str(payload.get("code")) != "0":
+                raise RuntimeError(
+                    f"{name}: {payload.get('msg') or payload.get('code')}"
+                )
+            for row in payload.get("data", []):
+                if isinstance(row, dict) and row.get("time"):
+                    by_time[int(row["time"])] = row
+            cursor = window_end
+            if pause_seconds:
+                time.sleep(pause_seconds)
+        raw_by_indicator[name] = by_time
+        intervals[name] = interval
+
+    anchor_times = sorted(raw_by_indicator.get("open_interest", {}))
+    summaries: dict[str, dict[int, dict[str, Any]]] = {}
+    for name, by_time in raw_by_indicator.items():
+        ordered = sorted(by_time.items())
+        summaries[name] = {}
+        for index, (timestamp, row) in enumerate(ordered):
+            prior = ordered[index - 1][1] if index else None
+            summaries[name][timestamp] = _summarize(
+                name, [prior, row] if prior is not None else [row]
+            )
+
+    contexts = []
+    for timestamp in anchor_times:
+        indicators = {
+            name: values[timestamp]
+            for name, values in summaries.items()
+            if timestamp in values
+        }
+        if "price" not in indicators or "open_interest" not in indicators:
+            continue
+        contexts.append({
+            "research_only": True,
+            "history_origin": "backfill",
+            "source": "coinglass_v4",
+            "status": "ok",
+            "captured_at": datetime.fromtimestamp(
+                timestamp / 1000, timezone.utc
+            ).isoformat(),
+            "symbol": "BTC",
+            "intervals": intervals,
+            "indicators": indicators,
+            "errors": {},
+            "quota": {},
+        })
+    return contexts
+
+
+def backfill_market_history(
+    api_key: str,
+    path: Path,
+    **fetch_options: Any,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    store = _read_store(path)
+    latest = store.get("latest") if isinstance(store.get("latest"), dict) else {}
+    existing = store.get("history") if isinstance(store.get("history"), list) else []
+    historical = fetch_historical_contexts(api_key, **fetch_options)
+    by_bar: dict[int | str, dict[str, Any]] = {}
+    for row in [*historical, *existing]:
+        times = row.get("indicators", {}).get("open_interest", {}).get("times", [])
+        key = times[-1] if times else row.get("captured_at", "")
+        by_bar[key] = row
+    history = sorted(
+        by_bar.values(),
+        key=lambda row: row.get("captured_at", ""),
+    )[-HISTORY_LIMIT:]
+    _atomic_json(path, {
+        "research_only": True,
+        "latest": latest,
+        "history": history,
+    })
+    return latest, history
 
 
 def _read_store(path: Path) -> dict[str, Any]:

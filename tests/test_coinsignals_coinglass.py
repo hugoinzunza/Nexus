@@ -1,7 +1,14 @@
 import json
 from datetime import datetime, timedelta, timezone
+from urllib.parse import parse_qs, urlparse
 
-from modules.coinsignals.coinglass import fetch_market_context, update_market_context
+import modules.coinsignals.coinglass as coinglass
+from modules.coinsignals.coinglass import (
+    backfill_market_history,
+    fetch_historical_contexts,
+    fetch_market_context,
+    update_market_context,
+)
 
 
 class FakeResponse:
@@ -203,3 +210,64 @@ def test_update_market_context_refreshes_after_five_minutes(tmp_path):
 
     assert latest == fresh
     assert history == [stale, fresh]
+
+
+def test_fetch_historical_contexts_aligns_windows_and_marks_backfill(monkeypatch):
+    monkeypatch.setattr(coinglass, "HISTORICAL_ENDPOINTS", (
+        ("price", "/price", {"symbol": "BTCUSDT", "interval": "1h"}),
+        ("open_interest", "/oi", {"symbol": "BTC", "interval": "1h"}),
+    ))
+
+    def opener(request, timeout):
+        assert timeout == 30
+        query = parse_qs(urlparse(request.full_url).query)
+        timestamp = int(query["start_time"][0]) + 4 * 60 * 60 * 1000
+        if "/price" in request.full_url:
+            row = {
+                "time": timestamp, "open": 100, "high": 102,
+                "low": 99, "close": 101, "volume_usd": 1_000_000,
+            }
+        else:
+            row = {"time": timestamp, "close": 1_000_000}
+        return FakeResponse({"code": "0", "data": [row]})
+
+    rows = fetch_historical_contexts(
+        "key",
+        opener=opener,
+        now=datetime(2026, 7, 24, tzinfo=timezone.utc),
+        days=2,
+        window_days=1,
+    )
+
+    assert len(rows) == 2
+    assert all(row["history_origin"] == "backfill" for row in rows)
+    assert all(row["intervals"] == {"price": "4h", "open_interest": "4h"} for row in rows)
+    assert rows[1]["indicators"]["price"]["candles"][-1]["close"] == 101
+    assert rows[1]["indicators"]["open_interest"]["close_usd"] == [
+        1_000_000.0, 1_000_000.0,
+    ]
+
+
+def test_backfill_market_history_preserves_forward_bar(monkeypatch, tmp_path):
+    path = tmp_path / "context.json"
+    forward = {
+        "captured_at": "2026-07-24T16:00:00+00:00",
+        "indicators": {"open_interest": {"times": [2]}},
+    }
+    historical = {
+        "history_origin": "backfill",
+        "captured_at": "2026-07-23T16:00:00+00:00",
+        "indicators": {"open_interest": {"times": [1]}},
+    }
+    path.write_text(json.dumps({"latest": forward, "history": [forward]}))
+    monkeypatch.setattr(
+        coinglass,
+        "fetch_historical_contexts",
+        lambda *_args, **_kwargs: [historical],
+    )
+
+    latest, history = backfill_market_history("key", path)
+
+    assert latest == forward
+    assert history == [historical, forward]
+    assert json.loads(path.read_text())["history"] == history

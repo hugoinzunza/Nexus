@@ -378,8 +378,10 @@ function renderModel() {
   scoreBox.querySelector("b").className = Number.isFinite(score) ? score >= 15 ? "up" : score <= -15 ? "down" : "" : "";
   scoreBox.querySelector("span").textContent = model.label || "sin datos";
   const observations = Number(model.observations || 0);
+  const historical = Number(model.historical_observations || 0);
+  const forward = Number(model.forward_observations || 0);
   const minimum = Number(model.minimum_for_calibration || 100);
-  $("calibration-label").textContent = `${observations} / ${minimum} barras 4h`;
+  $("calibration-label").textContent = `${historical} históricas · ${forward} forward`;
   $("calibration-progress").max = minimum;
   $("calibration-progress").value = Math.min(observations, minimum);
   const c = model.components || {};
