@@ -171,7 +171,7 @@ function renderFlow() {
     metric("Top cuentas long", topAccounts == null ? "—" : `${fmt(topAccounts)}%`) +
     metric("Top posiciones long", topPositions == null ? "—" : `${fmt(topPositions)}%`) +
     metric("Funding OI / Vol", fundingOi == null && fundingVolume == null ? "—" : `${signed(fundingOi, "%", 4)} / ${signed(fundingVolume, "%", 4)}`) +
-    metric("Book Binance / agregado", `${fmt(bookBinance)} / ${fmt(bookAll)}`);
+    metric("Book B/A · Bin/agg", `${fmt(bookBinance)} / ${fmt(bookAll)}`);
 
   const oiData = basic.open_interest_exchanges || {};
   const oiRows = oiData.exchanges || [];
@@ -410,16 +410,23 @@ function render(data) {
   renderModel();
 }
 
-document.querySelectorAll(".tabs button").forEach((button) => {
-  button.addEventListener("click", () => {
+function activateTab(button) {
+  if (!button) return;
     document.querySelectorAll(".tabs button").forEach((item) => item.classList.toggle("active", item === button));
     document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === `view-${button.dataset.tab}`));
     requestAnimationFrame(() => {
+      if (!state) return;
       if (button.dataset.tab === "overview") renderOverview();
       if (button.dataset.tab === "flow") renderFlow();
       if (button.dataset.tab === "liquidations") renderLiquidations();
       if (button.dataset.tab === "orderbook") renderOrderbook();
     });
+}
+
+document.querySelectorAll(".tabs button").forEach((button) => {
+  button.addEventListener("click", () => {
+    activateTab(button);
+    history.replaceState(null, "", `#${button.dataset.tab}`);
   });
 });
 
@@ -440,3 +447,6 @@ window.addEventListener("resize", () => {
 fetch("api/state").then((response) => response.json()).then(render).catch(() => {
   $("updated").textContent = "No se pudo cargar el snapshot";
 });
+
+const initialTab = document.querySelector(`[data-tab="${location.hash.slice(1)}"]`);
+if (initialTab) activateTab(initialTab);

@@ -165,7 +165,7 @@ def _summarize(name: str, rows: Any) -> dict[str, Any]:
             })
         return {
             "exchanges": sorted(
-                exchanges,
+                (row for row in exchanges if row["exchange"].lower() != "all"),
                 key=lambda row: row["long_musd"] + row["short_musd"],
                 reverse=True,
             )[:10],

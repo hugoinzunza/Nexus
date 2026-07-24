@@ -136,6 +136,7 @@ h3 { font-size: 14px; }
 
 .flow-metrics .metric:nth-child(4n + 1) { border-left: 0; }
 .flow-metrics .metric:nth-child(n + 5) { border-top: 1px solid var(--line); }
+.flow-metrics .metric b { white-space: normal; overflow-wrap: anywhere; }
 
 .flow-grid {
   display: grid;
@@ -347,7 +348,13 @@ progress::-webkit-progress-value { background: var(--cyan); }
   main { padding: 24px 14px 48px; }
   .topbar { padding: 0 14px; }
   .back { display: none; }
-  .workspace-head { align-items: flex-start; }
+  .workspace-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .price-block { text-align: left; }
   .price-block strong { font-size: 20px; }
   .tabs { overflow-x: auto; }
   .tabs button { flex: 0 0 auto; padding: 11px 12px; }
@@ -357,8 +364,8 @@ progress::-webkit-progress-value { background: var(--cyan); }
   .metric:nth-child(odd), .level-summary div:nth-child(odd), .components article:nth-child(odd) { border-left: 0; }
   .metric:nth-child(n + 3), .level-summary div:nth-child(n + 3), .components article:nth-child(n + 3) { border-top: 1px solid var(--line); }
   .metric:nth-child(4) { border-left: 1px solid var(--line); }
-  .section-head { align-items: flex-start; }
-  .section-head > span { max-width: 130px; text-align: right; }
+  .section-head { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+  .section-head > span { flex: 0 0 100%; max-width: 100%; text-align: left; }
   .capabilities { grid-template-columns: 1fr; }
   .chart-frame { height: 240px; }
   .chart-frame.tall { height: 390px; }
