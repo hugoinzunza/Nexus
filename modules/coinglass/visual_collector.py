@@ -287,16 +287,24 @@ async def bootstrap(profile: Path) -> None:
         await _dismiss_consent(page)
         print(
             "Ventana CoinGlass lista. Inicie sesion directamente en el navegador; "
-            "el bootstrap terminara cuando aparezca el mapa."
+            "el bootstrap terminara cuando CoinGlass confirme la sesion."
         )
-        await page.locator(
+        google_button = page.locator(
             "button:has-text('Continuar con Google'):visible"
-        ).first.wait_for(
-            state="hidden",
-            timeout=20 * 60 * 1000,
-        )
-        await page.locator(".MuiModal-backdrop:visible").wait_for(
-            state="hidden",
+        ).first
+        await google_button.click(timeout=10_000)
+        await page.wait_for_function(
+            """() => {
+                const visible = (element) => {
+                    const style = getComputedStyle(element);
+                    const box = element.getBoundingClientRect();
+                    return style.visibility !== "hidden" && style.display !== "none"
+                        && box.width > 0 && box.height > 0;
+                };
+                return [...document.querySelectorAll("button")]
+                    .filter(visible)
+                    .every((button) => !button.textContent.includes("Iniciar sesión"));
+            }""",
             timeout=20 * 60 * 1000,
         )
         await page.wait_for_timeout(5_000)
