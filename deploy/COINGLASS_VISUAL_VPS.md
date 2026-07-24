@@ -20,7 +20,10 @@ cd /home/hugo/Nexus
 python3 -m venv .venv-coinglass
 .venv-coinglass/bin/pip install -r deploy/requirements-coinglass-visual.txt
 .venv-coinglass/bin/playwright install --with-deps chromium
-mkdir -p ~/.config/nexux/coinglass-visual-profile data
+curl -fL -o /tmp/google-chrome.deb \
+  https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+sudo apt-get install -y /tmp/google-chrome.deb xvfb
+mkdir -p ~/.config/nexux/coinglass-visual-profile ~/.cache/nexux data
 chmod 700 ~/.config/nexux/coinglass-visual-profile
 ```
 
@@ -41,16 +44,19 @@ set -a; source deploy/collector.env; set +a
 ```
 
 Si CoinGlass exige login, se abre una única vez el perfil dedicado dentro de
-una sesión gráfica/VNC privada del VPS:
+una sesión gráfica/VNC privada del VPS. El OAuth se hace con Chrome estable,
+no con Chrome for Testing:
 
 ```bash
-DISPLAY=:99 .venv-coinglass/bin/python3 \
-  modules/coinglass/visual_collector.py --bootstrap
+DISPLAY=:99 google-chrome-stable --no-sandbox --disable-dev-shm-usage \
+  --password-store=basic \
+  --user-data-dir="$HOME/.config/nexux/coinglass-visual-profile" \
+  "https://www.coinglass.com/es/pro/futures/LiquidationMap"
 ```
 
 El usuario inicia sesión directamente en CoinGlass; NexUX no recibe ni almacena
-la contraseña. El bootstrap termina cuando aparece el canvas del mapa. Después,
-el timer reutiliza ese perfil en headless.
+la contraseña. Después se cierra Chrome y el timer reutiliza ese perfil en un
+display virtual aislado. El servicio falla cerrado si la sesión vence.
 
 ## Activación
 
@@ -68,6 +74,9 @@ Solo si el primer snapshot muestra cobertura válida:
 sudo systemctl enable --now nexus-coinglass-visual.timer
 systemctl list-timers nexus-coinglass-visual.timer
 ```
+
+La ejecución programada usa Chrome estable con `xvfb-run --headed`; CoinGlass
+no renderiza estas capas de canvas de forma fiable en headless.
 
 ## Rollback
 
