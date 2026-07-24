@@ -289,27 +289,9 @@ async def bootstrap(profile: Path) -> None:
             "Ventana CoinGlass lista. Inicie sesion directamente en el navegador; "
             "el bootstrap terminara cuando CoinGlass confirme la sesion."
         )
-        google_button = page.locator(
-            "button:has-text('Continuar con Google'):visible"
-        ).first
-        await google_button.click(timeout=10_000)
-        await page.wait_for_function(
-            """() => {
-                const visible = (element) => {
-                    const style = getComputedStyle(element);
-                    const box = element.getBoundingClientRect();
-                    return style.visibility !== "hidden" && style.display !== "none"
-                        && box.width > 0 && box.height > 0;
-                };
-                return [...document.querySelectorAll("button")]
-                    .filter(visible)
-                    .every((button) => !button.textContent.includes("Iniciar sesión"));
-            }""",
-            timeout=20 * 60 * 1000,
-        )
-        await page.wait_for_timeout(5_000)
+        await page.wait_for_timeout(20 * 60 * 1000)
         await context.close()
-        print("Sesion CoinGlass guardada en el perfil dedicado.")
+        print("Bootstrap CoinGlass cerrado; el perfil dedicado quedo persistido.")
 
 
 def publish(snapshot: dict[str, Any], remote_url: str, token: str) -> None:
