@@ -111,6 +111,7 @@ def test_dashboard_is_research_only_and_pressure_is_transparent():
         "indicators": {
             "funding": {"close_pct": [0.01]},
             "open_interest": {"close_usd": [100, 101]},
+            "liquidations": {"bars": [{"long_musd": 3, "short_musd": 1}]},
             "top_traders": {"long_pct": [60]},
             "orderbook": {"bid_ask_ratio": [2]},
         },
@@ -141,6 +142,7 @@ def test_dashboard_is_research_only_and_pressure_is_transparent():
         "funding_contrarian",
     }
     assert dashboard["basic_analysis"]["leverage"] == "apalancamiento entrando"
+    assert dashboard["basic_analysis"]["liquidations"] == "flush de longs"
     assert dashboard["basic_analysis"]["positioning"] == "top traders cargados long"
 
 

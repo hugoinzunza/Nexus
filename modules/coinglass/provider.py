@@ -211,7 +211,8 @@ def _compact_context(context: dict[str, Any]) -> dict[str, Any]:
 def _basic_analysis(basic: dict[str, Any]) -> dict[str, Any]:
     compact = _compact_context(basic)
     indicators = basic.get("indicators", {})
-    liquidation = _latest(indicators.get("liquidations", {}).get("bars"))
+    liquidation_rows = indicators.get("liquidations", {}).get("bars", [])
+    liquidation = liquidation_rows[-1] if isinstance(liquidation_rows, list) and liquidation_rows else None
     funding = compact.get("funding_pct")
     oi_change = compact.get("oi_change_pct")
     top_long = compact.get("top_long_pct")
