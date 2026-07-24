@@ -510,25 +510,43 @@ function component(label, value) {
 }
 
 function renderModel() {
-  const model = state.experimental_pressure || {};
+  const apiModel = state.experimental_pressure || {};
+  const visual = state.visual_indicator || {};
+  const hasVisual = visual.score != null;
+  const model = hasVisual ? visual : apiModel;
   const score = model.score == null ? null : Number(model.score);
   const scoreBox = $("pressure-score");
   scoreBox.querySelector("b").textContent = Number.isFinite(score) ? signed(score, "", 1) : "—";
-  scoreBox.querySelector("b").className = Number.isFinite(score) ? score >= 15 ? "up" : score <= -15 ? "down" : "" : "";
+  scoreBox.querySelector("b").className = Number.isFinite(score) ? score >= 18 ? "up" : score <= -18 ? "down" : "" : "";
   scoreBox.querySelector("span").textContent = model.label || "sin datos";
-  const observations = Number(model.observations || 0);
-  const historical = Number(model.historical_observations || 0);
-  const forward = Number(model.forward_observations || 0);
-  const minimum = Number(model.minimum_for_calibration || 100);
-  $("calibration-label").textContent = `${historical} históricas · ${forward} forward`;
+  const visualForward = Number(state.visual_shadow?.decisions || 0);
+  const apiForward = Number(apiModel.forward_observations || 0);
+  const observations = hasVisual ? visualForward : Number(apiModel.observations || 0);
+  const minimum = hasVisual ? 2016 : Number(apiModel.minimum_for_calibration || 100);
+  $("calibration-label").textContent = hasVisual
+    ? `${visualForward} capturas visuales forward · ${apiForward} API forward`
+    : `${Number(apiModel.historical_observations || 0)} históricas · ${apiForward} forward`;
   $("calibration-progress").max = minimum;
   $("calibration-progress").value = Math.min(observations, minimum);
-  const c = model.components || {};
-  $("model-components").innerHTML =
-    component("Atracción liquidaciones", c.liquidation_attraction) +
-    component("Imbalance order book", c.orderbook_imbalance) +
-    component("Posicionamiento contrarian", c.positioning_contrarian) +
-    component("Funding contrarian", c.funding_contrarian);
+  const visualComponents = visual.components || {};
+  const apiComponents = apiModel.components || {};
+  $("model-components").innerHTML = hasVisual
+    ? component("Heatmap: atracción", visualComponents.heatmap_attraction) +
+      component("Mapa: atracción", visualComponents.map_attraction) +
+      component("Delta del libro", visualComponents.depth_delta) +
+      component("Muros ballena · observación", visualComponents.whale_bid_pressure) +
+      component("Posicionamiento contrarian", apiComponents.positioning_contrarian) +
+      component("Funding contrarian", apiComponents.funding_contrarian)
+    : component("Atracción liquidaciones", apiComponents.liquidation_attraction) +
+      component("Imbalance order book", apiComponents.orderbook_imbalance) +
+      component("Posicionamiento contrarian", apiComponents.positioning_contrarian) +
+      component("Funding contrarian", apiComponents.funding_contrarian);
+  $("radar-method").textContent = hasVisual
+    ? "El índice combina mapa, heatmap y delta visual. Los muros ballena se muestran en paralelo y todavía no alteran el puntaje."
+    : "45% atracción de liquidaciones · 35% imbalance bid/ask · 10% posicionamiento contrarian · 10% funding contrarian.";
+  $("radar-validation").textContent = hasVisual
+    ? "Recolectaremos al menos 2.016 capturas forward antes de evaluar valor predictivo a 1h, 4h y 12h. Research only: no habilita órdenes."
+    : "La fórmula queda fija mientras recolectamos. Después se evaluará contra retornos BTC a 1h, 4h y 12h.";
 }
 
 function render(data) {

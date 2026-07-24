@@ -204,22 +204,22 @@
     <section class="view" id="view-model">
       <div class="model-head">
         <div>
-          <p class="eyebrow">MODELO 0 · NO VALIDADO</p>
-          <h2>Presión de microestructura</h2>
-          <p class="model-copy">Combina atracción de liquidaciones, imbalance del libro, funding y posicionamiento. No es una señal hasta superar la calibración forward.</p>
+          <p class="eyebrow">RADAR VISUAL V1 · NO VALIDADO</p>
+          <h2>Contexto de microestructura</h2>
+          <p class="model-copy">Integra las capas visuales autorizadas con el contexto del plan API. Mide atracción y presión; no es una señal de trading.</p>
         </div>
         <div class="score" id="pressure-score"><b>—</b><span>sin datos</span></div>
       </div>
       <div class="calibration">
-        <div><span id="calibration-label">0 históricas · 0 forward</span><span>histórico no equivale a validación</span></div>
-        <progress id="calibration-progress" max="100" value="0"></progress>
+        <div><span id="calibration-label">0 capturas visuales forward</span><span>captura no equivale a validación</span></div>
+        <progress id="calibration-progress" max="2016" value="0"></progress>
       </div>
       <div class="components" id="model-components"></div>
       <div class="method">
-        <h3>Fórmula pre-registrada</h3>
-        <p>45% atracción de liquidaciones · 35% imbalance bid/ask · 10% posicionamiento contrarian · 10% funding contrarian.</p>
-        <p>La fórmula queda fija mientras recolectamos. Después se evaluará contra retornos BTC a 1h, 4h y 12h, incluyendo precisión, calibración, retorno y drawdown.</p>
-        <p>El índice visual es paralelo y no modifica esta fórmula: primero debe acumular snapshots forward y demostrar valor incremental sobre el plan Hobbyist.</p>
+        <h3>Método pre-registrado</h3>
+        <p id="radar-method">Esperando la primera captura visual autorizada.</p>
+        <p id="radar-validation">La evaluación medirá precisión, calibración, retorno y drawdown contra BTC.</p>
+        <p>Los muros pueden retirarse o ser spoofing; por eso permanecen observacionales hasta demostrar valor incremental.</p>
       </div>
     </section>
   </main>

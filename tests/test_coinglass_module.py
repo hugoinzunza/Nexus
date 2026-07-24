@@ -304,10 +304,13 @@ def test_panel_exposes_real_research_views_and_no_signal_language():
     assert "Mapa de liquidaciones" in html
     assert "Libro de órdenes" in html
     assert "Radar" in html
+    assert "RADAR VISUAL V1" in html
+    assert "visual_indicator" in script
+    assert "2.016 capturas forward" in script
     assert "Flujo 4h" in html
     assert "Open interest por exchange" in html
-    assert "MODELO 0 · NO VALIDADO" in html
-    assert "No es una señal" in html
+    assert "RADAR VISUAL V1 · NO VALIDADO" in html
+    assert "no es una señal de trading" in html
     assert "drawLevelMap" in script
     assert "drawLiquidationHeatmap" in script
     assert "drawOrderbook" in script
