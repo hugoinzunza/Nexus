@@ -96,6 +96,14 @@ def snapshot():
                     "market": "S",
                     "exchange": "binance",
                 },
+                {
+                    "side": "ask",
+                    "price": 65_500,
+                    "amount_usd": 1_290_000,
+                    "duration": "3m 10s",
+                    "market": "S",
+                    "exchange": "binance",
+                },
             ],
         },
         "provenance": {
@@ -118,7 +126,7 @@ def test_visual_snapshot_is_normalized_and_never_enables_execution():
     assert clean["source"] == "coinglass_authorized_browser"
     assert clean["symbol"] == "BTCUSDT"
     assert len(clean["liquidation_heatmap"]["levels"]) == 8
-    assert len(clean["whale_orders"]["rows"]) == 3
+    assert len(clean["whale_orders"]["rows"]) == 4
     assert build_visual_indicator(clean, now=NOW)["execution_enabled"] is False
 
 
@@ -134,7 +142,7 @@ def test_visual_indicator_exposes_nearest_levels_and_decelerating_depth():
     assert indicator["depth"]["decelerating"] is True
     assert indicator["components"]["whale_bid_pressure"] > 0
     assert indicator["levels"]["nearest_whale_ask"]["price"] == 64_750
-    assert indicator["coverage"]["whale_orders"] == 3
+    assert indicator["coverage"]["whale_orders"] == 4
     assert -100 <= indicator["score"] <= 100
     assert "no predice" in indicator["warning"]
 
@@ -205,7 +213,7 @@ def test_visual_whale_order_parser_uses_side_exchange_and_duration():
         "amount_usd": 78_600_000,
         "duration": "1D 3H",
         "market": "S",
-        "exchange": "coinbase pro",
+        "exchange": "Coinbase",
     }
 
 

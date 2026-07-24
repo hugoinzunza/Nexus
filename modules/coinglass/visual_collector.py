@@ -26,6 +26,10 @@ DEFAULT_PROFILE = Path.home() / ".config/nexux/coinglass-visual-profile"
 COLLECTOR_VERSION = "0.2.0"
 MONEY_RE = re.compile(r"([-+]?\$?\s*[\d.,]+)\s*([KMB])?", re.IGNORECASE)
 BINANCE_PRICE_URL = "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT"
+EXCHANGE_ALIASES = {
+    "270": "Binance",
+    "coinbase pro": "Coinbase",
+}
 
 
 def _number(raw: str) -> float | None:
@@ -142,6 +146,7 @@ def parse_whale_order(
     if price is None or price <= 0 or amount is None or amount <= 0 or side is None:
         return None
     exchange = unquote(Path(urlparse(exchange_src).path).stem) if exchange_src else "unknown"
+    exchange = EXCHANGE_ALIASES.get(exchange, exchange)
     return {
         "side": side,
         "price": price,
@@ -275,12 +280,13 @@ async def _open_chart(page, url: str) -> None:
 
 async def _collect_whale_orders(page) -> list[dict[str, Any]]:
     checkbox = page.locator("input[type=checkbox]").first
-    try:
-        if await checkbox.is_checked(timeout=1_000):
-            await checkbox.uncheck(force=True)
-            await page.wait_for_timeout(2_500)
-    except Exception:  # noqa: BLE001
-        pass
+    if await page.locator("input[type=checkbox]").count() < 1:
+        raise RuntimeError("CoinGlass no expuso el control de ordenes canceladas")
+    if await checkbox.is_checked(timeout=1_000):
+        await checkbox.uncheck(force=True)
+        await page.wait_for_timeout(2_500)
+    if await checkbox.is_checked(timeout=1_000):
+        raise RuntimeError("No fue posible excluir ordenes ballena canceladas")
     rows = page.locator(".large-order-item")
     parsed: dict[tuple[str, int, int, str], dict[str, Any]] = {}
     for index in range(await rows.count()):
@@ -365,11 +371,12 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
         whale_rows = await _collect_whale_orders(page)
         await context.close()
 
-    if len(map_rows) < 4 or len(heatmap_rows) < 4:
+    if len(map_rows) < 4 or len(heatmap_rows) < 4 or len(whale_rows) < 4:
         raise RuntimeError(
             "Cobertura insuficiente "
             f"(map={len(map_rows)}, heatmap={len(heatmap_rows)}, "
-            f"depth={len(depth_rows)}); revise login, plan o cambios visuales"
+            f"depth={len(depth_rows)}, whale={len(whale_rows)}); "
+            "revise login, plan o cambios visuales"
         )
     current_price = public_btc_price()
 

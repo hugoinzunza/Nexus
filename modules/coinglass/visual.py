@@ -111,6 +111,7 @@ def normalize_visual_snapshot(
             "price": round(point_price, 2),
         })
 
+    has_whale_section = "whale_orders" in snapshot
     whale_data = snapshot.get("whale_orders") or {
         "active_only": True,
         "rows": [],
@@ -136,6 +137,8 @@ def normalize_visual_snapshot(
             "market": str(row.get("market") or "unknown")[:20],
             "exchange": str(row.get("exchange") or "unknown")[:80],
         })
+    if has_whale_section and len(whale_orders) < 4:
+        raise VisualSnapshotError("cobertura insuficiente de ordenes ballena")
 
     if len(map_levels) < 4 or len(heatmap_levels) < 4:
         raise VisualSnapshotError("cobertura insuficiente del mapa visual")
