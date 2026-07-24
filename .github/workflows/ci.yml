@@ -26,4 +26,4 @@ jobs:
           pip install -r requirements.txt
           pip install pytest
       - name: Smoke tests (import de la app + bóveda)
-        run: pytest -q tests/
+        run: python -m pytest -q tests/
