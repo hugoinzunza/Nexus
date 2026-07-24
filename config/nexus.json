@@ -49,6 +49,10 @@
       "quality_poi_tfs": ["1h", "4h", "1D"],
       "quality_require_disc": false,
       "one_position_at_a_time": false
+    },
+    "coinsignals": {
+      "enabled": true,
+      "forward_start": "2026-07-22T00:00:00+00:00"
     }
   }
 }

@@ -24,6 +24,8 @@ def test_import_core_app():
     "modules.journal.binance_client", "modules.journal.stats",
     "modules.trading.module", "modules.trading.news", "modules.trading.dashboard",
     "modules.trading.setups_store",
+    "modules.coinsignals.module", "modules.coinsignals.shadow",
+    "modules.coinsignals.collector",
 ])
 def test_import_module(mod):
     importlib.import_module(mod)

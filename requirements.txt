@@ -27,3 +27,7 @@ itsdangerous==2.2.0
 # guardar las API keys de Binance. La pública cifra en Railway; la privada (solo en el
 # VPS) descifra. Ya venía transitiva (pywebpush); ahora es dependencia directa.
 cryptography>=42.0,<50.0
+# Lector local de Vip CoinSignals. Usa una sesion MTProto separada y solo lectura;
+# el modulo web recibe snapshots shadow y no conoce credenciales de trading.
+telethon>=1.36,<2.0
+qrcode[pil]>=7.4,<9.0

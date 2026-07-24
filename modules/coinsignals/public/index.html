@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d12">
+  <title>CoinSignals Shadow · NexUX</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">NEX<span>UX</span></a>
+    <div class="status"><i></i> SHADOW ONLY · SIN ORDENES</div>
+    <a class="back" href="/m/bot/">Bot NexUX</a>
+  </header>
+  <main>
+    <section class="heading">
+      <div>
+        <p class="eyebrow">VIP COINSIGNALS · BTCUSDT</p>
+        <h1>Libros paralelos</h1>
+      </div>
+      <div class="updated" id="updated">Cargando...</div>
+    </section>
+
+    <section class="account" aria-label="Configuración">
+      <div><b>1.000 USDT</b><span>capital simulado</span></div>
+      <div><b>0,5%</b><span>riesgo por trade</span></div>
+      <div><b>25% × 4</b><span>parciales TP</span></div>
+      <div><b>BE tras TP1</b><span>gestión</span></div>
+    </section>
+
+    <section class="books" id="books"></section>
+
+    <section class="reference">
+      <div class="section-head">
+        <div><p class="eyebrow">REFERENCIA</p><h2>Histórico reconstruido</h2></div>
+        <span id="forward-start"></span>
+      </div>
+      <div class="reference-metrics" id="reference"></div>
+    </section>
+
+    <section class="trades">
+      <div class="section-head">
+        <div><p class="eyebrow">FORWARD</p><h2>Señales registradas</h2></div>
+        <select id="book-select" aria-label="Libro"></select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Fecha</th><th>Lado</th><th>Entrada plan</th><th>Promedio confirmado</th><th>TP1/R</th><th>Estado</th><th>Resultado</th></tr></thead>
+          <tbody id="trade-rows"><tr><td colspan="7" class="empty">Esperando la primera señal forward</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+[Unit]
+Description=NexUX CoinSignals shadow collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hugo
+WorkingDirectory=/home/hugo/Nexus
+EnvironmentFile=/home/hugo/Nexus/deploy/collector.env
+UMask=0077
+ExecStart=/home/hugo/Nexus/.venv/bin/python3 /home/hugo/Nexus/modules/coinsignals/collector.py --once --remote-url https://nexux.cl

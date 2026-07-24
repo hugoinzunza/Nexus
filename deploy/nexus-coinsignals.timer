@@ -1,0 +1,11 @@
+[Unit]
+Description=Actualiza CoinSignals shadow cada 60 segundos
+
+[Timer]
+OnBootSec=20
+OnUnitActiveSec=60
+AccuracySec=3
+Persistent=true
+
+[Install]
+WantedBy=timers.target

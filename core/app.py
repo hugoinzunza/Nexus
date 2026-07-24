@@ -330,7 +330,7 @@ def admin_list_users(request: Request):
 
 
 # Slugs que exigen sesión iniciada (datos personales). El resto es público.
-_LOGIN_REQUIRED = {"journal"}
+_LOGIN_REQUIRED = {"journal", "coinsignals"}
 
 
 def _gate(slug: str, request: Request):
