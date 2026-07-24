@@ -137,10 +137,18 @@ async def _largest_canvas(page):
         canvas = canvases.nth(index)
         box = await canvas.bounding_box()
         if box and box["width"] > 500 and box["height"] > 250:
-            candidates.append((box["width"] * box["height"], canvas, box))
+            candidates.append((index, canvas, box))
     if not candidates:
         raise RuntimeError("CoinGlass no expuso un canvas de datos")
-    _, canvas, box = max(candidates, key=lambda row: row[0])
+    top_y = min(row[2]["y"] for row in candidates)
+    top_group = [
+        row for row in candidates
+        if abs(row[2]["y"] - top_y) < 2
+    ]
+    _, canvas, box = max(
+        top_group,
+        key=lambda row: (row[2]["width"] * row[2]["height"], row[0]),
+    )
     return canvas, box
 
 
@@ -166,6 +174,25 @@ async def _scan_vertical(page, *, x_ratio: float, samples: int = 150) -> list[di
     for index in range(samples):
         y = 12 + index / max(1, samples - 1) * (box["height"] - 24)
         await canvas.hover(position={"x": box["width"] * x_ratio, "y": y})
+        parsed = parse_tooltip(await _tooltip_text(page))
+        price = parsed.get("price")
+        intensity = parsed.get("intensity_usd")
+        if price and intensity is not None:
+            seen[(round(price), round(intensity))] = parsed
+    return list(seen.values())
+
+
+async def _scan_levels_horizontal(
+    page,
+    *,
+    y_ratio: float = 0.55,
+    samples: int = 160,
+) -> list[dict[str, Any]]:
+    canvas, box = await _largest_canvas(page)
+    seen: dict[tuple[int, int], dict[str, Any]] = {}
+    for index in range(samples):
+        x = 12 + index / max(1, samples - 1) * (box["width"] - 24)
+        await canvas.hover(position={"x": x, "y": box["height"] * y_ratio})
         parsed = parse_tooltip(await _tooltip_text(page))
         price = parsed.get("price")
         intensity = parsed.get("intensity_usd")
@@ -242,10 +269,10 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
         page = context.pages[0] if context.pages else await context.new_page()
 
         await _open_chart(page, MAP_URL)
-        map_rows = await _scan_vertical(page, x_ratio=0.72)
+        map_rows = await _scan_levels_horizontal(page)
 
         await _open_chart(page, HEATMAP_URL)
-        heatmap_rows = await _scan_vertical(page, x_ratio=0.975)
+        heatmap_rows = await _scan_vertical(page, x_ratio=0.75)
 
         await _open_chart(page, DEPTH_URL)
         depth_rows = await _scan_horizontal(page)
@@ -253,7 +280,9 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
 
     if len(map_rows) < 4 or len(heatmap_rows) < 4:
         raise RuntimeError(
-            "Cobertura insuficiente; revise login, plan o cambios visuales de CoinGlass"
+            "Cobertura insuficiente "
+            f"(map={len(map_rows)}, heatmap={len(heatmap_rows)}, "
+            f"depth={len(depth_rows)}); revise login, plan o cambios visuales"
         )
     current_price = public_btc_price()
 
