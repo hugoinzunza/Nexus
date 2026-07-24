@@ -306,6 +306,12 @@ def test_visual_ingest_is_separate_from_api_dashboard(monkeypatch, tmp_path):
         "VISUAL_HISTORY_PATH",
         str(tmp_path / "visual-history.json"),
     )
+    book_history_path = tmp_path / "visual-book-history.json"
+    monkeypatch.setattr(
+        module,
+        "VISUAL_BOOK_HISTORY_PATH",
+        str(book_history_path),
+    )
     monkeypatch.setenv("NEXUS_INGEST_TOKEN", "secret")
     monkeypatch.setattr(module, "build_visual_indicator", lambda data: {
         "research_only": True,
@@ -333,7 +339,12 @@ def test_visual_ingest_is_separate_from_api_dashboard(monkeypatch, tmp_path):
     assert state_status == 200
     assert json.loads(dashboard_path.read_text())["advanced"]["price"] == 64_000
     assert visual_path.stat().st_mode & 0o777 == 0o600
+    book_history = json.loads(book_history_path.read_text())
+    assert book_history[0]["research_only"] is True
+    assert len(book_history[0]["bids"]) == 2
+    assert len(book_history[0]["asks"]) == 2
     assert state["visual_snapshot"]["source"] == "coinglass_authorized_browser"
+    assert state["visual_orderbook_history"] == book_history
     assert state["visual_indicator"]["score"] == 1
 
 
@@ -352,3 +363,5 @@ def test_visual_collector_and_model_have_no_bot_or_order_dependency():
     assert "Mapa visual" in html
     assert "SESIÓN AUTORIZADA" in html
     assert "renderVisual" in script
+    assert "visual_orderbook_history" in script
+    assert "Historial de muros ballena" in html

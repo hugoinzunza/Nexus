@@ -307,13 +307,17 @@ function drawOrderbook() {
   const canvas = $("orderbook-chart");
   const { ctx, width, height } = setupCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
-  const snapshots = state.advanced?.orderbook_heatmap || [];
+  const apiSnapshots = state.advanced?.orderbook_heatmap || [];
+  const visualSnapshots = state.visual_orderbook_history || [];
+  const snapshots = apiSnapshots.length ? apiSnapshots : visualSnapshots;
   if (!snapshots.length) {
-    message("orderbook-message", reason(state.advanced?.capabilities?.orderbook_heatmap));
+    message("orderbook-message", state.visual_snapshot?.whale_orders?.rows?.length
+      ? "La historia visual comienza con la próxima captura automática"
+      : reason(state.advanced?.capabilities?.orderbook_heatmap));
     return;
   }
   message("orderbook-message", "");
-  const price = Number(state.advanced?.price);
+  const price = Number(state.visual_indicator?.price || state.advanced?.price);
   const all = snapshots.flatMap((row) => row.bids.concat(row.asks))
     .filter((row) => !price || Math.abs(row[0] / price - 1) <= 0.12);
   const prices = all.map((row) => row[0]);
@@ -365,9 +369,12 @@ function renderLargeOrders() {
 
 function renderOrderbook() {
   const interval = state.advanced?.capabilities?.orderbook_heatmap?.interval;
+  const visualHistory = state.visual_orderbook_history || [];
   $("book-interval").textContent = interval
     ? `48 snapshots · intervalos de ${interval}`
-    : "Intervalo no disponible en el plan";
+    : visualHistory.length
+      ? `${visualHistory.length} capturas visuales · cada 5 min · historial forward`
+      : "Recolectando historial visual cada 5 min";
   drawOrderbook();
   renderLargeOrders();
 }

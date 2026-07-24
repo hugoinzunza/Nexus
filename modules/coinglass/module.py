@@ -20,7 +20,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 STATE_PATH = os.path.join(persist_dir(ROOT), "coinglass_dashboard.json")
 VISUAL_STATE_PATH = os.path.join(persist_dir(ROOT), "coinglass_visual.json")
 VISUAL_HISTORY_PATH = os.path.join(persist_dir(ROOT), "coinglass_visual_history.json")
+VISUAL_BOOK_HISTORY_PATH = os.path.join(
+    persist_dir(ROOT),
+    "coinglass_visual_book_history.json",
+)
 MAX_BODY = 8_000_000
+MAX_VISUAL_BOOK_HISTORY = 2_016
+PUBLIC_VISUAL_BOOK_HISTORY = 288
 
 
 class CoinGlassModule(NexusModule):
@@ -48,6 +54,11 @@ class CoinGlassModule(NexusModule):
         visual = self._read_path(VISUAL_STATE_PATH)
         if visual:
             data["visual_snapshot"] = visual
+            book_history = self._read_path(VISUAL_BOOK_HISTORY_PATH) or []
+            if isinstance(book_history, list):
+                data["visual_orderbook_history"] = book_history[
+                    -PUBLIC_VISUAL_BOOK_HISTORY:
+                ]
             try:
                 indicator = build_visual_indicator(visual)
                 data["visual_indicator"] = indicator
@@ -91,6 +102,33 @@ class CoinGlassModule(NexusModule):
                         "indicator": indicator,
                     })
                     self._write_path(VISUAL_HISTORY_PATH, history[-10_000:])
+                book_history = self._read_path(VISUAL_BOOK_HISTORY_PATH) or []
+                if not isinstance(book_history, list):
+                    book_history = []
+                if (
+                    not book_history
+                    or book_history[-1].get("captured_at") != clean["captured_at"]
+                ):
+                    rows = clean["whale_orders"]["rows"]
+                    book_history.append({
+                        "research_only": True,
+                        "captured_at": clean["captured_at"],
+                        "price": clean["price"],
+                        "bids": [
+                            [row["price"], row["amount_usd"]]
+                            for row in rows
+                            if row["side"] == "bid"
+                        ],
+                        "asks": [
+                            [row["price"], row["amount_usd"]]
+                            for row in rows
+                            if row["side"] == "ask"
+                        ],
+                    })
+                    self._write_path(
+                        VISUAL_BOOK_HISTORY_PATH,
+                        book_history[-MAX_VISUAL_BOOK_HISTORY:],
+                    )
             else:
                 self._write(body)
         return self._json(200, {"ok": True})
