@@ -40,6 +40,7 @@
     {
       label: "Research",
       links: [
+        { href: "/m/trading/research-diario-v1", text: "Diario V1", icon: "D1", tag: "archivo", match: ["/m/trading/research-diario-v1"] },
         { href: "/m/trading/backtest", text: "Backtest SMC", icon: "BT", match: ["/m/trading/backtest"] },
         { href: "/m/trading/research-bta-v2", text: "BTA visual v2", icon: "B2", tag: "lab", match: ["/m/trading/research-bta-v2"] },
       ],

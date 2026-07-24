@@ -121,6 +121,7 @@ def test_modulos_montan_navegacion_global():
         "modules/coinglass/public/index.html",
         "modules/trading/public/backtest.html",
         "modules/trading/public/research-bta-v2.html",
+        "modules/trading/public/research-diario-v1.html",
     ]
     for page in pages:
         html = (root / page).read_text(encoding="utf-8")
@@ -132,4 +133,19 @@ def test_modulos_montan_navegacion_global():
     assert 'class="nx-shell-mark"' in shell
     assert "M28 28 L72 72" in shell
     assert '{ href: "/account", text: "Mi cuenta"' in shell
+    assert '{ href: "/m/trading/research-diario-v1", text: "Diario V1"' in shell
     assert 'user.role !== "admin"' in shell
+
+
+def test_archivo_diario_v1_separa_paper_de_bot():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "modules/trading/public/research-diario-v1.html").read_text(
+        encoding="utf-8")
+    assert "Diario V1 archivado" in html
+    assert "$118.490" in html
+    assert "275" in html
+    assert "60,7%" in html
+    assert "Bot Fase 1 V1" in html
+    assert "37,5%" in html
+    assert "-0,305R" in html
+    assert "Dos operaciones V1 residuales" in html
