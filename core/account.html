@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f3f5f7">
+  <title>Mi cuenta · NexUX</title>
+  <link rel="icon" href="/favicon.ico?v=2" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <script>(function(){try{var t=localStorage.getItem("nexux-theme")||"light";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/nexux-shell.css">
+  <style>
+    :root {
+      --bg:#f3f5f7;--panel:#fff;--soft:#eef2f4;--line:#dce2e6;--ink:#17202a;
+      --text:#4e5965;--muted:#7d8791;--cyan:#118c9d;--green:#1b8c5a;
+      --amber:#a66f18;--red:#bd4350;
+    }
+    :root[data-theme="dark"] {
+      --bg:#0b0f14;--panel:#121821;--soft:#171f29;--line:#29323e;--ink:#edf1f5;
+      --text:#b8c1cb;--muted:#8793a0;--cyan:#2cc9d5;--green:#4cc38a;
+      --amber:#e1aa4b;--red:#ef6672;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0;min-height:100vh;background:var(--bg);color:var(--text);
+      font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      letter-spacing:0;-webkit-font-smoothing:antialiased;
+    }
+    button,input { font:inherit; }
+    .account-wrap { width:100%;max-width:1040px;margin:0 auto;padding:32px 34px 56px; }
+    .page-head {
+      display:flex;align-items:flex-end;justify-content:space-between;gap:20px;
+      padding-bottom:22px;border-bottom:1px solid var(--line);
+    }
+    .eyebrow { margin:0 0 7px;color:var(--cyan);font-size:10px;font-weight:750;text-transform:uppercase; }
+    h1 { margin:0;color:var(--ink);font:700 29px/1.15 Sora,Inter,sans-serif; }
+    .page-head .sub { margin:8px 0 0;color:var(--muted);font-size:13px; }
+    .role { padding:5px 7px;border:1px solid var(--line);border-radius:4px;color:var(--muted);font-size:9px;font-weight:750;text-transform:uppercase; }
+    .account-section { margin-top:26px;border:1px solid var(--line);border-radius:7px;background:var(--panel);overflow:hidden; }
+    .section-head { padding:18px 20px;border-bottom:1px solid var(--line); }
+    .section-head h2 { margin:0;color:var(--ink);font-size:15px; }
+    .section-head p { margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.45; }
+    .section-body { padding:20px; }
+    .profile-grid { display:grid;grid-template-columns:72px minmax(0,1fr);gap:20px;align-items:start; }
+    .avatar {
+      width:72px;height:72px;display:grid;place-items:center;overflow:hidden;
+      border:1px solid var(--line);border-radius:50%;background:var(--soft);
+      color:var(--cyan);font-size:22px;font-weight:700;
+    }
+    .avatar img { width:100%;height:100%;object-fit:cover; }
+    .field-grid { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+    label { display:block;color:var(--muted);font-size:11px;font-weight:650; }
+    input {
+      width:100%;height:42px;margin-top:6px;padding:0 11px;border:1px solid var(--line);
+      border-radius:6px;background:var(--bg);color:var(--ink);outline:none;
+    }
+    input:focus { border-color:var(--cyan);box-shadow:0 0 0 2px rgba(17,140,157,.12); }
+    input:disabled { color:var(--muted);cursor:not-allowed; }
+    .actions { display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px; }
+    .btn {
+      min-height:38px;padding:0 14px;border:1px solid var(--line);border-radius:6px;
+      background:var(--soft);color:var(--ink);font-size:12px;font-weight:650;cursor:pointer;
+    }
+    .btn:hover { border-color:#9eabb6; }
+    .btn.primary { border-color:#147f8d;background:#147f8d;color:#fff; }
+    .btn.danger { color:var(--red);background:transparent;border-color:rgba(189,67,80,.45); }
+    .btn:disabled { opacity:.55;cursor:wait; }
+    .msg { min-height:18px;color:var(--muted);font-size:11px; }
+    .msg.ok { color:var(--green); }.msg.error { color:var(--red); }
+    .connection-state { display:flex;align-items:center;gap:10px;margin-bottom:18px; }
+    .connection-state i { width:8px;height:8px;border-radius:50%;background:var(--muted); }
+    .connection-state.active i { background:var(--green); }
+    .connection-state.pending i { background:var(--amber); }
+    .connection-state.rejected i,.connection-state.error i { background:var(--red); }
+    .connection-state strong { color:var(--ink);font-size:13px; }
+    .connection-state span { color:var(--muted);font-size:11px; }
+    .credentials { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+    .security-note {
+      margin:16px 0 0;padding:12px 14px;border-left:3px solid var(--cyan);
+      background:var(--soft);color:var(--muted);font-size:11px;line-height:1.5;
+    }
+    .preferences { display:flex;align-items:center;justify-content:space-between;gap:18px; }
+    .preferences strong { display:block;color:var(--ink);font-size:13px; }
+    .preferences span { display:block;margin-top:4px;color:var(--muted);font-size:11px; }
+    .segmented { display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden; }
+    .segmented button { min-height:35px;padding:0 12px;border:0;border-right:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer; }
+    .segmented button:last-child { border-right:0; }
+    .segmented button.active { background:var(--ink);color:var(--bg); }
+    .session-row { display:flex;align-items:center;justify-content:space-between;gap:20px; }
+    .session-row strong { color:var(--ink);font-size:13px; }
+    .session-row p { margin:4px 0 0;color:var(--muted);font-size:11px; }
+    .session-links { display:flex;gap:9px; }
+    .session-links a { display:inline-flex;align-items:center;text-decoration:none; }
+    @media(max-width:700px) {
+      .account-wrap { padding:24px 15px 44px; }
+      .page-head { align-items:flex-start;flex-direction:column; }
+      .profile-grid { grid-template-columns:1fr; }
+      .field-grid,.credentials { grid-template-columns:1fr; }
+      .preferences,.session-row { align-items:flex-start;flex-direction:column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="account-wrap">
+    <header class="page-head">
+      <div><p class="eyebrow">Cuenta personal</p><h1>Mi cuenta</h1><p class="sub">Identidad, preferencias y conexión de datos.</p></div>
+      <span class="role" id="role">Cuenta</span>
+    </header>
+
+    <section class="account-section">
+      <div class="section-head"><h2>Perfil</h2><p>Este nombre se muestra únicamente dentro de tu workspace.</p></div>
+      <div class="section-body profile-grid">
+        <div class="avatar" id="avatar">—</div>
+        <form id="profile-form">
+          <div class="field-grid">
+            <label>Nombre visible<input id="name" name="name" maxlength="120" autocomplete="name" required></label>
+            <label>Correo de acceso<input id="email" type="email" disabled></label>
+          </div>
+          <div class="actions"><button class="btn primary" id="save-profile" type="submit">Guardar perfil</button><span class="msg" id="profile-msg"></span></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="account-section">
+      <div class="section-head"><h2>Binance</h2><p>Una conexión independiente por usuario para construir su Diario personal.</p></div>
+      <div class="section-body">
+        <div class="connection-state" id="connection-state"><i></i><div><strong>Comprobando conexión</strong><br><span>Esperando estado del colector</span></div></div>
+        <form id="exchange-form">
+          <div class="credentials">
+            <label>API Key<input id="api-key" type="password" minlength="16" autocomplete="off" placeholder="Nueva API key"></label>
+            <label>Secret Key<input id="api-secret" type="password" minlength="16" autocomplete="off" placeholder="Nuevo secret"></label>
+          </div>
+          <div class="actions">
+            <button class="btn primary" id="connect" type="submit">Conectar o reemplazar</button>
+            <button class="btn danger" id="disconnect" type="button" hidden>Desconectar Binance</button>
+            <span class="msg" id="exchange-msg"></span>
+          </div>
+        </form>
+        <p class="security-note"><strong>Solo lectura.</strong> Las credenciales viajan por HTTPS y se cifran al llegar a NexUX antes de persistirse como un sobre protegido. La web no puede descifrarlas, nunca vuelve a mostrarlas y puedes reemplazarlas o eliminarlas desde aquí.</p>
+      </div>
+    </section>
+
+    <section class="account-section">
+      <div class="section-head"><h2>Preferencias</h2></div>
+      <div class="section-body preferences">
+        <div><strong>Apariencia</strong><span>Esta preferencia se guarda en este dispositivo.</span></div>
+        <div class="segmented" aria-label="Tema"><button type="button" data-theme-choice="light">Claro</button><button type="button" data-theme-choice="dark">Oscuro</button></div>
+      </div>
+    </section>
+
+    <section class="account-section">
+      <div class="section-head"><h2>Sesión</h2></div>
+      <div class="section-body session-row">
+        <div><strong id="session-name">Cuenta NexUX</strong><p id="session-email">—</p></div>
+        <div class="session-links"><a class="btn" id="admin-link" href="/admin" hidden>Administración</a><a class="btn danger" href="/logout">Cerrar sesión</a></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/nexux-shell.js"></script>
+  <script>
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    let exchangeStatus = "none";
+
+    function setMessage(id, text, kind) {
+      const el = $(id);
+      el.textContent = text || "";
+      el.className = "msg" + (kind ? " " + kind : "");
+    }
+
+    async function loadAccount() {
+      const response = await fetch("/me", {cache: "no-store"});
+      const data = await response.json();
+      if (!data.user) {
+        location.href = "/login?next=/account";
+        return;
+      }
+      const user = data.user;
+      $("name").value = user.name || "";
+      $("email").value = user.email || "";
+      $("session-name").textContent = user.name || "Cuenta NexUX";
+      $("session-email").textContent = user.email || "";
+      $("role").textContent = user.role === "admin" ? "Administrador" : "Usuario";
+      $("admin-link").hidden = user.role !== "admin";
+      const avatar = $("avatar");
+      if (user.picture) {
+        const img = document.createElement("img");
+        img.src = user.picture;
+        img.alt = "";
+        avatar.replaceChildren(img);
+      } else {
+        avatar.textContent = (user.name || user.email || "N").slice(0, 1).toUpperCase();
+      }
+    }
+
+    async function loadExchange() {
+      const response = await fetch("/m/journal/api/exchange-status", {cache: "no-store"});
+      const data = await response.json();
+      exchangeStatus = data.status || "none";
+      const state = $("connection-state");
+      state.className = "connection-state " + exchangeStatus;
+      const labels = {
+        active: ["Binance conectado", "Verificada como solo lectura"],
+        pending: ["Verificación pendiente", "El colector comprobará la llave en unos minutos"],
+        rejected: ["Conexión rechazada", data.detail || "Revisa los permisos o las credenciales"],
+        error: ["Error de conexión", data.detail || "Se volverá a intentar"],
+        none: ["Sin Binance conectado", "Agrega una API de solo lectura"],
+        unsupported: ["Conexión no disponible", "La bóveda requiere el entorno web"]
+      };
+      const label = labels[exchangeStatus] || labels.none;
+      state.querySelector("strong").textContent = label[0];
+      state.querySelector("span").textContent = label[1];
+      $("disconnect").hidden = !["active", "pending", "rejected", "error"].includes(exchangeStatus);
+    }
+
+    $("profile-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = $("save-profile");
+      button.disabled = true;
+      setMessage("profile-msg", "Guardando...");
+      try {
+        const response = await fetch("/api/account/profile", {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name: $("name").value})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "No se pudo guardar");
+        $("session-name").textContent = data.user.name;
+        const shellName = document.getElementById("nx-shell-user-name");
+        if (shellName) shellName.textContent = data.user.name;
+        setMessage("profile-msg", "Perfil actualizado", "ok");
+      } catch (error) {
+        setMessage("profile-msg", error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    $("exchange-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = $("connect");
+      button.disabled = true;
+      setMessage("exchange-msg", "Cifrando y guardando...");
+      try {
+        const response = await fetch("/m/journal/api/connect-exchange", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({api_key: $("api-key").value, api_secret: $("api-secret").value})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "No se pudo conectar");
+        $("api-key").value = "";
+        $("api-secret").value = "";
+        setMessage("exchange-msg", data.message || "Conexión guardada", "ok");
+        await loadExchange();
+      } catch (error) {
+        setMessage("exchange-msg", error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    $("disconnect").addEventListener("click", async () => {
+      if (!confirm("¿Desconectar Binance y eliminar las credenciales cifradas?")) return;
+      const button = $("disconnect");
+      button.disabled = true;
+      try {
+        const response = await fetch("/m/journal/api/disconnect-exchange", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "No se pudo desconectar");
+        setMessage("exchange-msg", "Binance desconectado", "ok");
+        await loadExchange();
+      } catch (error) {
+        setMessage("exchange-msg", error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    function syncThemeButtons() {
+      const current = document.documentElement.getAttribute("data-theme") || "light";
+      document.querySelectorAll("[data-theme-choice]").forEach((button) => button.classList.toggle("active", button.dataset.themeChoice === current));
+    }
+    document.querySelectorAll("[data-theme-choice]").forEach((button) => button.addEventListener("click", () => {
+      const theme = button.dataset.themeChoice;
+      document.documentElement.setAttribute("data-theme", theme);
+      localStorage.setItem("nexux-theme", theme);
+      syncThemeButtons();
+    }));
+    syncThemeButtons();
+    Promise.all([loadAccount(), loadExchange()]).catch(() => setMessage("profile-msg", "No se pudo cargar la cuenta", "error"));
+  </script>
+</body>
+</html>

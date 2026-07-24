@@ -2,6 +2,8 @@
 `state` OAuth (que se entrega a usuarios anónimos en /auth/google) NO debe poder
 usarse como cookie de sesión."""
 import pytest
+from fastapi.testclient import TestClient
+from types import SimpleNamespace
 
 
 @pytest.fixture
@@ -31,3 +33,80 @@ def test_payload_sin_email_rechazado(auth):
     # Firmado con el serializer de sesión pero sin email → no es sesión válida.
     firmado = auth._serializer().dumps({"st": {"x": 1}})
     assert auth._read_cookie(firmado) is None
+
+
+def test_account_page_disponible_en_modo_local(monkeypatch):
+    from core import app
+    monkeypatch.setattr(app.auth, "enabled", lambda: False)
+    response = TestClient(app.app).get("/account")
+    assert response.status_code == 200
+    assert "Mi cuenta" in response.text
+    assert "/m/journal/api/connect-exchange" in response.text
+
+
+def test_actualizar_perfil_renueva_cookie(monkeypatch):
+    from core import app
+    session_user = {"uid": 7, "email": "ana@example.com", "role": "beta",
+                    "name": "Ana", "picture": None}
+    monkeypatch.setattr(app.auth, "enabled", lambda: True)
+    monkeypatch.setattr(app.auth, "current_user", lambda request: session_user)
+    monkeypatch.setattr(app.auth, "update_profile", lambda uid, name: {
+        **session_user, "name": name})
+    monkeypatch.setattr(app.auth, "make_cookie", lambda user: "cookie-renovada")
+    response = TestClient(app.app).put("/api/account/profile", json={"name": "Ana Torres"})
+    assert response.status_code == 200
+    assert response.json()["user"]["name"] == "Ana Torres"
+    assert "nexux_session=cookie-renovada" in response.headers["set-cookie"]
+
+
+def test_actualizar_perfil_rechaza_nombre_vacio(monkeypatch):
+    from core import app
+    monkeypatch.setattr(app.auth, "enabled", lambda: True)
+    monkeypatch.setattr(app.auth, "current_user", lambda request: {
+        "uid": 7, "email": "ana@example.com", "role": "beta"})
+    response = TestClient(app.app).put("/api/account/profile", json={"name": "   "})
+    assert response.status_code == 400
+
+
+def test_bot_web_es_solo_admin(monkeypatch):
+    from core import app
+    request = SimpleNamespace(url=SimpleNamespace(path="/m/bot/"))
+    monkeypatch.setattr(app.auth, "enabled", lambda: True)
+    monkeypatch.setattr(app.auth, "current_user", lambda request: {
+        "uid": 8, "email": "beta@example.com", "role": "beta"})
+    blocked = app._gate("bot", request)
+    assert blocked.status_code == 307
+    assert blocked.headers["location"] == "/m/journal/"
+
+    monkeypatch.setattr(app.auth, "current_user", lambda request: {
+        "uid": 1, "email": "admin@example.com", "role": "admin"})
+    assert app._gate("bot", request) is None
+    assert ("bot", "ingest") in app._TOKEN_AUTH_POSTS
+    assert ("journal", "ingest") in app._TOKEN_AUTH_POSTS
+
+
+def test_admin_puede_designar_otro_admin(monkeypatch):
+    from core import app
+    actor = {"uid": 1, "email": "owner@example.com", "role": "admin"}
+    monkeypatch.setattr(app.auth, "enabled", lambda: True)
+    monkeypatch.setattr(app.auth, "current_user", lambda request: actor)
+    monkeypatch.setattr(app.auth, "set_user_role", lambda uid, role, actor_uid: {
+        "ok": True, "user": {"id": uid, "email": "socio@example.com", "role": role}})
+    response = TestClient(app.app).patch("/api/admin/users/9/role", json={"role": "admin"})
+    assert response.status_code == 200
+    assert response.json()["user"]["role"] == "admin"
+
+
+def test_ingesta_token_no_exige_cookie_pero_comandos_si(monkeypatch):
+    from core import app
+
+    class FakeBot:
+        def api_post(self, subpath, body, headers, user=None):
+            return (200, "application/json", b'{"ok":true}')
+
+    monkeypatch.setitem(app.hub.modules_by_slug, "bot", FakeBot())
+    monkeypatch.setattr(app.auth, "enabled", lambda: True)
+    monkeypatch.setattr(app.auth, "current_user", lambda request: None)
+    client = TestClient(app.app)
+    assert client.post("/m/bot/api/ingest", json={"ts": 1}).status_code == 200
+    assert client.post("/m/bot/api/command", json={"action": "kill"}).status_code == 401

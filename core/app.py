@@ -93,7 +93,8 @@ def health():
 
 @app.get("/favicon.ico")
 def favicon():
-    return Response(content=_FAVICON, media_type="image/svg+xml")
+    return Response(content=_FAVICON, media_type="image/svg+xml",
+                    headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 @app.get("/manifest.webmanifest")
@@ -206,6 +207,43 @@ def whoami(request: Request):
     return {"auth": auth.enabled(), "user": {
         "email": u.get("email"), "name": u.get("name"),
         "role": u.get("role"), "picture": u.get("picture")}}
+
+
+ACCOUNT_PAGE = os.path.join(ROOT, "core", "account.html")
+
+
+@app.get("/account", response_class=HTMLResponse)
+def account_page(request: Request):
+    if auth.enabled() and not auth.current_user(request):
+        return RedirectResponse(url="/login?next=/account", status_code=307)
+    with open(ACCOUNT_PAGE, "r", encoding="utf-8") as fh:
+        return HTMLResponse(fh.read(), headers={"Cache-Control": "no-cache"})
+
+
+@app.put("/api/account/profile")
+async def account_update_profile(request: Request):
+    user = auth.current_user(request)
+    if not user:
+        return JSONResponse({"error": "necesitas iniciar sesión"}, status_code=401)
+    if not auth.enabled() or user.get("uid") is None:
+        return JSONResponse({"error": "perfil local no editable"}, status_code=409)
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "payload JSON inválido"}, status_code=400)
+    name = " ".join(str((data or {}).get("name") or "").strip().split())
+    if not name or len(name) > 120:
+        return JSONResponse({"error": "el nombre debe tener entre 1 y 120 caracteres"},
+                            status_code=400)
+    updated = auth.update_profile(int(user["uid"]), name)
+    if not updated:
+        return JSONResponse({"error": "usuario no encontrado"}, status_code=404)
+    response = JSONResponse({"ok": True, "user": {
+        "email": updated["email"], "name": updated["name"],
+        "role": updated["role"], "picture": updated["picture"]}})
+    response.set_cookie(auth.COOKIE, auth.make_cookie(updated), max_age=60 * 60 * 24 * 7,
+                        httponly=True, secure=True, samesite="lax", path="/")
+    return response
 
 
 LOGIN_PAGE = os.path.join(ROOT, "core", "login.html")
@@ -329,21 +367,53 @@ def admin_list_users(request: Request):
     return {"users": auth.list_users()}
 
 
+@app.patch("/api/admin/users/{user_id}/role")
+async def admin_set_user_role(user_id: int, request: Request):
+    blocked = _require_admin(request)
+    if blocked is not None:
+        return blocked
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "payload JSON inválido"}, status_code=400)
+    me = auth.current_user(request)
+    result = auth.set_user_role(user_id, str((data or {}).get("role") or ""),
+                                me.get("uid") if me else None)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+
+
 # Slugs que exigen sesión iniciada (datos personales). El resto es público.
 _LOGIN_REQUIRED = {"journal", "coinsignals", "coinglass"}
+_ADMIN_REQUIRED = {"bot"}
+_TOKEN_AUTH_POSTS = {
+    ("bot", "ingest"),
+    ("journal", "ingest"),
+    ("journal", "ingest_setups"),
+    ("journal", "connections"),
+    ("journal", "connection-status"),
+    ("journal", "vault-check"),
+}
 
 
 def _gate(slug: str, request: Request):
     """Devuelve una Response si hay que bloquear/redirigir; None si pasa."""
-    if not auth.enabled() or slug not in _LOGIN_REQUIRED:
+    if not auth.enabled():
         return None
-    if auth.current_user(request) is not None:
+    user = auth.current_user(request)
+    requires_login = slug in _LOGIN_REQUIRED or slug in _ADMIN_REQUIRED
+    if not requires_login:
         return None
-    # Página → al login; API → 401 JSON.
-    if request.url.path.startswith(f"/m/{slug}/api/"):
-        return JSONResponse({"error": "no autorizado", "login": "/login"}, status_code=401)
-    nxt = request.url.path
-    return RedirectResponse(url=f"/login?next={nxt}", status_code=307)
+    is_api = request.url.path.startswith(f"/m/{slug}/api/")
+    if user is None:
+        if is_api:
+            return JSONResponse({"error": "no autorizado", "login": "/login"}, status_code=401)
+        nxt = request.url.path
+        return RedirectResponse(url=f"/login?next={nxt}", status_code=307)
+    if slug in _ADMIN_REQUIRED and not auth.is_admin(user):
+        if is_api:
+            return JSONResponse({"error": "solo administradores"}, status_code=403)
+        return RedirectResponse(url="/m/journal/", status_code=307)
+    return None
 
 
 # --- Módulos -------------------------------------------------------------
@@ -386,6 +456,13 @@ async def module_api_post(slug: str, subpath: str, request: Request):
     module = hub.modules_by_slug.get(slug)
     if module is None:
         return JSONResponse({"error": f"módulo '{slug}' no encontrado"}, status_code=404)
+
+    # Las ingestas del colector usan X-Nexus-Token y se validan dentro del módulo.
+    # El resto de POSTs de módulos privados sí exige la sesión del navegador.
+    if (slug, subpath) not in _TOKEN_AUTH_POSTS:
+        blocked = _gate(slug, request)
+        if blocked is not None:
+            return blocked
 
     raw = await request.body()
     try:
@@ -448,14 +525,19 @@ def module_static(slug: str, relpath: str, request: Request):
         return Response(content=fh.read(), media_type=ctype, headers=headers)
 
 
-# Favicon mínimo en SVG (un nodo morado) para que el navegador no de 404.
+# Favicon SVG con el isotipo cruzado oficial de NexUX.
 _FAVICON = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-    '<rect width="32" height="32" rx="7" fill="#6c5ce7"/>'
-    '<circle cx="16" cy="16" r="5" fill="#fff"/>'
-    '<circle cx="6" cy="7" r="2.5" fill="#a29bfe"/>'
-    '<circle cx="26" cy="7" r="2.5" fill="#a29bfe"/>'
-    '<circle cx="6" cy="25" r="2.5" fill="#a29bfe"/>'
-    '<circle cx="26" cy="25" r="2.5" fill="#a29bfe"/>'
+    '<rect width="32" height="32" rx="7" fill="#10141b"/>'
+    '<defs>'
+    '<linearGradient id="v" x1="0" y1="0" x2="1" y2="1">'
+    '<stop offset="0" stop-color="#8b80ff"/><stop offset="1" stop-color="#6c5ce7"/>'
+    '</linearGradient>'
+    '<linearGradient id="c" x1="1" y1="0" x2="0" y2="1">'
+    '<stop offset="0" stop-color="#26d6f0"/><stop offset="1" stop-color="#0b96ad"/>'
+    '</linearGradient>'
+    '</defs>'
+    '<path d="M9 9 L23 23" stroke="url(#v)" stroke-width="4.2" stroke-linecap="round"/>'
+    '<path d="M23 9 L9 23" stroke="url(#c)" stroke-width="4.2" stroke-linecap="round"/>'
     '</svg>'
 ).encode("utf-8")

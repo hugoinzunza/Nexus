@@ -114,7 +114,21 @@ def current_user(request) -> Optional[dict]:
         token = request.cookies.get(COOKIE, "")
     except Exception:  # noqa: BLE001
         token = ""
-    return _read_cookie(token)
+    session_user = _read_cookie(token)
+    if not session_user or session_user.get("uid") is None:
+        return session_user
+    # El rol y el nombre se leen frescos de DB: una promoción o revocación debe
+    # aplicar de inmediato, no cuando expire la cookie firmada.
+    try:
+        from sqlalchemy import select
+        with db.session() as s:
+            user = s.scalar(select(db.User).where(db.User.id == int(session_user["uid"])))
+            if user is None:
+                return None
+            return {"uid": user.id, "email": user.email, "role": user.role,
+                    "name": user.name, "picture": user.picture}
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def is_admin(user: Optional[dict]) -> bool:
@@ -233,9 +247,45 @@ def list_users() -> list:
     with db.session() as s:
         rows = s.scalars(select(db.User).order_by(db.User.created_at.desc())).all()
         return [{"id": r.id, "email": r.email, "name": r.name, "role": r.role,
+                 "primary": r.email.lower() == ADMIN_EMAIL.lower(),
                  "picture": r.picture,
                  "last_login": r.last_login.isoformat() if r.last_login else None}
                 for r in rows]
+
+
+def update_profile(user_id: int, name: str) -> Optional[dict]:
+    """Actualiza el nombre visible sin permitir cambios de email, rol o Google ID."""
+    from sqlalchemy import select
+    clean = " ".join((name or "").strip().split())
+    if not clean or len(clean) > 120:
+        return None
+    with db.session() as s:
+        user = s.scalar(select(db.User).where(db.User.id == user_id))
+        if user is None:
+            return None
+        user.name = clean
+        s.flush()
+        return {"uid": user.id, "email": user.email, "role": user.role,
+                "name": user.name, "picture": user.picture}
+
+
+def set_user_role(user_id: int, role: str, actor_uid: Optional[int]) -> dict:
+    """Promueve o degrada usuarios. Protege al admin principal y al actor."""
+    if role not in ("admin", "beta"):
+        return {"ok": False, "error": "rol inválido"}
+    from sqlalchemy import select
+    with db.session() as s:
+        user = s.scalar(select(db.User).where(db.User.id == user_id))
+        if user is None:
+            return {"ok": False, "error": "usuario no encontrado"}
+        if role != "admin" and user.email.lower() == ADMIN_EMAIL.lower():
+            return {"ok": False, "error": "el administrador principal no puede degradarse"}
+        if role != "admin" and actor_uid is not None and user.id == actor_uid:
+            return {"ok": False, "error": "no puedes retirar tu propio rol administrador"}
+        user.role = role
+        s.flush()
+        return {"ok": True, "user": {
+            "id": user.id, "email": user.email, "name": user.name, "role": user.role}}
 
 
 def upsert_user(userinfo: dict) -> dict:

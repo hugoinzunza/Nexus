@@ -66,6 +66,46 @@ body.nx-has-shell {
 
 .nx-shell-word span { color: var(--nx-shell-cyan); }
 
+.nx-shell-user {
+  min-height: 66px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--nx-shell-line);
+  color: var(--nx-shell-text) !important;
+}
+
+.nx-shell-user:hover { background: #171d26; }
+
+.nx-shell-avatar {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #3b4856;
+  border-radius: 50%;
+  color: var(--nx-shell-cyan);
+  background: #202733;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.nx-shell-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.nx-shell-user-copy { min-width: 0; }
+.nx-shell-user-copy strong,
+.nx-shell-user-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nx-shell-user-copy strong { color: var(--nx-shell-text); font-size: 12px; font-weight: 650; }
+.nx-shell-user-copy small { margin-top: 3px; color: var(--nx-shell-muted); font-size: 10px; }
+
 .nx-shell-close,
 .nx-shell-menu {
   border: 0;

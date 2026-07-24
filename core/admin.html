@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f4f5f8">
   <title>NexUX · Admin</title>
+  <link rel="icon" href="/favicon.ico?v=2" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -42,6 +43,9 @@
     .pill.pend{color:var(--amber);background:rgba(201,138,22,.10)}
     .x{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:8px;color:var(--muted);
       padding:5px 10px;font-size:12px;font-family:inherit} .x:hover{border-color:var(--red);color:var(--red)}
+    .role-action{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:7px;
+      color:var(--text);padding:5px 9px;font-size:11px;font-family:inherit;margin-left:7px}
+    .role-action:hover{border-color:var(--accent);color:var(--accent)}
     .empty{color:var(--muted);font-size:13px;padding:10px 8px}
   </style>
 </head>
@@ -65,7 +69,7 @@
     </section>
     <section class="card">
       <h2>Usuarios registrados</h2>
-      <p class="sub">Quién ha entrado y con qué rol.</p>
+      <p class="sub">Solo quienes designes como administradores pueden ver y controlar el Bot.</p>
       <table id="usr-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Último acceso</th></tr></thead>
         <tbody id="usr-body"></tbody></table>
     </section>
@@ -82,8 +86,16 @@
         +`<td>${fmt(i.created_at)}</td><td style="text-align:right"><button class="x" onclick="delInv(${i.id})">quitar</button></td></tr>`).join(''); }
     async function loadUsr(){ const r=await fetch('/api/admin/users'); if(!r.ok) return; const d=await r.json();
       const b=$('usr-body'); if(!d.users.length){ b.innerHTML='<tr><td colspan="3" class="empty">Sin usuarios todavía.</td></tr>'; return; }
-      b.innerHTML=d.users.map(u=>`<tr><td>${u.name||u.email}<br><span style="color:var(--muted);font-size:12px">${u.email}</span></td>`
-        +`<td><span class="pill ${u.role}">${u.role}</span></td><td>${fmt(u.last_login)}</td></tr>`).join(''); }
+      b.innerHTML=d.users.map(u=>{ const next=u.role==='admin'?'beta':'admin';
+        const label=u.role==='admin'?'Quitar admin':'Hacer admin';
+        const action=u.primary?'':`<button class="role-action" onclick="setRole(${u.id},'${next}')">${label}</button>`;
+        return `<tr><td>${u.name||u.email}<br><span style="color:var(--muted);font-size:12px">${u.email}</span></td>`
+        +`<td><span class="pill ${u.role}">${u.role}</span>${action}</td>`
+        +`<td>${fmt(u.last_login)}</td></tr>`; }).join(''); }
+    async function setRole(id,role){ const verb=role==='admin'?'dar acceso administrativo':'retirar el acceso administrativo';
+      if(!confirm('¿Confirmas '+verb+'?')) return;
+      const r=await fetch('/api/admin/users/'+id+'/role',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({role})});
+      const d=await r.json(); if(!r.ok){ alert(d.error||'No se pudo cambiar el rol'); return; } loadUsr(); }
     async function delInv(id){ if(!confirm('¿Quitar esta invitación?')) return;
       await fetch('/api/admin/invitations/'+id,{method:'DELETE'}); loadInv(); }
     $('inv-form').addEventListener('submit',async e=>{ e.preventDefault();

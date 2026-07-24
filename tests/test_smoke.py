@@ -83,8 +83,10 @@ def test_hub_expone_todo_el_workspace():
     assert "hero-brand" in html
     assert 'class="iso"' in html
     assert 'href="/login"' in html
-    assert 'href="/m/trading/"' in html
-    assert 'href="/m/journal/"' in html
+    assert html.count('href="/login"') == 1
+    assert 'href="#producto"' in html
+    assert 'href="#seguridad"' in html
+    assert 'rel="icon"' in html
 
 
 def test_modulos_montan_navegacion_global():
@@ -108,3 +110,5 @@ def test_modulos_montan_navegacion_global():
     assert '{ href: "/", text: "Inicio"' in shell
     assert 'class="nx-shell-mark"' in shell
     assert "M28 28 L72 72" in shell
+    assert '{ href: "/account", text: "Mi cuenta"' in shell
+    assert 'user.role !== "admin"' in shell

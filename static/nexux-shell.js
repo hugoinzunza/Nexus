@@ -2,11 +2,19 @@
   "use strict";
 
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (!document.querySelector('link[rel~="icon"]')) {
+    const favicon = document.createElement("link");
+    favicon.rel = "icon";
+    favicon.type = "image/svg+xml";
+    favicon.href = "/favicon.ico?v=2";
+    document.head.appendChild(favicon);
+  }
   const sections = [
     {
       label: "NexUX",
       links: [
         { href: "/", text: "Inicio", icon: "NX", match: ["/"] },
+        { href: "/account", text: "Mi cuenta", icon: "YO", match: ["/account"] },
       ],
     },
     {
@@ -88,6 +96,13 @@
       </a>
       <button class="nx-shell-close" type="button" aria-label="Cerrar menú">×</button>
     </div>
+    <a class="nx-shell-user" id="nx-shell-user" href="/account">
+      <span class="nx-shell-avatar" id="nx-shell-avatar">—</span>
+      <span class="nx-shell-user-copy">
+        <strong id="nx-shell-user-name">Cargando cuenta</strong>
+        <small id="nx-shell-user-meta">Comprobando sesión</small>
+      </span>
+    </a>
     <nav class="nx-shell-nav">${nav}</nav>
     <div class="nx-shell-foot">
       <div class="nx-shell-health" id="nx-shell-health"><i></i><span>Comprobando sistema</span></div>
@@ -137,5 +152,43 @@
       const health = document.getElementById("nx-shell-health");
       health.classList.add("warn");
       health.querySelector("span").textContent = "Estado no disponible";
+    });
+
+  fetch("/me", { cache: "no-store" })
+    .then((response) => response.json())
+    .then((data) => {
+      const user = data && data.user;
+      const block = document.getElementById("nx-shell-user");
+      const avatar = document.getElementById("nx-shell-avatar");
+      const name = document.getElementById("nx-shell-user-name");
+      const meta = document.getElementById("nx-shell-user-meta");
+      if (!user) {
+        block.href = "/login";
+        name.textContent = "Ingresar";
+        meta.textContent = "Cuenta personal";
+        avatar.textContent = "→";
+        return;
+      }
+      const display = user.name || user.email || "Mi cuenta";
+      name.textContent = display;
+      meta.textContent = user.role === "admin" ? "Administrador" : "Cuenta personal";
+      if (user.role !== "admin") {
+        const botLink = shell.querySelector('.nx-shell-link[href="/m/bot/"]');
+        if (botLink) botLink.remove();
+      }
+      if (user.picture) {
+        const image = document.createElement("img");
+        image.src = user.picture;
+        image.alt = "";
+        avatar.replaceChildren(image);
+      } else {
+        avatar.textContent = display.slice(0, 1).toUpperCase();
+      }
+      const mobileName = mobile.querySelector("span");
+      mobileName.textContent = display.split(" ")[0];
+    })
+    .catch(() => {
+      document.getElementById("nx-shell-user-name").textContent = "Mi cuenta";
+      document.getElementById("nx-shell-user-meta").textContent = "Estado no disponible";
     });
 })();
