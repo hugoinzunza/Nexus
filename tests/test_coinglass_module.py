@@ -306,7 +306,10 @@ def test_panel_exposes_real_research_views_and_no_signal_language():
     assert "Radar" in html
     assert "RADAR VISUAL V1" in html
     assert "visual_indicator" in script
-    assert "2.016 capturas forward" in script
+    # La meta de 2.016 capturas se dejó de publicar como si fueran observaciones
+    # independientes (auditoría 2026-07-24): a 4h/12h las ventanas no solapadas
+    # son ~42 y ~14 por semana. El texto ahora declara la dependencia.
+    assert "no solapadas" in script
     assert "Flujo 4h" in html
     assert "Open interest por exchange" in html
     assert "RADAR VISUAL V1 · NO VALIDADO" in html

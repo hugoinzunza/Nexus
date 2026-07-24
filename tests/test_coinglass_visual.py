@@ -365,3 +365,62 @@ def test_visual_collector_and_model_have_no_bot_or_order_dependency():
     assert "renderVisual" in script
     assert "visual_orderbook_history" in script
     assert "Historial de muros ballena" in html
+
+
+def test_score_formula_esta_congelada_y_los_muros_quedan_fuera():
+    """Candado de la fórmula del Radar (auditoría 2026-07-24).
+
+    El puntaje debe ser exactamente 0.50·heatmap + 0.30·mapa + 0.20·delta,
+    renormalizado por el peso disponible, y la presión de muros ballena NO
+    puede entrar. Sin este test, agregar `whale_bid_pressure` al cálculo pasa
+    la suite en verde y promueve al score una variable sin forward.
+    """
+    indicator = build_visual_indicator(snapshot(), now=NOW)
+    c = indicator["components"]
+
+    pesos = {"heatmap_attraction": 0.50, "map_attraction": 0.30, "depth_delta": 0.20}
+    disponible = sum(w for k, w in pesos.items() if c[k] is not None)
+    esperado = round(max(-100, min(100, sum(
+        c[k] * w for k, w in pesos.items() if c[k] is not None) / disponible * 100)), 1)
+
+    assert indicator["score"] == esperado, "la fórmula del score cambió sin actualizar el test"
+    assert "whale_bid_pressure" in c, "la presión de muros debe seguir publicándose aparte"
+
+    # Un desbalance de muros extremo no puede mover el puntaje ni una décima.
+    cargado = snapshot()
+    cargado["whale_orders"]["rows"] = [
+        {"side": "bid", "price": 64_200 - i, "amount_usd": 900_000_000,
+         "duration": "5H", "market": "S", "exchange": "binance"}
+        for i in range(4)
+    ]
+    sesgado = build_visual_indicator(cargado, now=NOW)
+
+    assert sesgado["components"]["whale_bid_pressure"] == 1.0
+    assert sesgado["score"] == indicator["score"], \
+        "los muros ballena entraron al score: no hay forward que lo justifique"
+
+
+def test_niveles_del_heatmap_reportan_su_desfase_temporal():
+    """El tooltip del heatmap trae su propio reloj; hay que compararlo con la
+    captura. Sin esta medición no se puede saber si el 50% del score sale de
+    una columna vieja del gráfico (hallazgo P0 de la auditoría 2026-07-24)."""
+    indicator = build_visual_indicator(snapshot(), now=NOW)
+    lag = indicator["coverage"]["heatmap_lag_seconds"]
+
+    assert lag is not None, "el desfase del heatmap debe medirse, no ignorarse"
+    assert lag == 11_400  # tooltip 14:50 UTC vs captura 18:00 UTC = 3h10m
+    assert indicator["stale_heatmap"] is True
+
+
+def test_radar_declara_pesos_frescura_y_dependencia_de_la_muestra():
+    """La UI del Radar debe ser auditable: pesos explícitos, aviso de frescura,
+    cambio de modelo declarado y muestra no presentada como independiente."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+
+    assert "50% heatmap · 30% mapa · 20% delta" in script
+    assert "NO entran al puntaje" in script
+    assert "age_seconds" in script and "heatmap_lag_seconds" in script
+    assert "OTRA fórmula" in script, "el cambio silencioso de modelo debe avisarse"
+    assert "no solapadas" in script, "no presentar 2.016 capturas como independientes"
+    assert "Math.abs(c.heatmap_attraction + c.map_attraction)" not in script, \
+        "el consenso debe conservar el signo"

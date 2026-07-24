@@ -248,6 +248,35 @@ def _strongest(
     }
 
 
+def _clock_lag_seconds(levels: list[dict[str, Any]], captured_at: str) -> int | None:
+    """Segundos entre el reloj del tooltip (HH:MM, sin fecha) y la captura.
+
+    El tooltip solo trae hora del día, así que se ancla al día de la captura y
+    se elige la vuelta más cercana (±12 h). Positivo = el dato va ATRASADO
+    respecto de la captura. None si ningún nivel trae hora legible.
+    """
+    stamps = []
+    for level in levels:
+        raw = str(level.get("timestamp") or "").strip()
+        if not raw:
+            continue
+        parts = raw.split(":")
+        if len(parts) < 2 or not parts[0].isdigit() or not parts[1][:2].isdigit():
+            continue
+        stamps.append((int(parts[0]), int(parts[1][:2])))
+    if not stamps:
+        return None
+    base = _iso(captured_at)
+    hour, minute = max(stamps)          # el más reciente de la columna muestreada
+    stamped = base.replace(hour=hour % 24, minute=minute, second=0, microsecond=0)
+    lag = (base - stamped).total_seconds()
+    if lag > 43_200:                     # cruzó medianoche hacia atrás
+        lag -= 86_400
+    elif lag < -43_200:
+        lag += 86_400
+    return int(lag)
+
+
 def build_visual_indicator(
     snapshot: dict[str, Any],
     *,
@@ -258,6 +287,8 @@ def build_visual_indicator(
     map_levels = clean["liquidation_map"]["levels"]
     heatmap_levels = clean["liquidation_heatmap"]["levels"]
     whale_orders = clean["whale_orders"]["rows"]
+
+    heatmap_lag = _clock_lag_seconds(heatmap_levels, clean["captured_at"])
 
     map_up = _weighted_side(map_levels, price, amount_key="intensity_usd", above=True)
     map_down = _weighted_side(map_levels, price, amount_key="intensity_usd", above=False)
@@ -372,7 +403,16 @@ def build_visual_indicator(
             "heatmap_levels": len(heatmap_levels),
             "depth_points": len(depth),
             "whale_orders": len(whale_orders),
+            # Desfase entre el reloj del tooltip del heatmap y la captura. El
+            # heatmap es tiempo×precio y se muestrea en una columna fija del
+            # canvas: si esa columna no es la vigente, el componente de mayor
+            # peso del score describe el pasado. Medirlo es la única forma de
+            # saberlo (auditoría 2026-07-24); no altera el puntaje.
+            "heatmap_lag_seconds": heatmap_lag,
         },
+        # Señal de observabilidad: el heatmap va más de media hora atrás de la
+        # captura. No bloquea nada, se muestra en la UI.
+        "stale_heatmap": (heatmap_lag is not None and heatmap_lag > 1_800),
         "warning": (
             "Contexto experimental: localiza liquidez, muros ballena y "
             "desequilibrios; no predice por sí solo la dirección ni habilita órdenes."

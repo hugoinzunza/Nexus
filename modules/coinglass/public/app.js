@@ -475,8 +475,10 @@ function renderVisual() {
     component("Mapa: atracción", c.map_attraction) +
     component("Delta del libro", c.depth_delta) +
     component("Muros ballena", c.whale_bid_pressure) +
+    // El consenso conserva el signo: dos componentes de acuerdo bajista deben
+    // leerse negativos (antes Math.abs los pintaba en verde con +).
     component("Consenso", (c.heatmap_attraction != null && c.map_attraction != null)
-      ? (Math.sign(c.heatmap_attraction) === Math.sign(c.map_attraction) ? Math.abs(c.heatmap_attraction + c.map_attraction) / 2 : 0)
+      ? (Math.sign(c.heatmap_attraction) === Math.sign(c.map_attraction) ? (c.heatmap_attraction + c.map_attraction) / 2 : 0)
       : null);
   const coverage = visual.coverage || {};
   $("visual-source").textContent = `Captura ${new Date(snapshot.captured_at).toLocaleString("es-CL")} · tooltip scan`;
@@ -542,11 +544,24 @@ function renderModel() {
       component("Posicionamiento contrarian", apiComponents.positioning_contrarian) +
       component("Funding contrarian", apiComponents.funding_contrarian);
   $("radar-method").textContent = hasVisual
-    ? "El índice combina mapa, heatmap y delta visual. Los muros ballena se muestran en paralelo y todavía no alteran el puntaje."
+    ? "50% heatmap · 30% mapa · 20% delta del libro (renormalizado por componente disponible). Muros ballena, posicionamiento y funding se muestran en paralelo y NO entran al puntaje."
     : "45% atracción de liquidaciones · 35% imbalance bid/ask · 10% posicionamiento contrarian · 10% funding contrarian.";
-  $("radar-validation").textContent = hasVisual
-    ? "Recolectaremos al menos 2.016 capturas forward antes de evaluar valor predictivo a 1h, 4h y 12h. Research only: no habilita órdenes."
-    : "La fórmula queda fija mientras recolectamos. Después se evaluará contra retornos BTC a 1h, 4h y 12h.";
+  // Frescura: el Radar aceptaba capturas de hasta 30 min como vigentes y, al
+  // vencerlas, cambiaba al modelo API sin avisar. Ahora ambos casos se dicen.
+  const edad = Number(visual.age_seconds);
+  const lag = Number(visual.coverage?.heatmap_lag_seconds);
+  const avisos = [];
+  if (hasVisual) {
+    if (Number.isFinite(edad)) avisos.push(`captura de hace ${Math.round(edad / 60)} min`);
+    if (Number.isFinite(lag) && lag > 900) avisos.push(`heatmap atrasado ${Math.round(lag / 60)} min respecto de la captura`);
+  } else {
+    avisos.push("sin captura visual vigente: se muestra el modelo API, que es OTRA fórmula");
+  }
+  const muestra = hasVisual
+    ? "Las capturas van cada 5 min y están autocorrelacionadas: a 4h y 12h las ventanas no solapadas son ~42 y ~14 por semana, no 2.016."
+    : "La fórmula queda fija mientras recolectamos.";
+  $("radar-validation").textContent =
+    `${avisos.length ? avisos.join(" · ") + ". " : ""}${muestra} Research only: no habilita órdenes.`;
 }
 
 function render(data) {
