@@ -289,7 +289,9 @@ async def bootstrap(profile: Path) -> None:
             "Ventana CoinGlass lista. Inicie sesion directamente en el navegador; "
             "el bootstrap terminara cuando aparezca el mapa."
         )
-        await page.locator("button:has-text('Continuar con Google'):visible").wait_for(
+        await page.locator(
+            "button:has-text('Continuar con Google'):visible"
+        ).first.wait_for(
             state="hidden",
             timeout=20 * 60 * 1000,
         )
