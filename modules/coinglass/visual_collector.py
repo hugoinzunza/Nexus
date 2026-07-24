@@ -153,7 +153,34 @@ async def _scan_horizontal(page, *, y_ratio: float = 0.5, samples: int = 48) -> 
 async def _open_chart(page, url: str) -> None:
     await page.goto(url, wait_until="domcontentloaded", timeout=90_000)
     await page.wait_for_selector("canvas", timeout=90_000)
+    await _dismiss_consent(page)
     await page.wait_for_timeout(6_000)
+
+
+async def _dismiss_consent(page) -> None:
+    """Remove Funding Choices overlay, preferring the least permissive action."""
+    selectors = (
+        "button.fc-cta-do-not-consent",
+        "button:has-text('No consentir')",
+        "button:has-text('Rechazar')",
+        "button:has-text('Reject')",
+        "button.fc-cta-consent",
+        "button:has-text('Consentir')",
+        "button:has-text('Aceptar')",
+        "button:has-text('Accept')",
+    )
+    for selector in selectors:
+        button = page.locator(selector).first
+        try:
+            if await button.is_visible(timeout=250):
+                await button.click(timeout=2_000)
+                await page.locator(".fc-dialog-overlay").wait_for(
+                    state="hidden",
+                    timeout=5_000,
+                )
+                return
+        except Exception:  # noqa: BLE001
+            continue
 
 
 async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
