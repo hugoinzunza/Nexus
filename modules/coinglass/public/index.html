@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b10">
+  <title>CoinGlass · NexUX</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">NEX<span>UX</span></a>
+    <div class="mode"><i></i> RESEARCH · SIN ORDENES</div>
+    <a class="back" href="/m/coinsignals/">CoinSignals</a>
+  </header>
+
+  <main>
+    <header class="workspace-head">
+      <div>
+        <p class="eyebrow">COINGLASS V4 · BTCUSDT</p>
+        <h1>Microestructura</h1>
+      </div>
+      <div class="price-block">
+        <strong id="price">—</strong>
+        <span id="updated">Esperando datos</span>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Vistas">
+      <button class="active" data-tab="overview">Resumen</button>
+      <button data-tab="liquidations">Liquidaciones</button>
+      <button data-tab="orderbook">Libro de órdenes</button>
+      <button data-tab="model">Radar</button>
+    </nav>
+
+    <section class="view active" id="view-overview">
+      <div class="metric-strip" id="market-metrics"></div>
+
+      <div class="section-head">
+        <div><p class="eyebrow">ÚLTIMAS 24 HORAS</p><h2>Derivados y posicionamiento</h2></div>
+        <span>Snapshots causales de 5 minutos</span>
+      </div>
+      <div class="chart-frame">
+        <canvas id="history-chart" aria-label="Historia de open interest y funding"></canvas>
+        <div class="legend"><span class="cyan">OI</span><span class="amber">Funding</span></div>
+      </div>
+
+      <div class="section-head capability-head">
+        <div><p class="eyebrow">ACCESO API</p><h2>Capacidades detectadas</h2></div>
+      </div>
+      <div class="capabilities" id="capabilities"></div>
+    </section>
+
+    <section class="view" id="view-liquidations">
+      <div class="section-head">
+        <div><p class="eyebrow">BINANCE · 7 DÍAS</p><h2>Mapa de liquidaciones</h2></div>
+        <div class="segmented">
+          <button class="active" data-liq-mode="levels">Niveles</button>
+          <button data-liq-mode="heatmap">Heatmap 3d</button>
+        </div>
+      </div>
+      <div class="chart-frame tall">
+        <canvas id="liquidation-chart" aria-label="Mapa de liquidaciones BTC"></canvas>
+        <div class="canvas-message" id="liquidation-message"></div>
+      </div>
+      <div class="level-summary">
+        <div><span>Liquidez sobre precio</span><b id="liq-above">—</b></div>
+        <div><span>Liquidez bajo precio</span><b id="liq-below">—</b></div>
+        <div><span>Nivel fuerte superior</span><b id="level-above">—</b></div>
+        <div><span>Nivel fuerte inferior</span><b id="level-below">—</b></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-orderbook">
+      <div class="section-head">
+        <div><p class="eyebrow">BINANCE FUTURES</p><h2>Profundidad histórica</h2></div>
+        <span>48 snapshots · intervalos de 1h</span>
+      </div>
+      <div class="chart-frame tall">
+        <canvas id="orderbook-chart" aria-label="Heatmap del libro de órdenes BTC"></canvas>
+        <div class="canvas-message" id="orderbook-message"></div>
+      </div>
+      <div class="section-head orders-head">
+        <div><p class="eyebrow">MUROS ABIERTOS</p><h2>Órdenes grandes</h2></div>
+        <span>Umbral CoinGlass BTC ≥ US$1M</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Lado</th><th>Precio</th><th>Distancia</th><th>Valor actual</th><th>Inicio</th></tr></thead>
+          <tbody id="large-orders"><tr><td colspan="5" class="empty">Esperando datos</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="view" id="view-model">
+      <div class="model-head">
+        <div>
+          <p class="eyebrow">MODELO 0 · NO VALIDADO</p>
+          <h2>Presión de microestructura</h2>
+          <p class="model-copy">Combina atracción de liquidaciones, imbalance del libro, funding y posicionamiento. No es una señal hasta superar la calibración forward.</p>
+        </div>
+        <div class="score" id="pressure-score"><b>—</b><span>sin datos</span></div>
+      </div>
+      <div class="calibration">
+        <div><span id="calibration-label">0 / 100 observaciones</span><span>mínimo para iniciar backtest</span></div>
+        <progress id="calibration-progress" max="100" value="0"></progress>
+      </div>
+      <div class="components" id="model-components"></div>
+      <div class="method">
+        <h3>Fórmula pre-registrada</h3>
+        <p>45% atracción de liquidaciones · 35% imbalance bid/ask · 10% posicionamiento contrarian · 10% funding contrarian.</p>
+        <p>La fórmula queda fija mientras recolectamos. Después se evaluará contra retornos BTC a 1h, 4h y 12h, incluyendo precisión, calibración, retorno y drawdown.</p>
+      </div>
+    </section>
+  </main>
+  <script src="app.js" defer></script>
+</body>
+</html>

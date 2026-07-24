@@ -21,12 +21,14 @@ if str(ROOT) not in sys.path:
 
 from research.coinsignals_backtest import KlineCache
 from modules.coinsignals.coinglass import update_market_context
+from modules.coinglass.provider import update_dashboard
 from modules.coinsignals.module import STATE_PATH
 from modules.coinsignals.shadow import HISTORY_PATH, build_snapshot
 
 DEFAULT_CONFIG = Path.home() / ".config/nexux/telegram.env"
 DEFAULT_SESSION = Path.home() / ".config/nexux/coinsignals"
 COINGLASS_PATH = ROOT / "data/coinsignals_coinglass.json"
+COINGLASS_DASHBOARD_PATH = ROOT / "data/coinglass_dashboard.json"
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -99,11 +101,17 @@ async def refresh_telegram(config: Path, session: Path, channel_title: str) -> i
         await client.disconnect()
 
 
-def publish_remote(snapshot: dict[str, Any], remote_url: str, token: str) -> None:
+def publish_remote(
+    snapshot: dict[str, Any],
+    remote_url: str,
+    token: str,
+    *,
+    path: str = "/m/coinsignals/api/ingest",
+) -> None:
     if not remote_url:
         return
     request = urllib.request.Request(
-        remote_url.rstrip("/") + "/m/coinsignals/api/ingest",
+        remote_url.rstrip("/") + path,
         data=json.dumps(snapshot, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json", "X-Nexus-Token": token},
         method="POST",
@@ -120,10 +128,18 @@ async def refresh(args: argparse.Namespace) -> dict[str, Any]:
     start_ms = int(cached[0]["t"]) if cached else int((time.time() - 6 * 365 * 86400) * 1000)
     cache.fetch("BTCUSDT", start_ms, int(time.time() * 1000))
     market_context = None
+    dashboard = None
     if args.coinglass_api_key:
-        market_context, _history = update_market_context(
+        market_context, market_history = update_market_context(
             args.coinglass_api_key,
             COINGLASS_PATH,
+            max_age_seconds=args.coinglass_interval,
+        )
+        dashboard = update_dashboard(
+            args.coinglass_api_key,
+            COINGLASS_DASHBOARD_PATH,
+            market_context,
+            market_history,
             max_age_seconds=args.coinglass_interval,
         )
     snapshot = build_snapshot(
@@ -141,6 +157,16 @@ async def refresh(args: argparse.Namespace) -> dict[str, Any]:
             # perder mensajes ni convertir el timer en fallido; el próximo ciclo
             # vuelve a intentar publicar el snapshot completo.
             remote_status = f"remote-pending ({exc})"
+        if dashboard:
+            try:
+                publish_remote(
+                    dashboard,
+                    args.remote_url,
+                    args.token,
+                    path="/m/coinglass/api/ingest",
+                )
+            except Exception as exc:  # noqa: BLE001
+                remote_status += f"; coinglass-pending ({exc})"
     print(
         f"coinsignals shadow: {message_count} mensajes, "
         f"{sum(book['metrics']['signals'] for book in snapshot['books'])} registros en libros, "
