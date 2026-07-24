@@ -1,0 +1,419 @@
+{
+ "meta": {
+  "research_only": true,
+  "execution_enabled": false,
+  "validated": false,
+  "aviso": "Research only - No senal - No bot - NO usar para activar live",
+  "objetivo": "riesgo/volatilidad, NO direccion",
+  "barras": 1079,
+  "hipotesis_pre_registrada": [
+   "H1 el score correlaciona con el movimiento absoluto futuro",
+   "H2 aporta informacion incremental sobre la volatilidad reciente",
+   "H3 control negativo: no predice direccion"
+  ],
+  "criterio_descarte": "IC 95% de la correlacion OOS que incluya cero, o correlacion parcial no positiva con IC sobre cero",
+  "pesos": "iguales, pre-registrados, sin ajuste a los datos",
+  "normalizacion": "z-score con ventana expansiva (solo pasado)"
+ },
+ "horizontes": {
+  "4h": {
+   "evaluacion": {
+    "IS": {
+     "n": 712,
+     "rho_score": 0.006568952070869745,
+     "ic_score": [
+      -0.07091220558638875,
+      0.07788338055023729
+     ],
+     "rho_baseline": 0.12757670581806652,
+     "rho_parcial": -0.028560045752566245,
+     "ic_parcial": [
+      -0.10206938804373003,
+      0.0435676479541698
+     ],
+     "rho_direccion_control": -0.05722124600272526
+    },
+    "OOS": {
+     "n": 306,
+     "rho_score": 0.05490426426350963,
+     "ic_score": [
+      -0.05206086926293208,
+      0.17160644838521275
+     ],
+     "rho_baseline": 0.18045560724423262,
+     "rho_parcial": -0.01419444142796751,
+     "ic_parcial": [
+      -0.13059088847158123,
+      0.10145516622431114
+     ],
+     "rho_direccion_control": -0.048538285394790145
+    },
+    "TODO": {
+     "n": 1018,
+     "rho_score": 0.013016572324403711,
+     "ic_score": [
+      -0.049754873809797685,
+      0.0724654942684007
+     ],
+     "rho_baseline": 0.14506582511490154,
+     "rho_parcial": -0.028189121009473166,
+     "ic_parcial": [
+      -0.09023377467510403,
+      0.033044289721086036
+     ],
+     "rho_direccion_control": -0.051993497176517106
+    },
+    "quintiles_OOS": [
+     {
+      "quintil": 1,
+      "n": 61,
+      "absmove_medio_pct": 0.683
+     },
+     {
+      "quintil": 2,
+      "n": 61,
+      "absmove_medio_pct": 0.656
+     },
+     {
+      "quintil": 3,
+      "n": 61,
+      "absmove_medio_pct": 0.569
+     },
+     {
+      "quintil": 4,
+      "n": 61,
+      "absmove_medio_pct": 0.611
+     },
+     {
+      "quintil": 5,
+      "n": 61,
+      "absmove_medio_pct": 0.624
+     }
+    ]
+   },
+   "ablacion_OOS": {
+    "funding_extremity": {
+     "rho_IS": -0.09519697090862062,
+     "rho_OOS": -0.026422869642683887,
+     "parcial_OOS": -0.026364512322886603,
+     "ic_parcial_OOS": [
+      -0.14562848757509378,
+      0.08954123577975545
+     ],
+     "signo_estable": false,
+     "veredicto": "artefacto de regimen: cambia de signo IS->OOS"
+    },
+    "oi_buildup": {
+     "rho_IS": 0.09423428486912354,
+     "rho_OOS": 0.05510835913312694,
+     "parcial_OOS": -0.02450014540478799,
+     "ic_parcial_OOS": [
+      -0.13274215329861094,
+      0.0853172716826687
+     ],
+     "signo_estable": true,
+     "veredicto": "signo estable, sin significancia"
+    },
+    "crowd_extremity": {
+     "rho_IS": -0.06273826105476635,
+     "rho_OOS": 0.21521244035175927,
+     "parcial_OOS": 0.18356905720475564,
+     "ic_parcial_OOS": [
+      0.07899722120959655,
+      0.2833552085574676
+     ],
+     "signo_estable": false,
+     "veredicto": "artefacto de regimen: cambia de signo IS->OOS"
+    },
+    "liq_intensity": {
+     "rho_IS": 0.07081966748170385,
+     "rho_OOS": 0.1744648196660581,
+     "parcial_OOS": 0.09243208800580076,
+     "ic_parcial_OOS": [
+      -0.015387107727892027,
+      0.20757714280842068
+     ],
+     "signo_estable": true,
+     "veredicto": "signo estable, sin significancia"
+    },
+    "book_imbalance": {
+     "rho_IS": 0.007823118353253323,
+     "rho_OOS": -0.03710936466354424,
+     "parcial_OOS": -0.041469077582938316,
+     "ic_parcial_OOS": [
+      -0.1498584834654813,
+      0.0707050242468493
+     ],
+     "signo_estable": false,
+     "veredicto": "artefacto de regimen: cambia de signo IS->OOS"
+    }
+   }
+  },
+  "8h": {
+   "evaluacion": {
+    "IS": {
+     "n": 356,
+     "rho_score": -0.0022493187811601927,
+     "ic_score": [
+      -0.10892923590717353,
+      0.10129949785660122
+     ],
+     "rho_baseline": 0.11636028996184641,
+     "rho_parcial": -0.0377097565662959,
+     "ic_parcial": [
+      -0.1435225330150382,
+      0.06533119173899034
+     ],
+     "rho_direccion_control": -0.11431044961108354
+    },
+    "OOS": {
+     "n": 153,
+     "rho_score": 0.029934461823006714,
+     "ic_score": [
+      -0.1396687360193028,
+      0.2057466776810205
+     ],
+     "rho_baseline": 0.023990457426989936,
+     "rho_parcial": 0.021494591408604526,
+     "ic_parcial": [
+      -0.142171818306356,
+      0.19404623500568288
+     ],
+     "rho_direccion_control": -0.03150925441947114
+    },
+    "TODO": {
+     "n": 509,
+     "rho_score": -0.0068475636777923276,
+     "ic_score": [
+      -0.09457641570514877,
+      0.07721671588789027
+     ],
+     "rho_baseline": 0.08956085504913411,
+     "rho_parcial": -0.03738191805413597,
+     "ic_parcial": [
+      -0.12143228918384696,
+      0.04722248898743935
+     ],
+     "rho_direccion_control": -0.07597756365049307
+    },
+    "quintiles_OOS": [
+     {
+      "quintil": 1,
+      "n": 30,
+      "absmove_medio_pct": 0.969
+     },
+     {
+      "quintil": 2,
+      "n": 30,
+      "absmove_medio_pct": 0.891
+     },
+     {
+      "quintil": 3,
+      "n": 30,
+      "absmove_medio_pct": 1.112
+     },
+     {
+      "quintil": 4,
+      "n": 30,
+      "absmove_medio_pct": 1.013
+     },
+     {
+      "quintil": 5,
+      "n": 30,
+      "absmove_medio_pct": 1.011
+     }
+    ]
+   },
+   "ablacion_OOS": {
+    "funding_extremity": {
+     "rho_IS": -0.12164347271151285,
+     "rho_OOS": 0.03765236867397443,
+     "parcial_OOS": 0.03606607872041522,
+     "ic_parcial_OOS": [
+      -0.1251898598872441,
+      0.1918796776091146
+     ],
+     "signo_estable": false,
+     "veredicto": "artefacto de regimen: cambia de signo IS->OOS"
+    },
+    "oi_buildup": {
+     "rho_IS": 0.10572117449462705,
+     "rho_OOS": 0.06259023570306578,
+     "parcial_OOS": 0.05213904383712003,
+     "ic_parcial_OOS": [
+      -0.09296648942636729,
+      0.1941310160262333
+     ],
+     "signo_estable": true,
+     "veredicto": "signo estable, sin significancia"
+    },
+    "crowd_extremity": {
+     "rho_IS": -0.0713464709899885,
+     "rho_OOS": 0.22186798313765502,
+     "parcial_OOS": 0.21887495738281773,
+     "ic_parcial_OOS": [
+      0.06275952043517115,
+      0.3562830293035083
+     ],
+     "signo_estable": false,
+     "veredicto": "artefacto de regimen: cambia de signo IS->OOS"
+    },
+    "liq_intensity": {
+     "rho_IS": 0.1583222231731996,
+     "rho_OOS": 0.1326307826707933,
+     "parcial_OOS": 0.13186990330215417,
+     "ic_parcial_OOS": [
+      -0.015010255154918477,
+      0.2815248253847769
+     ],
+     "signo_estable": true,
+     "veredicto": "signo estable, sin significancia"
+    },
+    "book_imbalance": {
+     "rho_IS": 0.010098518064517241,
+     "rho_OOS": -0.13456992411380245,
+     "parcial_OOS": -0.14365034527532997,
+     "ic_parcial_OOS": [
+      -0.29101596723275397,
+      0.01612743099773202
+     ],
+     "signo_estable": false,
+     "veredicto": "artefacto de regimen: cambia de signo IS->OOS"
+    }
+   }
+  },
+  "12h": {
+   "evaluacion": {
+    "IS": {
+     "n": 237,
+     "rho_score": 0.00624978590449267,
+     "ic_score": [
+      -0.12115931419834446,
+      0.13866325770757118
+     ],
+     "rho_baseline": 0.1758521902646491,
+     "rho_parcial": -0.018318594910663642,
+     "ic_parcial": [
+      -0.1499741923500325,
+      0.11682205328268411
+     ],
+     "rho_direccion_control": -0.0562624964167173
+    },
+    "OOS": {
+     "n": 102,
+     "rho_score": -0.0016567619069159916,
+     "ic_score": [
+      -0.20439401310058486,
+      0.20307922035317139
+     ],
+     "rho_baseline": 0.037777564164183416,
+     "rho_parcial": -0.012767228334453535,
+     "ic_parcial": [
+      -0.22738529395828105,
+      0.19452034238465749
+     ],
+     "rho_direccion_control": 0.03640918060966577
+    },
+    "TODO": {
+     "n": 339,
+     "rho_score": -0.004089647588626486,
+     "ic_score": [
+      -0.11554186780138943,
+      0.10052424692063847
+     ],
+     "rho_baseline": 0.14201060221962797,
+     "rho_parcial": -0.028836909192719133,
+     "ic_parcial": [
+      -0.13825090284180314,
+      0.07382563825243398
+     ],
+     "rho_direccion_control": -0.017307615301448642
+    },
+    "quintiles_OOS": [
+     {
+      "quintil": 1,
+      "n": 20,
+      "absmove_medio_pct": 1.319
+     },
+     {
+      "quintil": 2,
+      "n": 20,
+      "absmove_medio_pct": 1.171
+     },
+     {
+      "quintil": 3,
+      "n": 20,
+      "absmove_medio_pct": 1.025
+     },
+     {
+      "quintil": 4,
+      "n": 20,
+      "absmove_medio_pct": 1.429
+     },
+     {
+      "quintil": 5,
+      "n": 20,
+      "absmove_medio_pct": 1.293
+     }
+    ]
+   },
+   "ablacion_OOS": {
+    "funding_extremity": {
+     "rho_IS": -0.07721626199887069,
+     "rho_OOS": 0.08830394314403575,
+     "parcial_OOS": 0.07825453145155267,
+     "ic_parcial_OOS": [
+      -0.12271207311069597,
+      0.26852479159349446
+     ],
+     "signo_estable": false,
+     "veredicto": "artefacto de regimen: cambia de signo IS->OOS"
+    },
+    "oi_buildup": {
+     "rho_IS": 0.0692836307417663,
+     "rho_OOS": 0.023550258652719428,
+     "parcial_OOS": -0.001973579668199947,
+     "ic_parcial_OOS": [
+      -0.1941094019579056,
+      0.20212095339014824
+     ],
+     "signo_estable": true,
+     "veredicto": "signo estable, sin significancia"
+    },
+    "crowd_extremity": {
+     "rho_IS": -0.1030364687785977,
+     "rho_OOS": 0.3079253479665038,
+     "parcial_OOS": 0.29357460350310854,
+     "ic_parcial_OOS": [
+      0.08993550959401203,
+      0.46002074076031807
+     ],
+     "signo_estable": false,
+     "veredicto": "artefacto de regimen: cambia de signo IS->OOS"
+    },
+    "liq_intensity": {
+     "rho_IS": 0.1564458030724897,
+     "rho_OOS": 0.1645374260481866,
+     "parcial_OOS": 0.13201275588655859,
+     "ic_parcial_OOS": [
+      -0.06723629572510295,
+      0.3207398129136583
+     ],
+     "signo_estable": true,
+     "veredicto": "signo estable, sin significancia"
+    },
+    "book_imbalance": {
+     "rho_IS": 0.05947740415506532,
+     "rho_OOS": -0.1334038316804329,
+     "parcial_OOS": -0.13544811925575823,
+     "ic_parcial_OOS": [
+      -0.3366162475848384,
+      0.0612678972444842
+     ],
+     "signo_estable": false,
+     "veredicto": "artefacto de regimen: cambia de signo IS->OOS"
+    }
+   }
+  }
+ }
+}
