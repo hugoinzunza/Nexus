@@ -82,6 +82,8 @@ def test_bot_web_es_solo_admin(monkeypatch):
         "uid": 1, "email": "admin@example.com", "role": "admin"})
     assert app._gate("bot", request) is None
     assert ("bot", "ingest") in app._TOKEN_AUTH_POSTS
+    assert ("coinglass", "visual-ingest") in app._TOKEN_AUTH_POSTS
+    assert ("coinsignals", "ingest") in app._TOKEN_AUTH_POSTS
     assert ("journal", "ingest") in app._TOKEN_AUTH_POSTS
 
 
@@ -105,8 +107,18 @@ def test_ingesta_token_no_exige_cookie_pero_comandos_si(monkeypatch):
             return (200, "application/json", b'{"ok":true}')
 
     monkeypatch.setitem(app.hub.modules_by_slug, "bot", FakeBot())
+    monkeypatch.setitem(app.hub.modules_by_slug, "coinglass", FakeBot())
+    monkeypatch.setitem(app.hub.modules_by_slug, "coinsignals", FakeBot())
     monkeypatch.setattr(app.auth, "enabled", lambda: True)
     monkeypatch.setattr(app.auth, "current_user", lambda request: None)
     client = TestClient(app.app)
     assert client.post("/m/bot/api/ingest", json={"ts": 1}).status_code == 200
+    assert client.post(
+        "/m/coinglass/api/visual-ingest",
+        json={"research_only": True},
+    ).status_code == 200
+    assert client.post(
+        "/m/coinsignals/api/ingest",
+        json={"research_only": True},
+    ).status_code == 200
     assert client.post("/m/bot/api/command", json={"action": "kill"}).status_code == 401

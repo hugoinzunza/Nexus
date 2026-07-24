@@ -388,6 +388,9 @@ _LOGIN_REQUIRED = {"journal", "coinsignals", "coinglass"}
 _ADMIN_REQUIRED = {"bot"}
 _TOKEN_AUTH_POSTS = {
     ("bot", "ingest"),
+    ("coinglass", "ingest"),
+    ("coinglass", "visual-ingest"),
+    ("coinsignals", "ingest"),
     ("journal", "ingest"),
     ("journal", "ingest_setups"),
     ("journal", "connections"),
