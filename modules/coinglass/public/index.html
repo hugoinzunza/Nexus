@@ -28,6 +28,7 @@
 
     <nav class="tabs" aria-label="Vistas">
       <button class="active" data-tab="overview">Resumen</button>
+      <button data-tab="flow">Flujo 4h</button>
       <button data-tab="liquidations">Liquidaciones</button>
       <button data-tab="orderbook">Libro de órdenes</button>
       <button data-tab="model">Radar</button>
@@ -55,6 +56,50 @@
         <div><p class="eyebrow">ACCESO API</p><h2>Capacidades detectadas</h2></div>
       </div>
       <div class="capabilities" id="capabilities"></div>
+    </section>
+
+    <section class="view" id="view-flow">
+      <div class="section-head">
+        <div><p class="eyebrow">HOBBYIST · DATOS DISPONIBLES</p><h2>Flujo y divergencias</h2></div>
+        <span>BTC · lectura causal de la última barra</span>
+      </div>
+      <div class="flow-metrics" id="flow-metrics"></div>
+
+      <div class="section-head">
+        <div><p class="eyebrow">CONCENTRACIÓN</p><h2>Open interest por exchange</h2></div>
+        <span>Margen estable y cambio de exposición</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Exchange</th><th>Open interest</th><th>Cuota</th><th>4h</th><th>24h</th><th>Margen estable</th></tr></thead>
+          <tbody id="oi-exchanges"><tr><td colspan="6" class="empty">Esperando datos</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="flow-grid">
+        <section>
+          <div class="section-head">
+            <div><p class="eyebrow">ÓRDENES A MERCADO</p><h2>Taker por exchange</h2></div>
+          </div>
+          <div class="table-wrap">
+            <table class="compact-table">
+              <thead><tr><th>Exchange</th><th>Compra</th><th>Venta</th><th>Volumen</th></tr></thead>
+              <tbody id="taker-exchanges"><tr><td colspan="4" class="empty">Esperando datos</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+        <section>
+          <div class="section-head">
+            <div><p class="eyebrow">EVENTOS FORZADOS</p><h2>Liquidaciones por exchange</h2></div>
+          </div>
+          <div class="table-wrap">
+            <table class="compact-table">
+              <thead><tr><th>Exchange</th><th>Longs</th><th>Shorts</th><th>Dominio</th></tr></thead>
+              <tbody id="liquidation-exchanges"><tr><td colspan="4" class="empty">Esperando datos</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </section>
 
     <section class="view" id="view-liquidations">

@@ -13,16 +13,36 @@ BASE_URL = "https://open-api-v4.coinglass.com"
 HISTORY_LIMIT = 90 * 24 * 12
 
 ENDPOINTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
+    ("price", "/api/futures/price/history",
+     {"exchange": "Binance", "symbol": "BTCUSDT", "interval": "1h", "limit": 4}),
     ("funding", "/api/futures/funding-rate/oi-weight-history",
+     {"symbol": "BTC", "interval": "1h", "limit": 4}),
+    ("funding_volume", "/api/futures/funding-rate/vol-weight-history",
      {"symbol": "BTC", "interval": "1h", "limit": 4}),
     ("open_interest", "/api/futures/open-interest/aggregated-history",
      {"symbol": "BTC", "interval": "1h", "limit": 4}),
+    ("open_interest_exchanges", "/api/futures/open-interest/exchange-list",
+     {"symbol": "BTC"}),
     ("liquidations", "/api/futures/liquidation/aggregated-history",
      {"exchange_list": "Binance,OKX,Bybit", "symbol": "BTC", "interval": "1h", "limit": 4}),
+    ("liquidation_exchanges", "/api/futures/liquidation/exchange-list",
+     {"symbol": "BTC", "range": "4h"}),
+    ("global_accounts", "/api/futures/global-long-short-account-ratio/history",
+     {"exchange": "Binance", "symbol": "BTCUSDT", "interval": "1h", "limit": 4}),
+    ("top_accounts", "/api/futures/top-long-short-account-ratio/history",
+     {"exchange": "Binance", "symbol": "BTCUSDT", "interval": "1h", "limit": 4}),
     ("top_traders", "/api/futures/top-long-short-position-ratio/history",
      {"exchange": "Binance", "symbol": "BTCUSDT", "interval": "1h", "limit": 4}),
+    ("taker", "/api/futures/aggregated-taker-buy-sell-volume/history",
+     {"exchange_list": "Binance,OKX,Bybit", "symbol": "BTC", "interval": "1h",
+      "limit": 4, "unit": "usd"}),
+    ("taker_exchanges", "/api/futures/taker-buy-sell-volume/exchange-list",
+     {"symbol": "BTC", "range": "4h"}),
     ("orderbook", "/api/futures/orderbook/ask-bids-history",
      {"exchange": "Binance", "symbol": "BTCUSDT", "interval": "1h", "range": "1", "limit": 4}),
+    ("orderbook_aggregated", "/api/futures/orderbook/aggregated-ask-bids-history",
+     {"exchange_list": "Binance,OKX,Bybit", "symbol": "BTC", "interval": "1h",
+      "range": "1", "limit": 4}),
 )
 
 
@@ -52,14 +72,67 @@ def _times(rows: Any) -> list[int]:
     return [int(row["time"]) for row in rows[-4:] if isinstance(row, dict) and row.get("time")]
 
 
+def _percent_series(rows: Any, keys: tuple[str, ...]) -> list[float]:
+    values = _series(rows, keys)
+    return [round(value * 100 if abs(value) <= 1 else value, 2) for value in values]
+
+
+def _usd_millions(value: Any) -> float:
+    return round((_number(value) or 0) / 1_000_000, 3)
+
+
 def _summarize(name: str, rows: Any) -> dict[str, Any]:
-    if name == "funding":
+    if name == "price":
+        candles = []
+        for row in rows[-4:] if isinstance(rows, list) else []:
+            if not isinstance(row, dict):
+                continue
+            values = [_number(row.get(key)) for key in ("open", "high", "low", "close")]
+            if all(value is not None for value in values):
+                candles.append({
+                    "time": int(row.get("time") or 0),
+                    "open": round(values[0], 2),
+                    "high": round(values[1], 2),
+                    "low": round(values[2], 2),
+                    "close": round(values[3], 2),
+                    "volume_musd": _usd_millions(row.get("volume_usd")),
+                })
+        return {"candles": candles}
+    if name in {"funding", "funding_volume"}:
         return {"close_pct": _series(rows, ("close", "funding_rate")), "times": _times(rows)}
     if name == "open_interest":
         return {
             "close_usd": _series(rows, ("close", "open_interest", "aggregated_open_interest")),
             "times": _times(rows),
         }
+    if name == "open_interest_exchanges":
+        normalized = []
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, dict) or not row.get("exchange"):
+                continue
+            normalized.append({
+                "exchange": str(row["exchange"]),
+                "oi_usd": round(_number(row.get("open_interest_usd")) or 0, 2),
+                "stable_margin_usd": round(
+                    _number(row.get("open_interest_by_stable_coin_margin")) or 0, 2
+                ),
+                "coin_margin_usd": round(
+                    _number(row.get("open_interest_by_coin_margin")) or 0, 2
+                ),
+                "change_4h_pct": round(
+                    _number(row.get("open_interest_change_percent_4h")) or 0, 3
+                ),
+                "change_24h_pct": round(
+                    _number(row.get("open_interest_change_percent_24h")) or 0, 3
+                ),
+            })
+        total = next((row for row in normalized if row["exchange"].lower() == "all"), None)
+        exchanges = sorted(
+            (row for row in normalized if row["exchange"].lower() != "all"),
+            key=lambda row: row["oi_usd"],
+            reverse=True,
+        )[:10]
+        return {"total": total or {}, "exchanges": exchanges}
     if name == "liquidations":
         bars = []
         for row in rows[-4:] if isinstance(rows, list) else []:
@@ -74,20 +147,98 @@ def _summarize(name: str, rows: Any) -> dict[str, Any]:
                     bar["time"] = int(row["time"])
                 bars.append(bar)
         return {"bars": bars}
+    if name == "liquidation_exchanges":
+        exchanges = []
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, dict) or not row.get("exchange"):
+                continue
+            long_usd = next((_number(row.get(key)) for key in (
+                "long_liquidation_usd", "longLiquidation_usd",
+            ) if row.get(key) is not None), None)
+            short_usd = next((_number(row.get(key)) for key in (
+                "short_liquidation_usd", "shortLiquidation_usd",
+            ) if row.get(key) is not None), None)
+            exchanges.append({
+                "exchange": str(row["exchange"]),
+                "long_musd": round((long_usd or 0) / 1_000_000, 3),
+                "short_musd": round((short_usd or 0) / 1_000_000, 3),
+            })
+        return {
+            "exchanges": sorted(
+                exchanges,
+                key=lambda row: row["long_musd"] + row["short_musd"],
+                reverse=True,
+            )[:10],
+        }
+    if name in {"global_accounts", "top_accounts"}:
+        keys = (
+            ("global_account_long_percent", "long_account_percent", "long_account")
+            if name == "global_accounts"
+            else ("top_account_long_percent", "long_account_percent", "long_account")
+        )
+        return {"long_pct": _percent_series(rows, keys), "times": _times(rows)}
     if name == "top_traders":
-        values = _series(rows, (
+        values = _percent_series(rows, (
             "top_position_long_percent", "long_position_percentage",
             "long_account", "long_account_ratio", "long_ratio",
         ))
+        return {"long_pct": values, "times": _times(rows)}
+    if name == "taker":
+        bars = []
+        for row in rows[-4:] if isinstance(rows, list) else []:
+            if not isinstance(row, dict):
+                continue
+            buy = next((_number(row.get(key)) for key in (
+                "aggregated_buy_volume_usd", "buy_volume_usd", "buy_vol_usd",
+            ) if row.get(key) is not None), None)
+            sell = next((_number(row.get(key)) for key in (
+                "aggregated_sell_volume_usd", "sell_volume_usd", "sell_vol_usd",
+            ) if row.get(key) is not None), None)
+            if buy is not None or sell is not None:
+                total = (buy or 0) + (sell or 0)
+                bars.append({
+                    "time": int(row.get("time") or 0),
+                    "buy_musd": round((buy or 0) / 1_000_000, 3),
+                    "sell_musd": round((sell or 0) / 1_000_000, 3),
+                    "buy_ratio": round((buy or 0) / total * 100, 2) if total else None,
+                })
+        return {"bars": bars}
+    if name == "taker_exchanges":
+        source = rows if isinstance(rows, dict) else {}
+        exchange_rows = source.get("exchange_list", source.get("list", []))
+        exchanges = []
+        for row in exchange_rows if isinstance(exchange_rows, list) else []:
+            if not isinstance(row, dict) or not row.get("exchange"):
+                continue
+            exchanges.append({
+                "exchange": str(row["exchange"]),
+                "buy_ratio": round(_number(row.get("buy_ratio")) or 0, 2),
+                "sell_ratio": round(_number(row.get("sell_ratio")) or 0, 2),
+                "buy_musd": _usd_millions(
+                    row.get("buy_vol_usd", row.get("buy_volume_usd"))
+                ),
+                "sell_musd": _usd_millions(
+                    row.get("sell_vol_usd", row.get("sell_volume_usd"))
+                ),
+            })
         return {
-            "long_pct": [round(value * 100 if value <= 1 else value, 2) for value in values],
-            "times": _times(rows),
+            "buy_ratio": round(_number(source.get("buy_ratio")) or 0, 2),
+            "sell_ratio": round(_number(source.get("sell_ratio")) or 0, 2),
+            "buy_musd": _usd_millions(
+                source.get("buy_vol_usd", source.get("buy_volume_usd"))
+            ),
+            "sell_musd": _usd_millions(
+                source.get("sell_vol_usd", source.get("sell_volume_usd"))
+            ),
+            "exchanges": exchanges[:10],
         }
-    if name == "orderbook":
+    if name in {"orderbook", "orderbook_aggregated"}:
         ratios = []
         for row in rows[-4:] if isinstance(rows, list) else []:
-            bids = _number(row.get("bids_usd"))
-            asks = _number(row.get("asks_usd"))
+            bid_keys = ("bids_usd",) if name == "orderbook" else ("aggregated_bids_usd", "bids_usd")
+            ask_keys = ("asks_usd",) if name == "orderbook" else ("aggregated_asks_usd", "asks_usd")
+            bids = next((_number(row.get(key)) for key in bid_keys if row.get(key) is not None), None)
+            asks = next((_number(row.get(key)) for key in ask_keys if row.get(key) is not None), None)
             if bids is not None and asks:
                 ratios.append(round(bids / asks, 3))
         return {"bid_ask_ratio": ratios, "times": _times(rows)}

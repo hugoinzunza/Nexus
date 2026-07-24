@@ -20,22 +20,43 @@ class FakeResponse:
 
 
 def test_fetch_market_context_normalizes_available_indicators_without_leaking_key():
-    payloads = {
-        "funding-rate": [{"close": "0.007601"}],
-        "open-interest": [{"close": "104816.674"}],
-        "liquidation": [{
+    def payload_for(url):
+        if "price/history" in url:
+            return [{"time": 1, "open": 100, "high": 102, "low": 99, "close": 101}]
+        if "funding-rate" in url:
+            return [{"close": "0.007601"}]
+        if "open-interest/exchange-list" in url:
+            return [{"exchange": "Binance", "open_interest_usd": 70}]
+        if "open-interest" in url:
+            return [{"close": "104816.674"}]
+        if "liquidation/exchange-list" in url:
+            return [{"exchange": "Binance", "longLiquidation_usd": 250_000,
+                     "shortLiquidation_usd": 1_090_000}]
+        if "liquidation" in url:
+            return [{
             "aggregated_long_liquidation_usd": 250_000,
             "aggregated_short_liquidation_usd": 1_090_000,
-        }],
-        "top-long-short": [{"long_position_percentage": 0.6198}],
-        "orderbook": [{"bids_usd": 66, "asks_usd": 100}],
-    }
+            }]
+        if "global-long-short" in url:
+            return [{"global_account_long_percent": 61}]
+        if "top-long-short-account" in url:
+            return [{"top_account_long_percent": 62}]
+        if "top-long-short-position" in url:
+            return [{"long_position_percentage": 0.6198}]
+        if "taker-buy-sell-volume/exchange-list" in url:
+            return {"buy_ratio": 48, "sell_ratio": 52, "exchange_list": []}
+        if "taker-buy-sell-volume" in url:
+            return [{"aggregated_buy_volume_usd": 48, "aggregated_sell_volume_usd": 52}]
+        if "aggregated-ask-bids" in url:
+            return [{"aggregated_bids_usd": 80, "aggregated_asks_usd": 100}]
+        if "orderbook" in url:
+            return [{"bids_usd": 66, "asks_usd": 100}]
+        raise AssertionError(url)
 
     def opener(request, timeout):
         assert timeout == 20
-        match = next(key for key in payloads if key in request.full_url)
         return FakeResponse(
-            {"code": "0", "msg": "success", "data": payloads[match]},
+            {"code": "0", "msg": "success", "data": payload_for(request.full_url)},
             {"API-KEY-MAX-LIMIT": "30", "API-KEY-USE-LIMIT": "5"},
         )
 
@@ -55,6 +76,9 @@ def test_fetch_market_context_normalizes_available_indicators_without_leaking_ke
     }]
     assert context["indicators"]["top_traders"]["long_pct"] == [61.98]
     assert context["indicators"]["orderbook"]["bid_ask_ratio"] == [0.66]
+    assert context["indicators"]["global_accounts"]["long_pct"] == [61.0]
+    assert context["indicators"]["top_accounts"]["long_pct"] == [62.0]
+    assert context["indicators"]["orderbook_aggregated"]["bid_ask_ratio"] == [0.8]
     assert context["quota"] == {"max_per_minute": 30, "used_this_minute": 5}
     assert "private-key" not in json.dumps(context)
 
@@ -63,13 +87,29 @@ def test_fetch_market_context_falls_back_to_4h_and_reports_real_interval():
     def opener(request, timeout):
         if "interval=1h" in request.full_url:
             return FakeResponse({"code": "400", "msg": "interval unavailable"})
-        if "liquidation" in request.full_url:
+        if "price/history" in request.full_url:
+            data = [{"time": 1, "open": 1, "high": 1, "low": 1, "close": 1}]
+        elif "open-interest/exchange-list" in request.full_url:
+            data = []
+        elif "liquidation/exchange-list" in request.full_url:
+            data = []
+        elif "liquidation" in request.full_url:
             data = [{
                 "aggregated_long_liquidation_usd": 1,
                 "aggregated_short_liquidation_usd": 2,
             }]
-        elif "top-long-short" in request.full_url:
+        elif "global-long-short" in request.full_url:
+            data = [{"global_account_long_percent": 60}]
+        elif "top-long-short-account" in request.full_url:
+            data = [{"top_account_long_percent": 60}]
+        elif "top-long-short-position" in request.full_url:
             data = [{"long_position_percentage": 0.6}]
+        elif "taker-buy-sell-volume/exchange-list" in request.full_url:
+            data = {"buy_ratio": 50, "sell_ratio": 50, "exchange_list": []}
+        elif "taker-buy-sell-volume" in request.full_url:
+            data = [{"aggregated_buy_volume_usd": 1, "aggregated_sell_volume_usd": 1}]
+        elif "aggregated-ask-bids" in request.full_url:
+            data = [{"aggregated_bids_usd": 2, "aggregated_asks_usd": 1}]
         elif "orderbook" in request.full_url:
             data = [{"bids_usd": 2, "asks_usd": 1}]
         else:
@@ -79,7 +119,7 @@ def test_fetch_market_context_falls_back_to_4h_and_reports_real_interval():
     context = fetch_market_context("key", opener=opener)
 
     assert context["status"] == "ok"
-    assert set(context["intervals"].values()) == {"4h"}
+    assert set(context["intervals"].values()) == {"4h", "realtime"}
 
 
 def test_update_market_context_uses_cache_and_writes_private_file(tmp_path):

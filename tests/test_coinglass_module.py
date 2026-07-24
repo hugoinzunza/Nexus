@@ -169,6 +169,37 @@ def test_pressure_is_incomplete_without_real_liquidation_map():
     assert dashboard["experimental_pressure"]["components"]["liquidation_attraction"] is None
 
 
+def test_dashboard_classifies_price_oi_flow_and_cross_exchange_context():
+    basic = {
+        "captured_at": "2026-07-24T16:00:00+00:00",
+        "intervals": {"open_interest": "4h"},
+        "indicators": {
+            "price": {"candles": [
+                {"time": 1, "close": 64_000},
+                {"time": 2, "close": 63_500},
+            ]},
+            "open_interest": {"close_usd": [100, 101], "times": [1, 2]},
+            "global_accounts": {"long_pct": [65]},
+            "top_accounts": {"long_pct": [67]},
+            "top_traders": {"long_pct": [62]},
+            "taker": {"bars": [{"buy_ratio": 46}]},
+            "orderbook": {"bid_ask_ratio": [1.3]},
+            "orderbook_aggregated": {"bid_ask_ratio": [0.75]},
+        },
+    }
+    advanced = {"price": 63_500, "capabilities": {}}
+
+    dashboard = build_dashboard(basic, [basic], advanced)
+    analysis = dashboard["basic_analysis"]
+
+    assert analysis["leverage"] == "precio baja + OI sube · nuevos shorts"
+    assert analysis["taker"] == "vendedores agresivos dominan"
+    assert analysis["crowding"] == "consenso long elevado"
+    assert analysis["orderbook"] == "libros divergen entre exchanges"
+    assert dashboard["history"][0]["price_change_pct"] < 0
+    assert dashboard["history"][0]["taker_buy_pct"] == 46
+
+
 def test_dashboard_cache_avoids_requery_and_never_persists_key(tmp_path):
     basic = {
         "captured_at": "2026-07-24T15:00:00+00:00",
@@ -242,8 +273,11 @@ def test_panel_exposes_real_research_views_and_no_signal_language():
     assert "Mapa de liquidaciones" in html
     assert "Libro de órdenes" in html
     assert "Radar" in html
+    assert "Flujo 4h" in html
+    assert "Open interest por exchange" in html
     assert "MODELO 0 · NO VALIDADO" in html
     assert "No es una señal" in html
     assert "drawLevelMap" in script
     assert "drawLiquidationHeatmap" in script
     assert "drawOrderbook" in script
+    assert "renderFlow" in script

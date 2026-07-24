@@ -193,6 +193,9 @@ def _latest(values: Any) -> float | None:
 
 def _compact_context(context: dict[str, Any]) -> dict[str, Any]:
     indicators = context.get("indicators", {})
+    candles = indicators.get("price", {}).get("candles", [])
+    price_now = _float(candles[-1].get("close")) if candles else None
+    price_prev = _float(candles[-2].get("close")) if len(candles) > 1 else None
     open_interest = indicators.get("open_interest", {})
     oi = open_interest.get("close_usd") or open_interest.get("close_btc", [])
     oi_now = _latest(oi)
@@ -200,12 +203,28 @@ def _compact_context(context: dict[str, Any]) -> dict[str, Any]:
     return {
         "time": context.get("captured_at"),
         "bar_time": (open_interest.get("times") or [None])[-1],
+        "price": price_now,
+        "price_change_pct": round((price_now / price_prev - 1) * 100, 4)
+        if price_now is not None and price_prev else None,
         "funding_pct": _latest(indicators.get("funding", {}).get("close_pct")),
+        "funding_volume_pct": _latest(
+            indicators.get("funding_volume", {}).get("close_pct")
+        ),
         "oi_usd": oi_now,
         "oi_change_pct": round((oi_now / oi_prev - 1) * 100, 4)
         if oi_now is not None and oi_prev else None,
         "top_long_pct": _latest(indicators.get("top_traders", {}).get("long_pct")),
+        "global_long_pct": _latest(indicators.get("global_accounts", {}).get("long_pct")),
+        "top_account_long_pct": _latest(
+            indicators.get("top_accounts", {}).get("long_pct")
+        ),
+        "taker_buy_pct": _latest([
+            row.get("buy_ratio") for row in indicators.get("taker", {}).get("bars", [])
+        ]),
         "book_ratio": _latest(indicators.get("orderbook", {}).get("bid_ask_ratio")),
+        "aggregated_book_ratio": _latest(
+            indicators.get("orderbook_aggregated", {}).get("bid_ask_ratio")
+        ),
     }
 
 
@@ -216,16 +235,33 @@ def _basic_analysis(basic: dict[str, Any]) -> dict[str, Any]:
     liquidation = liquidation_rows[-1] if isinstance(liquidation_rows, list) and liquidation_rows else None
     funding = compact.get("funding_pct")
     oi_change = compact.get("oi_change_pct")
+    price_change = compact.get("price_change_pct")
     top_long = compact.get("top_long_pct")
     book = compact.get("book_ratio")
+    aggregated_book = compact.get("aggregated_book_ratio")
+    taker_buy = compact.get("taker_buy_pct")
+    global_long = compact.get("global_long_pct")
+    top_account_long = compact.get("top_account_long_pct")
     long_liq = _float(liquidation.get("long_musd")) if isinstance(liquidation, dict) else None
     short_liq = _float(liquidation.get("short_musd")) if isinstance(liquidation, dict) else None
-    leverage = (
+    if price_change is not None and oi_change is not None:
+        if price_change > 0.15 and oi_change > 0.15:
+            leverage = "precio sube + OI sube · nuevos longs"
+        elif price_change < -0.15 and oi_change > 0.15:
+            leverage = "precio baja + OI sube · nuevos shorts"
+        elif price_change > 0.15 and oi_change < -0.15:
+            leverage = "precio sube + OI baja · cierre de shorts"
+        elif price_change < -0.15 and oi_change < -0.15:
+            leverage = "precio baja + OI baja · salida de longs"
+        else:
+            leverage = "precio/OI sin divergencia clara"
+    else:
+        leverage = (
         "sin datos" if oi_change is None
         else "apalancamiento entrando" if oi_change > 0.25
         else "desapalancamiento" if oi_change < -0.25
         else "OI estable"
-    )
+        )
     funding_state = (
         "sin datos" if funding is None
         else "longs pagan elevado" if funding > 0.01
@@ -245,10 +281,34 @@ def _basic_analysis(basic: dict[str, Any]) -> dict[str, Any]:
         else "posicionamiento equilibrado"
     )
     book_state = (
-        "sin datos" if book is None
-        else "más bids en ±1%" if book >= 1.25
-        else "más asks en ±1%" if book <= 0.8
+        "sin datos" if book is None and aggregated_book is None
+        else "bids dominan Binance y agregado"
+        if book is not None and aggregated_book is not None and book >= 1.2 and aggregated_book >= 1.2
+        else "asks dominan Binance y agregado"
+        if book is not None and aggregated_book is not None and book <= 0.83 and aggregated_book <= 0.83
+        else "libros divergen entre exchanges"
+        if book is not None and aggregated_book is not None
+        and (book - 1) * (aggregated_book - 1) < 0
+        else "más bids en ±1%" if (aggregated_book or book or 0) >= 1.2
+        else "más asks en ±1%" if (aggregated_book or book or 0) <= 0.83
         else "profundidad equilibrada"
+    )
+    taker_state = (
+        "sin datos" if taker_buy is None
+        else "compradores agresivos dominan" if taker_buy >= 52
+        else "vendedores agresivos dominan" if taker_buy <= 48
+        else "flujo taker equilibrado"
+    )
+    crowd_values = [
+        value for value in (global_long, top_account_long, top_long) if value is not None
+    ]
+    crowd_state = (
+        "sin datos" if not crowd_values
+        else "consenso long elevado" if min(crowd_values) >= 60
+        else "consenso short elevado" if max(crowd_values) <= 40
+        else "segmentos de traders divergen"
+        if max(crowd_values) - min(crowd_values) >= 8
+        else "posicionamiento mixto"
     )
     return {
         "research_only": True,
@@ -257,6 +317,8 @@ def _basic_analysis(basic: dict[str, Any]) -> dict[str, Any]:
         "funding": funding_state,
         "liquidations": liquidation_state,
         "positioning": positioning,
+        "crowding": crowd_state,
+        "taker": taker_state,
         "orderbook": book_state,
     }
 

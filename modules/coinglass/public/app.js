@@ -9,6 +9,9 @@ const compactUsd = (value) => {
   return usd(number);
 };
 const signed = (value, suffix = "", digits = 2) => value == null ? "—" : `${value >= 0 ? "+" : ""}${fmt(value, digits)}${suffix}`;
+const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[char]));
 let state = null;
 let liquidationMode = "levels";
 
@@ -136,6 +139,60 @@ function renderOverview() {
   $("basic-analysis").innerHTML = readings.map(([label, value]) =>
     `<div class="regime"><span>${label}</span><b>${value || "sin datos"}</b></div>`
   ).join("");
+}
+
+function pctClass(value, neutral = 0) {
+  if (value == null) return "";
+  return Number(value) >= neutral ? "up" : "down";
+}
+
+function renderFlow() {
+  const basic = state.basic?.indicators || {};
+  const candles = basic.price?.candles || [];
+  const priceNow = latest(candles)?.close;
+  const pricePrev = candles.length > 1 ? candles[candles.length - 2]?.close : null;
+  const priceChange = priceNow != null && pricePrev ? (priceNow / pricePrev - 1) * 100 : null;
+  const oi = basic.open_interest?.close_usd || [];
+  const oiNow = latest(oi), oiPrev = oi.length > 1 ? oi[oi.length - 2] : null;
+  const oiChange = oiNow != null && oiPrev ? (oiNow / oiPrev - 1) * 100 : null;
+  const taker = latest(basic.taker?.bars);
+  const globalLong = latest(basic.global_accounts?.long_pct);
+  const topAccounts = latest(basic.top_accounts?.long_pct);
+  const topPositions = latest(basic.top_traders?.long_pct);
+  const fundingOi = latest(basic.funding?.close_pct);
+  const fundingVolume = latest(basic.funding_volume?.close_pct);
+  const bookBinance = latest(basic.orderbook?.bid_ask_ratio);
+  const bookAll = latest(basic.orderbook_aggregated?.bid_ask_ratio);
+  $("flow-metrics").innerHTML =
+    metric("Precio 4h", signed(priceChange, "%"), pctClass(priceChange)) +
+    metric("OI 4h", signed(oiChange, "%"), pctClass(oiChange)) +
+    metric("Taker compra", taker?.buy_ratio == null ? "—" : `${fmt(taker.buy_ratio)}%`, pctClass((taker?.buy_ratio || 50) - 50)) +
+    metric("Global long", globalLong == null ? "—" : `${fmt(globalLong)}%`) +
+    metric("Top cuentas long", topAccounts == null ? "—" : `${fmt(topAccounts)}%`) +
+    metric("Top posiciones long", topPositions == null ? "—" : `${fmt(topPositions)}%`) +
+    metric("Funding OI / Vol", fundingOi == null && fundingVolume == null ? "—" : `${signed(fundingOi, "%", 4)} / ${signed(fundingVolume, "%", 4)}`) +
+    metric("Book Binance / agregado", `${fmt(bookBinance)} / ${fmt(bookAll)}`);
+
+  const oiData = basic.open_interest_exchanges || {};
+  const oiRows = oiData.exchanges || [];
+  const totalOi = Number(oiData.total?.oi_usd || oiRows.reduce((sum, row) => sum + Number(row.oi_usd || 0), 0));
+  $("oi-exchanges").innerHTML = oiRows.length ? oiRows.map((row) => {
+    const share = totalOi ? Number(row.oi_usd || 0) / totalOi * 100 : null;
+    return `<tr><td>${escapeHtml(row.exchange)}</td><td>${compactUsd(row.oi_usd)}</td><td>${share == null ? "—" : `${fmt(share)}%`}</td><td class="${pctClass(row.change_4h_pct)}">${signed(row.change_4h_pct, "%")}</td><td class="${pctClass(row.change_24h_pct)}">${signed(row.change_24h_pct, "%")}</td><td>${compactUsd(row.stable_margin_usd)}</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty">Sin desglose de OI disponible</td></tr>`;
+
+  const takerRows = basic.taker_exchanges?.exchanges || [];
+  $("taker-exchanges").innerHTML = takerRows.length ? takerRows.map((row) => {
+    const volume = (Number(row.buy_musd) + Number(row.sell_musd)) * 1e6;
+    return `<tr><td>${escapeHtml(row.exchange)}</td><td class="buy">${fmt(row.buy_ratio)}%</td><td class="sell">${fmt(row.sell_ratio)}%</td><td>${compactUsd(volume)}</td></tr>`;
+  }).join("") : `<tr><td colspan="4" class="empty">Sin flujo taker por exchange</td></tr>`;
+
+  const liqRows = basic.liquidation_exchanges?.exchanges || [];
+  $("liquidation-exchanges").innerHTML = liqRows.length ? liqRows.map((row) => {
+    const long = Number(row.long_musd || 0), short = Number(row.short_musd || 0);
+    const dominance = long > short * 1.5 ? "longs" : short > long * 1.5 ? "shorts" : "mixto";
+    return `<tr><td>${escapeHtml(row.exchange)}</td><td class="down">${fmt(long)}M</td><td class="up">${fmt(short)}M</td><td>${dominance}</td></tr>`;
+  }).join("") : `<tr><td colspan="4" class="empty">Sin liquidaciones por exchange</td></tr>`;
 }
 
 function message(id, text) {
@@ -347,6 +404,7 @@ function render(data) {
   document.querySelector('[data-tab="liquidations"]').classList.toggle("hidden", !hasLiquidations);
   document.querySelector('[data-tab="orderbook"]').classList.toggle("hidden", !hasOrderbook);
   renderOverview();
+  renderFlow();
   renderLiquidations();
   renderOrderbook();
   renderModel();
@@ -358,6 +416,7 @@ document.querySelectorAll(".tabs button").forEach((button) => {
     document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === `view-${button.dataset.tab}`));
     requestAnimationFrame(() => {
       if (button.dataset.tab === "overview") renderOverview();
+      if (button.dataset.tab === "flow") renderFlow();
       if (button.dataset.tab === "liquidations") renderLiquidations();
       if (button.dataset.tab === "orderbook") renderOrderbook();
     });
