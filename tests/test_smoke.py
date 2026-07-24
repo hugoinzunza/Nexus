@@ -73,3 +73,40 @@ def test_bot_panel_muestra_fase1_dry_run():
     assert "cruce causal de la entrada central" in js
     assert "20 trades dry o 3 semanas" in js
     assert "no autoriza live" in js
+
+
+def test_hub_expone_todo_el_workspace():
+    """La portada operativa enlaza cada producto y cada vista de research."""
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "docs/diseno/home-clean.html").read_text(encoding="utf-8")
+    routes = [
+        "/m/trading/",
+        "/m/journal/",
+        "/m/bot/",
+        "/m/coinsignals/",
+        "/m/coinglass/",
+        "/m/trading/backtest",
+        "/m/trading/research-bta-v2",
+    ]
+    assert "Centro de control" in html
+    assert "Menos pantallas" not in html
+    for route in routes:
+        assert f'href="{route}"' in html
+
+
+def test_modulos_montan_navegacion_global():
+    """Las vistas principales comparten el mismo mapa de navegación."""
+    root = Path(__file__).resolve().parents[1]
+    pages = [
+        "modules/trading/public/index.html",
+        "modules/journal/public/index.html",
+        "modules/bot/public/index.html",
+        "modules/coinsignals/public/index.html",
+        "modules/coinglass/public/index.html",
+        "modules/trading/public/backtest.html",
+        "modules/trading/public/research-bta-v2.html",
+    ]
+    for page in pages:
+        html = (root / page).read_text(encoding="utf-8")
+        assert "/static/nexux-shell.css" in html, page
+        assert "/static/nexux-shell.js" in html, page
