@@ -42,9 +42,40 @@
 
       <div class="section-head">
         <div><p class="eyebrow">PLAN ACTUAL · LECTURA DESCRIPTIVA</p><h2>Régimen 4h</h2></div>
-        <span>Contexto, no señal</span>
+        <span>Contexto, no señal · toca el título para la leyenda</span>
       </div>
-      <div class="regime-strip" id="basic-analysis"></div>
+      <div class="lecturas">
+        <div class="lectura">
+          <details>
+          <summary><span class="eyebrow">MECANISMO DEL MOVIMIENTO</span><b id="lev-titulo">—</b></summary>
+          <div class="legend-box">
+            <p>Cruza el cambio de <b>precio</b> con el de <b>open interest</b> (cuánta
+              plata hay viva en futuros). Distingue un alza con dinero nuevo entrando
+              de un alza que es sólo gente cerrando shorts — en el gráfico se ven
+              iguales, pero no son lo mismo.</p>
+            <p class="warn">Describe lo que <b>ya pasó</b>. No predice: probado como
+              regla direccional, perdió fuera de muestra con el intervalo de
+              confianza completamente bajo cero.</p>
+          </div>
+          </details>
+          <div class="cuadrantes" id="lev-cuadrantes"></div>
+        </div>
+
+        <div class="lectura">
+          <details>
+          <summary><span class="eyebrow">QUIÉN FUE BARRIDO</span><b id="liq-titulo">—</b></summary>
+          <div class="legend-box">
+            <p>Posiciones cerradas <b>a la fuerza</b> en la última barra, en millones
+              de USD. Un “flush de longs” significa que acaban de liquidar
+              compradores apalancados: el movimiento tuvo combustible forzado, no
+              sólo decisión.</p>
+            <p class="warn">Es el pasado inmediato. Que hayan barrido un lado no
+              implica que el otro siga.</p>
+          </div>
+          </details>
+          <div class="liq-barra" id="liq-barra"></div>
+        </div>
+      </div>
 
       <div class="section-head">
         <div><p class="eyebrow">HISTÓRICO DISPONIBLE</p><h2>Derivados y posicionamiento</h2></div>

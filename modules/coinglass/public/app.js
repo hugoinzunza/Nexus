@@ -131,32 +131,52 @@ function renderOverview() {
     metric("Book bid/ask ±1%", fmt(book, 2));
   renderHistory();
   renderCapabilities();
+  renderLecturas(liq);
+}
+
+// Dos lecturas, en formato grafico. Se dejaron solo estas porque son las unicas
+// que dicen algo que el grafico de precio no muestra; las otras tres eran
+// redundantes o no accionables.
+const CUADRANTES = [
+  ["Precio sube · OI sube", "nuevos longs", "up"],
+  ["Precio sube · OI baja", "cierre de shorts", "up"],
+  ["Precio baja · OI sube", "nuevos shorts", "down"],
+  ["Precio baja · OI baja", "salida de longs", "down"],
+];
+
+function renderLecturas(liq) {
   const analysis = state.basic_analysis || {};
-  // Cada lectura lleva su "cómo se lee": el panel mostraba etiquetas tipo
-  // "nuevos longs" sin decir qué significan ni qué se puede concluir.
-  const readings = [
-    ["Apalancamiento", analysis.leverage,
-     "Cruza precio con open interest: dice si el movimiento lo hace plata NUEVA " +
-     "entrando o posiciones viejas cerrando. Es el mecanismo de lo que ya pasó, " +
-     "no una prediccion (probado como regla direccional: perdio fuera de muestra)."],
-    ["Funding", analysis.funding,
-     "Quien paga por mantener la posicion. Longs pagando elevado = mucha gente " +
-     "larga y apretada; suele acompañar techos, pero no los marca."],
-    ["Liquidaciones", analysis.liquidations,
-     "Quien fue liquidado a la fuerza en la ultima barra. 'Flush de longs' = " +
-     "acaban de barrer compradores apalancados. Describe el pasado inmediato."],
-    ["Top traders", analysis.positioning,
-     "Cuanto consenso hay entre los traders grandes de Binance. Consenso extremo " +
-     "es contexto de riesgo, no señal contraria automatica."],
-    ["Profundidad", analysis.orderbook,
-     "Si los libros de distintos exchanges se contradicen. Divergencia = el " +
-     "desequilibrio de un solo exchange no es representativo."],
-  ];
-  $("basic-analysis").innerHTML = readings.map(([label, value, comoSeLee]) =>
-    `<div class="regime" title="${escapeHtml(comoSeLee)}">` +
-    `<span>${escapeHtml(label)}</span><b>${escapeHtml(value || "sin datos")}</b>` +
-    `<small>${escapeHtml(comoSeLee)}</small></div>`
+
+  // --- Mecanismo: cuadrante 2x2 con la celda vigente encendida ---
+  const lectura = String(analysis.leverage || "");
+  const activo = CUADRANTES.findIndex(([, etiqueta]) => lectura.includes(etiqueta));
+  $("lev-titulo").textContent = lectura || "sin datos";
+  $("lev-titulo").className = activo < 0 ? "" : CUADRANTES[activo][2];
+  $("lev-cuadrantes").innerHTML = CUADRANTES.map(([eje, etiqueta, clase], i) =>
+    `<div class="cuadrante${i === activo ? " on " + clase : ""}">` +
+    `<span>${escapeHtml(eje)}</span><b>${escapeHtml(etiqueta)}</b></div>`
   ).join("");
+
+  // --- Liquidaciones: barra proporcional long vs short ---
+  const largos = Number(liq?.long_musd) || 0;
+  const cortos = Number(liq?.short_musd) || 0;
+  const total = largos + cortos;
+  $("liq-titulo").textContent = analysis.liquidations || "sin datos";
+  $("liq-titulo").className = total === 0 ? ""
+    : largos > cortos * 2 ? "down" : cortos > largos * 2 ? "up" : "";
+  if (!total) {
+    $("liq-barra").innerHTML = `<p class="empty">Sin liquidaciones en la última barra.</p>`;
+    return;
+  }
+  const pctL = Math.round(100 * largos / total);
+  $("liq-barra").innerHTML =
+    `<div class="liq-track">` +
+    `<div class="liq-long" style="width:${pctL}%"></div>` +
+    `<div class="liq-short" style="width:${100 - pctL}%"></div></div>` +
+    `<div class="liq-pies">` +
+    `<span class="down"><b>${fmt(largos)}M</b> longs barridos · ${pctL}%</span>` +
+    `<span class="up">${100 - pctL}% · <b>${fmt(cortos)}M</b> shorts barridos</span>` +
+    `</div>`;
 }
 
 function pctClass(value, neutral = 0) {

@@ -367,14 +367,29 @@ def test_panel_avisa_cuando_el_dato_de_mercado_esta_cacheado():
     assert "captured_at" in script
 
 
-def test_resumen_explica_como_se_lee_cada_lectura():
-    """El Resumen mostraba etiquetas como "nuevos longs" sin decir qué significan
-    ni qué se puede concluir. Cada lectura debe traer su "cómo se lee"."""
+def test_resumen_deja_dos_lecturas_graficas_con_leyenda_al_click():
+    """El Resumen mostraba 5 etiquetas sin explicar nada. Ahora quedan las DOS que
+    dicen algo que el gráfico de precio no muestra, en formato gráfico (cuadrante
+    2x2 y barra de liquidaciones) y con la leyenda desplegable al tocar el título.
+    """
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
     script = (ROOT / "modules/coinglass/public/app.js").read_text()
     css = (ROOT / "modules/coinglass/public/styles.css").read_text()
 
-    assert "comoSeLee" in script
-    assert "no una prediccion" in script, \
-        "debe decir explícitamente que el cruce precio/OI no predice"
-    assert "perdio fuera de muestra" in script
-    assert ".regime small" in css, "el texto explicativo necesita estilo propio"
+    # leyenda al click: <details> nativo, sin JS y accesible en movil
+    assert html.count('<div class="lectura">') == 2
+    assert html.count("<details>") >= 2
+    assert "toca el título para la leyenda" in html
+    assert "legend-box" in html and ".lectura details[open] .legend-box" in css
+
+    # el cruce precio/OI debe declarar que NO predice
+    assert "no predice" in html.lower()
+    assert "bajo cero" in html, "debe citar que perdió fuera de muestra"
+
+    # las dos lecturas son graficas
+    assert "renderLecturas" in script
+    assert "CUADRANTES" in script and ".cuadrante.on" in css
+    assert "liq-track" in script and ".liq-long" in css
+
+    # las tres lecturas redundantes ya no se muestran
+    assert 'id="basic-analysis"' not in html
