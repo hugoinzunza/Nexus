@@ -734,3 +734,83 @@ def test_el_libro_tiene_zoom_al_precio_de_ahora():
     assert "ahora * (1 - bookZoom / 100)" in script
     # y el recorrido del precio nunca queda fuera del marco
     assert "min = Math.min(min, Math.min(...precios))" in script
+
+
+def test_lo_que_se_cae_de_la_ventana_se_archiva_en_vez_de_perderse(tmp_path):
+    """2.016 capturas cada 5 min son EXACTAMENTE 7 días: todo lo anterior se perdía.
+
+    El estudio del imán con niveles REALES no es backtesteable —sólo se puede
+    registrar hacia adelante— así que cada día sin archivo destruía un día de datos
+    irrecuperable. Acá se fija que lo descartado quede en disco.
+    """
+    from modules.coinglass import module as mod
+
+    archivo = tmp_path / "archivo.jsonl"
+    viejas = [{"captured_at": f"2026-07-{d:02d}T00:00:00+00:00", "price": 60_000 + d}
+              for d in range(1, 4)]
+
+    res = mod._archivar_descartadas(str(archivo), viejas)
+    assert res["escritas"] == 3 and res["error"] is None
+
+    lineas = archivo.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lineas) == 3
+    assert json.loads(lineas[0])["price"] == 60_001
+
+    # es APPEND: una segunda tanda no pisa la primera
+    mod._archivar_descartadas(str(archivo), [{"captured_at": "x", "price": 1}])
+    assert len(archivo.read_text(encoding="utf-8").strip().split("\n")) == 4
+
+
+def test_el_archivo_deja_de_escribir_en_vez_de_rotar_en_silencio(tmp_path, monkeypatch):
+    """Perder datos calladamente es justo el problema que este archivo resuelve, así
+    que al llegar al tope se detiene y lo dice."""
+    from modules.coinglass import module as mod
+
+    archivo = tmp_path / "archivo.jsonl"
+    archivo.write_text("x" * 500, encoding="utf-8")
+    monkeypatch.setattr(mod, "MAX_ARCHIVE_BYTES", 100)
+
+    res = mod._archivar_descartadas(str(archivo), [{"captured_at": "a"}])
+    assert res["lleno"] is True and res["escritas"] == 0
+    assert archivo.read_text(encoding="utf-8") == "x" * 500   # no lo toca
+
+    estado = mod._estado_del_archivo(str(archivo))
+    assert estado["lleno"] is True
+
+
+def test_archivar_no_puede_romper_la_ingesta(tmp_path):
+    """Ya pasó una vez: un guard mío fallando cerrado le costó un ciclo de captura al
+    colector. Un error de disco acá se reporta, no propaga."""
+    from modules.coinglass import module as mod
+
+    ruta_imposible = str(tmp_path / "no" / "existe" / "a.jsonl")
+    res = mod._archivar_descartadas(ruta_imposible, [{"captured_at": "a"}])
+    assert res["error"] is not None
+    assert res["escritas"] == 0
+
+
+def test_el_estado_expone_si_el_archivo_esta_creciendo(tmp_path):
+    """Un archivo que falla en silencio es peor que no tenerlo: da la sensación de
+    estar guardando. Por eso el estado lo publica."""
+    from modules.coinglass import module as mod
+
+    archivo = tmp_path / "archivo.jsonl"
+    assert mod._estado_del_archivo(str(archivo))["existe"] is False
+
+    mod._archivar_descartadas(str(archivo), [{"captured_at": "a"}, {"captured_at": "b"}])
+    estado = mod._estado_del_archivo(str(archivo))
+    assert estado["existe"] is True and estado["bytes"] > 0
+    assert "ultima_escritura" in estado
+    # NO debe contar lineas: leeria cientos de MB en cada carga de la pagina
+    assert "capturas" not in estado
+
+    fuente = (ROOT / "modules/coinglass/module.py").read_text()
+    assert 'data["visual_book_archive"]' in fuente, \
+        "el estado debe publicarlo o nadie se entera si deja de crecer"
+
+
+def test_el_archivo_no_cruza_research_con_ejecucion():
+    """La separacion research<->ejecucion se mantiene: el join con los setups se hace
+    OFFLINE por captured_at, sin que trading importe coinglass ni al reves."""
+    cg = (ROOT / "modules/coinglass/module.py").read_text()
+    assert "modules.trading" not in cg and "setups_store" not in cg

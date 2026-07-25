@@ -1,0 +1,18 @@
+{
+ "meta": {
+  "research_only": true,
+  "execution_enabled": false,
+  "validated": false,
+  "aviso": "Research only - No senal - No bot - NO usar para activar live",
+  "proposito": "registrar hacia adelante los imanes REALES en el momento del toque; es la unica via, el historico no es descargable",
+  "causalidad": "captura anterior o igual a la activacion, nunca posterior",
+  "simbolo": "BTC_USDT",
+  "tolerancia_min": 15,
+  "capturas_disponibles": 0,
+  "setups_btc_activados": 9,
+  "con_cobertura": 0,
+  "sin_cobertura": 9,
+  "expectativa": "~15 setups de BTC cada 43 dias: juntar muestra para repetir iman-vs-placebo toma anos, no meses"
+ },
+ "filas": []
+}

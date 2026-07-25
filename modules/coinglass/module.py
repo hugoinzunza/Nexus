@@ -54,6 +54,72 @@ def _recent_by_time(rows: list, *, hours: int, cap: int) -> list:
 MAX_VISUAL_BOOK_HISTORY = 2_016
 PUBLIC_VISUAL_BOOK_HISTORY = 288
 
+# 2.016 capturas cada 5 min son EXACTAMENTE 7 días: todo lo anterior se perdía para
+# siempre. Y como nada cruza los niveles de CoinGlass con los setups del Diario, el
+# estudio del imán con niveles REALES —el único que quedó pendiente y que no es
+# backtesteable— no tenía con qué hacerse nunca. Cada día de espera destruía un día
+# de datos irrecuperable.
+#
+# Se archiva append-only lo que se cae de la ventana. El archivo caliente sigue
+# chico (lo que sirve la UI no cambia); el histórico queda en disco para poder unir
+# offline por `captured_at` sin que ningún módulo de trading importe CoinGlass —la
+# separación research↔ejecución se mantiene intacta—.
+VISUAL_BOOK_ARCHIVE_PATH = os.path.join(
+    persist_dir(ROOT),
+    "coinglass_visual_book_archive.jsonl",
+)
+# ~1 KB por captura y 288 capturas al día son ~0,3 MB/día, ~110 MB/año. El tope es
+# holgado, y al llegar DEJA de escribir en vez de rotar en silencio: perder datos
+# calladamente es justo el problema que este archivo viene a resolver.
+MAX_ARCHIVE_BYTES = 512_000_000
+
+
+def _archivar_descartadas(path: str, filas: list) -> dict:
+    """Agrega al archivo histórico lo que se cae de la ventana rodante.
+
+    Devuelve un resumen para poder ver desde el estado si esto está funcionando: un
+    archivo que falla en silencio es peor que no tenerlo, porque da la sensación de
+    estar guardando.
+    """
+    resumen = {"escritas": 0, "error": None, "lleno": False}
+    if not filas:
+        return resumen
+    try:
+        if os.path.exists(path) and os.path.getsize(path) >= MAX_ARCHIVE_BYTES:
+            resumen["lleno"] = True
+            return resumen
+        with open(path, "a", encoding="utf-8") as fh:
+            for fila in filas:
+                fh.write(json.dumps(fila, separators=(",", ":")) + "\n")
+        resumen["escritas"] = len(filas)
+    except OSError as exc:
+        # No romper la ingesta por esto: el colector ya perdió un ciclo una vez por
+        # fallar cerrado en un guard mío. Se reporta y se sigue.
+        resumen["error"] = str(exc)
+    return resumen
+
+
+def _estado_del_archivo(path: str) -> dict:
+    """Salud del archivo con `stat` solamente.
+
+    Contar líneas obligaría a leer el archivo entero en CADA carga de la página, y
+    este archivo está diseñado para crecer a cientos de MB. `bytes` + `ultima_escritura`
+    alcanzan para ver que sigue creciendo, que es lo único que hay que vigilar.
+    """
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return {"existe": False, "bytes": 0}
+    except OSError as exc:
+        return {"existe": None, "error": str(exc)}
+    return {
+        "existe": True,
+        "bytes": st.st_size,
+        "ultima_escritura": datetime.fromtimestamp(
+            st.st_mtime, timezone.utc).isoformat(),
+        "lleno": st.st_size >= MAX_ARCHIVE_BYTES,
+    }
+
 
 class CoinGlassModule(NexusModule):
     slug = "coinglass"
@@ -88,6 +154,9 @@ class CoinGlassModule(NexusModule):
                 # dibujaba contiguas, borrando los huecos.
                 data["visual_orderbook_history"] = _recent_by_time(
                     book_history, hours=24, cap=PUBLIC_VISUAL_BOOK_HISTORY)
+            # Observable a propósito: si el archivo dejara de crecer habría que
+            # enterarse, no descubrirlo dentro de unos meses al ir a usarlo.
+            data["visual_book_archive"] = _estado_del_archivo(VISUAL_BOOK_ARCHIVE_PATH)
             try:
                 indicator = build_visual_indicator(visual)
                 data["visual_indicator"] = indicator
@@ -154,6 +223,12 @@ class CoinGlassModule(NexusModule):
                             if row["side"] == "ask"
                         ],
                     })
+                    # Lo que se cae de la ventana va al histórico ANTES de recortar.
+                    if len(book_history) > MAX_VISUAL_BOOK_HISTORY:
+                        _archivar_descartadas(
+                            VISUAL_BOOK_ARCHIVE_PATH,
+                            book_history[:-MAX_VISUAL_BOOK_HISTORY],
+                        )
                     self._write_path(
                         VISUAL_BOOK_HISTORY_PATH,
                         book_history[-MAX_VISUAL_BOOK_HISTORY:],
