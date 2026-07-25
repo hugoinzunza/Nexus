@@ -527,3 +527,40 @@ def test_lag_del_heatmap_parsea_el_formato_real_de_produccion():
     tardio = build_visual_indicator(snap, now=datetime(2026, 7, 25, 1, 10, tzinfo=timezone.utc))
     assert tardio["coverage"]["heatmap_lag_seconds"] == 19_455   # 5 h 24 min
     assert tardio["stale_heatmap"] is True
+
+
+def test_paso_del_libro_se_mide_no_se_inventa():
+    """El `interval` del depth delta decía "15m" a mano, pero el paso real depende
+    del zoom del gráfico: `depth_slope` era una derivada de horizonte desconocido.
+    """
+    from modules.coinglass.visual_collector import _paso_observado
+
+    cada_hora = [{"timestamp": "2026-07-24 10:00"}, {"timestamp": "2026-07-24 11:00"},
+                 {"timestamp": "2026-07-24 12:00"}, {"timestamp": "2026-07-24 13:00"}]
+    assert _paso_observado(cada_hora) == "1h"
+
+    cada_15 = [{"timestamp": "10:00"}, {"timestamp": "10:15"},
+               {"timestamp": "10:30"}, {"timestamp": "10:45"}]
+    assert _paso_observado(cada_15) == "15m"
+
+    assert _paso_observado([{"timestamp": "10:00"}]) is None
+    assert _paso_observado([{"timestamp": "Precio"}, {"timestamp": ""}]) is None
+
+
+def test_heatmap_prefiere_la_columna_mas_reciente_que_devuelva_datos():
+    """El eje X del heatmap es TIEMPO: una columna fija muestrea un instante.
+    Estaba clavado en 0.75 (~6h atrás en vista 24h, confirmado en producción).
+    Ahora se barre desde el borde y se registra la columna usada.
+    """
+    from modules.coinglass.visual_collector import HEATMAP_COLUMNAS
+
+    assert HEATMAP_COLUMNAS[0] > 0.95, "debe intentar primero la columna más reciente"
+    assert HEATMAP_COLUMNAS == tuple(sorted(HEATMAP_COLUMNAS, reverse=True)), \
+        "las candidatas van de la más reciente a la más antigua"
+    assert 0.75 in HEATMAP_COLUMNAS, "el valor histórico queda como último recurso"
+
+    source = (ROOT / "modules/coinglass/visual_collector.py").read_text()
+    assert '"x_ratio": heatmap_x' in source, \
+        "la columna usada debe quedar registrada en el snapshot"
+    assert "_scan_vertical(page, x_ratio=0.75)" not in source, \
+        "ya no puede quedar clavado en una columna fija"

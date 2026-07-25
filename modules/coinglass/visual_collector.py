@@ -238,6 +238,82 @@ async def _scan_vertical(page, *, x_ratio: float, samples: int = 150) -> list[di
     return list(seen.values())
 
 
+def _paso_observado(rows: list[dict[str, Any]]) -> str | None:
+    """Paso temporal MEDIDO entre puntos consecutivos del barrido, como etiqueta.
+
+    Los tooltips traen su hora; el paso real depende del zoom del gráfico, así que
+    hardcodear "15m" convertía `depth_slope` en una derivada de horizonte
+    desconocido. Se usa la mediana de las diferencias para ignorar huecos.
+    """
+    marcas = []
+    for row in rows:
+        raw = str(row.get("timestamp") or "").strip()
+        if not raw:
+            continue
+        try:
+            marcas.append(datetime.fromisoformat(raw))
+            continue
+        except ValueError:
+            pass
+        partes = raw.split(":")
+        if len(partes) >= 2 and partes[0].strip().isdigit() and partes[1][:2].isdigit():
+            marcas.append(datetime(2000, 1, 1, int(partes[0]) % 24, int(partes[1][:2])))
+    if len(marcas) < 3:
+        return None
+    marcas.sort()
+    deltas = sorted((b - a).total_seconds() for a, b in zip(marcas, marcas[1:])
+                    if (b - a).total_seconds() > 0)
+    if not deltas:
+        return None
+    paso = deltas[len(deltas) // 2]
+    if paso % 3600 == 0:
+        return f"{int(paso // 3600)}h"
+    return f"{int(round(paso / 60))}m"
+
+
+async def _probe_column(page, x_ratio: float, samples: int = 12) -> int:
+    """Sondeo BARATO: ¿esta columna del canvas devuelve tooltips? Cuenta cuántos.
+
+    Se usa para elegir la columna antes de gastar 150 hovers en ella.
+    """
+    canvas, box = await _largest_canvas(page)
+    box = await canvas.bounding_box()
+    if not box:
+        return 0
+    encontrados = 0
+    for index in range(samples):
+        y = 12 + index / max(1, samples - 1) * (box["height"] - 24)
+        await page.mouse.move(box["x"] + box["width"] * x_ratio, box["y"] + y)
+        parsed = parse_tooltip(await _tooltip_text(page))
+        if parsed.get("price") and parsed.get("intensity_usd") is not None:
+            encontrados += 1
+    return encontrados
+
+
+# Columnas candidatas del heatmap, de la MÁS RECIENTE a la más antigua. El eje X
+# del heatmap es tiempo: hovear una columna fija muestrea un instante. Antes estaba
+# clavado en 0.75, que en una vista de 24h son ~6 horas atrás (confirmado en
+# produccion: captura 01:09 con tooltip de 19:45). Se elige la columna más a la
+# derecha que efectivamente devuelva tooltips, porque el borde puro suele caer en
+# el margen del eje y no devuelve nada.
+HEATMAP_COLUMNAS = (0.985, 0.965, 0.94, 0.90, 0.85, 0.78, 0.75)
+
+
+async def _scan_heatmap_reciente(page, samples: int = 150) -> tuple[list[dict[str, Any]], float]:
+    """Escanea la columna MÁS RECIENTE del heatmap que devuelva datos.
+
+    Devuelve (filas, x_ratio_usado) para que el x_ratio quede registrado en el
+    snapshot: si mañana CoinGlass cambia el layout, se ve en el dato en vez de
+    degradar en silencio.
+    """
+    elegida = HEATMAP_COLUMNAS[-1]
+    for x_ratio in HEATMAP_COLUMNAS:
+        if await _probe_column(page, x_ratio) >= 3:
+            elegida = x_ratio
+            break
+    return await _scan_vertical(page, x_ratio=elegida, samples=samples), elegida
+
+
 async def _scan_levels_horizontal(
     page,
     *,
@@ -424,7 +500,7 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
         map_rows = await _scan_levels_horizontal(page)
 
         await _open_chart(page, HEATMAP_URL)
-        heatmap_rows = await _scan_vertical(page, x_ratio=0.75)
+        heatmap_rows, heatmap_x = await _scan_heatmap_reciente(page)
 
         await _open_chart(page, DEPTH_URL)
         depth_rows = await _scan_horizontal(page)
@@ -464,6 +540,9 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
         "liquidation_heatmap": {
             "model": "2",
             "range": "24h",
+            # Columna del canvas realmente muestreada. Queda en el dato para que un
+            # cambio de layout de CoinGlass sea visible y no silencioso.
+            "x_ratio": heatmap_x,
             "levels": [{
                 "price": row["price"],
                 "intensity_usd": row["intensity_usd"],
@@ -472,7 +551,10 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
         },
         "depth_delta": {
             "range_pct": 1,
-            "interval": "15m",
+            # El intervalo se MIDE de las marcas de tiempo del propio tooltip; antes
+            # decia "15m" a mano y el paso real depende del zoom del grafico, asi que
+            # depth_slope era una derivada de horizonte desconocido.
+            "interval": _paso_observado(depth_rows) or "desconocido",
             "series": [{
                 "timestamp": row.get("timestamp"),
                 "delta_usd": row["delta_usd"],
