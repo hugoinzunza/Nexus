@@ -74,9 +74,31 @@ Dos agravantes verificados:
   marcados `14:50` con `captured_at` a las `18:00` UTC
   (`tests/test_coinglass_visual.py:32,53-60`).
 
-**Corregido en parte (`0b8ee01`)**: ahora se mide. `coverage.heatmap_lag_seconds`
-y `stale_heatmap` comparan el reloj del tooltip con la captura; en ese fixture da
-**11.400 s (3h10m)**. El dato ya venía en cada nivel y se descartaba.
+**Corregido (`0b8ee01`)**: ahora se mide. `coverage.heatmap_lag_seconds` y
+`stale_heatmap` comparan el reloj del tooltip con la captura. El dato ya venía en
+cada nivel y se descartaba.
+
+### ✅ CONFIRMADO EMPÍRICAMENTE (2026-07-25, tras desplegar al VPS)
+
+Medición sobre una captura real de producción:
+
+| | valor |
+|---|---|
+| `captured_at` de la captura | **2026-07-25 01:09:15 UTC** |
+| `timestamp` del tooltip del heatmap | **2026-07-24 19:45** |
+| desfase | **horas, no minutos** |
+
+El componente que pesa **50% del score** se muestrea de una columna del gráfico de
+horas antes, y sus distancias se comparan contra un precio *live*. La sospecha de
+la auditoría queda **confirmada y es peor que la estimación inicial**.
+
+Nota de método: el medidor inicial devolvía `None` en producción porque el tooltip
+real trae `"YYYY-MM-DD HH:MM"` y el fixture usaba `"HH:MM"`. Corregido en
+`7f8d526` — sin eso el hallazgo habría quedado sin medir pese a estar instrumentado.
+
+**Consecuencia**: cualquier estudio del Radar hecho con `x_ratio=0.75` mide una
+mezcla de presente y pasado. Antes de validar el Radar hay que decidir el punto de
+muestreo del heatmap con este número a la vista.
 
 - **Qué lo refutaría**: que el 25% derecho del canvas sea margen de eje/proyección
   y 0.75 sea efectivamente la columna vigente. Ahora es comprobable con datos
@@ -216,6 +238,25 @@ el precio toma cualquier monto entre 1e3 y 1e6 como precio; si falta la
 intensidad toma el último monto > 1e5 de la caja. Un tooltip a medio pintar
 produce una fila plausible en vez de un descarte.
 **Propuesta**: exigir claves obligatorias y descartar la fila si falta alguna.
+
+### Lección del despliegue: una guarda fail-closed tumbó la recolección
+
+Al desplegar, el colector **falló** con
+`CoinGlass no expuso un control de ordenes canceladas identificable por etiqueta`:
+mi propio arreglo de P2-12 era demasiado estricto y dejó al colector sin publicar
+durante un ciclo. Corregido en `192f5e1`: se intenta por etiqueta y, si no hay una
+identificable, se cae al comportamiento histórico **pero cada fila lleva**
+`cancel_filter = by_label | first_checkbox_unverified`.
+
+En producción el valor observado es **`first_checkbox_unverified`**: el DOM actual
+no expone una etiqueta reconocible, así que la exclusión de canceladas **no está
+verificada** y ahora eso queda registrado en el dato en vez de asumirse.
+
+Dos lecciones que valen más que el arreglo:
+- **Fallar cerrado en un colector no es gratis**: perder una captura cada 5 minutos
+  puede ser peor que un dato marcado como no verificado. La traza gana al veto.
+- El reintento solo logueaba el **tipo** de excepción, no el mensaje, así que no se
+  podía saber qué guarda había fallado. Corregido en el mismo commit.
 
 ### P2-12 · Fail-closed de órdenes canceladas apunta a un checkbox anónimo
 
