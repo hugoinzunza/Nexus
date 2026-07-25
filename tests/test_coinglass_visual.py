@@ -624,3 +624,24 @@ def test_brujula_mide_alcance_y_no_afirma_direccion():
     # el score sin validar deja de ser lo más grande de la pantalla
     assert "font-size: 24px" in css.split(".score b {")[1].split("}")[0]
     assert "sin validar" in script
+
+
+def test_el_encuadre_del_libro_se_ancla_al_precio_no_a_los_muros():
+    """REGRESIÓN: al reescribir el gráfico se perdió el filtro de distancia y dos
+    muros lejanos (120k y 125k con BTC en 64k) estiraban el eje Y de 57k a 130k,
+    aplastando toda la acción del precio en una banda de píxeles ilegible.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    bloque = script.split("function drawOrderbook()")[1].split("\nfunction ")[0]
+
+    # el rango sale del precio, no del min/max de todos los muros
+    assert "const pmin = Math.min(...precios)" in bloque
+    assert "muros.map((m) => m.p).concat(precios)" not in bloque, \
+        "el eje no puede tomar su rango de los muros lejanos"
+
+    # los muros fuera del encuadre no se dibujan ni se etiquetan
+    assert "if (m.p < min || m.p > max) continue;" in bloque
+    assert "filter((m) => m.p >= min && m.p <= max)" in bloque
+
+    # y las etiquetas de muros se separan en pixeles
+    assert "Math.abs(y - otra) < 24" in bloque

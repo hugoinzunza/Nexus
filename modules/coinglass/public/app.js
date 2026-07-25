@@ -367,9 +367,19 @@ function drawOrderbook() {
     message("orderbook-message", "Las capturas no traen muros legibles");
     return;
   }
-  // El rango vertical incluye precio y muros, para que nada quede fuera del marco
-  const todos = muros.map((m) => m.p).concat(precios);
-  let min = Math.min(...todos), max = Math.max(...todos);
+  // El rango vertical se ancla al PRECIO, no a los muros. Al reescribir el
+  // grafico se perdio el filtro de distancia del codigo viejo y dos muros
+  // lejanos (120k, 125k con BTC en 64k) estiraban el eje de 57k a 130k,
+  // aplastando toda la accion del precio en una banda de pixeles.
+  const pmin = Math.min(...precios), pmax = Math.max(...precios);
+  const centro = (pmin + pmax) / 2;
+  const radio = Math.max((pmax - pmin) / 2 * 1.6, centro * 0.02);
+  let min = centro - radio, max = centro + radio;
+  const cerca = muros.filter((m) => m.p >= min && m.p <= max);
+  if (cerca.length) {
+    min = Math.min(min, Math.min(...cerca.map((m) => m.p)));
+    max = Math.max(max, Math.max(...cerca.map((m) => m.p)));
+  }
   const pad = (max - min) * 0.04 || 1;
   min -= pad; max += pad;
   const maxUsd = Math.max(...muros.map((m) => m.usd), 1);
@@ -392,6 +402,7 @@ function drawOrderbook() {
   // --- muros: cada captura una columna; area proporcional al monto ---
   const ancho = Math.max(2, (width - L - R) / snapshots.length * 0.9);
   for (const m of muros) {
+    if (m.p < min || m.p > max) continue;      // fuera del encuadre
     const rel = Math.sqrt(m.usd / maxUsd);
     ctx.fillStyle = m.lado === "bid"
       ? `rgba(36,200,138,${(0.15 + rel * 0.75).toFixed(3)})`
@@ -418,13 +429,18 @@ function drawOrderbook() {
   ctx.fill();
 
   // --- los muros MAS GRANDES quedan etiquetados, no solo sombreados ---
-  const top = [...muros].sort((a, b) => b.usd - a.usd)
+  const top = [...muros].filter((m) => m.p >= min && m.p <= max)
+    .sort((a, b) => b.usd - a.usd)
     .filter((m, i, arr) => arr.findIndex((o) =>
-      Math.abs(o.p - m.p) / m.p < 0.001 && o.lado === m.lado) === i)
-    .slice(0, 4);
+      Math.abs(o.p - m.p) / m.p < 0.001 && o.lado === m.lado) === i);
   ctx.textAlign = "left";
+  const usadasY = [];
   for (const m of top) {
     const y = Y(m.p);
+    // separacion en pixeles: sin esto las etiquetas se apilaban ilegibles
+    if (usadasY.some((otra) => Math.abs(y - otra) < 24)) continue;
+    if (usadasY.length >= 4) break;
+    usadasY.push(y);
     ctx.strokeStyle = m.lado === "bid" ? "rgba(36,200,138,.55)" : "rgba(239,99,112,.55)";
     ctx.setLineDash([2, 3]);
     ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(width - R + 4, y); ctx.stroke();
