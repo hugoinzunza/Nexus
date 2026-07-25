@@ -165,6 +165,10 @@ def normalize_visual_snapshot(
         "liquidation_heatmap": {
             "model": str(heatmap_data.get("model") or "unknown"),
             "range": str(heatmap_data.get("range") or "unknown"),
+            # Columna del canvas realmente muestreada: se propaga para que el
+            # desfase del heatmap sea auditable desde el indicador. Sin esto la
+            # normalización la descartaba y el dato se perdía en el camino.
+            "x_ratio": _float(heatmap_data.get("x_ratio")),
             "levels": heatmap_levels,
         },
         "depth_delta": {
