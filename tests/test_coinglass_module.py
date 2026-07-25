@@ -310,7 +310,12 @@ def test_panel_exposes_real_research_views_and_no_signal_language():
     # independientes (auditoría 2026-07-24): a 4h/12h las ventanas no solapadas
     # son ~42 y ~14 por semana. El texto ahora declara la dependencia.
     assert "no solapadas" in script
-    assert "Flujo 4h" in html
+    # El label del intervalo ya no se hardcodea: lo pone renderIntervaloReal()
+    # con el intervalo MEDIDO en los datos, y marca ⚠ si difiere del pedido
+    # (auditoría 2026-07-24: antes decía "4h" fijo aunque se negociara otro).
+    assert 'data-tab="flow"' in html
+    assert "renderIntervaloReal" in script
+    assert "interval_mismatch" in script
     assert "Open interest por exchange" in html
     assert "RADAR VISUAL V1 · NO VALIDADO" in html
     assert "no es una señal de trading" in html

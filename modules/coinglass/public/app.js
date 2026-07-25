@@ -514,6 +514,105 @@ function component(label, value) {
   return `<article><span>${label}</span><b class="${number >= 0 ? "up" : "down"}">${signed(number, "", 1)}</b></article>`;
 }
 
+// La pestaña decía "Flujo 4h" fijo. Ahora muestra el intervalo REALMENTE medido
+// en los datos (`intervals_observed`), y avisa si difiere del que se pidió: el
+// plan Hobbyist puede negociar a la baja y antes eso no se veía en ninguna parte.
+function renderIntervaloReal() {
+  const boton = $("tab-flow");
+  if (!boton) return;
+  const basic = state.basic || {};
+  const observados = basic.intervals_observed || {};
+  const pedidos = basic.intervals || {};
+  const real = observados.open_interest || observados.price
+    || pedidos.open_interest || pedidos.price;
+  boton.textContent = real ? `Flujo ${real}` : "Flujo";
+  const desfase = basic.interval_mismatch || [];
+  boton.title = desfase.length
+    ? `El intervalo recibido no coincide con el pedido en: ${desfase.join(", ")}`
+    : (real ? `Intervalo medido en los datos: ${real}` : "");
+  if (desfase.length) boton.textContent += " ⚠";
+}
+
+// Lectura principal del Radar: los dos imanes de liquidez más cercanos y la
+// frecuencia HISTÓRICA con que el precio recorre esa distancia. Es lo único que
+// los datos permiten afirmar: no dice hacia dónde va, dice cuán lejos suele
+// llegar y qué hay en el camino.
+function renderAlcance(visual) {
+  const cuerpo = $("radar-alcance").querySelector("tbody");
+  const niveles = visual.levels || {};
+  const arriba = niveles.nearest_above;
+  const abajo = niveles.nearest_below;
+  const filas = [
+    ["Clúster arriba", arriba, "up"],
+    ["Clúster abajo", abajo, "down"],
+  ].filter(([, nivel]) => nivel && nivel.price != null);
+
+  if (!filas.length) {
+    cuerpo.innerHTML = `<tr><td colspan="6" class="empty">Sin captura visual vigente.</td></tr>`;
+    $("radar-veredicto").textContent = "Sin captura visual vigente: no hay lectura.";
+    $("radar-alcance-nota").textContent = "";
+    return;
+  }
+
+  cuerpo.innerHTML = filas.map(([etiqueta, nivel, clase]) => {
+    const a = nivel.alcance_historico || {};
+    const celda = (v) => v == null ? "—" : `${fmt(v, 0)}%`;
+    return `<tr><td class="${clase}">${escapeHtml(etiqueta)}</td>` +
+      `<td>${fmt(nivel.price, 1)}</td>` +
+      `<td>${signed(nivel.distance_pct, "%")}</td>` +
+      `<td>${celda(a["4h"])}</td><td>${celda(a["8h"])}</td><td>${celda(a["12h"])}</td></tr>`;
+  }).join("");
+
+  // El "veredicto" es deliberadamente descriptivo: cuál imán está más cerca y
+  // qué tan seguido se alcanza. NO se publica una direccion probable porque los
+  // componentes direccionales quedaron refutados fuera de muestra.
+  const dArriba = arriba ? Math.abs(Number(arriba.distance_pct)) : null;
+  const dAbajo = abajo ? Math.abs(Number(abajo.distance_pct)) : null;
+  let veredicto = "Hay liquidez a ambos lados a distancia similar.";
+  if (dArriba != null && dAbajo != null) {
+    const cerca = dArriba < dAbajo ? "ARRIBA" : "ABAJO";
+    const nivel = dArriba < dAbajo ? arriba : abajo;
+    const p4 = (nivel.alcance_historico || {})["4h"];
+    veredicto = `El imán de liquidez más cercano está ${cerca} ` +
+      `(${fmt(Math.min(dArriba, dAbajo), 2)}% de distancia` +
+      `${p4 != null ? `, alcanzado en 4h el ${fmt(p4, 0)}% de las veces` : ""}).`;
+  }
+  $("radar-veredicto").textContent = veredicto;
+  const n = (arriba?.alcance_historico || abajo?.alcance_historico || {}).n;
+  $("radar-alcance-nota").textContent =
+    `Los porcentajes son la TASA BASE histórica de que BTC recorra esa distancia ` +
+    `en ese plazo${n ? ` (n=${n} barras de 4h)` : ""}. No están condicionados al ` +
+    `estado actual del mercado y NO son una predicción de dirección: dicen cuán ` +
+    `lejos suele llegar el precio, no hacia dónde.`;
+}
+
+const GLOSARIO = [
+  ["Heatmap: atracción", "Dónde se acumula liquidez de liquidación en el heatmap, ponderado por cercanía.",
+   "Positivo = más liquidez arriba. Es un imán potencial, no una señal de compra."],
+  ["Mapa: atracción", "Lo mismo sobre el mapa de liquidaciones acumulado.",
+   "Si coincide con el heatmap, el imán es más consistente."],
+  ["Delta del libro", "Diferencia bids − asks en el libro cercano al precio.",
+   "Positivo = más volumen de compra en el libro. Se retira fácil: es el más frágil."],
+  ["Muros ballena · observación", "Órdenes límite grandes activas cerca del precio.",
+   "NO entra al puntaje. Un muro puede ser spoofing y desaparecer."],
+  ["Posicionamiento contrarian", "Qué tan cargados están los traders a un lado.",
+   "Observacional: viene del modelo API y NO entra a este puntaje."],
+  ["Funding contrarian", "Costo de mantener la posición dominante.",
+   "Observacional: NO entra a este puntaje."],
+];
+
+function renderGlosario(hasVisual) {
+  const cuerpo = $("radar-glosario").querySelector("tbody");
+  cuerpo.innerHTML = GLOSARIO.map(([nombre, mide, lee]) =>
+    `<tr><td>${escapeHtml(nombre)}</td><td>${escapeHtml(mide)}</td><td>${escapeHtml(lee)}</td></tr>`
+  ).join("");
+  if (!hasVisual) {
+    cuerpo.insertAdjacentHTML("afterbegin",
+      `<tr><td colspan="3" class="empty">Sin captura visual: los componentes de abajo ` +
+      `vienen del modelo API, que es otra fórmula.</td></tr>`);
+  }
+}
+
 function renderModel() {
   const apiModel = state.experimental_pressure || {};
   const visual = state.visual_indicator || {};
@@ -533,6 +632,9 @@ function renderModel() {
     : `${Number(apiModel.historical_observations || 0)} históricas · ${apiForward} forward`;
   $("calibration-progress").max = minimum;
   $("calibration-progress").value = Math.min(observations, minimum);
+  renderAlcance(visual);
+  renderGlosario(hasVisual);
+  renderIntervaloReal();
   const visualComponents = visual.components || {};
   const apiComponents = apiModel.components || {};
   $("model-components").innerHTML = hasVisual

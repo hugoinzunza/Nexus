@@ -30,7 +30,7 @@
 
     <nav class="tabs" aria-label="Vistas">
       <button class="active" data-tab="overview">Resumen</button>
-      <button data-tab="flow">Flujo 4h</button>
+      <button data-tab="flow" id="tab-flow">Flujo</button>
       <button data-tab="liquidations">Liquidaciones</button>
       <button data-tab="orderbook">Libro de órdenes</button>
       <button data-tab="visual">Mapa visual</button>
@@ -210,11 +210,34 @@
         </div>
         <div class="score" id="pressure-score"><b>—</b><span>sin datos</span></div>
       </div>
+
+      <!-- LO PRIMERO que se debe leer: qué hay cerca del precio y con qué
+           frecuencia histórica se alcanza. No afirma dirección. -->
+      <div class="card">
+        <div class="card-head">
+          <div><p class="eyebrow">LECTURA PRINCIPAL</p><h2>¿Qué hay cerca del precio?</h2></div>
+        </div>
+        <p class="model-copy" id="radar-veredicto">Esperando captura.</p>
+        <table id="radar-alcance"><thead>
+          <tr><th>Nivel</th><th>Precio</th><th>Distancia</th><th>4h</th><th>8h</th><th>12h</th></tr>
+        </thead><tbody></tbody></table>
+        <p class="model-copy" id="radar-alcance-nota" style="margin-bottom:22px"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><p class="eyebrow">DESCOMPOSICIÓN · QUÉ MIDE CADA UNO</p><h2>Componentes</h2></div>
+        </div>
+        <div class="components" id="model-components"></div>
+        <table id="radar-glosario"><thead>
+          <tr><th>Componente</th><th>Qué mide</th><th>Cómo se lee</th></tr>
+        </thead><tbody></tbody></table>
+      </div>
+
       <div class="calibration">
         <div><span id="calibration-label">0 capturas visuales forward</span><span>captura no equivale a validación</span></div>
         <progress id="calibration-progress" max="2016" value="0"></progress>
       </div>
-      <div class="components" id="model-components"></div>
       <div class="method">
         <h3>Método pre-registrado</h3>
         <p id="radar-method">Esperando la primera captura visual autorizada.</p>

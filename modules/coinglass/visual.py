@@ -1,7 +1,9 @@
 """Validate browser-derived CoinGlass snapshots and build research context."""
 from __future__ import annotations
 
+import json
 import math
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -248,6 +250,66 @@ def _strongest(
     }
 
 
+_TOUCH_RATES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "touch_rates.json")
+_TOUCH_RATES: dict[str, Any] | None = None
+
+
+def _touch_rates() -> dict[str, Any]:
+    global _TOUCH_RATES
+    if _TOUCH_RATES is None:
+        try:
+            with open(_TOUCH_RATES_PATH, encoding="utf-8") as fh:
+                _TOUCH_RATES = json.load(fh)
+        except (OSError, ValueError):
+            _TOUCH_RATES = {}
+    return _TOUCH_RATES
+
+
+def probabilidad_de_alcance(distancia_pct: float | None, arriba: bool) -> dict | None:
+    """Tasa base HISTÓRICA de que el precio recorra `distancia_pct` en cada
+    horizonte. Es lo único que se puede afirmar con estos datos sin inventar
+    dirección: no dice a dónde va, dice cuán lejos suele llegar.
+
+    Se interpola entre los buckets tabulados (`research/coinglass_touch_rates.py`)
+    y se reporta el `n` para que nadie lea la cifra como si fuera una certeza.
+    """
+    tabla = _touch_rates()
+    horizontes = tabla.get("horizontes") or {}
+    if distancia_pct is None or not horizontes:
+        return None
+    objetivo = abs(float(distancia_pct))
+    salida: dict[str, Any] = {"distancia_pct": round(objetivo, 3)}
+    for etiqueta, bloque in horizontes.items():
+        curva = bloque.get("p_arriba" if arriba else "p_abajo") or {}
+        puntos = sorted((float(k), v) for k, v in curva.items())
+        if not puntos:
+            continue
+        if objetivo <= puntos[0][0]:
+            p = puntos[0][1]
+        elif objetivo >= puntos[-1][0]:
+            p = puntos[-1][1]
+        else:
+            p = puntos[-1][1]
+            for (x0, y0), (x1, y1) in zip(puntos, puntos[1:]):
+                if x0 <= objetivo <= x1:
+                    peso = (objetivo - x0) / (x1 - x0) if x1 > x0 else 0.0
+                    p = y0 + peso * (y1 - y0)
+                    break
+        salida[etiqueta] = round(100 * p, 1)
+        salida["n"] = bloque.get("n")
+    return salida
+
+
+def _con_alcance(nivel: dict[str, Any] | None, *, arriba: bool) -> dict[str, Any] | None:
+    """Agrega al nivel su tasa base de alcance. Es la cifra que responde 'qué tan
+    probable es llegar hasta ahí', sin afirmar hacia dónde va el precio."""
+    if not nivel:
+        return nivel
+    tasas = probabilidad_de_alcance(nivel.get("distance_pct"), arriba)
+    return {**nivel, "alcance_historico": tasas} if tasas else nivel
+
+
 def _clock_lag_seconds(levels: list[dict[str, Any]], captured_at: str) -> int | None:
     """Segundos entre el reloj del tooltip (HH:MM, sin fecha) y la captura.
 
@@ -395,12 +457,10 @@ def build_visual_indicator(
             ),
         },
         "levels": {
-            "nearest_above": _nearest(
-                heatmap_levels, price, above=True, minimum_usd=5_000_000
-            ),
-            "nearest_below": _nearest(
-                heatmap_levels, price, above=False, minimum_usd=5_000_000
-            ),
+            "nearest_above": _con_alcance(_nearest(
+                heatmap_levels, price, above=True, minimum_usd=5_000_000), arriba=True),
+            "nearest_below": _con_alcance(_nearest(
+                heatmap_levels, price, above=False, minimum_usd=5_000_000), arriba=False),
             "strongest_above": _strongest(heatmap_levels, price, above=True),
             "strongest_below": _strongest(heatmap_levels, price, above=False),
             "nearest_whale_ask": whale_level("ask", strongest=False),
