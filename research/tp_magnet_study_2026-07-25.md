@@ -97,11 +97,19 @@ Nada de esto. En particular: no cambiar la lógica de TP del plan, porque el
 estudio dice que la actual (TP a liquidez, sin capar) es **mejor** que las
 alternativas propuestas.
 
-## Próximo paso, si se quiere seguir
+## Próximo paso, si se quiere seguir — RESUELTO
 
 Lo único con evidencia a favor es el SL tras el imán opuesto. Antes de considerarlo
 hay que entender **por qué falla en 2024 y en 1h** — si es régimen, la mejora en el
 resto es prestada. Un estudio de eso es barato y responde antes de tocar nada.
+
+> **Contestado en [`sl_iman_regimen_2026-07-25.md`](sl_iman_regimen_2026-07-25.md):
+> sí es régimen** (Spearman 0,867 contra la tasa de stop-out del baseline). El signo
+> del efecto depende de si hay más rescates que diluciones, y eso lo fija el régimen,
+> no el método. Peor: resta justo en 1h, el único corte donde la estrategia gana sola.
+> **El candidato queda refutado.** Ese informe también corrige lo que dice más arriba
+> sobre el drawdown: en el corte 1h completo **empeora** 89 → 137 R, tabla que acá
+> no estaba.
 
 La versión con niveles **reales** de CoinGlass (mapa de liquidaciones, muros del
 libro) no es backtesteable: solo se puede registrar hacia adelante y comparar en
