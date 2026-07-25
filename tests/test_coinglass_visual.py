@@ -594,3 +594,33 @@ def test_grafico_del_libro_tiene_eje_precio_linea_de_precio_y_muros_marcados():
     # leyenda al click, con la advertencia de spoofing
     assert "CÓMO SE LEE ESTE GRÁFICO" in html
     assert "spoofing" in html
+
+
+def test_brujula_mide_alcance_y_no_afirma_direccion():
+    """El Radar mostraba un número grande que se leía como veredicto. Ahora la
+    lectura principal es una brújula de TERRENO: el largo de cada aguja es la
+    probabilidad histórica de alcance, no un pronóstico.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    css = (ROOT / "modules/coinglass/public/styles.css").read_text()
+    bloque = script.split("function drawCompass(")[1].split("\nfunction ")[0]
+
+    # el largo de la aguja viene de la tasa de alcance, no de la distancia
+    assert 'alcance_historico?.["4h"]' in bloque
+    assert "fraccion * largoMax" in bloque
+
+    # los muros del libro se dibujan como anillos CON su monto
+    assert "ellipse(cx" in bloque and "compactUsd(m.amount_usd)" in bloque
+    # y con separación en píxeles para que las etiquetas no se pisen
+    assert "Math.abs(y - otra) >= 26" in bloque
+
+    # encuadre honesto, visible en el lienzo y en la leyenda
+    assert "terreno, no destino" in bloque
+    assert "Terreno, no destino" in html
+    assert "no un pronóstico" in html
+    assert ".chart-frame.brujula" in css
+
+    # el score sin validar deja de ser lo más grande de la pantalla
+    assert "font-size: 24px" in css.split(".score b {")[1].split("}")[0]
+    assert "sin validar" in script

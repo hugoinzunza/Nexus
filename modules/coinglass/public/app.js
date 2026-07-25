@@ -632,6 +632,106 @@ function renderIntervaloReal() {
   if (desfase.length) boton.textContent += " ⚠";
 }
 
+// Brújula de TERRENO. Deliberadamente no dibuja una direccion "probable": el
+// largo de cada aguja es la probabilidad HISTORICA de alcanzar ese nivel, asi que
+// la aguja mas larga es el iman mas alcanzable, no un pronostico. Las reglas
+// direccionales de CoinGlass quedaron refutadas fuera de muestra.
+function drawCompass(visual) {
+  const canvas = $("compass-chart");
+  if (!canvas) return;
+  const { ctx, width, height } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+  const niveles = visual.levels || {};
+  const precio = Number(visual.price);
+  const arriba = niveles.nearest_above;
+  const abajo = niveles.nearest_below;
+  if (!Number.isFinite(precio) || (!arriba && !abajo)) {
+    message("compass-message", "Sin captura visual vigente");
+    return;
+  }
+  message("compass-message", "");
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const largoMax = Math.min(cy - 46, 150);
+  const prob = (nivel) => Number(nivel?.alcance_historico?.["4h"]);
+
+  // eje vertical y precio actual en el centro
+  ctx.strokeStyle = "#222936";
+  ctx.beginPath(); ctx.moveTo(cx, 22); ctx.lineTo(cx, height - 22); ctx.stroke();
+  ctx.strokeStyle = "#edf1f7";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx - 10, cy); ctx.lineTo(cx + 100, cy); ctx.stroke();
+  ctx.font = "11px ui-monospace, monospace";
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#edf1f7";
+  ctx.fillText(`${fmt(precio, 0)} ahora`, cx - 14, cy);
+
+  // anillos de muros ballena, a su distancia relativa
+  const muros = [niveles.nearest_whale_ask, niveles.strongest_whale_ask,
+                 niveles.nearest_whale_bid, niveles.strongest_whale_bid]
+    .filter((m) => m && Number.isFinite(Number(m.price)));
+  const distMax = Math.max(1, ...muros.map((m) => Math.abs(Number(m.distance_pct) || 0)),
+                           Math.abs(Number(arriba?.distance_pct) || 0),
+                           Math.abs(Number(abajo?.distance_pct) || 0));
+  // Separacion minima en PIXELES, no en %: dos muros a 0,12% quedan a la misma
+  // altura y sus etiquetas se pisaban entre si y con el precio del centro.
+  const usadas = [cy];
+  const libre = (y) => usadas.every((otra) => Math.abs(y - otra) >= 26);
+  for (const m of [...muros].sort((a, b) =>
+       Math.abs(Number(b.amount_usd) || 0) - Math.abs(Number(a.amount_usd) || 0))) {
+    const d = Math.abs(Number(m.distance_pct) || 0);
+    const hacia = Number(m.price) > precio ? -1 : 1;
+    const y = cy + hacia * (d / distMax) * largoMax;
+    if (!libre(y)) continue;                   // se prioriza el muro mas grande
+    usadas.push(y);
+    ctx.strokeStyle = "rgba(67,189,215,.45)";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(cx, y, 58, 7, 0, 0, Math.PI * 2); ctx.stroke();
+    // el monto del muro a la izquierda: el espacio estaba vacio y este dato
+    // dice si el anillo es una pared real o una orden chica
+    ctx.textAlign = "right";
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.fillStyle = "#43bdd7";
+    ctx.fillText(`muro ${compactUsd(m.amount_usd)}`, cx - 74, y);
+    ctx.fillStyle = "#7d879a";
+    ctx.fillText(`${fmt(Number(m.price), 0)} · ${signed(m.distance_pct, "%")}`,
+                 cx - 74, y + 12);
+  }
+
+  // agujas: LARGO = probabilidad de alcance
+  for (const [nivel, signo, etiqueta, color] of [
+    [arriba, -1, "ARRIBA", "#24c88a"], [abajo, 1, "ABAJO", "#ef6370"],
+  ]) {
+    if (!nivel || !Number.isFinite(Number(nivel.price))) continue;
+    const p = prob(nivel);
+    const fraccion = Number.isFinite(p) ? Math.max(0.12, Math.min(1, p / 50)) : 0.3;
+    const punta = cy + signo * fraccion * largoMax;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 7;
+    ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, punta); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(cx, punta, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.textAlign = "left";
+    ctx.font = "700 12px sans-serif";
+    ctx.fillText(`${etiqueta} · ${fmt(nivel.price, 0)}`, cx + 22, punta - 8);
+    ctx.font = "11px ui-monospace, monospace";
+    ctx.fillStyle = "#919baa";
+    ctx.fillText(`${signed(nivel.distance_pct, "%")} · ` +
+                 `${Number.isFinite(p) ? fmt(p, 0) + "% en 4h" : "sin tasa"}`,
+                 cx + 22, punta + 8);
+  }
+  ctx.lineCap = "butt";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#7d879a";
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.fillText("aguja larga = mas alcanzable · terreno, no destino", cx, height - 10);
+}
+
 // Lectura principal del Radar: los dos imanes de liquidez más cercanos y la
 // frecuencia HISTÓRICA con que el precio recorre esa distancia. Es lo único que
 // los datos permiten afirmar: no dice hacia dónde va, dice cuán lejos suele
@@ -721,7 +821,7 @@ function renderModel() {
   const scoreBox = $("pressure-score");
   scoreBox.querySelector("b").textContent = Number.isFinite(score) ? signed(score, "", 1) : "—";
   scoreBox.querySelector("b").className = Number.isFinite(score) ? score >= 18 ? "up" : score <= -18 ? "down" : "" : "";
-  scoreBox.querySelector("span").textContent = model.label || "sin datos";
+  scoreBox.querySelector("span").textContent = (model.label || "sin datos") + " · sin validar";
   const visualForward = Number(state.visual_shadow?.decisions || 0);
   const apiForward = Number(apiModel.forward_observations || 0);
   const observations = hasVisual ? visualForward : Number(apiModel.observations || 0);
@@ -731,6 +831,7 @@ function renderModel() {
     : `${Number(apiModel.historical_observations || 0)} históricas · ${apiForward} forward`;
   $("calibration-progress").max = minimum;
   $("calibration-progress").value = Math.min(observations, minimum);
+  drawCompass(visual);
   renderAlcance(visual);
   renderGlosario(hasVisual);
   renderIntervaloReal();

@@ -260,11 +260,31 @@
         <div class="score" id="pressure-score"><b>—</b><span>sin datos</span></div>
       </div>
 
-      <!-- LO PRIMERO que se debe leer: qué hay cerca del precio y con qué
-           frecuencia histórica se alcanza. No afirma dirección. -->
+      <!-- Brújula de TERRENO: no dice a dónde va el precio, dice qué hay a cada
+           lado y cuán alcanzable es. La aguja larga es la más alcanzable. -->
       <div class="card">
         <div class="card-head">
-          <div><p class="eyebrow">LECTURA PRINCIPAL</p><h2>¿Qué hay cerca del precio?</h2></div>
+          <div><p class="eyebrow">BRÚJULA DE LIQUIDEZ</p><h2>¿Hacia dónde hay imán?</h2></div>
+        </div>
+        <div class="lectura lectura-ancha">
+          <details>
+            <summary><span class="eyebrow">CÓMO SE LEE LA BRÚJULA</span><b>Terreno, no destino</b></summary>
+            <div class="legend-box">
+              <p>El <b>centro es el precio actual</b>. Cada aguja apunta al clúster de
+                liquidez más cercano hacia arriba y hacia abajo. El <b>largo de la
+                aguja es la probabilidad histórica de alcanzar esa distancia</b>, no
+                la distancia: la aguja más larga es el imán <b>más alcanzable</b>.</p>
+              <p>Los <b>anillos</b> marcan muros ballena del libro a su distancia.</p>
+              <p class="warn">Es un mapa del terreno, no un pronóstico. Dice qué hay
+                alrededor y cuán seguido el precio llega hasta ahí — no hacia dónde
+                va a ir. Las tasas son incondicionales: no están ajustadas al estado
+                actual del mercado.</p>
+            </div>
+          </details>
+        </div>
+        <div class="chart-frame brujula">
+          <canvas id="compass-chart" aria-label="Brújula de imanes de liquidez"></canvas>
+          <div class="canvas-message" id="compass-message"></div>
         </div>
         <p class="model-copy" id="radar-veredicto">Esperando captura.</p>
         <table id="radar-alcance"><thead>
