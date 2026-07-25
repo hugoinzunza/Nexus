@@ -515,40 +515,107 @@ function drawVisualLevels() {
     return;
   }
   message("visual-level-message", "");
-  const prices = rows.map((row) => Number(row.price)).concat(price);
-  const min = Math.min(...prices), max = Math.max(...prices);
-  const strongest = Math.max(...rows.map((row) => Number(row.intensity_usd)), 1);
-  const y = (value) => 24 + (max - value) / (max - min || 1) * (height - 48);
-  grid(ctx, width, height, 102, 24);
-  rows.slice().sort((a, b) => Number(a.price) - Number(b.price)).forEach((row) => {
-    const rowPrice = Number(row.price);
-    const amount = Number(row.intensity_usd);
-    const py = y(rowPrice);
-    const barWidth = Math.max(5, amount / strongest * (width - 240));
-    ctx.fillStyle = rowPrice > price ? "rgba(239,99,112,.74)" : "rgba(36,200,138,.74)";
-    ctx.fillRect(104, py - 4, barWidth, 8);
-    if (amount / strongest >= 0.55) {
-      ctx.fillStyle = "#b9c1ce";
-      ctx.font = "10px ui-monospace, monospace";
-      ctx.fillText(
-        `${fmt(rowPrice, 0)} · ${compactUsd(amount)}`,
-        Math.min(width - 170, 112 + barWidth),
-        py + 4,
-      );
+
+  const L = 78, R = 232, T = 22, B = 26;
+  const niveles = visual.levels || {};
+  // Muros del LIBRO en el mismo eje de precio: la confluencia entre un clUster de
+  // liquidacion y una pared real de ordenes es la informacion que faltaba.
+  const muros = [niveles.nearest_whale_ask, niveles.strongest_whale_ask,
+                 niveles.nearest_whale_bid, niveles.strongest_whale_bid]
+    .filter((m) => m && Number.isFinite(Number(m.price)))
+    .filter((m, i, arr) => arr.findIndex((o) =>
+      Math.round(Number(o.price)) === Math.round(Number(m.price))) === i);
+
+  const todos = rows.map((r) => Number(r.price)).concat(price)
+    .concat(muros.map((m) => Number(m.price)));
+  let min = Math.min(...todos), max = Math.max(...todos);
+  const pad = (max - min) * 0.05 || 1;
+  min -= pad; max += pad;
+  const fuerte = Math.max(...rows.map((r) => Number(r.intensity_usd)), 1);
+  const Y = (v) => T + (max - v) / (max - min || 1) * (height - T - B);
+
+  // --- eje Y con precios, no solo el precio actual ---
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.textBaseline = "middle";
+  for (let k = 0; k <= 5; k++) {
+    const p = min + (max - min) * k / 5;
+    const y = Y(p);
+    ctx.strokeStyle = "#1e2532";
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(width - R, y); ctx.stroke();
+    ctx.fillStyle = "#7d879a";
+    ctx.textAlign = "right";
+    ctx.fillText(fmt(p, 0), L - 8, y);
+  }
+
+  // --- barras de intensidad de liquidacion ---
+  const masFuerte = rows.reduce((a, b) =>
+    Number(b.intensity_usd) > Number(a.intensity_usd) ? b : a, rows[0]);
+  ctx.textAlign = "left";
+  for (const row of [...rows].sort((a, b) => Number(a.price) - Number(b.price))) {
+    const p = Number(row.price);
+    const usd = Number(row.intensity_usd);
+    const y = Y(p);
+    const ancho = Math.max(6, usd / fuerte * (width - L - R - 20));
+    const esElMayor = row === masFuerte;
+    ctx.fillStyle = p > price
+      ? `rgba(239,99,112,${esElMayor ? .95 : .6})`
+      : `rgba(36,200,138,${esElMayor ? .95 : .6})`;
+    ctx.fillRect(L, y - 4, ancho, 8);
+    if (esElMayor) {
+      // dentro de la barra: afuera choca con la columna de alcance de la derecha
+      const etiqueta = `mayor clúster ${compactUsd(usd)}`;
+      const cabe = ancho > ctx.measureText(etiqueta).width + 16;
+      ctx.fillStyle = cabe ? "#0b0e14" : "#edf1f7";
+      ctx.textAlign = cabe ? "right" : "left";
+      ctx.fillText(etiqueta, cabe ? L + ancho - 8 : L + ancho + 8, y);
+      ctx.textAlign = "left";
     }
-  });
-  const currentY = y(price);
+  }
+
+  // --- muros del libro como rombos sobre el mismo eje ---
+  for (const m of muros) {
+    const y = Y(Number(m.price));
+    const x = width - R - 10;
+    ctx.fillStyle = "#43bdd7";
+    ctx.beginPath();
+    ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y);
+    ctx.closePath(); ctx.fill();
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#43bdd7";
+    ctx.fillText(compactUsd(m.amount_usd), x + 12, y);
+  }
+
+  // --- precio actual y los dos imanes con su tasa de alcance ---
+  const yPrecio = Y(price);
   ctx.strokeStyle = "#edf1f7";
   ctx.lineWidth = 1.5;
   ctx.setLineDash([5, 4]);
-  ctx.beginPath();
-  ctx.moveTo(92, currentY);
-  ctx.lineTo(width - 12, currentY);
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(L, yPrecio); ctx.lineTo(width - R, yPrecio); ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = "#edf1f7";
-  ctx.font = "11px ui-monospace, monospace";
-  ctx.fillText(`BTC ${fmt(price, 0)}`, 10, currentY + 4);
+  ctx.font = "700 11px ui-monospace, monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(`BTC ${fmt(price, 0)}`, L - 8, yPrecio - 13);
+
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.textAlign = "left";
+  for (const [nivel, color] of [[niveles.nearest_above, "#ef6370"],
+                                [niveles.nearest_below, "#24c88a"]]) {
+    const p4 = Number(nivel?.alcance_historico?.["4h"]);
+    if (!nivel || !Number.isFinite(Number(nivel.price)) || !Number.isFinite(p4)) continue;
+    const y = Y(Number(nivel.price));
+    ctx.strokeStyle = color;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(width - 12, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.textAlign = "right";
+    // desplazado en vertical: en la primera version caia sobre la etiqueta del
+    // muro que esta al mismo precio y quedaban ilegibles
+    const dy = Number(nivel.price) > price ? -11 : 11;
+    ctx.fillText(`el más cercano · ${fmt(p4, 0)}% en 4h`, width - 10, y + dy);
+    ctx.textAlign = "left";
+  }
 }
 
 function levelText(level) {

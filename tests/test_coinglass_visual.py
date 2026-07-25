@@ -645,3 +645,25 @@ def test_el_encuadre_del_libro_se_ancla_al_precio_no_a_los_muros():
 
     # y las etiquetas de muros se separan en pixeles
     assert "Math.abs(y - otra) < 24" in bloque
+
+
+def test_mapa_visual_suma_eje_precio_muros_y_alcance():
+    """El mapa mostraba barras sin eje Y (solo el precio actual) y sin relación con
+    el libro. Ahora trae eje de precios, los muros del libro sobre el MISMO eje
+    (para ver confluencia) y la tasa de alcance del clúster más cercano.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    bloque = script.split("function drawVisualLevels()")[1].split("\nfunction ")[0]
+
+    assert "fmt(p, 0), L - 8, y" in bloque, "el eje Y debe rotular precios"
+    assert "nearest_whale_ask" in bloque and "closePath(); ctx.fill()" in bloque, \
+        "los muros del libro se dibujan como rombos en el mismo eje de precio"
+    assert 'alcance_historico?.["4h"]' in bloque, "falta la tasa de alcance"
+    assert "mayor clúster" in bloque
+
+    # las tres columnas de etiquetas no pueden compartir la misma x
+    assert "const L = 78, R = 232" in bloque
+    assert "width - 10, y + dy" in bloque, "el alcance va al borde, desplazado"
+
+    assert "confluencia" in html, "la leyenda debe explicar la confluencia"

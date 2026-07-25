@@ -227,6 +227,25 @@
         <div><p class="eyebrow">HEATMAP MODEL 2 · NIVELES ≥ US$5M</p><h2>Bandas de liquidación cercanas</h2></div>
         <span>Distancia respecto al precio actual</span>
       </div>
+      <div class="lectura lectura-ancha">
+        <details>
+          <summary><span class="eyebrow">CÓMO SE LEE ESTE GRÁFICO</span><b>Dónde se acumula liquidez alrededor del precio</b></summary>
+          <div class="legend-box">
+            <p><b>Eje Y = precio.</b> Cada barra es una banda donde se acumularían
+              liquidaciones si el precio llega ahí; el <b>largo es el monto</b>. La
+              mayor queda etiquetada.</p>
+            <p><b>Rojo arriba, verde abajo</b> del precio. La línea blanca punteada
+              es BTC ahora.</p>
+            <p>Los <b>rombos celestes</b> son muros del libro de órdenes en ese mismo
+              precio: cuando un rombo coincide con una barra grande, hay
+              <b>confluencia</b> entre liquidez de liquidación y una pared real.</p>
+            <p>Las dos líneas punteadas de color marcan el clúster más cercano de cada
+              lado con su <b>probabilidad histórica de alcance a 4h</b>.</p>
+            <p class="warn">Es un mapa de dónde hay combustible, no de hacia dónde va
+              el precio. Los muros pueden retirarse.</p>
+          </div>
+        </details>
+      </div>
       <div class="chart-frame visual-levels">
         <canvas id="visual-level-chart" aria-label="Niveles visuales CoinGlass alrededor del precio"></canvas>
         <div class="canvas-message" id="visual-level-message"></div>
