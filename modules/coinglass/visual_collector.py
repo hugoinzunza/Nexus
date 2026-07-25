@@ -318,19 +318,23 @@ async def _collect_whale_orders(page) -> list[dict[str, Any]]:
     # `.first` apagaría el control equivocado y se publicarían canceladas con
     # active_only=True (bandera autoafirmada que el servidor cree).
     checkbox = None
-    for label in ("cancel", "cancelad"):
-        candidate = page.locator(
-            f"label:has-text('{label}') input[type=checkbox], "
-            f"*:has(> input[type=checkbox]):has-text('{label}') input[type=checkbox]"
-        ).first
-        if await candidate.count() > 0:
-            checkbox = candidate
-            break
+    filtro_verificado = False
+    for label in ("cancelad", "cancel"):
+        candidate = page.locator(f"label:has-text('{label}') input[type=checkbox]").first
+        try:
+            if await candidate.count() > 0:
+                checkbox, filtro_verificado = candidate, True
+                break
+        except Exception:  # noqa: BLE001 - selector no soportado por el DOM actual
+            continue
     if checkbox is None:
-        raise RuntimeError(
-            "CoinGlass no expuso un control de ordenes canceladas identificable "
-            "por etiqueta; no se publica sin poder excluirlas"
-        )
+        # Sin etiqueta identificable se cae al primer checkbox (comportamiento
+        # histórico) pero se REGISTRA que la exclusión no está verificada, en vez
+        # de romper la recolección o de afirmar `active_only` a ciegas. Fallar
+        # duro dejaba al colector sin datos cada 5 min, que es peor.
+        checkbox = page.locator("input[type=checkbox]").first
+        if await page.locator("input[type=checkbox]").count() < 1:
+            raise RuntimeError("CoinGlass no expuso el control de ordenes canceladas")
     if await checkbox.is_checked(timeout=1_000):
         await checkbox.uncheck(force=True)
         await page.wait_for_timeout(2_500)
@@ -360,7 +364,13 @@ async def _collect_whale_orders(page) -> list[dict[str, Any]]:
             item.get("market") or "unknown",
         )
         parsed[key] = item
-    return list(parsed.values())
+    filas = list(parsed.values())
+    for fila in filas:
+        # Traza de CÓMO se excluyeron las canceladas: `by_label` es verificado,
+        # `first_checkbox_unverified` es la heurística histórica.
+        fila["cancel_filter"] = ("by_label" if filtro_verificado
+                                else "first_checkbox_unverified")
+    return filas
 
 
 async def _dismiss_consent(page) -> None:
@@ -499,7 +509,7 @@ async def collect_with_retry(
                 raise
             print(
                 f"CoinGlass visual intento {attempt} fallo "
-                f"({type(exc).__name__}); reiniciando navegador",
+                f"({type(exc).__name__}: {exc}); reiniciando navegador",
                 flush=True,
             )
             await asyncio.sleep(3)

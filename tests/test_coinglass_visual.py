@@ -435,14 +435,22 @@ def test_reason_escapa_html_del_payload_de_ingesta():
     assert "escapeHtml(" in cuerpo, "reason() debe escapar antes de devolver"
 
 
-def test_fail_closed_de_canceladas_busca_el_control_por_etiqueta():
-    """`.first` sobre input[type=checkbox] apaga el control equivocado si
-    CoinGlass agrega otro filtro antes."""
-    source = (ROOT / "modules/coinglass/visual_collector.py").read_text()
-    bloque = source.split("async def _collect_whale_orders")[1].split("async def")[0]
+def test_canceladas_prefiere_la_etiqueta_y_deja_traza_si_no_puede():
+    """Se intenta identificar el checkbox por su ETIQUETA (antes se usaba `.first`
+    a ciegas, que apagaría el control equivocado si CoinGlass agrega otro filtro).
 
-    assert 'locator("input[type=checkbox]").first' not in bloque
-    assert "has-text" in bloque, "el checkbox debe identificarse por su etiqueta"
+    Si no hay etiqueta identificable, se cae al comportamiento histórico pero se
+    REGISTRA `cancel_filter` para no afirmar `active_only` sin verificar. Fallar
+    duro dejaba al colector sin datos cada 5 minutos, que es peor que un dato
+    marcado como no verificado.
+    """
+    source = (ROOT / "modules/coinglass/visual_collector.py").read_text()
+    bloque = source.split("async def _collect_whale_orders")[1].split("\nasync def")[0]
+
+    assert "has-text" in bloque, "debe intentarse por etiqueta primero"
+    assert "by_label" in bloque and "first_checkbox_unverified" in bloque, \
+        "debe quedar traza de cómo se excluyeron las canceladas"
+    assert "cancel_filter" in bloque
 
 
 def test_dedup_de_muros_distingue_spot_de_futuros():
