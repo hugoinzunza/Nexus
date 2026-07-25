@@ -161,6 +161,24 @@
         <div><p class="eyebrow">COINGLASS · RESEARCH</p><h2>Historial de muros ballena</h2></div>
         <span id="book-interval">48 snapshots · intervalo negociado</span>
       </div>
+      <div class="lectura lectura-ancha">
+        <details>
+          <summary><span class="eyebrow">CÓMO SE LEE ESTE GRÁFICO</span><b>Precio en el tiempo sobre los muros del libro</b></summary>
+          <div class="legend-box">
+            <p><b>Eje Y = precio · eje X = tiempo</b> (una columna por captura, cada
+              5 min). La <b>línea blanca</b> es el precio de BTC recorriendo esas
+              capturas; el punto marca la última.</p>
+            <p><b>Verde = muros de compra</b> (bids, debajo del precio suelen frenar
+              caídas). <b>Rojo = muros de venta</b> (asks, arriba suelen frenar
+              subidas). La intensidad y el grosor son proporcionales al monto.</p>
+            <p>Las <b>cuatro líneas punteadas etiquetadas</b> a la derecha son los
+              muros más grandes del período, con su monto y precio.</p>
+            <p class="warn">Son órdenes límite grandes: pueden retirarse o ser
+              <b>spoofing</b>. Que un muro exista no obliga al precio a respetarlo.
+              Y la historia empieza cuando arrancó el colector, no antes.</p>
+          </div>
+        </details>
+      </div>
       <div class="chart-frame tall">
         <canvas id="orderbook-chart" aria-label="Historial visual de muros ballena BTC"></canvas>
         <div class="canvas-message" id="orderbook-message"></div>

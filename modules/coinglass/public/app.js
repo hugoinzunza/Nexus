@@ -345,47 +345,111 @@ function drawOrderbook() {
   const canvas = $("orderbook-chart");
   const { ctx, width, height } = setupCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
-  const apiSnapshots = state.advanced?.orderbook_heatmap || [];
-  const visualSnapshots = state.visual_orderbook_history || [];
-  const snapshots = apiSnapshots.length ? apiSnapshots : visualSnapshots;
-  if (!snapshots.length) {
-    message("orderbook-message", state.visual_snapshot?.whale_orders?.rows?.length
-      ? "La historia visual comienza con la próxima captura automática"
-      : reason(state.advanced?.capabilities?.orderbook_heatmap));
+  // Solo el historial VISUAL: el heatmap de profundidad de la API quedo muerto
+  // (401 "Upgrade plan"). Antes se mezclaban los dos datasets bajo el mismo
+  // titulo —profundidad completa vs muros discretos— sin decir cual se veia.
+  const snapshots = state.visual_orderbook_history || [];
+  if (snapshots.length < 2) {
+    message("orderbook-message", snapshots.length
+      ? "Con una sola captura no hay historia: la serie parte con la proxima"
+      : "Recolectando historial visual cada 5 min");
     return;
   }
   message("orderbook-message", "");
-  const price = Number(state.visual_indicator?.price || state.advanced?.price);
-  const all = snapshots.flatMap((row) => row.bids.concat(row.asks))
-    .filter((row) => !price || Math.abs(row[0] / price - 1) <= 0.12);
-  const prices = all.map((row) => row[0]);
-  const quantities = all.map((row) => row[1]);
-  const min = Math.min(...prices), max = Math.max(...prices), qMax = Math.max(...quantities, 1);
-  const xStep = (width - 74) / Math.max(1, snapshots.length);
-  snapshots.forEach((snapshot, index) => {
-    for (const [side, color] of [["bids", "36,200,138"], ["asks", "239,99,112"]]) {
-      snapshot[side].forEach(([levelPrice, quantity]) => {
-        if (levelPrice < min || levelPrice > max) return;
-        const y = 16 + (max - levelPrice) / (max - min || 1) * (height - 44);
-        const alpha = Math.min(.9, .08 + Math.sqrt(quantity / qMax) * .82);
-        ctx.fillStyle = `rgba(${color},${alpha})`;
-        ctx.fillRect(60 + index * xStep, y - 2, Math.max(2, xStep + 1), 4);
-      });
-    }
-  });
-  if (Number.isFinite(price)) {
-    const y = 16 + (max - price) / (max - min || 1) * (height - 44);
-    ctx.strokeStyle = "#edf1f7";
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(56, y);
-    ctx.lineTo(width - 12, y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#edf1f7";
-    ctx.font = "10px ui-monospace, monospace";
-    ctx.fillText(fmt(price, 0), 9, y + 3);
+
+  const L = 68, R = 128, T = 20, B = 30;       // margenes: izq precio, der etiquetas
+  const muros = snapshots.flatMap((snap, i) => [
+    ...(snap.bids || []).map(([p, usd]) => ({ i, p, usd, lado: "bid" })),
+    ...(snap.asks || []).map(([p, usd]) => ({ i, p, usd, lado: "ask" })),
+  ]).filter((m) => Number.isFinite(m.p) && Number.isFinite(m.usd));
+  const precios = snapshots.map((s) => Number(s.price)).filter(Number.isFinite);
+  if (!muros.length || !precios.length) {
+    message("orderbook-message", "Las capturas no traen muros legibles");
+    return;
   }
+  // El rango vertical incluye precio y muros, para que nada quede fuera del marco
+  const todos = muros.map((m) => m.p).concat(precios);
+  let min = Math.min(...todos), max = Math.max(...todos);
+  const pad = (max - min) * 0.04 || 1;
+  min -= pad; max += pad;
+  const maxUsd = Math.max(...muros.map((m) => m.usd), 1);
+  const X = (i) => L + i * (width - L - R) / Math.max(1, snapshots.length - 1);
+  const Y = (p) => T + (max - p) / (max - min || 1) * (height - T - B);
+
+  // --- eje Y: precios reales, no solo la linea del precio actual ---
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.textBaseline = "middle";
+  for (let k = 0; k <= 5; k++) {
+    const p = min + (max - min) * k / 5;
+    const y = Y(p);
+    ctx.strokeStyle = "#1e2532";
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(width - R, y); ctx.stroke();
+    ctx.fillStyle = "#7d879a";
+    ctx.textAlign = "right";
+    ctx.fillText(fmt(p, 0), L - 8, y);
+  }
+
+  // --- muros: cada captura una columna; area proporcional al monto ---
+  const ancho = Math.max(2, (width - L - R) / snapshots.length * 0.9);
+  for (const m of muros) {
+    const rel = Math.sqrt(m.usd / maxUsd);
+    ctx.fillStyle = m.lado === "bid"
+      ? `rgba(36,200,138,${(0.15 + rel * 0.75).toFixed(3)})`
+      : `rgba(239,99,112,${(0.15 + rel * 0.75).toFixed(3)})`;
+    const alto = Math.max(3, rel * 11);
+    ctx.fillRect(X(m.i) - ancho / 2, Y(m.p) - alto / 2, ancho, alto);
+  }
+
+  // --- linea de PRECIO sobre el tiempo, superpuesta a los muros ---
+  ctx.strokeStyle = "#edf1f7";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  snapshots.forEach((snap, i) => {
+    const p = Number(snap.price);
+    if (!Number.isFinite(p)) return;
+    const x = X(i), y = Y(p);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  const ultimo = precios[precios.length - 1];
+  ctx.fillStyle = "#edf1f7";
+  ctx.beginPath();
+  ctx.arc(X(snapshots.length - 1), Y(ultimo), 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // --- los muros MAS GRANDES quedan etiquetados, no solo sombreados ---
+  const top = [...muros].sort((a, b) => b.usd - a.usd)
+    .filter((m, i, arr) => arr.findIndex((o) =>
+      Math.abs(o.p - m.p) / m.p < 0.001 && o.lado === m.lado) === i)
+    .slice(0, 4);
+  ctx.textAlign = "left";
+  for (const m of top) {
+    const y = Y(m.p);
+    ctx.strokeStyle = m.lado === "bid" ? "rgba(36,200,138,.55)" : "rgba(239,99,112,.55)";
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(width - R + 4, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = m.lado === "bid" ? "#24c88a" : "#ef6370";
+    ctx.fillText(`${compactUsd(m.usd)} ${m.lado === "bid" ? "compra" : "venta"}`,
+                 width - R + 8, y);
+    ctx.fillStyle = "#7d879a";
+    ctx.fillText(fmt(m.p, 0), width - R + 8, y + 11);
+  }
+
+  // --- eje X: tiempo real de la primera y ultima captura ---
+  const hora = (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" :
+      d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+  };
+  ctx.fillStyle = "#7d879a";
+  ctx.textAlign = "left";
+  ctx.fillText(hora(snapshots[0].captured_at), L, height - 12);
+  ctx.textAlign = "center";
+  ctx.fillText(hora(snapshots[Math.floor(snapshots.length / 2)].captured_at),
+               (L + width - R) / 2, height - 12);
+  ctx.textAlign = "right";
+  ctx.fillText(hora(snapshots[snapshots.length - 1].captured_at), width - R, height - 12);
 }
 
 function renderLargeOrders() {

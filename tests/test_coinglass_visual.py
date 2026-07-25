@@ -564,3 +564,33 @@ def test_heatmap_prefiere_la_columna_mas_reciente_que_devuelva_datos():
         "la columna usada debe quedar registrada en el snapshot"
     assert "_scan_vertical(page, x_ratio=0.75)" not in source, \
         "ya no puede quedar clavado en una columna fija"
+
+
+def test_grafico_del_libro_tiene_eje_precio_linea_de_precio_y_muros_marcados():
+    """Antes era una nube de rectángulos sin eje Y ni referencia temporal: no se
+    podía saber a qué precio estaba cada muro ni qué hizo el precio.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    bloque = script.split("function drawOrderbook()")[1].split("\nfunction ")[0]
+
+    # eje Y con precios y eje X con horas reales de captura
+    assert "fmt(p, 0), L - 8, y" in bloque, "el eje Y debe rotular precios"
+    assert "captured_at" in bloque and "toLocaleTimeString" in bloque, \
+        "el eje X debe mostrar la hora real de las capturas"
+
+    # linea de precio superpuesta sobre los muros
+    assert "snapshots.forEach" in bloque and "ctx.stroke()" in bloque
+    assert "Number(snap.price)" in bloque, "debe dibujar el precio por captura"
+
+    # los muros mas grandes quedan etiquetados, no solo sombreados
+    assert "sort((a, b) => b.usd - a.usd)" in bloque
+    assert "compactUsd(m.usd)" in bloque
+
+    # ya no mezcla el heatmap de la API (muerto: 401) con los muros visuales
+    assert "orderbook_heatmap" not in bloque, \
+        "el heatmap de profundidad de la API esta 401; no debe mezclarse"
+
+    # leyenda al click, con la advertencia de spoofing
+    assert "CÓMO SE LEE ESTE GRÁFICO" in html
+    assert "spoofing" in html

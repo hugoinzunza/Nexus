@@ -508,3 +508,6 @@ progress::-webkit-progress-value { background: var(--cyan); }
   margin-top: 7px;
   font-size: 11px;
 }
+
+/* Leyenda de gráfico a ancho completo (libro de órdenes, mapa visual) */
+.lectura-ancha { margin-bottom: 12px; }
