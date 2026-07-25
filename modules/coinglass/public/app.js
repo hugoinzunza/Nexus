@@ -341,6 +341,48 @@ function renderLiquidations() {
   renderLiquidationSummary();
 }
 
+// Ventana vertical del grafico del libro, en % alrededor del precio de AHORA.
+// 0 = todo el rango. La captura de Hugo mostro el problema: sin acotar, dos muros
+// lejanos aplastan la accion del precio y el "ahora" queda ilegible.
+let bookZoom = 1.5;
+
+// Flujo de muros: compara cada captura con la anterior. Un muro que desaparece
+// PUEDE haber sido consumido (el precio paso por ahi) o retirado (no llego nunca),
+// y esa segunda es la firma del spoofing. Es una inferencia: entre capturas hay
+// 5 min y solo se conoce el precio de cada punta.
+function flujoDeMuros(snapshots, referencia) {
+  // Tolerancia de 0,05% del precio: un muro que se corre unos dolares es EL MISMO
+  // muro. Dos errores ya cometidos aca:
+  //  1) clave al dolar exacto -> todo salia nuevo + retirado (377 y 377);
+  //  2) dividir por (precio * TOL) -> eso es 1/TOL, constante, asi que TODOS los
+  //     muros caian en el mismo bucket y nunca habia eventos (0, 0, 0).
+  // El paso tiene que venir de una referencia fija, no del precio de cada muro.
+  const paso = Math.max(1, (referencia || 1) * 0.0005);
+  const clave = (lado, precio) => `${lado}:${Math.round(precio / paso)}`;
+  const eventos = [];
+  let nuevos = 0, consumidos = 0, retirados = 0;
+  for (let i = 1; i < snapshots.length; i++) {
+    const antes = new Map(), ahora = new Map();
+    for (const [lado, campo] of [["bid", "bids"], ["ask", "asks"]]) {
+      for (const [p, usd] of snapshots[i - 1][campo] || []) antes.set(clave(lado, p), { p, usd, lado });
+      for (const [p, usd] of snapshots[i][campo] || []) ahora.set(clave(lado, p), { p, usd, lado });
+    }
+    const pa = Number(snapshots[i - 1].price), pb = Number(snapshots[i].price);
+    const lo = Math.min(pa, pb), hi = Math.max(pa, pb);
+    for (const [k, m] of ahora) {
+      if (!antes.has(k)) { eventos.push({ i, ...m, tipo: "nuevo" }); nuevos++; }
+    }
+    for (const [k, m] of antes) {
+      if (ahora.has(k)) continue;
+      // el precio recorrio ese nivel entre las dos capturas -> se lo comieron
+      const tocado = m.p >= lo && m.p <= hi;
+      eventos.push({ i, ...m, tipo: tocado ? "consumido" : "retirado" });
+      tocado ? consumidos++ : retirados++;
+    }
+  }
+  return { eventos, nuevos, consumidos, retirados };
+}
+
 function drawOrderbook() {
   const canvas = $("orderbook-chart");
   const { ctx, width, height } = setupCanvas(canvas);
@@ -357,7 +399,7 @@ function drawOrderbook() {
   }
   message("orderbook-message", "");
 
-  const L = 68, R = 128, T = 20, B = 30;       // margenes: izq precio, der etiquetas
+  const L = 68, R = 128, T = 20, B = 30;
   const muros = snapshots.flatMap((snap, i) => [
     ...(snap.bids || []).map(([p, usd]) => ({ i, p, usd, lado: "bid" })),
     ...(snap.asks || []).map(([p, usd]) => ({ i, p, usd, lado: "ask" })),
@@ -367,18 +409,26 @@ function drawOrderbook() {
     message("orderbook-message", "Las capturas no traen muros legibles");
     return;
   }
-  // El rango vertical se ancla al PRECIO, no a los muros. Al reescribir el
-  // grafico se perdio el filtro de distancia del codigo viejo y dos muros
-  // lejanos (120k, 125k con BTC en 64k) estiraban el eje de 57k a 130k,
-  // aplastando toda la accion del precio en una banda de pixeles.
-  const pmin = Math.min(...precios), pmax = Math.max(...precios);
-  const centro = (pmin + pmax) / 2;
-  const radio = Math.max((pmax - pmin) / 2 * 1.6, centro * 0.02);
-  let min = centro - radio, max = centro + radio;
-  const cerca = muros.filter((m) => m.p >= min && m.p <= max);
-  if (cerca.length) {
-    min = Math.min(min, Math.min(...cerca.map((m) => m.p)));
-    max = Math.max(max, Math.max(...cerca.map((m) => m.p)));
+
+  // --- ventana vertical: centrada en el precio de AHORA cuando hay zoom ---
+  const ahora = precios[precios.length - 1];
+  let min, max;
+  if (bookZoom > 0) {
+    min = ahora * (1 - bookZoom / 100);
+    max = ahora * (1 + bookZoom / 100);
+    // el recorrido del precio nunca queda fuera del marco
+    min = Math.min(min, Math.min(...precios));
+    max = Math.max(max, Math.max(...precios));
+  } else {
+    const pmin = Math.min(...precios), pmax = Math.max(...precios);
+    const centro = (pmin + pmax) / 2;
+    const radio = Math.max((pmax - pmin) / 2 * 1.6, centro * 0.02);
+    min = centro - radio; max = centro + radio;
+    const cerca = muros.filter((m) => m.p >= min && m.p <= max);
+    if (cerca.length) {
+      min = Math.min(min, Math.min(...cerca.map((m) => m.p)));
+      max = Math.max(max, Math.max(...cerca.map((m) => m.p)));
+    }
   }
   const pad = (max - min) * 0.04 || 1;
   min -= pad; max += pad;
@@ -405,34 +455,74 @@ function drawOrderbook() {
     if (m.p < min || m.p > max) continue;      // fuera del encuadre
     const rel = Math.sqrt(m.usd / maxUsd);
     ctx.fillStyle = m.lado === "bid"
-      ? `rgba(36,200,138,${(0.15 + rel * 0.75).toFixed(3)})`
-      : `rgba(239,99,112,${(0.15 + rel * 0.75).toFixed(3)})`;
+      ? `rgba(36,200,138,${(0.12 + rel * 0.5).toFixed(3)})`
+      : `rgba(239,99,112,${(0.12 + rel * 0.5).toFixed(3)})`;
     const alto = Math.max(3, rel * 11);
     ctx.fillRect(X(m.i) - ancho / 2, Y(m.p) - alto / 2, ancho, alto);
   }
 
-  // --- linea de PRECIO sobre el tiempo, superpuesta a los muros ---
-  ctx.strokeStyle = "#edf1f7";
-  ctx.lineWidth = 1.6;
+  // --- FLUJO: que muros nacen, se comen o se retiran ---
+  const flujo = flujoDeMuros(snapshots, ahora);
+  // Solo los eventos de los muros mas grandes y con tope: dibujar los cientos de
+  // eventos de una ventana tapaba por completo el precio y los muros.
+  const corte = maxUsd * 0.55;
+  const marcables = flujo.eventos
+    .filter((e) => e.usd >= corte && e.p >= min && e.p <= max)
+    .sort((a, b) => b.usd - a.usd)
+    .slice(0, 40);
+  for (const e of marcables) {
+    const x = X(e.i), y = Y(e.p);
+    ctx.lineWidth = 1.6;
+    if (e.tipo === "nuevo") {
+      ctx.strokeStyle = "#43bdd7";
+      ctx.beginPath();
+      ctx.moveTo(x, y - 4); ctx.lineTo(x + 4, y); ctx.lineTo(x, y + 4); ctx.lineTo(x - 4, y);
+      ctx.closePath(); ctx.stroke();
+    } else if (e.tipo === "consumido") {
+      ctx.strokeStyle = "#24c88a";
+      ctx.beginPath();
+      ctx.moveTo(x - 4, y - 4); ctx.lineTo(x + 4, y + 4);
+      ctx.moveTo(x + 4, y - 4); ctx.lineTo(x - 4, y + 4);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = "#e8b653";
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  // --- linea de PRECIO sobre el tiempo, con presencia ---
+  ctx.strokeStyle = "rgba(9,11,16,.85)";
+  ctx.lineWidth = 5;
   ctx.beginPath();
   snapshots.forEach((snap, i) => {
     const p = Number(snap.price);
     if (!Number.isFinite(p)) return;
-    const x = X(i), y = Y(p);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    i === 0 ? ctx.moveTo(X(i), Y(p)) : ctx.lineTo(X(i), Y(p));
+  });
+  ctx.stroke();                                 // contorno para separarla del fondo
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  snapshots.forEach((snap, i) => {
+    const p = Number(snap.price);
+    if (!Number.isFinite(p)) return;
+    i === 0 ? ctx.moveTo(X(i), Y(p)) : ctx.lineTo(X(i), Y(p));
   });
   ctx.stroke();
-  const ultimo = precios[precios.length - 1];
-  ctx.fillStyle = "#edf1f7";
+  ctx.fillStyle = "#ffffff";
   ctx.beginPath();
-  ctx.arc(X(snapshots.length - 1), Y(ultimo), 3, 0, Math.PI * 2);
+  ctx.arc(X(snapshots.length - 1), Y(ahora), 4, 0, Math.PI * 2);
   ctx.fill();
+  ctx.font = "700 11px ui-monospace, monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(`${fmt(ahora, 0)} ahora`, width - R - 10, Y(ahora) - 12);
 
   // --- los muros MAS GRANDES quedan etiquetados, no solo sombreados ---
   const top = [...muros].filter((m) => m.p >= min && m.p <= max)
     .sort((a, b) => b.usd - a.usd)
     .filter((m, i, arr) => arr.findIndex((o) =>
       Math.abs(o.p - m.p) / m.p < 0.001 && o.lado === m.lado) === i);
+  ctx.font = "10px ui-monospace, monospace";
   ctx.textAlign = "left";
   const usadasY = [];
   for (const m of top) {
@@ -466,6 +556,14 @@ function drawOrderbook() {
                (L + width - R) / 2, height - 12);
   ctx.textAlign = "right";
   ctx.fillText(hora(snapshots[snapshots.length - 1].captured_at), width - R, height - 12);
+
+  // resumen del flujo: la tasa de retirados es el dato de spoofing
+  const salieron = flujo.consumidos + flujo.retirados;
+  $("book-interval").textContent =
+    `${snapshots.length} capturas · cada 5 min · flujo: ${flujo.nuevos} nuevos, ` +
+    `${flujo.consumidos} consumidos, ${flujo.retirados} retirados` +
+    (salieron ? ` (${Math.round(100 * flujo.retirados / salieron)}% de los que ` +
+                `desaparecieron se retiraron sin que el precio llegara)` : "");
 }
 
 function renderLargeOrders() {
@@ -486,13 +584,7 @@ function renderLargeOrders() {
 }
 
 function renderOrderbook() {
-  const interval = state.advanced?.capabilities?.orderbook_heatmap?.interval;
-  const visualHistory = state.visual_orderbook_history || [];
-  $("book-interval").textContent = interval
-    ? `48 snapshots · intervalos de ${interval}`
-    : visualHistory.length
-      ? `${visualHistory.length} capturas visuales · cada 5 min · historial forward`
-      : "Recolectando historial visual cada 5 min";
+  // el resumen del pie lo escribe drawOrderbook con el conteo del flujo de muros
   drawOrderbook();
   renderLargeOrders();
 }
@@ -1004,6 +1096,15 @@ document.querySelectorAll(".tabs button").forEach((button) => {
   button.addEventListener("click", () => {
     activateTab(button);
     history.replaceState(null, "", `#${button.dataset.tab}`);
+  });
+});
+
+document.querySelectorAll("[data-zoom]").forEach((button) => {
+  button.addEventListener("click", () => {
+    bookZoom = Number(button.dataset.zoom);
+    document.querySelectorAll("[data-zoom]").forEach((item) =>
+      item.classList.toggle("active", item === button));
+    drawOrderbook();
   });
 });
 

@@ -667,3 +667,41 @@ def test_mapa_visual_suma_eje_precio_muros_y_alcance():
     assert "width - 10, y + dy" in bloque, "el alcance va al borde, desplazado"
 
     assert "confluencia" in html, "la leyenda debe explicar la confluencia"
+
+
+def test_flujo_de_muros_distingue_consumido_de_retirado():
+    """El gráfico pasa de "foto de muros" a "flujo": comparando capturas marca los
+    que aparecen, los que el precio se comió y los que se retiraron sin ser
+    tocados — esa última es la firma del spoofing.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    bloque = script.split("function flujoDeMuros(")[1].split("\nfunction ")[0]
+
+    # el matcheo usa un paso FIJO derivado de una referencia, no del propio precio
+    assert "referencia" in bloque and "* 0.0005" in bloque
+    assert "Math.round(precio / paso)" in bloque
+    assert "precio / (precio * TOL)" not in script, \
+        "ese divisor es 1/TOL, constante: metia todos los muros en un bucket"
+
+    # consumido vs retirado se decide por si el precio recorrio el nivel
+    assert "m.p >= lo && m.p <= hi" in bloque
+    assert '"consumido" : "retirado"' in bloque
+
+    # y la inferencia se declara como tal en la leyenda
+    assert "es una inferencia" in html
+    assert "spoofing" in html
+
+
+def test_el_libro_tiene_zoom_al_precio_de_ahora():
+    """Sin acotar la ventana, dos muros lejanos aplastan el 'ahora'."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+
+    assert 'data-zoom="0.5"' in html and 'data-zoom="0"' in html
+    assert "let bookZoom" in script
+    assert "bookZoom = Number(button.dataset.zoom)" in script
+    # con zoom, la ventana se centra en el precio de la ultima captura
+    assert "ahora * (1 - bookZoom / 100)" in script
+    # y el recorrido del precio nunca queda fuera del marco
+    assert "min = Math.min(min, Math.min(...precios))" in script
