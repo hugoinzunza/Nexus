@@ -97,8 +97,35 @@ real trae `"YYYY-MM-DD HH:MM"` y el fixture usaba `"HH:MM"`. Corregido en
 `7f8d526` — sin eso el hallazgo habría quedado sin medir pese a estar instrumentado.
 
 **Consecuencia**: cualquier estudio del Radar hecho con `x_ratio=0.75` mide una
-mezcla de presente y pasado. Antes de validar el Radar hay que decidir el punto de
-muestreo del heatmap con este número a la vista.
+mezcla de presente y pasado.
+
+### ✅ RESUELTO (2026-07-25) — muestreo adaptativo de la columna
+
+| | antes | después |
+|---|---|---|
+| Columna del canvas | `0.75` fija | **`0.94`**, elegida por sondeo |
+| Desfase del heatmap | **321 min** | **19 min** |
+| `stale_heatmap` | `True` | `False` |
+| Cobertura | 118 niveles | 114 niveles (sin pérdida real) |
+
+El colector ahora sondea barato (12 hovers) desde el borde derecho hacia dentro y
+escanea la **columna más reciente que devuelva tooltips**. El sondeo confirmó por
+qué estaba en 0.75: **`0.985` y `0.965` no devuelven nada** (caen en el margen del
+eje o la zona de proyección), así que revertir a `0.975` habría roto la
+recolección. La columna usada queda registrada en `liquidation_heatmap.x_ratio`
+para que un cambio de layout sea visible y no silencioso.
+
+**Hallazgo colateral en el libro**: el `interval` del depth delta estaba escrito a
+mano como `"15m"`; medido de los propios tooltips es **`1h`**. Es decir,
+`depth_slope = depth[-1] − depth[-4]` no era una derivada de 45 minutos sino de
+**3 horas**, mal etiquetada por un factor de 4. El muestreo del libro en sí estaba
+bien (barre 0.45→0.98, sí alcanza lo reciente); el error era la etiqueta.
+
+**Lo que esto implica para el veredicto del Radar**: todos los estudios previos del
+compuesto midieron un insumo con 5 horas de desfase en su componente de mayor peso.
+El descarte del compuesto sigue en pie *con esos datos*, pero **merece re-medición**
+cuando se acumule forward con el muestreo corregido. Esta es la única razón por la
+que el veredicto de CoinGlass no debe tomarse como final.
 
 - **Qué lo refutaría**: que el 25% derecho del canvas sea margen de eje/proyección
   y 0.75 sea efectivamente la columna vigente. Ahora es comprobable con datos
