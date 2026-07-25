@@ -162,6 +162,15 @@ h3 { font-size: 14px; }
 .regime + .regime { border-left: 1px solid var(--line); }
 .regime span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; }
 .regime b { display: block; margin-top: 6px; font-size: 13px; line-height: 1.35; }
+/* "Cómo se lee" de cada lectura: el panel mostraba etiquetas sin explicar qué
+   significan. Se muestra en la propia tarjeta, no solo en el tooltip. */
+.regime small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
 .tabs button.hidden { display: none; }
 
 .metric, .level-summary div, .components article {

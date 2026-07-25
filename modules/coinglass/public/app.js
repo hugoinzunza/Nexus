@@ -132,15 +132,30 @@ function renderOverview() {
   renderHistory();
   renderCapabilities();
   const analysis = state.basic_analysis || {};
+  // Cada lectura lleva su "cómo se lee": el panel mostraba etiquetas tipo
+  // "nuevos longs" sin decir qué significan ni qué se puede concluir.
   const readings = [
-    ["Apalancamiento", analysis.leverage],
-    ["Funding", analysis.funding],
-    ["Liquidaciones", analysis.liquidations],
-    ["Top traders", analysis.positioning],
-    ["Profundidad", analysis.orderbook],
+    ["Apalancamiento", analysis.leverage,
+     "Cruza precio con open interest: dice si el movimiento lo hace plata NUEVA " +
+     "entrando o posiciones viejas cerrando. Es el mecanismo de lo que ya pasó, " +
+     "no una prediccion (probado como regla direccional: perdio fuera de muestra)."],
+    ["Funding", analysis.funding,
+     "Quien paga por mantener la posicion. Longs pagando elevado = mucha gente " +
+     "larga y apretada; suele acompañar techos, pero no los marca."],
+    ["Liquidaciones", analysis.liquidations,
+     "Quien fue liquidado a la fuerza en la ultima barra. 'Flush de longs' = " +
+     "acaban de barrer compradores apalancados. Describe el pasado inmediato."],
+    ["Top traders", analysis.positioning,
+     "Cuanto consenso hay entre los traders grandes de Binance. Consenso extremo " +
+     "es contexto de riesgo, no señal contraria automatica."],
+    ["Profundidad", analysis.orderbook,
+     "Si los libros de distintos exchanges se contradicen. Divergencia = el " +
+     "desequilibrio de un solo exchange no es representativo."],
   ];
-  $("basic-analysis").innerHTML = readings.map(([label, value]) =>
-    `<div class="regime"><span>${label}</span><b>${value || "sin datos"}</b></div>`
+  $("basic-analysis").innerHTML = readings.map(([label, value, comoSeLee]) =>
+    `<div class="regime" title="${escapeHtml(comoSeLee)}">` +
+    `<span>${escapeHtml(label)}</span><b>${escapeHtml(value || "sin datos")}</b>` +
+    `<small>${escapeHtml(comoSeLee)}</small></div>`
   ).join("");
 }
 

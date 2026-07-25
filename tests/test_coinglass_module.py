@@ -365,3 +365,16 @@ def test_panel_avisa_cuando_el_dato_de_mercado_esta_cacheado():
     assert "advanced?.stale" in script or "advanced.stale" in script
     assert "DATO CACHEADO" in script
     assert "captured_at" in script
+
+
+def test_resumen_explica_como_se_lee_cada_lectura():
+    """El Resumen mostraba etiquetas como "nuevos longs" sin decir qué significan
+    ni qué se puede concluir. Cada lectura debe traer su "cómo se lee"."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    css = (ROOT / "modules/coinglass/public/styles.css").read_text()
+
+    assert "comoSeLee" in script
+    assert "no una prediccion" in script, \
+        "debe decir explícitamente que el cruce precio/OI no predice"
+    assert "perdio fuera de muestra" in script
+    assert ".regime small" in css, "el texto explicativo necesita estilo propio"
