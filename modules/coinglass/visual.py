@@ -255,21 +255,31 @@ def _clock_lag_seconds(levels: list[dict[str, Any]], captured_at: str) -> int | 
     se elige la vuelta más cercana (±12 h). Positivo = el dato va ATRASADO
     respecto de la captura. None si ningún nivel trae hora legible.
     """
-    stamps = []
+    base = _iso(captured_at)
+    completos: list[datetime] = []
+    horas: list[tuple[int, int]] = []
     for level in levels:
         raw = str(level.get("timestamp") or "").strip()
         if not raw:
             continue
-        parts = raw.split(":")
-        if len(parts) < 2 or not parts[0].isdigit() or not parts[1][:2].isdigit():
+        # Producción entrega "YYYY-MM-DD HH:MM" (verificado en el VPS 2026-07-25);
+        # el formato corto "HH:MM" también aparece. Cualquier otra cosa ("Precio")
+        # se ignora en vez de inventar una hora.
+        try:
+            completos.append(datetime.fromisoformat(raw).replace(tzinfo=base.tzinfo))
             continue
-        stamps.append((int(parts[0]), int(parts[1][:2])))
-    if not stamps:
+        except ValueError:
+            pass
+        partes = raw.split(":")
+        if len(partes) >= 2 and partes[0].strip().isdigit() and partes[1][:2].isdigit():
+            horas.append((int(partes[0]), int(partes[1][:2])))
+    if completos:
+        return int((base - max(completos)).total_seconds())
+    if not horas:
         return None
-    base = _iso(captured_at)
-    hour, minute = max(stamps)          # el más reciente de la columna muestreada
-    stamped = base.replace(hour=hour % 24, minute=minute, second=0, microsecond=0)
-    lag = (base - stamped).total_seconds()
+    hora, minuto = max(horas)
+    sellado = base.replace(hour=hora % 24, minute=minuto, second=0, microsecond=0)
+    lag = (base - sellado).total_seconds()
     if lag > 43_200:                     # cruzó medianoche hacia atrás
         lag -= 86_400
     elif lag < -43_200:

@@ -502,3 +502,28 @@ def test_historial_publico_se_recorta_por_tiempo_no_por_conteo():
 
     assert len(recortado) == 3, "las entradas de hace 3 días no son 'últimas 24 h'"
     assert _recent_by_time([{"captured_at": "sin-formato"}], hours=24, cap=288) == []
+
+
+def test_lag_del_heatmap_parsea_el_formato_real_de_produccion():
+    """En producción el tooltip trae "YYYY-MM-DD HH:MM" (verificado en el VPS),
+    no "HH:MM". Con el parser viejo el desfase salía None y el hallazgo P0 quedaba
+    sin medir. Se ignoran las etiquetas que no son hora (p.ej. "Precio")."""
+    snap = snapshot()
+    snap["liquidation_heatmap"]["levels"] = [
+        {**nivel, "timestamp": "2026-07-24 19:45"}
+        for nivel in snap["liquidation_heatmap"]["levels"]
+    ]
+    snap["liquidation_heatmap"]["levels"][0]["timestamp"] = "Precio"
+
+    indicator = build_visual_indicator(snap, now=NOW)
+    lag = indicator["coverage"]["heatmap_lag_seconds"]
+
+    # captura 2026-07-24 18:00 UTC vs tooltip del mismo día 19:45 -> -6300 s
+    assert lag == -6_300
+    assert indicator["stale_heatmap"] is False   # negativo no es "atrasado"
+
+    # Y el caso real observado: captura del día siguiente a la 01:09
+    snap["captured_at"] = "2026-07-25T01:09:15+00:00"
+    tardio = build_visual_indicator(snap, now=datetime(2026, 7, 25, 1, 10, tzinfo=timezone.utc))
+    assert tardio["coverage"]["heatmap_lag_seconds"] == 19_455   # 5 h 24 min
+    assert tardio["stale_heatmap"] is True
