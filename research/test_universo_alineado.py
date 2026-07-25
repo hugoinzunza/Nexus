@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
-"""Fija el look-ahead de la barra de activación encontrado el 2026-07-25.
+"""Candado del look-ahead de la barra de activación (encontrado y corregido 2026-07-25).
 
-`_resolve` marca `act_idx` en la barra que ENTRA a la zona y `_simulate_scaled`
-recorre `range(act_idx, end)`, incluyéndola con su máximo y su mínimo completos.
-Para un long, activarse significa que el MÍNIMO bajó a la zona — pero el MÁXIMO de
-esa misma barra pudo ocurrir antes, mientras el precio venía cayendo. Contarlo como
-TP1 lleno es mirar hacia atrás.
+`_resolve` marca `act_idx` en la barra que ENTRA a la zona. `_simulate_scaled` recorría
+`range(act_idx, end)`, incluyéndola con su máximo completo. Para un long, activarse
+significa que el MÍNIMO bajó a la zona — pero el MÁXIMO de esa misma barra pudo ocurrir
+antes, mientras el precio venía cayendo. Contarlo como TP1 lleno era mirar hacia atrás.
 
-Pega justo en los tramos parciales porque TP1 está a 1R (~0,8% con el sl_pct
-mediano), una distancia que el rango de una barra de 1h o 4h cubre casi siempre; el
-TP lejano (rr mediano 9,9) casi nunca se llena intrabarra, por eso la ruta de TP
-completo no está afectada.
+Pegaba justo en los tramos parciales porque TP1 está a 1R (~0,8% con el sl_pct mediano),
+distancia que el rango de una barra de 1h o 4h cubre casi siempre; el TP lejano
+(rr mediano 9,9) casi nunca se llena intrabarra, así que la ruta de TP completo no
+estaba afectada.
 
-Estos tests documentan el comportamiento ACTUAL. Cuando se corrija el arranque a
-`act_idx + 1`, van a fallar: eso es intencional, obliga a actualizar el informe y a
-re-correr el backtest en vez de que el cambio pase inadvertido.
+Estos tests fijan el comportamiento CORREGIDO. Si alguien vuelve a incluir la barra de
+activación, el primero falla.
 """
 from __future__ import annotations
 
@@ -34,36 +32,53 @@ LEGS, BE, TRAIL = [(1.0, 0.5), (2.0, 0.25)], 1, 1.0
 SETUP = {"dir": "long", "entry": 100.0, "sl": 99.0, "tp": 110.0, "rr": 10.0}
 
 
-def test_la_barra_de_activacion_regala_medio_R():
-    """El caso reproducible: el máximo ya había pasado cuando se entró."""
+def test_no_se_cobra_TP1_con_un_maximo_previo_a_la_entrada():
+    """El caso que destapó el sesgo: el máximo ya había pasado cuando se entró.
+
+    Con `act_idx=0` el simulador debe IGNORAR esa barra y resolver con la siguiente,
+    que va al stop. Si vuelve a dar +0,5 es que alguien reintrodujo el look-ahead.
+    """
     # activación: el mínimo (99,5) entra a la zona; el máximo (101,5) fue antes
     sel = [{"h": 101.5, "l": 99.5}, {"h": 99.6, "l": 98.9}]
 
-    contando_la_barra = _simulate_scaled(SETUP, sel, 0, len(sel), LEGS, BE, TRAIL)
-    desde_la_siguiente = _simulate_scaled(SETUP, sel, 1, len(sel), LEGS, BE, TRAIL)
+    assert _simulate_scaled(SETUP, sel, 0, len(sel), LEGS, BE, TRAIL) == -1.0
 
-    assert contando_la_barra == 0.5, "hoy cobra TP1 con un maximo previo a la entrada"
-    assert desde_la_siguiente == -1.0, "sin ese maximo, el trade muere en el stop"
-    assert contando_la_barra - desde_la_siguiente == 1.5
+    # y el TP1 sí se cobra cuando el máximo ocurre en una barra POSTERIOR
+    sel_ok = [{"h": 99.9, "l": 99.5}, {"h": 101.5, "l": 99.6}, {"h": 99.7, "l": 98.9}]
+    assert _simulate_scaled(SETUP, sel_ok, 0, len(sel_ok), LEGS, BE, TRAIL) == 0.5
 
 
-def test_la_ruta_de_tp_completo_no_esta_afectada():
-    """El TP lejano casi nunca cae dentro de la barra de activación, así que la
-    variante `actual` (y su walk-forward) siguen siendo utilizables."""
-    solo_far = [("far", 1.0)]
+def test_el_sesgo_medido_era_de_1_5R_por_trade():
+    """Deja constancia del tamaño del error, que es lo que justifica haber
+    invalidado la medición del plan en vivo y re-corrido el backtest."""
     sel = [{"h": 101.5, "l": 99.5}, {"h": 99.6, "l": 98.9}]
-    a = _simulate_scaled(SETUP, sel, 0, len(sel), solo_far, 99)
-    b = _simulate_scaled(SETUP, sel, 1, len(sel), solo_far, 99)
-    assert a == b == -1.0
+    # act_idx = -1 hace que el recorrido arranque en la barra 0, o sea reproduce el
+    # comportamiento viejo (incluir la barra de activación) sin revivir el bug
+    con_sesgo = _simulate_scaled(SETUP, sel, -1, len(sel), LEGS, BE, TRAIL)
+    sin_sesgo = _simulate_scaled(SETUP, sel, 0, len(sel), LEGS, BE, TRAIL)
+    assert con_sesgo == 0.5 and sin_sesgo == -1.0
+    assert con_sesgo - sin_sesgo == 1.5
+
+
+def test_la_ruta_de_tp_completo_no_estaba_afectada():
+    """Por eso la variante `actual` y su walk-forward siguieron siendo utilizables:
+    el TP lejano (aca 110, rr=10) no cabe en el rango de la barra de activacion, asi
+    que incluirla o no daba lo mismo."""
+    solo_far = [("far", 1.0)]
+    sel = [{"h": 101.5, "l": 99.5, "c": 100.0}, {"h": 99.6, "l": 98.9, "c": 99.0}]
+    # con la barra de activacion incluida (comportamiento viejo) y sin ella: igual
+    assert _simulate_scaled(SETUP, sel, -1, len(sel), solo_far, 99) == -1.0
+    assert _simulate_scaled(SETUP, sel, 0, len(sel), solo_far, 99) == -1.0
 
 
 def test_el_stop_sigue_pegando_antes_que_el_tp_en_la_misma_barra():
-    """La regla conservadora SI existe — mi primera sospecha estaba equivocada y
-    conviene que quede fijada para no volver a acusarla."""
-    # barra que toca TP1 (101) y tambien el stop (99): debe ganar el stop
-    sel = [{"h": 101.5, "l": 98.5}]
-    r = _simulate_scaled(SETUP, sel, 0, len(sel), LEGS, BE, TRAIL)
-    assert r == -1.0
+    """La regla conservadora SI existe — mi primera sospecha sobre el origen del
+    sesgo estaba equivocada y conviene dejarlo fijado para no volver a acusarla."""
+    sel = [
+        {"h": 99.9, "l": 99.5, "c": 99.8},      # activacion, sin nada
+        {"h": 101.5, "l": 98.5, "c": 99.0},     # toca TP1 (101) Y el stop (99)
+    ]
+    assert _simulate_scaled(SETUP, sel, 0, len(sel), LEGS, BE, TRAIL) == -1.0
 
 
 def test_el_informe_declara_que_real_vivo_quedo_invalido():

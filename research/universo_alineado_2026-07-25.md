@@ -146,10 +146,81 @@ hay nada que sostenga que el plan de salida actual sea mejor que dejar correr.
 No cambiar el plan de salida. La evidencia dice que la medición estaba mal, no que
 la alternativa sea mejor — eso hay que medirlo, y con el `act_idx` corregido.
 
-## Siguiente paso concreto
+---
 
-Corregir `_simulate_scaled` para arrancar en `act_idx + 1`, re-correr
-`run_setup_backtest` y volver a comparar las variantes de salida contra la realidad
-del Diario. Es un cambio de una línea con un efecto grande, así que hay que hacerlo
-con test que lo fije. No lo toqué todavía porque ese script alimenta el
-`setup_backtest_results.json` que sirve la API del Diario.
+# APLICADO: el fix y lo que pasó después
+
+`_simulate_scaled` arranca ahora en `act_idx + 1`. Backtest re-corrido completo
+(~28 min de CPU, 11.815 registros, 6.263 activados).
+
+## El sesgo era real y grande
+
+| Variante | a TP1 antes | después | avg netR antes | después |
+|---|---|---|---|---|
+| `real_vivo` (el plan del bot) | 80,9% | **67,4%** | +0,822 | **+0,493** |
+| `runner_agres` | 80,9% | 67,4% | +0,689 | +0,498 |
+| `tu_idea` | 80,9% | 67,4% | +0,687 | +0,470 |
+| `be_tardio` | 66,5% | 53,6% | +0,665 | +0,452 |
+| `actual` (TP completo) | 17,8% | 18,6% | +0,579 | +0,688 |
+
+13,5 puntos de tasa de acierto y **0,33R por trade** de aire en la variante que
+modela el plan del bot. La ruta de TP completo casi no se movió, como estaba
+previsto: su objetivo está a 8,4% del precio contra 0,80% de TP1, y sólo el 4% de
+los trades tiene el TP a menos de 2%, que es lo que una barra podría cubrir.
+
+## Pero la brecha con la realidad NO se cerró
+
+| | Backtest `real_vivo` | Diario real |
+|---|---|---|
+| llegan a TP1 | **67,4%** | **33,3%** (CI95 21,3% – 50,0%) |
+
+El 67,4% queda **fuera** del intervalo. O sea el fix corrigió un sesgo verdadero
+pero queda una segunda fuente de optimismo sin identificar.
+
+## Corrección importante a lo que yo mismo escribí más arriba
+
+Dije que la brecha era decisiva con **P = 1,2 × 10⁻¹⁰**. **Ese número no vale.**
+Asume 39 observaciones independientes, y los 39 trades del Diario caen en **8 días**,
+con **31 de ellos en tres días seguidos** de mediados de junio. Están masivamente
+agrupados: si esos tres días fueron un mal tramo, casi toda la muestra comparte un
+solo evento.
+
+Remuestreando **días** en vez de trades —la unidad que sí se aproxima a
+independiente— el intervalo real es 21,3% a 50,0%. El 67,4% sigue quedando afuera,
+así que la conclusión sobrevive, pero como **indicio, no como demostración**. Con 8
+clusters incluso ese intervalo tiene cobertura discutible.
+
+Segunda corrección, menor: comparar la variante `actual` con el resto era comparar
+peras con manzanas. Ahí no existe TP1 —el único tramo es el TP lejano— así que su
+tasa mide otro evento. Queda excluida y marcada como no comparable.
+
+## Estado de la pregunta que decide la Fase 1
+
+**Sigue sin respuesta.** El plan de salida del bot capa el 75% de cada posición en
+≤2R y el estudio del imán probó que capar empeora la expectativa de forma monótona.
+Medido bien, `real_vivo` da +0,493R contra +0,688R de dejar correr — o sea el
+backtest ahora **también** dice que los parciales restan, pero ese mismo backtest
+todavía predice el doble de aciertos de los que se observan. No se puede usar para
+decidir hasta encontrar la segunda fuente de optimismo.
+
+## Dónde seguir buscando
+
+Descartadas: la regla SL-primero (existe) y el look-ahead de la barra de activación
+(corregido, y no alcanzó).
+
+Quedan, en orden de sospecha:
+
+1. **El llenado de la entrada.** El backtest activa cuando el rango de la barra toca
+   la zona; en vivo hace falta que una orden límite se llene a un precio concreto.
+   Una barra que roza la zona con la mecha y sigue de largo cuenta como entrada
+   llena en el backtest y probablemente no llene en la realidad — y esas entradas
+   marginales son justo las que peor terminan.
+2. **Régimen.** 43 días, y 31 de los 39 trades en tres días. Puede ser un tramo malo
+   y punto. Se responde solo con más forward, no con más análisis.
+3. **La resolución dentro de la barra de entrada en `_resolve`**, que decide
+   `ganada`/`perdida` con el máximo de esa misma barra para el TP. Es el mismo tipo
+   de error que acabo de corregir, en la otra función. Afecta poco por la distancia
+   del TP lejano, pero conviene cerrarlo por consistencia.
+
+La 1 es la que más explicaría, y se puede acotar midiendo cuántas activaciones del
+backtest ocurren con la barra apenas rozando el borde de la zona.

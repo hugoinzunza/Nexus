@@ -118,9 +118,20 @@ def _simulate_scaled(setup, sel, act_idx, end, legs, be_after, trail_r=None):
     """R final de un setup YA ACTIVADO con salida escalonada + break-even.
 
     `act_idx` = barra donde se activó; `end` = límite de la ventana. Camina las barras
-    POSTERIORES cerrando fracciones al tocar cada leg; mueve el SL a break-even cuando
-    se llenan `be_after` legs. Conservador: dentro de una barra el stop pega antes que
-    el TP. Devuelve la R total realizada (ponderada por las fracciones)."""
+    ESTRICTAMENTE POSTERIORES cerrando fracciones al tocar cada leg; mueve el SL a
+    break-even cuando se llenan `be_after` legs. Conservador: dentro de una barra el
+    stop pega antes que el TP. Devuelve la R total realizada (ponderada).
+
+    Por qué se excluye la barra de activación (fix 2026-07-25): activarse significa,
+    para un long, que el MÍNIMO de esa barra bajó a la zona — pero su MÁXIMO pudo
+    ocurrir antes, mientras el precio venía cayendo. Usarlo para llenar TP1 es mirar
+    hacia atrás: esa subida ya había pasado cuando se entró. Con OHLC no se puede
+    saber el orden intrabarra, así que la única opción honesta es no contar esa barra.
+
+    El sesgo era grande y sólo golpeaba a los tramos parciales: TP1 está a 1R (~0,8%
+    con el sl_pct mediano), distancia que el rango de una barra de 1h o 4h cubre casi
+    siempre, mientras el TP lejano (rr mediano 9,9) casi nunca se llena intrabarra.
+    Medido: el mismo setup daba +0,5R contando la barra y −1,0R sin ella."""
     long = setup["dir"] == "long"
     entry, sl, tp, rr = setup["entry"], setup["sl"], setup["tp"], setup["rr"]
     risk = abs(entry - sl)
@@ -143,7 +154,7 @@ def _simulate_scaled(setup, sel, act_idx, end, legs, be_after, trail_r=None):
     remaining, realized, sl_cur, taken = 1.0, 0.0, sl, 0
     n_fixed = len(targets)
     best = entry                                   # mejor precio a favor (para el trailing)
-    for j in range(act_idx, end):
+    for j in range(act_idx + 1, end):
         h, l = sel[j]["h"], sel[j]["l"]
         # Stop primero (conservador). En break-even el SL = entrada → aporta 0R.
         if (long and l <= sl_cur) or ((not long) and h >= sl_cur):

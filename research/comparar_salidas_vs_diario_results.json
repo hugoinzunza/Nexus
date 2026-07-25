@@ -1,0 +1,81 @@
+{
+ "meta": {
+  "research_only": true,
+  "execution_enabled": false,
+  "validated": false,
+  "aviso": "Research only - No senal - No bot - NO usar para activar live",
+  "pregunta": "tras corregir el look-ahead de la barra de activacion, alguna variante de salida reproduce la realidad del Diario",
+  "vara": "tasa de llegada a TP1, con CI remuestreando DIAS (no trades)",
+  "por_que_no_binomial": "los 39 trades caen en 8 dias y 31 en tres dias seguidos: no son independientes. La binomial daba 1,4e-05 y no significaba nada.",
+  "limite": "con 8 clusters el CI es ancho y su cobertura es discutible; esto sugiere, no demuestra"
+ },
+ "diario_real": {
+  "n": 39,
+  "dias_distintos": 8,
+  "concentracion": [
+   14,
+   9,
+   8,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "llego_a_tp1_pct": 33.3,
+  "avg_R": -0.17,
+  "ganadora_mediana_R": 1.49,
+  "ganadora_max_R": 3.68,
+  "ci95_por_dia": [
+   21.3,
+   50.0
+  ]
+ },
+ "backtest": {
+  "actual": {
+   "n": 6263,
+   "llego_a_tp1_pct": 18.6,
+   "avg_R": 0.805,
+   "avg_netR": 0.688,
+   "ganadora_mediana_R": 6.9,
+   "comparable": false,
+   "dentro_del_ci": null
+  },
+  "be_tardio": {
+   "n": 6263,
+   "llego_a_tp1_pct": 53.6,
+   "avg_R": 0.544,
+   "avg_netR": 0.452,
+   "ganadora_mediana_R": 1.0,
+   "comparable": true,
+   "dentro_del_ci": false
+  },
+  "real_vivo": {
+   "n": 6263,
+   "llego_a_tp1_pct": 67.4,
+   "avg_R": 0.576,
+   "avg_netR": 0.493,
+   "ganadora_mediana_R": 1.39,
+   "comparable": true,
+   "dentro_del_ci": false
+  },
+  "runner_agres": {
+   "n": 6263,
+   "llego_a_tp1_pct": 67.4,
+   "avg_R": 0.582,
+   "avg_netR": 0.498,
+   "ganadora_mediana_R": 1.25,
+   "comparable": true,
+   "dentro_del_ci": false
+  },
+  "tu_idea": {
+   "n": 6263,
+   "llego_a_tp1_pct": 67.4,
+   "avg_R": 0.553,
+   "avg_netR": 0.47,
+   "ganadora_mediana_R": 1.0,
+   "comparable": true,
+   "dentro_del_ci": false
+  }
+ }
+}
