@@ -474,6 +474,41 @@ sobrescriben a las históricas de la misma barra. La forward es la última captu
 (`test_coinsignals_coinglass.py:251-273`), así que es decisión de diseño, no bug
 de implementación — por eso no lo toqué.
 
+### P1-25 · La capa "advanced" del plan API está MUERTA: no hay historial que descargar
+
+Sondeo read-only contra la API real (2026-07-25) para responder si se puede
+backfillear el mapa de liquidaciones y la profundidad del libro:
+
+| Endpoint | Resultado |
+|---|---|
+| `orderbook/history` (niveles de precio del libro) | **401 "Upgrade plan"** en 4h/1d/12h; **403 "interval not available"** en 1h |
+| `liquidation/map` | **401 "Upgrade plan"** en 12h / 7d / 30d / 90d |
+| `liquidation/aggregated-heatmap/model2` | **401 "Upgrade plan"** en 3d / 7d / 30d |
+| `orderbook/large-limit-order` (muros ballena) | **401 "Upgrade plan"** |
+| `orderbook/ask-bids-history` (ratio bid/ask) | **OK a 4h: 1.000 filas (~166 días)**; 403 a 1h |
+| `start_time`/`end_time` para paginar | **401 "Upgrade plan"** |
+
+Tres consecuencias que cambian el mapa mental del módulo:
+
+1. **No existe historial descargable de niveles** — ni del mapa de liquidaciones ni
+   de la profundidad del libro. Está explícitamente detrás del upgrade. Por eso el
+   colector visual no es un lujo: **es la única fuente de niveles**, y solo puede
+   capturar hacia adelante. Cualquier backtest que necesite niveles históricos es
+   imposible hoy, no difícil.
+2. **El código pide `liquidation_map` con `range: 7d`, que da 401** → esa capability
+   queda permanentemente `available: False`. Y como `_pressure` exige `liquidity`
+   para emitir puntaje, **el score del modelo API es siempre `None` ("modelo
+   incompleto")**. El Radar solo puede funcionar con la capa visual. Eso también
+   explica por qué la comparación "modelo API vs visual" nunca fue simétrica.
+3. **Sí hay margen sin gastar**: `ask-bids-history` a 4h entrega 1.000 filas
+   (~166 días) y hoy se piden **4**. Es un ratio de presión bid/ask, no la forma del
+   libro, pero es 250× más contexto del que se está usando y es gratis.
+
+- **Propuesta**: subir el `limit` de los endpoints históricos disponibles y dejar de
+  pedir los que el plan no da (o marcarlos como "requiere upgrade" en vez de
+  reintentarlos cada ciclo, que sólo gasta cuota).
+- **Naturaleza**: research/datos. **Riesgo**: bajo. **Esfuerzo**: bajo.
+
 ### P3-14 · Deriva de versión y umbrales inconsistentes
 
 `visual_context_v0` (shadow) vs `Visual Context v1` (indicador) vs `RADAR VISUAL
