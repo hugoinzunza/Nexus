@@ -89,3 +89,21 @@ def test_marcado_como_research():
     assert meta["research_only"] is True
     assert meta["execution_enabled"] is False
     assert meta["validated"] is False
+
+
+def test_los_cerrados_del_diario_usan_la_misma_regla_de_entrada_que_el_backtest():
+    """Refuta la hipotesis del llenado. Si esto cambiara -si el grueso de los
+    cerrados pasara a `midpoint_touch_v2`- la comparacion dejaria de ser
+    apples-to-apples y habria que rehacerla, porque el backtest usa V1.
+    """
+    with open(os.path.join(WT, "data/setups.json"), encoding="utf-8") as fh:
+        rows = json.load(fh)
+    cerr = [r for r in rows
+            if r.get("status") in ("ganada", "perdida") and r.get("result_r") is not None]
+    v1 = [r for r in cerr if not r.get("entry_model")]
+    assert len(v1) / len(cerr) > 0.8, (
+        "el grueso de los cerrados ya no es V1: la comparacion contra el backtest "
+        "(que activa por toque de zona) hay que rehacerla")
+    g = [r for r in v1 if r["result_r"] > 0]
+    # misma regla de entrada y aun asi la mitad de la tasa del backtest
+    assert 0.25 < len(g) / len(v1) < 0.50

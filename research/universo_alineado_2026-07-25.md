@@ -208,19 +208,52 @@ decidir hasta encontrar la segunda fuente de optimismo.
 Descartadas: la regla SL-primero (existe) y el look-ahead de la barra de activación
 (corregido, y no alcanzó).
 
-Quedan, en orden de sospecha:
+### El llenado de la entrada: REFUTADO
 
-1. **El llenado de la entrada.** El backtest activa cuando el rango de la barra toca
-   la zona; en vivo hace falta que una orden límite se llene a un precio concreto.
-   Una barra que roza la zona con la mecha y sigue de largo cuenta como entrada
-   llena en el backtest y probablemente no llene en la realidad — y esas entradas
-   marginales son justo las que peor terminan.
-2. **Régimen.** 43 días, y 31 de los 39 trades en tres días. Puede ser un tramo malo
-   y punto. Se responde solo con más forward, no con más análisis.
-3. **La resolución dentro de la barra de entrada en `_resolve`**, que decide
-   `ganada`/`perdida` con el máximo de esa misma barra para el TP. Es el mismo tipo
-   de error que acabo de corregir, en la otra función. Afecta poco por la distancia
-   del TP lejano, pero conviene cerrarlo por consistencia.
+Era mi principal sospecha. El backtest activa cuando el rango de la barra toca la
+zona pero entra al **midpoint**, así que una barra que sólo roza el borde superior
+llenaría a un precio que el mercado nunca ofreció. Y el Diario en vivo tiene un
+modelo más estricto (`midpoint_touch_v2`, línea 736 de `setups_store`): exige que el
+precio llegue al midpoint y que venga "armado" desde el lado correcto.
 
-La 1 es la que más explicaría, y se puede acotar midiendo cuántas activaciones del
-backtest ocurren con la barra apenas rozando el borde de la zona.
+**Pero 36 de los 39 trades cerrados son `entry_model = None`, o sea V1** — la misma
+regla de toque de zona que usa el backtest. Y esos 36 dan **36,1%** de llegada a TP1
+(avg −0,101R). Los 3 de V2 son 0/3, que no dice nada.
+
+Misma regla de entrada, 67,4% contra 36,1%. **La diferencia no está en el llenado.**
+
+### La expiración: REFUTADA
+
+`_EXPIRE_HOURS` (96h para POIs de 1h) sólo cierra setups **pendientes**, no
+activados. Y el horizonte del backtest —240 barras en 1h— es *más corto* que el de
+la vida real, donde el trade más largo del Diario duró 35 días. Juega en contra del
+backtest, no a favor.
+
+### Lo que queda
+
+Por eliminación: **régimen y muestra chica**. 43 días, 8 días con actividad, y el
+agrupamiento es entre pares (10 trades en 5 pares distintos el mismo día), así que
+esos 8 días son casi toda la información que existe.
+
+Y hay que ser honesto con la fuerza de la propia evidencia: el 67,4% queda fuera del
+CI [21,3%, 50,0%], pero ese CI se construye con **8 clusters**. Con tan pocos, ni el
+intervalo ni su exclusión son firmes. **No queda demostrado que el backtest tenga un
+segundo error; queda que no coincide, con una muestra que no alcanza para saber si
+eso es un error o un mal tramo.**
+
+## Conclusión operativa
+
+Se encontró y corrigió **un** error real (el look-ahead de la barra de activación,
+0,33R por trade). Los otros dos candidatos concretos están descartados. Lo que
+sobra no se puede resolver con más arqueología del backtest: se resuelve con más
+forward, y el forward produce ~1,3 días independientes por semana — **unos 9 meses
+para 50 observaciones**, sin que ampliar pares lo acelere, porque los setups se
+disparan simultáneamente en todo el universo.
+
+Eso deja dos caminos honestos para la Fase 1, y la elección es de Hugo:
+
+- **Esperar el forward** con su reloj de meses, sin usar el backtest para decidir.
+- **Aceptar el backtest con la incertidumbre declarada** y dimensionar el riesgo en
+  consecuencia, sabiendo que su predicción de llegada a TP1 duplica lo observado.
+
+Lo que no es honesto es seguir buscando un tercer bug hasta que los números calcen.
