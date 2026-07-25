@@ -20,7 +20,17 @@ from modules.coinglass.visual_collector import (
 from modules.coinglass.shadow import replay_shadow, shadow_plan
 
 ROOT = Path(__file__).resolve().parents[1]
-NOW = datetime(2026, 7, 24, 18, 0, tzinfo=timezone.utc)
+# Anclado al reloj REAL, no a una fecha fija. El recorte del historial público
+# (`_recent_by_time`, ventana de 24 h) corre contra `datetime.now()` dentro del
+# módulo, así que un NOW fijo convierte estos tests en una bomba de tiempo: pasan
+# el día que se escriben y fallan solos cuando el fixture cruza las 24 h. Ya pasó
+# el 2026-07-25 con NOW = 2026-07-24T18:00. Los tests que necesitan un instante
+# determinista lo pasan explícito por `now=`, relativo a este ancla.
+# Hora fija (18:00) pero DÍA de hoy: los tooltips del heatmap vienen en "HH:MM" y
+# se resuelven contra la fecha de la captura, así que la hora tiene que ser estable
+# para que los desfases esperados no dependan de cuándo corre la suite; y el día
+# tiene que ser el de hoy para caer siempre dentro de la ventana de 24 h.
+NOW = datetime.now(timezone.utc).replace(hour=18, minute=0, second=0, microsecond=0)
 
 
 def snapshot():
@@ -462,6 +472,23 @@ def test_dedup_de_muros_distingue_spot_de_futuros():
     assert "market" in clave, "la clave de dedup debe incluir el venue"
 
 
+def test_el_ancla_de_tiempo_sigue_al_reloj_real():
+    """Candado contra la bomba de tiempo del 2026-07-25.
+
+    `NOW` era una fecha fija (2026-07-24T18:00). El recorte del historial público
+    corre contra `datetime.now()` DENTRO del módulo, así que los tests que pasan
+    por `api("state")` pasaron el día que se escribieron y empezaron a fallar solos
+    cuando el fixture cruzó las 24 h. Un test que se pudre con el calendario es
+    peor que no tenerlo: falla sin que nadie haya tocado el código.
+    """
+    real = datetime.now(timezone.utc)
+    assert abs((NOW - real).total_seconds()) < 24 * 3600, \
+        "NOW quedo fuera de la ventana de 24 h: volvio a ser una fecha fija"
+    assert NOW.hour == 18, \
+        "la HORA debe ser estable o los desfases esperados del heatmap se mueven"
+    assert NOW.date() == real.date()
+
+
 def test_tooltip_marca_los_campos_inferidos():
     """Las heurísticas de relleno son necesarias (formatos sin etiqueta), pero un
     tooltip a medio pintar no puede confundirse con uno completo."""
@@ -509,8 +536,9 @@ def test_lag_del_heatmap_parsea_el_formato_real_de_produccion():
     no "HH:MM". Con el parser viejo el desfase salía None y el hallazgo P0 quedaba
     sin medir. Se ignoran las etiquetas que no son hora (p.ej. "Precio")."""
     snap = snapshot()
+    tooltip = NOW + timedelta(hours=1, minutes=45)          # 19:45 del día de NOW
     snap["liquidation_heatmap"]["levels"] = [
-        {**nivel, "timestamp": "2026-07-24 19:45"}
+        {**nivel, "timestamp": tooltip.strftime("%Y-%m-%d %H:%M")}
         for nivel in snap["liquidation_heatmap"]["levels"]
     ]
     snap["liquidation_heatmap"]["levels"][0]["timestamp"] = "Precio"
@@ -518,13 +546,14 @@ def test_lag_del_heatmap_parsea_el_formato_real_de_produccion():
     indicator = build_visual_indicator(snap, now=NOW)
     lag = indicator["coverage"]["heatmap_lag_seconds"]
 
-    # captura 2026-07-24 18:00 UTC vs tooltip del mismo día 19:45 -> -6300 s
+    # captura 18:00 UTC vs tooltip del mismo día 19:45 -> -6300 s
     assert lag == -6_300
     assert indicator["stale_heatmap"] is False   # negativo no es "atrasado"
 
-    # Y el caso real observado: captura del día siguiente a la 01:09
-    snap["captured_at"] = "2026-07-25T01:09:15+00:00"
-    tardio = build_visual_indicator(snap, now=datetime(2026, 7, 25, 1, 10, tzinfo=timezone.utc))
+    # Y el caso real observado: captura del día SIGUIENTE a la 01:09
+    captura = tooltip + timedelta(hours=5, minutes=24, seconds=15)
+    snap["captured_at"] = captura.isoformat()
+    tardio = build_visual_indicator(snap, now=captura + timedelta(seconds=45))
     assert tardio["coverage"]["heatmap_lag_seconds"] == 19_455   # 5 h 24 min
     assert tardio["stale_heatmap"] is True
 
