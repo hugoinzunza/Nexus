@@ -91,6 +91,15 @@ de aborto, esto se comporta como **modulador de riesgo, no como alpha**.
 Nada en el universo completo supera cero de forma robusta: el mejor combo global
 (`lejano`\|`tras_imán`) da **+0.008**, que es cero con pasos extra.
 
+> **CORRECCIÓN (2026-07-25, misma fecha).** Esa frase mide el "universo completo",
+> que es **71% de 15m — un timeframe que el bot no opera** (`POI_TFS` = 1D/4h/1h).
+> En el universo operable la afirmación es falsa: `lejano`\|`estructural` da
+> **+0,279R** en 1h OOS con n=648. Ver
+> [`universo_operable_2026-07-25.md`](universo_operable_2026-07-25.md). Lo que sí se
+> sostiene sin cambios es todo lo de más arriba sobre capar el TP: `fijo_2r` es
+> negativo en **ambos** timeframes (−0,096 y −0,099), así que esa conclusión nunca
+> dependió del universo.
+
 ## Qué NO llevar al bot
 
 Nada de esto. En particular: no cambiar la lógica de TP del plan, porque el
