@@ -34,6 +34,7 @@
       links: [
         { href: "/m/coinsignals/", text: "CoinSignals", icon: "CS", tag: "shadow", match: ["/m/coinsignals"] },
         { href: "/m/coinglass/", text: "CoinGlass", icon: "CG", tag: "research", match: ["/m/coinglass"] },
+        { href: "/m/inteligencia/", text: "Acción del precio", icon: "AP", tag: "research", match: ["/m/inteligencia"] },
       ],
     },
     {

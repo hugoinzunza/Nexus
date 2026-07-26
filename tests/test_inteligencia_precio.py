@@ -348,3 +348,32 @@ def test_el_colector_del_vps_no_puede_tocar_la_cuenta():
     assert '("1d", 1_500)' in fuente
     # y no publica vacio: pisaria lo que ya esta servido
     assert "no se pisa lo que ya está servido" in fuente
+
+
+def test_el_modulo_aparece_en_el_menu_compartido():
+    """El landing de NexUX es un HTML ESTATICO: no arma las tarjetas desde los modulos
+    cargados. Un modulo nuevo puede estar corriendo, responder 200 y ser invisible,
+    que es exactamente lo que paso el 2026-07-26 — Hugo no lo encontraba.
+
+    La navegacion de verdad vive en `static/nexux-shell.js`, y hay que anotarse ahi.
+    """
+    shell = open(os.path.join(ROOT, "static/nexux-shell.js"), encoding="utf-8").read()
+    assert '"/m/inteligencia/"' in shell
+    assert "Acción del precio" in shell
+
+    # y la pagina tiene que CARGAR el shell, o queda sin barra compartida
+    html = open(INDEX, encoding="utf-8").read()
+    assert "nexux-shell.js" in html
+
+
+def test_el_shell_se_versiona_igual_en_todas_las_paginas():
+    """El shell va cacheado con `?v=N`. Si una pagina queda en una version vieja, su
+    menu no muestra los modulos nuevos y el sintoma es invisible: la pagina anda, solo
+    que le falta un enlace."""
+    import glob
+    import re
+    versiones = set()
+    for ruta in glob.glob(os.path.join(ROOT, "modules/*/public/*.html")):
+        for m in re.finditer(r"nexux-shell\.js\?v=(\d+)", open(ruta, encoding="utf-8").read()):
+            versiones.add(m.group(1))
+    assert len(versiones) == 1, f"hay paginas con versiones distintas del shell: {versiones}"
