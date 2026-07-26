@@ -213,24 +213,11 @@ def _asymmetry(above: float, below: float) -> float | None:
     return (above - below) / total if total > 0 else None
 
 
-def _nearest(
-    levels: list[dict[str, Any]],
-    price: float,
-    *,
-    above: bool,
-    minimum_usd: float,
-) -> dict[str, Any] | None:
-    candidates = [
-        row for row in levels
-        if (row["price"] > price) == above and row["intensity_usd"] >= minimum_usd
-    ]
-    if not candidates:
-        return None
-    row = min(candidates, key=lambda item: abs(item["price"] - price))
-    return {
-        **row,
-        "distance_pct": round((row["price"] / price - 1) * 100, 3),
-    }
+# `_nearest` se eliminó el 2026-07-26. Elegía el nivel más cercano que superara un
+# umbral ABSOLUTO (`minimum_usd=5_000_000`) sobre un dato cuyo máximo por captura
+# ronda los 7M, así que descartaba clústers sustanciales y reportaba el imán más
+# lejos de lo que estaba. Su reemplazo es el primer peldaño de `_escalera`, que usa
+# corte relativo y agrupa los niveles contiguos.
 
 
 def _strongest(
@@ -278,7 +265,12 @@ def _escalera(
        Un umbral absoluto sobre un dato que cambia de escala deja la vista vacía en
        los días tranquilos y saturada en los volátiles.
     """
-    lado = [row for row in levels if (row["price"] > price) == above]
+    # Los niveles en 0 son ruido de redondeo: CoinGlass muestra "0.00M" para lo
+    # despreciable y el parser devuelve 0. Medido en producción: 5 de 114 niveles
+    # venían en 0, y el más cercano al precio era uno de ellos. Dejarlos pasar hacía
+    # que "el imán más cercano" pudiera ser un nivel sin liquidez.
+    lado = [row for row in levels
+            if (row["price"] > price) == above and row["intensity_usd"] > 0]
     if not lado:
         return []
     lado.sort(key=lambda row: abs(row["price"] - price))
@@ -488,6 +480,9 @@ def build_visual_indicator(
             "distance_pct": round((row["price"] / price - 1) * 100, 3),
         }
 
+    escalera_arriba = _escalera(heatmap_levels, price, above=True)
+    escalera_abajo = _escalera(heatmap_levels, price, above=False)
+
     components = [
         (heatmap_asymmetry, 0.50),
         (map_asymmetry, 0.30),
@@ -538,10 +533,21 @@ def build_visual_indicator(
             ),
         },
         "levels": {
-            "nearest_above": _con_alcance(_nearest(
-                heatmap_levels, price, above=True, minimum_usd=5_000_000), arriba=True),
-            "nearest_below": _con_alcance(_nearest(
-                heatmap_levels, price, above=False, minimum_usd=5_000_000), arriba=False),
+            # El "más cercano" es el PRIMER PELDAÑO de la escalera, no un nivel
+            # elegido con un umbral absoluto. Antes se filtraba con
+            # `minimum_usd=5_000_000` y eso distorsionaba la lectura principal:
+            # medido en producción (2026-07-26, máximo de la captura 6,98M), el
+            # filtro se saltaba un clúster de 4,89M a +0,19% y reportaba +0,34%;
+            # hacia abajo se saltaba 4,43M a −0,86% y reportaba −1,16%, un 35% más
+            # lejos. Y esa distancia alimenta la probabilidad de alcance, las agujas
+            # de la brújula y el veredicto, así que no era cosmético.
+            #
+            # La escalera usa corte RELATIVO (la mediana de la captura), que es lo
+            # correcto sobre un dato que cambia de escala, y además agrupa los
+            # niveles contiguos. Unificarlo deja gráfico, tabla, brújula, tarjeta y
+            # veredicto leyendo la misma fuente.
+            "nearest_above": (escalera_arriba[0] if escalera_arriba else None),
+            "nearest_below": (escalera_abajo[0] if escalera_abajo else None),
             "strongest_above": _strongest(heatmap_levels, price, above=True),
             "strongest_below": _strongest(heatmap_levels, price, above=False),
             "nearest_whale_ask": whale_level("ask", strongest=False),
@@ -553,8 +559,8 @@ def build_visual_indicator(
             "dominant_whale_bid": dominant_whale("bid"),
             # La escalera completa: qué hay DESPUÉS del primer clúster. Mostrar solo
             # el más cercano dejaba ciego a lo que viene si el precio lo rompe.
-            "escalera_arriba": _escalera(heatmap_levels, price, above=True),
-            "escalera_abajo": _escalera(heatmap_levels, price, above=False),
+            "escalera_arriba": escalera_arriba,
+            "escalera_abajo": escalera_abajo,
         },
         "coverage": {
             "map_levels": len(map_levels),

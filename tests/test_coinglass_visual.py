@@ -147,8 +147,14 @@ def test_visual_indicator_exposes_nearest_levels_and_decelerating_depth():
 
     assert indicator["validated"] is False
     assert indicator["execution_enabled"] is False
-    assert indicator["levels"]["nearest_above"]["price"] == 64_482.8
-    assert indicator["levels"]["nearest_below"]["price"] == 63_598.8
+    # El "más cercano" es el PRIMER PELDAÑO de la escalera (2026-07-26). Antes se
+    # elegía con un umbral absoluto de 5M y eso reportaba el imán más lejos de lo
+    # que estaba; se afirma la INVARIANTE en vez de un número mágico.
+    niveles = indicator["levels"]
+    assert niveles["nearest_above"] == niveles["escalera_arriba"][0]
+    assert niveles["nearest_below"] == niveles["escalera_abajo"][0]
+    assert niveles["nearest_above"]["price"] > indicator["price"]
+    assert niveles["nearest_below"]["price"] < indicator["price"]
     assert indicator["levels"]["strongest_below"]["price"] == 63_377.8
     assert indicator["depth"]["latest_delta_usd"] == 12_470_000
     assert indicator["depth"]["decelerating"] is True
@@ -1179,3 +1185,74 @@ def test_el_libro_muestra_la_distancia_de_los_muros():
     script = (ROOT / "modules/coinglass/public/app.js").read_text()
     dibujo = script.split("function drawOrderbook()")[1].split("\nfunction ")[0]
     assert 'signed((m.p / ahora - 1) * 100, "%")' in dibujo
+
+
+def test_el_iman_mas_cercano_no_se_elige_con_umbral_absoluto():
+    """El artefacto del umbral de US$1M en los MUROS hizo preguntar si el heatmap
+    tenía el mismo problema. Tiene uno del mismo tipo, por otro mecanismo: nuestro
+    propio `minimum_usd=5_000_000` en `_nearest`.
+
+    Medido en producción (2026-07-26, máximo de la captura 6,98M): hacia arriba se
+    saltaba un clúster de 4,89M a +0,19% y reportaba +0,34%; hacia abajo se saltaba
+    4,43M a −0,86% y reportaba −1,16%, un 35% más lejos. Esa distancia alimenta la
+    probabilidad de alcance, las agujas de la brújula y el veredicto: la tasa a 4h
+    hacia abajo pasó de ~10% a 16% al corregirlo.
+    """
+    fuente = (ROOT / "modules/coinglass/visual.py").read_text()
+    bloque = fuente.split('"nearest_above"')[1].split('"strongest_above"')[0]
+    assert "escalera_arriba[0]" in bloque and "escalera_abajo[0]" in bloque
+    # `_nearest` se eliminó: quedó sin uso al reemplazarlo por la escalera
+    assert "def _nearest(" not in fuente, "volvio la seleccion por umbral absoluto"
+
+    # Un clúster sustancial cerca del precio no puede quedar fuera por ser < 5M.
+    # El escenario usa varios niveles por lado, como el heatmap real (~58 por lado):
+    # con solo tres, la mediana descarta al más cercano y eso NO es el bug que este
+    # test persigue —lo verifiqué y era mi escenario el irreal, no el código—.
+    snap = snapshot()
+    snap["liquidation_heatmap"]["levels"] = [
+        {"price": 64_300, "intensity_usd": 4_500_000, "timestamp": "14:50"},
+        {"price": 64_600, "intensity_usd": 4_600_000, "timestamp": "14:50"},
+        {"price": 64_900, "intensity_usd": 1_000_000, "timestamp": "14:50"},
+        {"price": 65_400, "intensity_usd": 900_000, "timestamp": "14:50"},
+        {"price": 64_100, "intensity_usd": 4_400_000, "timestamp": "14:50"},
+        {"price": 63_800, "intensity_usd": 4_300_000, "timestamp": "14:50"},
+        {"price": 63_500, "intensity_usd": 800_000, "timestamp": "14:50"},
+        {"price": 63_000, "intensity_usd": 700_000, "timestamp": "14:50"},
+    ]
+    niveles = build_visual_indicator(snap, now=NOW)["levels"]
+    assert niveles["nearest_above"]["price"] == 64_300, \
+        "el cluster de 4,5M mas cercano quedo fuera por el umbral"
+    assert niveles["nearest_below"]["price"] == 64_100
+
+
+def test_los_niveles_en_cero_no_pueden_ser_el_iman_mas_cercano():
+    """CoinGlass muestra "0.00M" para lo despreciable y el parser devuelve 0. Medido
+    en producción: 5 de 114 niveles venían en 0 y el MÁS CERCANO al precio era uno de
+    ellos, así que sin filtrarlos "el imán más cercano" podía ser un nivel sin
+    liquidez. Lo descubrí al intentar forzar que el más cercano entrara siempre."""
+    snap = snapshot()
+    snap["liquidation_heatmap"]["levels"] = [
+        {"price": 64_250, "intensity_usd": 0, "timestamp": "14:50"},
+        {"price": 64_500, "intensity_usd": 6_000_000, "timestamp": "14:50"},
+        {"price": 64_800, "intensity_usd": 5_000_000, "timestamp": "14:50"},
+        {"price": 64_230, "intensity_usd": 0, "timestamp": "14:50"},
+        {"price": 63_900, "intensity_usd": 6_500_000, "timestamp": "14:50"},
+        {"price": 63_600, "intensity_usd": 5_500_000, "timestamp": "14:50"},
+    ]
+    niveles = build_visual_indicator(snap, now=NOW)["levels"]
+    assert niveles["nearest_above"]["price"] == 64_500
+    assert niveles["nearest_below"]["price"] == 63_900
+    for lado in ("escalera_arriba", "escalera_abajo"):
+        assert all(b["intensity_usd"] > 0 for b in niveles[lado])
+
+
+def test_el_bot_virtual_lee_los_mismos_niveles_que_la_ui():
+    """`shadow_plan` usa nearest_above/below como objetivo y stop. Si la UI y el bot
+    virtual leyeran niveles distintos, sus resultados no serian comparables con lo
+    que se ve en pantalla."""
+    indicator = build_visual_indicator(snapshot(), now=NOW)
+    plan = shadow_plan(indicator)
+    niveles = indicator["levels"]
+    if plan["action"] == "virtual_entry":
+        objetivos = {niveles["nearest_above"]["price"], niveles["nearest_below"]["price"]}
+        assert plan["target"] in objetivos and plan["stop"] in objetivos
