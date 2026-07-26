@@ -223,3 +223,27 @@ def test_el_modulo_no_puede_tocar_la_cuenta():
     assert "signed_get" not in fuente
     assert "BINANCE_API" not in fuente
     assert "public_get" in fuente
+
+
+def test_la_medicion_del_vacio_disponible_esta_en_pantalla():
+    """El vacio disponible era la unica idea del curso que NexUX no tenia, y se midio
+    el 2026-07-26 sobre 5.289 trades del bot. Resultado en dos partes, y las dos
+    tienen que estar visibles porque juntas dicen algo distinto que cada una sola:
+
+      1. la ceguera EXISTE y es grande: rr planificado mediano 11,6 contra 1,52 de
+         distancia a la primera pared; 97,9% de los planes tiene al menos una pared
+         entre entrada y objetivo;
+      2. y aun asi contar paredes NO predice: 0 de 12 contrastes sobreviven Holm, y
+         un conteo permutado al azar predice igual o mejor.
+
+    Publicar solo la (1) haria pensar que hay algo que arreglar; solo la (2), que no
+    habia nada que mirar. Las dos juntas es lo unico honesto.
+    """
+    html = open(INDEX, encoding="utf-8").read()
+    assert "5.289" in html
+    assert "11,6" in html and "1,52" in html, "falta la magnitud de la ceguera"
+    assert "97,9" in html
+    assert "Cero de" in html and "Holm" in html, "falta el resultado negativo"
+    assert "permutado al azar" in html
+    # el control de fuga: sin el, un resultado negativo no es creible
+    assert "control de fuga" in html

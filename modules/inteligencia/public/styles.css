@@ -170,3 +170,10 @@ td.num { font-family: ui-monospace, monospace; }
 .med-nota code { color: var(--cyan); }
 .medicion tbody tr:first-child td { color: var(--amber); }
 .disclaimer a { color: #e8c98a; }
+
+/* Medicion embebida dentro de una tarjeta normal (no seccion propia): se usa cuando
+   el resultado matiza lo que la tarjeta muestra en vez de refutarlo entero. */
+.med-inline {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid rgba(239, 99, 112, .3);
+}
