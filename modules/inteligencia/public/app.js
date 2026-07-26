@@ -359,15 +359,45 @@ function tablaMapa(id, filas) {
     "</tbody>";
 }
 
-function referencias(id, titulo, filas) {
+function mapasTemporales(d, principal) {
+  const capas = Object.values(d.mapas_temporales || {})
+    .filter((c) => c.tf !== principal);
+  $("mapas-temporales").innerHTML = capas.map((c) => {
+    const m = c.mapa;
+    if (!m || !m.pierna) {
+      return `<div class="tf-map"><h4>${String(c.tf).toUpperCase()} · ${c.rol}</h4>` +
+        '<p class="tf-map-meta">sin pierna confirmada</p></div>';
+    }
+    const niveles = [
+      ...m.retrocesos.map((x) => ({ ...x, familia: "corrección" })),
+      ...m.extensiones.map((x) => ({ ...x, familia: "proyección" })),
+    ].sort((a, b) => b.precio - a.precio);
+    return `<div class="tf-map"><h4>${String(c.tf).toUpperCase()} · ${c.rol}</h4>` +
+      `<p class="tf-map-meta">${m.pierna.direccion} · ` +
+      `${fmt(m.pierna.inicio, decimales(d.precio))} → ` +
+      `${fmt(m.pierna.fin, decimales(d.precio))} · confirmada ` +
+      `${new Date(m.pierna.confirmed_at).toLocaleString("es-CL")}</p>` +
+      '<div class="scroll-x"><table><thead><tr><th>familia</th><th>nivel</th>' +
+      '<th>precio</th><th>desde ahora</th></tr></thead><tbody>' +
+      niveles.map((n) => `<tr><td>${n.familia}</td><td>${fmt(n.ratio * 100, 1)}%</td>` +
+        `<td class="num">${fmt(n.precio, decimales(d.precio))}</td>` +
+        `<td class="num">${signed(n.dist_pct, "%")}</td></tr>`).join("") +
+      "</tbody></table></div></div>";
+  }).join("");
+}
+
+function referencias(id, titulo, filas, total) {
   const el = $(id);
   if (!filas || !filas.length) {
     el.innerHTML = `<h3>${titulo}</h3><div class="px">sin referencias</div>`;
     return;
   }
-  el.innerHTML = `<h3>${titulo}</h3>` + filas.map((r) =>
+  const conteo = Number.isFinite(Number(total)) && Number(total) > filas.length
+    ? ` · mostrando ${filas.length} de ${total}`
+    : ` · ${filas.length}`;
+  el.innerHTML = `<h3>${titulo}${conteo}</h3>` + filas.map((r) =>
     `<div class="meta"><span class="cuenta">${fmt(r.precio, decimales(state.mapa.precio))}</span>` +
-    ` · ${r.tf} · ${r.tipo}</div>`).join("");
+    ` · ${r.tf} · ${r.tipo}${r.rol ? ` · ${r.rol}` : ""}</div>`).join("");
 }
 
 function pintarMapa() {
@@ -422,10 +452,12 @@ function pintarMapa() {
     tablaMapa("tabla-retrocesos", m.retrocesos);
     tablaMapa("tabla-extensiones", m.extensiones);
   }
+  mapasTemporales(d, p.principal);
+  const refs = d.referencias_cercanas || {};
   referencias("refs-arriba", "Referencias confirmadas arriba",
-              (d.referencias_cercanas || {}).arriba);
+              refs.arriba, refs.total_arriba);
   referencias("refs-abajo", "Referencias confirmadas abajo",
-              (d.referencias_cercanas || {}).abajo);
+              refs.abajo, refs.total_abajo);
   $("mapa-nota").textContent = d.nota || "";
 }
 

@@ -234,6 +234,48 @@ def test_el_timeframe_inferior_no_puede_inventar_direccion():
     assert sin_sync["estado"] == "principal_alineado_sin_sincronismo"
 
 
+def test_cada_timeframe_del_horizonte_conserva_su_propio_mapa():
+    """Corto y medio parecían casi vacíos porque solo se calculaba la pierna del TF
+    principal. Panorama y sincronismo no votan ni generan una señal, pero sus precios
+    aritméticos sí deben quedar visibles con su propia procedencia."""
+    import time
+    m, _ = _modulo()
+    ahora = int(time.time() * 1000)
+
+    def serie(tf, n=180):
+        paso = P.TF_MS[tf]
+        t0 = (ahora // paso - n) * paso
+        patron = (100, 103, 107, 111, 107, 103, 99, 95, 91, 95, 99, 103)
+        return [
+            {"t": t0 + i * paso, "o": patron[i % len(patron)],
+             "h": patron[i % len(patron)] + 1,
+             "l": patron[i % len(patron)] - 1,
+             "c": patron[i % len(patron)], "v": 1}
+            for i in range(n)
+        ]
+
+    m._velas = lambda _symbol, tf, _tope: (serie(tf), "test", {})
+    corto = m._mapa_horizonte("BTCUSDT", "corto")
+    capas = corto["mapas_temporales"]
+    assert set(capas) == {"1d", "4h", "1h", "15m"}
+    assert capas["1h"]["rol"] == "principal"
+    assert capas["15m"]["rol"] == "sincronismo"
+    assert capas["4h"]["rol"] == "panorama"
+    for capa in capas.values():
+        assert capa["mapa"] is not None
+        assert len(capa["mapa"]["retrocesos"]) == len(P.RETROCESOS)
+        assert len(capa["mapa"]["extensiones"]) == len(P.EXTENSIONES)
+
+    refs = corto["referencias_cercanas"]
+    assert refs["limite_por_lado"] == 12
+    assert len(refs["arriba"]) == 12 and len(refs["abajo"]) == 12
+    assert refs["total_arriba"] > len(refs["arriba"])
+    assert refs["total_abajo"] > len(refs["abajo"])
+    assert {r.get("tf") for r in refs["arriba"] + refs["abajo"]} >= {
+        "1d", "4h", "1h", "15m",
+    }
+
+
 def test_la_tendencia_dice_indefinida_en_vez_de_inventar():
     """Con menos de dos pivotes por lado no hay como hablar de creciente. Forzar una
     lectura ahi es exactamente la discrecionalidad que el curso no resuelve."""
@@ -604,6 +646,8 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert 'id="ver-historicas"' in html
     assert "/mapa?" in js
     assert "alineacion-stats" in html and "vacio_horizonte" in modulo
+    assert "mapas-temporales" in html and "mapas_temporales" in modulo
+    assert "mostrando ${filas.length} de ${total}" in js
     assert "invalidación estructural no evaluada" in js
     assert '"execution_enabled": False' in modulo
     assert '"validated": False' in modulo

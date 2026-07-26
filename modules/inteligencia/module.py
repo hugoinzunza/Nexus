@@ -374,10 +374,28 @@ class InteligenciaModule(NexusModule):
         principal_tf = perfil["principal"]
         principal = series[principal_tf]
         precio = float(principal["raw"][-1]["c"]) if principal["raw"] else 0.0
-        piernas = P.piernas_confirmadas(
-            principal["closed"], principal_tf, PIV_CURSO)
+        piernas_por_tf = {
+            tf: P.piernas_confirmadas(series[tf]["closed"], tf, PIV_CURSO)
+            for tf in requeridas
+        }
+        piernas = piernas_por_tf[principal_tf]
         seleccionada = piernas[-1] if piernas else None
         mapa = P.mapa_precios(seleccionada, precio) if seleccionada else None
+        roles_tf = {
+            tf: ("principal" if tf == principal_tf
+                 else "sincronismo" if tf == perfil["sincronismo"]
+                 else "panorama")
+            for tf in requeridas
+        }
+        mapas_temporales = {}
+        for tf in requeridas:
+            pierna_tf = piernas_por_tf[tf][-1] if piernas_por_tf[tf] else None
+            mapas_temporales[tf] = {
+                "tf": tf,
+                "rol": roles_tf[tf],
+                "mapa": P.mapa_precios(pierna_tf, precio) if pierna_tf else None,
+                "n_piernas_confirmadas": len(piernas_por_tf[tf]),
+            }
 
         estructuras = {}
         referencias = []
@@ -412,18 +430,24 @@ class InteligenciaModule(NexusModule):
                     "confirmed_at": ancla["t"] + P.TF_MS["1d"],
                     "selection_reason": "rejilla anual mecánica vigente",
                 })
-        if mapa:
-            for familia, niveles in (("retroceso", mapa["retrocesos"]),
-                                     ("extension", mapa["extensiones"])):
+        for tf, capa in mapas_temporales.items():
+            mapa_tf = capa["mapa"]
+            if not mapa_tf:
+                continue
+            pierna_tf = mapa_tf["pierna"]
+            for familia, niveles in (("retroceso", mapa_tf["retrocesos"]),
+                                     ("extension", mapa_tf["extensiones"])):
                 for nivel in niveles:
                     referencias.append({
                         "precio": nivel["precio"],
                         "tipo": f"{familia} {nivel['ratio'] * 100:g}%",
                         "familia": f"pierna_{familia}",
-                        "tf": principal_tf,
-                        "pivot_t": seleccionada["fin_t"],
-                        "confirmed_at": seleccionada["confirmed_at"],
-                        "selection_reason": "nivel aritmético de la pierna seleccionada",
+                        "tf": tf,
+                        "rol": capa["rol"],
+                        "pivot_t": pierna_tf["fin_t"],
+                        "confirmed_at": pierna_tf["confirmed_at"],
+                        "selection_reason": (
+                            "nivel aritmético de la última pierna confirmada del TF"),
                     })
 
         tendencias = {tf: est["tendencia"] for tf, est in estructuras.items()}
@@ -458,10 +482,11 @@ class InteligenciaModule(NexusModule):
                 vacio = {"evaluado": False,
                          "motivo": "no existe stop estructural principal detrás del precio"}
 
-        arriba = sorted((r for r in referencias if r["precio"] > precio),
-                        key=lambda r: r["precio"])[:5]
-        abajo = sorted((r for r in referencias if r["precio"] < precio),
-                       key=lambda r: r["precio"], reverse=True)[:5]
+        todas_arriba = sorted((r for r in referencias if r["precio"] > precio),
+                              key=lambda r: r["precio"])
+        todas_abajo = sorted((r for r in referencias if r["precio"] < precio),
+                             key=lambda r: r["precio"], reverse=True)
+        limite_referencias = 12
         return {
             "research_only": True,
             "execution_enabled": False,
@@ -475,9 +500,16 @@ class InteligenciaModule(NexusModule):
             "estructuras": estructuras,
             "alineacion": alineacion,
             "mapa": mapa,
+            "mapas_temporales": mapas_temporales,
             "vacio_horizonte": vacio,
             "piernas_candidatas": piernas[-4:],
-            "referencias_cercanas": {"arriba": arriba, "abajo": abajo},
+            "referencias_cercanas": {
+                "arriba": todas_arriba[:limite_referencias],
+                "abajo": todas_abajo[:limite_referencias],
+                "total_arriba": len(todas_arriba),
+                "total_abajo": len(todas_abajo),
+                "limite_por_lado": limite_referencias,
+            },
             "nota": ("Escenario causal calculado con barras cerradas. No predice "
                      "dirección, probabilidad ni resultado."),
         }
