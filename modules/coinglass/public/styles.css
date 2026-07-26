@@ -569,3 +569,55 @@ progress::-webkit-progress-value { background: var(--cyan); }
   color: #edf1f7;
   letter-spacing: .04em;
 }
+
+/* Leyenda SIEMPRE visible bajo los gráficos. La explicación larga vive en el
+   desplegable, pero los símbolos tienen que identificarse sin abrir nada: un rombo
+   celeste o un círculo ámbar no se adivinan. */
+.leyenda-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  list-style: none;
+  border: 1px solid #1e2532;
+  border-top: none;
+  background: #0d1117;
+  font: normal 10px/1.5 ui-monospace, monospace;
+  color: #8d97a6;
+}
+.leyenda-inline li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.leyenda-inline b { font-weight: 700; }
+.leyenda-inline .cyan { color: #43bdd7; }
+.leyenda-inline .up { color: #24c88a; }
+.leyenda-inline .amber { color: #e8b653; }
+/* muestras de color: mismos valores que usa el canvas */
+.leyenda-inline .g-bid,
+.leyenda-inline .g-ask {
+  width: 16px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+}
+.leyenda-inline .g-bid { background: rgba(36, 200, 138, .7); }
+.leyenda-inline .g-ask { background: rgba(239, 99, 112, .7); }
+.leyenda-inline .linea-precio {
+  width: 18px;
+  height: 2px;
+  background: #fff;
+  flex: none;
+}
+/* barrita de probabilidad: replica el degradado de la columna del gráfico */
+.leyenda-inline .prob {
+  width: 30px;
+  height: 6px;
+  flex: none;
+  background: linear-gradient(to right, rgba(67, 189, 215, .9) 55%, #1e2532 55%);
+}
+@media (max-width: 560px) {
+  .leyenda-inline { gap: 6px 12px; font-size: 9px; }
+}

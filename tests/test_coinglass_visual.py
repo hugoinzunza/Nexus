@@ -1125,3 +1125,57 @@ def test_cada_banda_lleva_su_probabilidad_en_el_grafico():
     bucle = dibujo.split("for (const row of")[1].split("// encabezado")[0]
     assert 'alcance_historico?.["4h"]' in bucle
     assert "anchoProb" in bucle and "distance_pct" in bucle
+
+
+def test_los_muros_del_borde_del_umbral_no_cuentan_como_retirados():
+    """CoinGlass solo lista muros sobre US$1M, así que los que rondan esa cifra
+    cruzan el umbral de ida y vuelta y entran y salen de la captura sin que nadie los
+    ponga ni los quite. Medido en producción: el 48% de los eventos eran muros de
+    1,00M a 1,10M, con precios que hacían retirado->nuevo->retirado->nuevo. Al
+    descartarlos, el conteo pasó de 22 nuevos / 22 retirados a 10 / 12.
+
+    Contarlos inflaba justo el número que se presenta como firma de spoofing.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    bloque = script.split("function flujoDeMuros(")[1].split("\nfunction ")[0]
+
+    assert "const piso = Math.min" in bloque, "falta el piso del umbral"
+    assert "enElBorde" in bloque
+    # se descartan en AMBAS direcciones: un muro del borde no es nuevo ni retirado
+    assert bloque.count("if (enElBorde(m.usd)) { borde++; continue; }") == 2
+    assert "borde," in bloque and "piso }" in bloque, "el conteo debe salir de la funcion"
+
+    # y el pie declara lo descartado: un conteo que esconde su filtro miente
+    assert "eventos descartados por rondar el umbral" in script
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    assert "Umbral de CoinGlass" in html
+    assert "48%" in html, "la magnitud medida debe quedar escrita"
+
+
+def test_los_graficos_tienen_leyenda_visible_sin_abrir_nada():
+    """Un rombo celeste o un círculo ámbar no se adivinan. La explicación larga sigue
+    en el desplegable, pero los símbolos tienen que identificarse de inmediato."""
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    assert html.count('class="leyenda-inline"') == 2, \
+        "leyenda visible en el libro Y en la escalera"
+
+    libro = html.split('id="orderbook-chart"')[1].split("</ul>")[0]
+    for simbolo in ("◇", "✕", "○"):
+        assert simbolo in libro, f"falta el simbolo {simbolo} en la leyenda del libro"
+    assert "retirado" in libro and "consumido" in libro and "nuevo" in libro
+    assert "g-bid" in libro and "g-ask" in libro, "faltan las muestras de color"
+
+    escalera = html.split('id="visual-level-chart"')[1].split("</ul>")[0]
+    assert "◆" in escalera and "↑↓" in escalera
+    assert "probabilidad" in escalera
+
+    css = (ROOT / "modules/coinglass/public/styles.css").read_text()
+    assert ".leyenda-inline" in css and "g-bid" in css
+
+
+def test_el_libro_muestra_la_distancia_de_los_muros():
+    """Sin la distancia hay que restar de cabeza para saber si un muro está cerca.
+    La escalera ya la mostraba; el libro no."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    dibujo = script.split("function drawOrderbook()")[1].split("\nfunction ")[0]
+    assert 'signed((m.p / ahora - 1) * 100, "%")' in dibujo

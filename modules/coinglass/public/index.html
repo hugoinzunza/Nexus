@@ -201,6 +201,13 @@
               escritorios de ejecución lo hacen a propósito, para que nadie les lea la
               intención); u orden real cancelada porque cambió el plan de ejecución.
               Lo que se mide acá es que el nivel se fue sin ser tocado, nada más.</p>
+            <p class="warn"><b>Umbral de CoinGlass.</b> La lista solo incluye muros
+              sobre US$1M, así que los que rondan esa cifra cruzan el umbral de ida y
+              vuelta y entran y salen de la captura sin que nadie los ponga ni los
+              quite. Medido acá: el <b>48%</b> de los eventos eran muros de 1,00M a
+              1,10M, con precios que hacían retirado → nuevo → retirado → nuevo.
+              Esos eventos ahora <b>se descartan</b> y el pie del gráfico dice cuántos
+              fueron. Sin eso, el conteo de "retirados" medía el umbral, no el mercado.</p>
             <p class="warn">La distinción consumido/retirado también es una inferencia:
               entre capturas hay 5 minutos y sólo se conoce el precio de cada punta,
               así que un toque intermedio breve puede pasar inadvertido. Y el tamaño
@@ -214,6 +221,17 @@
         <canvas id="orderbook-chart" aria-label="Historial visual de muros ballena BTC"></canvas>
         <div class="canvas-message" id="orderbook-message"></div>
       </div>
+      <!-- Leyenda SIEMPRE visible. La explicación larga sigue en el desplegable de
+           arriba, pero los símbolos tienen que poder identificarse sin abrir nada:
+           un rombo celeste o un círculo ámbar no se adivinan. -->
+      <ul class="leyenda-inline">
+        <li><span class="g-bid"></span>muro de compra (bid)</li>
+        <li><span class="g-ask"></span>muro de venta (ask)</li>
+        <li><b class="linea-precio"></b>precio de BTC</li>
+        <li><b class="cyan">◇</b>muro <b>nuevo</b></li>
+        <li><b class="up">✕</b><b>consumido</b>: el precio pasó por ahí</li>
+        <li><b class="amber">○</b><b>retirado</b>: desapareció sin que el precio llegara</li>
+      </ul>
       <div class="section-head orders-head">
         <div><p class="eyebrow">MUROS ABIERTOS</p><h2>Órdenes grandes</h2></div>
         <span>Umbral CoinGlass BTC ≥ US$1M</span>
@@ -322,6 +340,12 @@
         <canvas id="visual-level-chart" aria-label="Niveles visuales CoinGlass alrededor del precio"></canvas>
         <div class="canvas-message" id="visual-level-message"></div>
       </div>
+      <ul class="leyenda-inline">
+        <li><span class="g-ask"></span>banda sobre el precio (resistencia)</li>
+        <li><span class="g-bid"></span>banda bajo el precio (soporte)</li>
+        <li><b class="cyan">◆</b>muro del libro · <b>↑↓</b> significa que está fuera del encuadre</li>
+        <li><b class="prob"></b>probabilidad histórica de que BTC llegue a esa banda en 4h</li>
+      </ul>
 
       <div class="card">
         <div class="card-head">

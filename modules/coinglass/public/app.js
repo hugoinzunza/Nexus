@@ -373,24 +373,37 @@ function flujoDeMuros(snapshots, referencia) {
     }
     return mapa;
   };
+  // BORDE DEL UMBRAL. CoinGlass solo lista muros sobre US$1M, así que los que
+  // rondan esa cifra cruzan el umbral de ida y vuelta y entran y salen de nuestra
+  // captura sin que nadie los ponga ni los quite. Medido en producción: el 48% de
+  // los eventos eran muros de 1,00M a 1,10M, y varios precios hacían
+  // retirado->nuevo->retirado->nuevo. Contarlos como "retirado" inflaba justo el
+  // número que se presenta como firma de spoofing.
+  const piso = Math.min(...snapshots.flatMap((s) =>
+    [...(s.bids || []), ...(s.asks || [])].map(([, usd]) => usd)));
+  const enElBorde = (usd) => usd < piso * 1.2;
+
   const eventos = [];
-  let nuevos = 0, consumidos = 0, retirados = 0;
+  let nuevos = 0, consumidos = 0, retirados = 0, borde = 0;
   for (let i = 1; i < snapshots.length; i++) {
     const antes = indexar(snapshots[i - 1]), ahora = indexar(snapshots[i]);
     const pa = Number(snapshots[i - 1].price), pb = Number(snapshots[i].price);
     const lo = Math.min(pa, pb), hi = Math.max(pa, pb);
     for (const [k, m] of ahora) {
-      if (!antes.has(k)) { eventos.push({ i, ...m, tipo: "nuevo" }); nuevos++; }
+      if (antes.has(k)) continue;
+      if (enElBorde(m.usd)) { borde++; continue; }
+      eventos.push({ i, ...m, tipo: "nuevo" }); nuevos++;
     }
     for (const [k, m] of antes) {
       if (ahora.has(k)) continue;
+      if (enElBorde(m.usd)) { borde++; continue; }
       // el precio recorrio ese nivel entre las dos capturas -> se lo comieron
       const tocado = m.p >= lo && m.p <= hi;
       eventos.push({ i, ...m, tipo: tocado ? "consumido" : "retirado" });
       tocado ? consumidos++ : retirados++;
     }
   }
-  return { eventos, nuevos, consumidos, retirados };
+  return { eventos, nuevos, consumidos, retirados, borde, piso };
 }
 
 // El pie decia "cada 5 min" cableado. Es el mismo defecto que ya corregimos en la
@@ -576,7 +589,10 @@ function drawOrderbook() {
     ctx.fillText(`${compactUsd(m.usd)} ${m.lado === "bid" ? "compra" : "venta"}`,
                  width - R + 8, y);
     ctx.fillStyle = "#7d879a";
-    ctx.fillText(fmt(m.p, 0), width - R + 8, y + 11);
+    // distancia respecto del precio de AHORA, igual que en la escalera: sin ella
+    // hay que restar de cabeza para saber si el muro está cerca o lejos
+    ctx.fillText(`${fmt(m.p, 0)} · ${signed((m.p / ahora - 1) * 100, "%")}`,
+                 width - R + 8, y + 11);
   }
 
   // --- eje X: tiempo real de la primera y ultima captura ---
@@ -594,13 +610,15 @@ function drawOrderbook() {
   ctx.textAlign = "right";
   ctx.fillText(hora(snapshots[snapshots.length - 1].captured_at), width - R, height - 12);
 
-  // resumen del flujo: la tasa de retirados es el dato de spoofing
   const salieron = flujo.consumidos + flujo.retirados;
   $("book-interval").textContent =
     `${snapshots.length} capturas · ${intervaloMedido(snapshots)} · flujo: ${flujo.nuevos} nuevos, ` +
     `${flujo.consumidos} consumidos, ${flujo.retirados} retirados` +
     (salieron ? ` (${Math.round(100 * flujo.retirados / salieron)}% de los que ` +
-                `desaparecieron se retiraron sin que el precio llegara)` : "");
+                `desaparecieron se retiraron sin que el precio llegara)` : "") +
+    // Se declara lo descartado: un conteo que esconde su propio filtro miente.
+    (flujo.borde ? ` · ${flujo.borde} eventos descartados por rondar el umbral de ` +
+                   `${compactUsd(flujo.piso)} con que CoinGlass filtra la lista` : "");
 }
 
 function renderLargeOrders() {
