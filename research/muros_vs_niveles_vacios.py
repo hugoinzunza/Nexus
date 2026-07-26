@@ -56,7 +56,19 @@ HORIZONTES = (12, 36)          # capturas de 5 min -> 1 h y 3 h
 REBOTE_PCT = 0.3               # cuánto tiene que devolverse para contar como reacción
 BLOQUE = 24                    # bloques de 2 h para el bootstrap
 REMUESTREOS = 2000
-MIN_USD = 500_000              # un "muro" por debajo de esto es ruido del scraping
+# CoinGlass sólo lista muros sobre US$1M, así que los que rondan esa cifra cruzan el
+# umbral de ida y vuelta y entran y salen de la captura sin que nadie los mueva.
+# Medido en producción (2026-07-26): el piso de cada captura era exactamente
+# 1.000.000 y el 48% de los eventos de flujo eran muros de 1,00M a 1,10M.
+#
+# Acá el daño es distinto al de la UI: no inflaba un conteo, mete ruido en la
+# variable de TRATAMIENTO —el mismo muro figura presente y ausente en capturas
+# consecutivas— y eso ATENÚA el efecto hacia cero. No inventa señal, pero destruye el
+# poder del estudio, que es justo lo que necesita para detectar algo chico.
+#
+# El piso se deriva de los datos, no se fija en dólares: `MIN_USD` era 500.000, por
+# debajo del piso real, así que no filtraba nada.
+MARGEN_SOBRE_EL_PISO = 1.2     # se ignora lo que esté a menos de 20% del piso
 
 
 def cargar_capturas():
@@ -96,7 +108,19 @@ def cargar_capturas():
     return [f for _, f in out]
 
 
-def observaciones(capturas, horizonte):
+def piso_observado(capturas):
+    """El monto mínimo que CoinGlass deja ver, derivado de los datos.
+
+    En producción sale exactamente 1.000.000, que es su umbral de listado. No se fija
+    a mano: si CoinGlass lo cambia, esto lo sigue solo.
+    """
+    montos = [u for cap in capturas
+              for _, u in [*(cap.get("bids") or []), *(cap.get("asks") or [])]
+              if u]
+    return min(montos) if montos else 0
+
+
+def observaciones(capturas, horizonte, corte_muro=0.0):
     """Una fila por (captura, lado, bucket): si había muro y qué hizo el precio.
 
     El nivel evaluado es SIEMPRE el centro del bucket, tenga muro o no. Así el
@@ -111,11 +135,14 @@ def observaciones(capturas, horizonte):
         precio = float(cap["price"])
         if precio <= 0:
             continue
+        # `corte_muro` sale del piso REAL de los datos, no de una constante en
+        # dólares: los muros pegados al umbral de listado de CoinGlass aparecen y
+        # desaparecen solos, y contarlos como tratamiento atenúa el efecto.
         muros = {
             "arriba": [(p, u) for p, u in (cap.get("asks") or [])
-                       if p and u and u >= MIN_USD and p > precio],
+                       if p and u and u >= corte_muro and p > precio],
             "abajo": [(p, u) for p, u in (cap.get("bids") or [])
-                      if p and u and u >= MIN_USD and p < precio],
+                      if p and u and u >= corte_muro and p < precio],
         }
         for lado in ("arriba", "abajo"):
             signo = 1 if lado == "arriba" else -1
@@ -197,6 +224,8 @@ def bootstrap_dif(filas, campo, rng):
 def main():
     rng = random.Random(20260725)
     capturas = cargar_capturas()
+    piso = piso_observado(capturas)
+    corte_muro = piso * MARGEN_SOBRE_EL_PISO
 
     salida = {
         "meta": {
@@ -208,7 +237,9 @@ def main():
                          "nivel vacio a la misma distancia"),
             "diseno": ("pareado por bucket de distancia y lado; el nivel evaluado es "
                        "el centro del bucket tenga muro o no"),
-            "min_usd_para_contar_como_muro": MIN_USD,
+            "piso_observado_usd": piso,
+            "corte_para_contar_como_muro": round(corte_muro, 2),
+            "margen_sobre_el_piso": MARGEN_SOBRE_EL_PISO,
             "rebote_pct": REBOTE_PCT,
             "capturas": len(capturas),
             "independencia": ("capturas consecutivas comparten muros: el CI es por "
@@ -230,7 +261,7 @@ def main():
         return
 
     for h in HORIZONTES:
-        filas = observaciones(capturas, h)
+        filas = observaciones(capturas, h, corte_muro)
         bloque = {"n": len(filas), "global": {}, "por_bucket": {}}
         for campo in ("alcanzado", "rebote"):
             bloque["global"][campo] = {
