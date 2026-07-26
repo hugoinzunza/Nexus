@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
+  <meta name="theme-color" content="#090b10">
+  <title>Acción del precio · NexUX</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/static/nexux-shell.css">
+  <!-- TradingView Lightweight Charts (Apache-2.0), la misma que usa el módulo de
+       trading, bundleada localmente. -->
+  <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">NEX<span>UX</span></a>
+    <div class="mode"><i></i> RESEARCH · SIN VALIDAR · SIN ORDENES</div>
+    <a class="back" href="/m/trading/">Trading</a>
+  </header>
+
+  <main>
+    <header class="workspace-head">
+      <div>
+        <p class="eyebrow">INTELIGENCIA · CURSO CRECETRADER</p>
+        <h1>Acción del precio</h1>
+      </div>
+      <div class="price-block">
+        <select id="par"></select>
+        <select id="tf">
+          <option value="15m">15m</option>
+          <option value="1h" selected>1h</option>
+          <option value="4h">4h</option>
+          <option value="1d">1D</option>
+        </select>
+        <strong id="price">—</strong>
+        <span id="updated">Cargando</span>
+      </div>
+    </header>
+
+    <p class="disclaimer">
+      Del curso completo, cero conceptos tienen evidencia cuantitativa propia. Esto
+      dibuja los niveles que son objetivos y auditables, no los que funcionan.
+    </p>
+
+    <!-- Gráfico: velas + niveles del método superpuestos -->
+    <section class="card">
+      <h2>Gráfico <small id="g-sub"></small>
+        <button class="ayuda" data-ayuda="grafico">qué se ve</button></h2>
+      <div class="ayuda-txt" id="ayuda-grafico" hidden>
+        Sobre las velas van los niveles del método, cada uno con su origen visible:
+        <strong style="color:#e8b653">la rejilla anual</strong> anclada en la apertura
+        del 1 de enero, <strong style="color:#43bdd7">la apertura semanal</strong>, y
+        <strong>los pivotes confirmados</strong> de la temporalidad que estés viendo.
+        Los pivotes se dibujan en la vela que los <em>confirma</em>, no en su extremo:
+        ese retraso de 5 velas es real y esconderlo sería mirar el futuro.
+      </div>
+      <div class="chart-wrap"><div id="chart"></div></div>
+      <div class="leyenda">
+        <span><i style="background:#e8b653"></i> rejilla anual 10%</span>
+        <span><i style="background:#5b6272"></i> placebo 7,5% / 12,5%</span>
+        <span><i style="background:#43bdd7"></i> apertura semanal</span>
+        <span><i style="background:#ef6370"></i> pivote alto confirmado</span>
+        <span><i style="background:#24c88a"></i> pivote bajo confirmado</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="ver-placebo"> mostrar rejillas placebo
+        <small>si el precio parece respetar las tres por igual, lo que ves es densidad, no niveles</small>
+      </label>
+    </section>
+
+    <!-- Dónde está el precio respecto del año -->
+    <section class="card">
+      <h2>El año <small id="anio"></small>
+        <button class="ayuda" data-ayuda="anual">qué es</button></h2>
+      <div class="ayuda-txt" id="ayuda-anual" hidden>
+        El curso ancla una rejilla en la <strong>apertura del 1 de enero</strong> y
+        pone niveles cada 10% hacia arriba y hacia abajo. El ancla es un hecho
+        histórico, no una opinión: el 1 de enero ya pasó y no cambia aunque los datos
+        envejezcan. Lo que <em>no</em> está demostrado es que el 10% tenga algo
+        especial, y por eso el gráfico puede mostrar dos rejillas placebo al lado.
+      </div>
+      <div class="grid3">
+        <div class="stat"><span>apertura anual</span><strong id="pa">—</strong>
+          <small id="pa-fecha"></small></div>
+        <div class="stat" id="pa-dist-box"><span>desde la apertura</span>
+          <strong id="pa-dist">—</strong><small>variación del año en curso</small></div>
+        <div class="stat"><span>apertura semanal</span><strong id="ps">—</strong>
+          <small id="ps-fecha"></small></div>
+      </div>
+      <div class="scroll-x"><table id="tabla-rejilla"></table></div>
+    </section>
+
+    <!-- Vacío disponible: la única idea nueva del curso -->
+    <section class="card">
+      <h2>Vacío disponible
+        <button class="ayuda" data-ayuda="vacio">qué es</button></h2>
+      <div class="ayuda-txt" id="ayuda-vacio" hidden>
+        La distancia hasta el <strong>primer obstáculo</strong>, no hasta un objetivo
+        lejano. Es lo único que el curso aporta y NexUX no tenía: el objetivo del bot
+        toma la liquidez más cercana sin barrer y <em>no cuenta</em> los niveles
+        fuertes que quedan en el camino. Un ratio alto medido a través de tres paredes
+        es aritméticamente correcto y operativamente ilusorio. El ratio de acá usa un
+        riesgo de referencia de 1,5%, que es el techo de SL del bot, solo para dar
+        escala: no es el SL de ningún plan.
+      </div>
+      <div class="grid2">
+        <div class="vac arriba" id="vac-arriba"></div>
+        <div class="vac abajo" id="vac-abajo"></div>
+      </div>
+    </section>
+
+    <!-- Estructura causal -->
+    <section class="card">
+      <h2>Estructura confirmada
+        <button class="ayuda" data-ayuda="estructura">qué es</button></h2>
+      <div class="ayuda-txt" id="ayuda-estructura" hidden>
+        Pivotes con la ventana que enseña el curso: 5 velas antes, la candidata, 5
+        después. Lo importante es el <strong>retraso</strong>: un pivote no existe
+        hasta 5 velas después de su extremo, y acá se respeta. Fecharlo en su extremo
+        en vez de en su confirmación es mirar el futuro, y es el error más caro que
+        cometimos en este proyecto. La tendencia se lee de los dos últimos pivotes de
+        cada lado; con menos de dos dice <em>indefinida</em> en vez de inventar una
+        lectura.
+      </div>
+      <div class="grid2" id="estructuras"></div>
+    </section>
+
+    <p class="fuente">
+      Apuntes y auditoría del curso en <code>research/crecetrader/</code>. Klines
+      públicas de Binance Futuros, sin firma y sin credenciales. Este módulo no crea
+      órdenes ni toca el bot. Gráficos con
+      <a class="credit" href="https://www.tradingview.com/" rel="noopener">Lightweight Charts™ de TradingView</a>.
+    </p>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

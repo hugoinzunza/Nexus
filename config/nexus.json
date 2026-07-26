@@ -9,15 +9,52 @@
       "book_depth": 12,
       "candle_timeframe": "1m",
       "candle_count": 400,
-      "ui_timeframes": ["1m", "5m", "15m", "1h", "4h", "1D"],
+      "ui_timeframes": [
+        "1m",
+        "5m",
+        "15m",
+        "1h",
+        "4h",
+        "1D"
+      ],
       "ui_default_timeframe": "15m",
       "instruments": [
-        { "name": "BTC_USDT", "label": "BTC/USDT", "binance": "BTCUSDT", "market": "futures" },
-        { "name": "ETH_USDT", "label": "ETH/USDT", "binance": "ETHUSDT", "market": "futures" },
-        { "name": "SOL_USDT", "label": "SOL/USDT", "binance": "SOLUSDT", "market": "futures" },
-        { "name": "XRP_USDT", "label": "XRP/USDT", "binance": "XRPUSDT", "market": "futures" },
-        { "name": "ADA_USDT", "label": "ADA/USDT", "binance": "ADAUSDT", "market": "futures" },
-        { "name": "DOGE_USDT", "label": "DOGE/USDT", "binance": "DOGEUSDT", "market": "futures" }
+        {
+          "name": "BTC_USDT",
+          "label": "BTC/USDT",
+          "binance": "BTCUSDT",
+          "market": "futures"
+        },
+        {
+          "name": "ETH_USDT",
+          "label": "ETH/USDT",
+          "binance": "ETHUSDT",
+          "market": "futures"
+        },
+        {
+          "name": "SOL_USDT",
+          "label": "SOL/USDT",
+          "binance": "SOLUSDT",
+          "market": "futures"
+        },
+        {
+          "name": "XRP_USDT",
+          "label": "XRP/USDT",
+          "binance": "XRPUSDT",
+          "market": "futures"
+        },
+        {
+          "name": "ADA_USDT",
+          "label": "ADA/USDT",
+          "binance": "ADAUSDT",
+          "market": "futures"
+        },
+        {
+          "name": "DOGE_USDT",
+          "label": "DOGE/USDT",
+          "binance": "DOGEUSDT",
+          "market": "futures"
+        }
       ]
     },
     "journal": {
@@ -29,7 +66,13 @@
       "base_equity": 450.0,
       "capital": 1000.0,
       "risk_pct": 0.02,
-      "pairs": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "XRPUSDT"],
+      "pairs": [
+        "BTCUSDT",
+        "ETHUSDT",
+        "SOLUSDT",
+        "ADAUSDT",
+        "XRPUSDT"
+      ],
       "max_leverage": 5,
       "fixed_leverage": 5,
       "hedge": true,
@@ -39,14 +82,20 @@
       "max_risk_pct": 0.08,
       "_entry_profiles_nota": "min_rr GLOBAL (rr>=5). NO es un perfil sobreoptimizado: la 2a auditoria (Fable 5, 2026-07-04) refuto OOS el combo 4h/1D-o-short (no batia a rr>=5 solo) y la regla evitar-1h-long. Un solo {min_rr:5} = piso rr>=5 para cualquier tf/dir.",
       "entry_profiles": [
-        { "min_rr": 5 }
+        {
+          "min_rr": 5
+        }
       ],
       "max_entry_slippage_pct": 0.3,
       "max_daily_loss_pct": 15.0,
       "fee_rate": 0.0005,
       "quality_filter": true,
       "quality_min_rr": 5.0,
-      "quality_poi_tfs": ["1h", "4h", "1D"],
+      "quality_poi_tfs": [
+        "1h",
+        "4h",
+        "1D"
+      ],
       "quality_require_disc": false,
       "one_position_at_a_time": false
     },
@@ -56,6 +105,17 @@
     },
     "coinglass": {
       "enabled": true
+    },
+    "inteligencia": {
+      "enabled": true,
+      "pares": [
+        "BTCUSDT",
+        "ETHUSDT",
+        "SOLUSDT",
+        "ADAUSDT",
+        "XRPUSDT"
+      ],
+      "_nota": "Vista Accion del precio (curso CreceTrader). research_only, sin senal, sin ordenes. Solo klines publicas sin firma."
     }
   }
 }

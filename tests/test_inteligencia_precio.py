@@ -1,0 +1,187 @@
+"""Tests de la vista Accion del precio (curso CreceTrader).
+
+El modulo dibuja niveles que NO estan validados. Por eso los tests cuidan dos cosas
+distintas: que la aritmetica sea la del curso, y que la pantalla no pueda mentir
+—ni presentandose como senal, ni escondiendo lo que no sabe—.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from modules.inteligencia import precio as P  # noqa: E402
+
+APP_JS = os.path.join(ROOT, "modules/inteligencia/public/app.js")
+INDEX = os.path.join(ROOT, "modules/inteligencia/public/index.html")
+MODULE = os.path.join(ROOT, "modules/inteligencia/module.py")
+
+
+def velas_diarias(desde="2024-01-01", n=800, px0=40_000.0):
+    base = dt.datetime.fromisoformat(desde).replace(tzinfo=dt.timezone.utc)
+    out = []
+    for i in range(n):
+        p = px0 * (1 + 0.0006 * i)
+        t = int((base + dt.timedelta(days=i)).timestamp() * 1000)
+        out.append({"t": t, "o": p, "h": p * 1.01, "l": p * 0.99, "c": p * 1.002, "v": 1})
+    return out
+
+
+# --- aritmetica del curso -------------------------------------------
+
+
+def test_la_rejilla_es_lineal_y_no_compuesta():
+    """+20% es `ancla*1.20`, NO `ancla*1.10^2`. La intuicion financiera dice lo
+    contrario y por eso es facil equivocarse; el apunte lo confirma contra la
+    planilla del curso."""
+    filas = P.rejilla(100.0, 100.0)
+    arriba = {f["k"]: f["precio"] for f in filas if f["dir"] == "arriba"}
+    assert abs(arriba[1] - 110.0) < 1e-9
+    assert abs(arriba[2] - 120.0) < 1e-9   # y NO 121.0, que es lo compuesto
+    assert abs(arriba[2] - 121.0) > 0.9
+    assert abs(arriba[3] - 130.0) < 1e-9
+
+
+def test_la_rejilla_nunca_produce_precios_cero_o_negativos():
+    """Con `k >= 10` hacia abajo la formula del curso da cero y luego negativo, que
+    no significa nada para un activo. El tope de K_MAX existe para eso."""
+    assert P.K_MAX < 10
+    for ancla in (100.0, 87_608.3, 0.05):
+        for f in P.rejilla(ancla, ancla):
+            assert f["precio"] > 0
+
+
+def test_la_apertura_anual_no_se_inventa_si_falta_el_comienzo_del_anio():
+    """Si el par se listo en marzo, su "apertura anual" seria una ficcion con cara
+    de dato. Tiene que devolver None, no la primera vela que haya."""
+    velas = velas_diarias(desde="2024-03-15", n=100)
+    assert P.apertura_anual(velas, 2024) is None
+    completo = velas_diarias(desde="2024-01-01", n=100)
+    ancla = P.apertura_anual(completo, 2024)
+    assert ancla and ancla["fecha"] == "2024-01-01"
+
+
+def test_la_apertura_semanal_no_entrega_una_semana_vieja_como_actual():
+    """A diferencia de la anual, esta SI envejece. Con datos que no alcanzan la
+    semana en curso debe decir que no hay, no servir la de hace un mes."""
+    viejas = velas_diarias(desde="2024-01-01", n=30)
+    ahora = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
+    assert P.apertura_semanal(viejas, ahora) is None
+
+
+# --- causalidad ------------------------------------------------------
+
+
+def test_un_pivote_no_existe_antes_de_sus_velas_de_la_derecha():
+    """Es el candado central. Fechar un pivote en su extremo en vez de en su
+    confirmacion es look-ahead, y es el error mas caro que cometimos en este
+    proyecto: un bucle que arrancaba una vela antes costaba 1,5R por trade."""
+    velas = velas_diarias(n=300)
+    # ruido para que existan pivotes de verdad
+    for i in range(20, 280, 17):
+        velas[i]["h"] *= 1.05
+        velas[i + 3]["l"] *= 0.95
+    completo = P.estructura(velas, piv=5)
+    for p in completo["highs"] + completo["lows"]:
+        assert p["confirm_idx"] >= p["idx"] + 5
+
+    # el observador de una vela intermedia NO puede ver pivotes que confirman despues
+    corte = 150
+    parcial = P.estructura(velas, piv=5, as_of_idx=corte)
+    for p in parcial["highs"] + parcial["lows"]:
+        assert p["confirm_idx"] <= corte
+
+
+def test_agregar_velas_futuras_no_cambia_un_pivote_ya_confirmado():
+    """Replay: anexar futuro no puede alterar decisiones pasadas. Si esto falla, todo
+    lo que la pantalla muestre como historico es reconstruccion, no observacion."""
+    velas = velas_diarias(n=300)
+    for i in range(20, 280, 17):
+        velas[i]["h"] *= 1.05
+    corte = 200
+    antes = P.estructura(velas[:corte], piv=5)
+    despues = P.estructura(velas, piv=5, as_of_idx=corte - 1)
+    clave = lambda e: [(p["idx"], p["confirm_idx"]) for p in e["highs"]]  # noqa: E731
+    assert clave(antes) == clave(despues)
+
+
+def test_la_tendencia_dice_indefinida_en_vez_de_inventar():
+    """Con menos de dos pivotes por lado no hay como hablar de creciente. Forzar una
+    lectura ahi es exactamente la discrecionalidad que el curso no resuelve."""
+    planas = velas_diarias(n=60)
+    e = P.estructura(planas, piv=5)
+    assert e["tendencia"] in ("indefinida", "lateral", "sin_datos")
+
+
+# --- el vacio disponible --------------------------------------------
+
+
+def test_el_vacio_toma_el_primer_obstaculo_y_no_el_conveniente():
+    """El punto entero del concepto: elegir el "primer" referente despues de ver el
+    recorrido es la trampa que viene a denunciar."""
+    refs = [{"precio": 105.0}, {"precio": 120.0}, {"precio": 95.0}]
+    v = P.vacio_disponible(100.0, "long", 98.0, refs)
+    assert v["primer_obstaculo"]["precio"] == 105.0
+    assert v["n_adelante"] == 2
+    assert v["vacuum_rr"] == 2.5          # (105-100)/(100-98)
+
+
+def test_los_obstaculos_intermedios_se_cuentan():
+    """Un RR alto medido a traves de tres paredes es aritmeticamente correcto y
+    operativamente ilusorio. Contar es lo unico que lo hace visible."""
+    refs = [{"precio": 105.0}, {"precio": 110.0}, {"precio": 130.0}]
+    o = P.obstaculos_entre(100.0, 120.0, "long", refs)
+    assert o["obstacle_count"] == 2       # 130 queda fuera del tramo
+    assert o["target_atraviesa_referencias"] is True
+    assert P.obstaculos_entre(100.0, 104.0, "long", refs)["obstacle_count"] == 0
+
+
+# --- la pantalla no puede mentir -------------------------------------
+
+
+def test_la_vista_se_declara_research_y_sin_ejecucion():
+    fuente = open(MODULE, encoding="utf-8").read()
+    assert '"research_only": True' in fuente
+    assert '"execution_enabled": False' in fuente
+    assert '"validated": False' in fuente
+    html = open(INDEX, encoding="utf-8").read()
+    assert "SIN VALIDAR" in html
+    assert "cero conceptos tienen evidencia cuantitativa propia" in html
+
+
+def test_la_rejilla_placebo_viaja_siempre_al_lado_de_la_del_curso():
+    """Una rejilla sola SIEMPRE parece funcionar: con suficientes niveles el precio
+    reacciona en alguno. El placebo de 7,5% y 12,5% es lo que convierte la pantalla
+    en algo honesto en vez de una demostracion."""
+    assert P.PASOS_PLACEBO == (0.075, 0.125)
+    fuente = open(MODULE, encoding="utf-8").read()
+    assert "rejilla_placebo" in fuente
+    js = open(APP_JS, encoding="utf-8").read()
+    assert "ver-placebo" in js and "rejilla_placebo" in js
+
+
+def test_ningun_nivel_desaparece_en_silencio_del_grafico():
+    """En 1h la rejilla anual queda casi entera fuera del encuadre. Esconderla hace
+    que la pantalla parezca decir "no hay nada cerca" cuando lo que pasa es que no
+    estamos mirando tan lejos. Es la misma familia de defecto que ya corregimos seis
+    veces: una franja no declarada haciendose pasar por una medicion completa."""
+    js = open(APP_JS, encoding="utf-8").read()
+    assert "fuera del encuadre" in js
+    assert "fuera.length" in js, "hay que contar los que quedaron afuera"
+    # y el encuadre lo fijan las VELAS, no los niveles: si un nivel a +90% mandara en
+    # el eje, aplastaria todo el grafico en una franja
+    bloque = js.split("function pintarNiveles()")[1].split("\nfunction ")[0]
+    assert "state.velas.flatMap" in bloque
+
+
+def test_el_modulo_no_puede_tocar_la_cuenta():
+    """Solo klines publicas. Si aparece una llamada firmada aca, el modulo dejo de
+    ser una vista de lectura."""
+    fuente = open(MODULE, encoding="utf-8").read()
+    assert "signed_get" not in fuente
+    assert "BINANCE_API" not in fuente
+    assert "public_get" in fuente
