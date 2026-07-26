@@ -411,6 +411,26 @@ def build_visual_indicator(
             "distance_pct": round((row["price"] / price - 1) * 100, 3),
         }
 
+    def dominant_whale(side: str) -> dict[str, Any] | None:
+        """El muro más grande del libro, SIN el radio de ±5%.
+
+        `nearby_whales` recorta a ±5% porque eso es lo correcto para medir presión
+        cerca del precio. Pero para "cuál es la pared que importa" ese recorte
+        miente: las órdenes grandes y pacientes se posan LEJOS justamente por eso.
+        Medido en producción (2026-07-26): los cuatro muros mayores del libro
+        estaban todos fuera del radio, y el mayor —78,7M, 43x la mediana— quedaba
+        excluido por 6 dólares (−5,01% contra un corte de 5%). La brújula y el
+        mapa mostraban muros menores mientras ignoraban el dominante.
+        """
+        candidates = [row for row in whale_orders if row["side"] == side]
+        if not candidates:
+            return None
+        row = max(candidates, key=lambda item: item["amount_usd"])
+        return {
+            **row,
+            "distance_pct": round((row["price"] / price - 1) * 100, 3),
+        }
+
     components = [
         (heatmap_asymmetry, 0.50),
         (map_asymmetry, 0.30),
@@ -471,6 +491,9 @@ def build_visual_indicator(
             "nearest_whale_bid": whale_level("bid", strongest=False),
             "strongest_whale_ask": whale_level("ask", strongest=True),
             "strongest_whale_bid": whale_level("bid", strongest=True),
+            # Sin radio: la pared más grande del libro, esté donde esté.
+            "dominant_whale_ask": dominant_whale("ask"),
+            "dominant_whale_bid": dominant_whale("bid"),
         },
         "coverage": {
             "map_levels": len(map_levels),

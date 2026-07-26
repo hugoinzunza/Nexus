@@ -28,6 +28,17 @@
       </div>
     </header>
 
+    <!-- LECTURA DEL MOMENTO. Los cuatro datos que cambian una decisión estaban
+         repartidos en cuatro pestañas distintas (imán en Radar, muro en Libro,
+         flujo en Libro, frescura en Mapa visual). Acá van juntos y siempre
+         visibles; todo ya se calculaba, esto es composición. -->
+    <section class="ahora" id="ahora" aria-label="Lectura del momento">
+      <article><span>IMÁN MÁS CERCANO</span><b id="ahora-iman">—</b><i id="ahora-iman-meta"></i></article>
+      <article><span>MURO DOMINANTE</span><b id="ahora-muro">—</b><i id="ahora-muro-meta"></i></article>
+      <article><span>FLUJO DE MUROS</span><b id="ahora-flujo">—</b><i id="ahora-flujo-meta"></i></article>
+      <article><span>FRESCURA</span><b id="ahora-fresco">—</b><i id="ahora-fresco-meta"></i></article>
+    </section>
+
     <nav class="tabs" aria-label="Vistas">
       <button class="active" data-tab="overview">Resumen</button>
       <button data-tab="flow" id="tab-flow">Flujo</button>

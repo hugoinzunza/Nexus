@@ -359,14 +359,24 @@ function flujoDeMuros(snapshots, referencia) {
   // El paso tiene que venir de una referencia fija, no del precio de cada muro.
   const paso = Math.max(1, (referencia || 1) * 0.0005);
   const clave = (lado, precio) => `${lado}:${Math.round(precio / paso)}`;
+  // Dos muros distintos pueden caer en el mismo bucket. Con `Map.set` el segundo
+  // pisaba al primero: su monto desaparecia del diff y, si uno de los dos se
+  // retiraba, el bucket seguia ocupado y no se generaba evento. Se ACUMULA.
+  const indexar = (snap) => {
+    const mapa = new Map();
+    for (const [lado, campo] of [["bid", "bids"], ["ask", "asks"]]) {
+      for (const [p, usd] of snap[campo] || []) {
+        const k = clave(lado, p);
+        const previo = mapa.get(k);
+        if (previo) { previo.usd += usd; } else { mapa.set(k, { p, usd, lado }); }
+      }
+    }
+    return mapa;
+  };
   const eventos = [];
   let nuevos = 0, consumidos = 0, retirados = 0;
   for (let i = 1; i < snapshots.length; i++) {
-    const antes = new Map(), ahora = new Map();
-    for (const [lado, campo] of [["bid", "bids"], ["ask", "asks"]]) {
-      for (const [p, usd] of snapshots[i - 1][campo] || []) antes.set(clave(lado, p), { p, usd, lado });
-      for (const [p, usd] of snapshots[i][campo] || []) ahora.set(clave(lado, p), { p, usd, lado });
-    }
+    const antes = indexar(snapshots[i - 1]), ahora = indexar(snapshots[i]);
     const pa = Number(snapshots[i - 1].price), pb = Number(snapshots[i].price);
     const lo = Math.min(pa, pb), hi = Math.max(pa, pb);
     for (const [k, m] of ahora) {
@@ -381,6 +391,20 @@ function flujoDeMuros(snapshots, referencia) {
     }
   }
   return { eventos, nuevos, consumidos, retirados };
+}
+
+// El pie decia "cada 5 min" cableado. Es el mismo defecto que ya corregimos en la
+// pestana Flujo (el "4h" fijo que resultaba ser 1h): si el timer cambia o hay
+// huecos, miente. Se mide con la MEDIANA de los saltos, que ignora los huecos.
+function intervaloMedido(snapshots) {
+  const ts = snapshots.map((s) => Date.parse(s.captured_at)).filter(Number.isFinite);
+  const saltos = [];
+  for (let i = 1; i < ts.length; i++) if (ts[i] > ts[i - 1]) saltos.push(ts[i] - ts[i - 1]);
+  if (!saltos.length) return "intervalo desconocido";
+  saltos.sort((a, b) => a - b);
+  const minutos = Math.round(saltos[Math.floor(saltos.length / 2)] / 60000);
+  const huecos = saltos.filter((s) => s > saltos[Math.floor(saltos.length / 2)] * 2.5).length;
+  return `cada ~${minutos} min` + (huecos ? ` · ${huecos} hueco${huecos > 1 ? "s" : ""}` : "");
 }
 
 function drawOrderbook() {
@@ -463,11 +487,15 @@ function drawOrderbook() {
 
   // --- FLUJO: que muros nacen, se comen o se retiran ---
   const flujo = flujoDeMuros(snapshots, ahora);
-  // Solo los eventos de los muros mas grandes y con tope: dibujar los cientos de
-  // eventos de una ventana tapaba por completo el precio y los muros.
-  const corte = maxUsd * 0.55;
+  // Se toman los N eventos MAS GRANDES del encuadre, sin umbral absoluto.
+  //
+  // Antes el corte era `maxUsd * 0.55` y eso lo hacia invisible en produccion:
+  // el bid persistente de ~78M fija el maximo, el corte queda en ~43M y la
+  // MEDIANA de muro es 1,8M, asi que 1 de 41 muros podia marcar. El fixture no
+  // lo mostraba porque ahi no habia una ballena gigante fijando la vara. Un
+  // ranking relativo no depende de la escala del muro mas grande.
   const marcables = flujo.eventos
-    .filter((e) => e.usd >= corte && e.p >= min && e.p <= max)
+    .filter((e) => e.p >= min && e.p <= max)
     .sort((a, b) => b.usd - a.usd)
     .slice(0, 40);
   for (const e of marcables) {
@@ -518,10 +546,19 @@ function drawOrderbook() {
   ctx.fillText(`${fmt(ahora, 0)} ahora`, width - R - 10, Y(ahora) - 12);
 
   // --- los muros MAS GRANDES quedan etiquetados, no solo sombreados ---
+  // Dedup con Set, O(n). Antes era `findIndex` dentro de `filter`: con 288
+  // capturas x ~40 muros son ~11.500 elementos y ~130M comparaciones EN CADA
+  // redraw (zoom, resize). En movil eso congela la pestana.
+  const vistos = new Set();
+  const pasoDedup = Math.max(1, ahora * 0.001);
   const top = [...muros].filter((m) => m.p >= min && m.p <= max)
     .sort((a, b) => b.usd - a.usd)
-    .filter((m, i, arr) => arr.findIndex((o) =>
-      Math.abs(o.p - m.p) / m.p < 0.001 && o.lado === m.lado) === i);
+    .filter((m) => {
+      const k = `${m.lado}:${Math.round(m.p / pasoDedup)}`;
+      if (vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
   ctx.font = "10px ui-monospace, monospace";
   ctx.textAlign = "left";
   const usadasY = [];
@@ -560,7 +597,7 @@ function drawOrderbook() {
   // resumen del flujo: la tasa de retirados es el dato de spoofing
   const salieron = flujo.consumidos + flujo.retirados;
   $("book-interval").textContent =
-    `${snapshots.length} capturas · cada 5 min · flujo: ${flujo.nuevos} nuevos, ` +
+    `${snapshots.length} capturas · ${intervaloMedido(snapshots)} · flujo: ${flujo.nuevos} nuevos, ` +
     `${flujo.consumidos} consumidos, ${flujo.retirados} retirados` +
     (salieron ? ` (${Math.round(100 * flujo.retirados / salieron)}% de los que ` +
                 `desaparecieron se retiraron sin que el precio llegara)` : "");
@@ -876,8 +913,12 @@ function drawCompass(visual) {
   }
 
   // agujas: LARGO = probabilidad de alcance
+  // El color sigue la MISMA convencion que el libro y el mapa visual: lo que esta
+  // ARRIBA del precio es rojo (asks/resistencia) y lo de ABAJO verde
+  // (bids/soporte). Antes estaba invertido solo aca, asi que el mismo nivel se
+  // pintaba de un color en el mapa y del opuesto en la brujula.
   for (const [nivel, signo, etiqueta, color] of [
-    [arriba, -1, "ARRIBA", "#24c88a"], [abajo, 1, "ABAJO", "#ef6370"],
+    [arriba, -1, "ARRIBA", "#ef6370"], [abajo, 1, "ABAJO", "#24c88a"],
   ]) {
     if (!nivel || !Number.isFinite(Number(nivel.price))) continue;
     const p = prob(nivel);
@@ -1044,6 +1085,115 @@ function renderModel() {
     `${avisos.length ? avisos.join(" · ") + ". " : ""}${muestra} Research only: no habilita órdenes.`;
 }
 
+// --- LECTURA DEL MOMENTO -----------------------------------------------------
+// Los cuatro datos que cambian una decisión, juntos y siempre visibles. Nada se
+// calcula de nuevo acá: se compone lo que ya producen el indicador visual y el
+// historial del libro.
+
+// Cuántas capturas seguidas lleva vivo un muro. Un bid de 78M que sobrevive días
+// no es lo mismo que uno de 78M que nació hace 5 min, y hasta ahora cada captura
+// lo pintaba como si fuera nuevo.
+function edadDelMuro(snapshots, muro, referencia) {
+  if (!muro || !snapshots.length) return null;
+  const paso = Math.max(1, (referencia || 1) * 0.0005);
+  const k = Math.round(Number(muro.price) / paso);
+  const lado = Number(muro.price) > referencia ? "asks" : "bids";
+  let seguidas = 0;
+  for (let i = snapshots.length - 1; i >= 0; i--) {
+    const hay = (snapshots[i][lado] || []).some(([p]) => Math.round(p / paso) === k);
+    if (!hay) break;
+    seguidas++;
+  }
+  return seguidas;
+}
+
+function renderAhora() {
+  const visual = state.visual_indicator;
+  const snapshots = state.visual_orderbook_history || [];
+  const set = (id, valor, meta, clase = "") => {
+    $(id).textContent = valor;
+    $(id).className = clase;
+    $(`${id}-meta`).textContent = meta || "";
+  };
+
+  // 1. Imán más cercano, con su tasa base de alcance
+  const niveles = visual?.levels || {};
+  const arriba = niveles.nearest_above, abajo = niveles.nearest_below;
+  const dA = arriba ? Math.abs(Number(arriba.distance_pct)) : null;
+  const dB = abajo ? Math.abs(Number(abajo.distance_pct)) : null;
+  if (dA != null || dB != null) {
+    const haciaArriba = dB == null || (dA != null && dA < dB);
+    const nivel = haciaArriba ? arriba : abajo;
+    const p4 = Number(nivel.alcance_historico?.["4h"]);
+    set("ahora-iman", `${haciaArriba ? "ARRIBA" : "ABAJO"} · ${fmt(nivel.price, 0)}`,
+        `${signed(nivel.distance_pct, "%")}` +
+        (Number.isFinite(p4) ? ` · alcanzado ${fmt(p4, 0)}% de las veces en 4h` : ""),
+        haciaArriba ? "down" : "up");   // arriba = rojo, misma convención que el resto
+  } else {
+    set("ahora-iman", "—", "sin captura visual vigente");
+  }
+
+  // 2. Muro dominante del libro, con su edad.
+  // Se usan los `dominant_*`, que NO llevan el radio de ±5%: medido en producción,
+  // los cuatro muros mayores caían fuera de ese radio y el mayor de todos quedaba
+  // excluido por 6 dólares. Con `strongest_*` esta tarjeta mostraba 5,6M mientras
+  // en el libro había una pared de 78,7M.
+  const muros = [niveles.dominant_whale_bid, niveles.dominant_whale_ask]
+    .filter((m) => m && Number.isFinite(Number(m.amount_usd)));
+  const dominante = muros.sort((a, b) => b.amount_usd - a.amount_usd)[0];
+  if (dominante) {
+    const compra = Number(dominante.price) < Number(visual.price);
+    const seguidas = edadDelMuro(snapshots, dominante, Number(visual.price));
+    const vive = seguidas == null ? "" :
+      seguidas >= snapshots.length ? ` · lleva toda la ventana` :
+      ` · ${seguidas} capturas seguidas`;
+    set("ahora-muro", `${compactUsd(dominante.amount_usd)} ${compra ? "compra" : "venta"}`,
+        `${fmt(dominante.price, 0)} · ${signed(dominante.distance_pct, "%")}${vive}`,
+        compra ? "up" : "down");
+  } else {
+    set("ahora-muro", "—", "sin muros cerca del precio");
+  }
+
+  // 3. Flujo de la ventana: la tasa de retirados es lo interesante
+  if (snapshots.length >= 2) {
+    const precio = Number(snapshots[snapshots.length - 1].price);
+    const f = flujoDeMuros(snapshots, precio);
+    const salieron = f.consumidos + f.retirados;
+    set("ahora-flujo", `${f.nuevos} nuevos · ${f.consumidos} consumidos · ${f.retirados} retirados`,
+        salieren(salieron, f));
+  } else {
+    set("ahora-flujo", "—", "hace falta más de una captura");
+  }
+
+  // 4. Frescura de la captura Y salud del archivo histórico. El estado ya publica
+  // `visual_book_archive` desde ayer y la UI no lo mostraba en ninguna parte: el
+  // modo de falla exacto que ese dato venía a evitar.
+  const edad = Number(visual?.age_seconds);
+  const archivo = state.visual_book_archive || {};
+  const partes = [];
+  if (archivo.existe && archivo.ultima_escritura) {
+    const min = Math.round((Date.now() - Date.parse(archivo.ultima_escritura)) / 60000);
+    partes.push(`archivo ${fmt(archivo.bytes / 1e6, 1)} MB` +
+                (Number.isFinite(min) ? `, última escritura hace ${min} min` : ""));
+    if (archivo.lleno) partes.push("ARCHIVO LLENO: dejó de guardar");
+  } else if (archivo.existe === false) {
+    partes.push("archivo histórico aún vacío");
+  }
+  if (Number.isFinite(edad)) {
+    const min = Math.round(edad / 60);
+    set("ahora-fresco", `hace ${min} min`, partes.join(" · "),
+        min > 15 || archivo.lleno ? "down" : "");
+  } else {
+    set("ahora-fresco", "—", partes.join(" · "));
+  }
+}
+
+function salieren(salieron, f) {
+  if (!salieron) return "ningún muro desapareció en la ventana";
+  const pct = Math.round(100 * f.retirados / salieron);
+  return `${pct}% de los que desaparecieron se retiraron sin que el precio llegara`;
+}
+
 function render(data) {
   state = data;
   if (data.waiting) {
@@ -1076,6 +1226,7 @@ function render(data) {
   renderOrderbook();
   renderVisual();
   renderModel();
+  renderAhora();
 }
 
 function activateTab(button) {

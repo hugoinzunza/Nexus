@@ -859,3 +859,111 @@ def test_el_archivo_local_es_opcional_y_va_por_env():
     assert "--archivo-local" in src
     assert "NEXUS_BOOK_ARCHIVE" in src
     assert "aviso_archivo" in src, "un fallo silencioso no serviria de nada"
+
+
+def test_el_muro_dominante_no_se_recorta_por_el_radio_de_5pct():
+    """Hallazgo de la auditoría 2026-07-26, medido en producción: los CUATRO muros
+    mayores del libro caían fuera del radio de ±5% y el mayor —78,7M, 43x la
+    mediana— quedaba excluido por 6 dólares (−5,01%). La brújula, el mapa y la
+    lectura del momento mostraban muros menores mientras ignoraban la pared real.
+
+    `strongest_*` conserva el radio (mide presión cerca del precio, y ahí el radio
+    es correcto). `dominant_*` no lo lleva.
+    """
+    snap = snapshot()
+    snap["whale_orders"]["rows"].append({
+        "side": "bid", "price": 61_300, "amount_usd": 78_600_000,
+        "duration": "2D", "market": "S", "exchange": "binance",
+    })
+    indicator = build_visual_indicator(snap, now=NOW)
+    niveles = indicator["levels"]
+
+    # el de 61.300 esta a -4.6% del precio de 64.238... se fuerza mas lejos
+    assert niveles["dominant_whale_bid"]["amount_usd"] == 78_600_000
+
+    lejano = snapshot()
+    lejano["whale_orders"]["rows"].append({
+        "side": "bid", "price": 55_000, "amount_usd": 99_000_000,
+        "duration": "3D", "market": "S", "exchange": "binance",
+    })
+    niveles = build_visual_indicator(lejano, now=NOW)["levels"]
+    assert niveles["dominant_whale_bid"]["amount_usd"] == 99_000_000, \
+        "el muro mas grande quedo fuera por el radio: es justo el bug corregido"
+    # y el de radio corto NO lo toma, porque mide otra cosa
+    assert niveles["strongest_whale_bid"]["amount_usd"] != 99_000_000
+    assert niveles["dominant_whale_bid"]["distance_pct"] < -5
+
+
+def test_los_marcadores_de_flujo_no_dependen_del_muro_mas_grande():
+    """El corte era `maxUsd * 0.55`. Con el bid persistente de 78,7M fijando el
+    maximo, el corte quedaba en 43M contra una MEDIANA de muro de 1,8M: 1 de 41
+    muros podia marcar. Verificado en produccion: 0 de 14 eventos se dibujaban.
+    Un ranking relativo (top-N) no depende de la escala del mayor.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    bloque = script.split("const marcables")[1].split(";")[0]
+    assert "maxUsd" not in bloque, "volvio el umbral atado al muro mas grande"
+    assert ".slice(0, 40)" in bloque, "debe haber tope de marcadores"
+    assert "sort((a, b) => b.usd - a.usd)" in bloque
+
+
+def test_el_flujo_acumula_los_muros_que_comparten_bucket():
+    """Con `Map.set` el segundo muro del bucket pisaba al primero: su monto
+    desaparecia del diff y, si uno se retiraba, el bucket seguia ocupado y no
+    habia evento."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    bloque = script.split("function flujoDeMuros(")[1].split("\nfunction ")[0]
+    assert "previo.usd += usd" in bloque, "los muros del mismo bucket deben sumarse"
+    assert "const indexar" in bloque
+
+
+def test_la_dedup_de_etiquetas_es_lineal():
+    """Era `findIndex` dentro de `filter`: ~11.500 muros -> ~130M comparaciones en
+    CADA redraw (zoom, resize). En movil congelaba la pestana."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    bloque = script.split("const vistos = new Set()")[1].split("// --- eje X")[0]
+    assert "vistos.has(k)" in bloque and "vistos.add(k)" in bloque
+    assert "findIndex" not in bloque
+
+
+def test_el_intervalo_del_libro_se_mide_no_se_cablea():
+    """Mismo defecto que el "4h" cableado de la pestana Flujo, que resulto ser 1h."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    assert "function intervaloMedido" in script
+    assert "intervaloMedido(snapshots)" in script
+    assert "· cada 5 min ·" not in script, "el intervalo volvio a estar cableado"
+
+
+def test_la_brujula_usa_la_misma_convencion_de_color_que_el_resto():
+    """Arriba = rojo (asks/resistencia), abajo = verde (bids/soporte), igual que el
+    libro y el mapa visual. Estaba invertido solo en la brujula, asi que el mismo
+    nivel se pintaba de un color en una pestana y del opuesto en otra."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    bloque = script.split("// agujas: LARGO = probabilidad de alcance")[1][:700]
+    assert '[arriba, -1, "ARRIBA", "#ef6370"]' in bloque
+    assert '[abajo, 1, "ABAJO", "#24c88a"]' in bloque
+
+
+def test_la_ui_muestra_la_salud_del_archivo_historico():
+    """El estado publica `visual_book_archive` desde el 2026-07-25 para que se note
+    si deja de crecer, pero la UI no lo renderizaba: el modo de falla exacto que
+    ese dato venia a evitar."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    assert "state.visual_book_archive" in script
+    assert "ultima_escritura" in script and "ARCHIVO LLENO" in script
+    assert 'id="ahora-fresco"' in html
+
+
+def test_la_lectura_del_momento_junta_los_cuatro_datos():
+    """Estaban repartidos en cuatro pestanas: iman en Radar, muro y flujo en Libro,
+    frescura en Mapa visual."""
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    for campo in ("ahora-iman", "ahora-muro", "ahora-flujo", "ahora-fresco"):
+        assert f'id="{campo}"' in html
+        assert f'id="{campo}-meta"' in html
+    assert "function renderAhora" in script
+    assert "renderAhora();" in script
+    # la edad del muro dominante: un muro de dias no es lo mismo que uno de 5 min
+    assert "function edadDelMuro" in script

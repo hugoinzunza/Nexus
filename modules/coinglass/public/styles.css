@@ -514,3 +514,47 @@ progress::-webkit-progress-value { background: var(--cyan); }
 
 /* Brújula de liquidez: marco propio, más bajo que los gráficos de serie */
 .chart-frame.brujula { height: 340px; }
+
+/* Lectura del momento: los cuatro datos que cambian una decisión, siempre
+   visibles arriba de las pestañas. Se apila en una columna en móvil. */
+.ahora {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+.ahora article {
+  background: #10141c;
+  border: 1px solid #1e2532;
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+.ahora span {
+  display: block;
+  font: 600 9px/1.3 ui-monospace, monospace;
+  letter-spacing: .09em;
+  color: #7d879a;
+}
+.ahora b {
+  display: block;
+  margin-top: 4px;
+  font: 700 14px/1.25 sans-serif;
+  color: #edf1f7;
+  overflow-wrap: anywhere;
+}
+.ahora b.up { color: #24c88a; }
+.ahora b.down { color: #ef6370; }
+.ahora i {
+  display: block;
+  margin-top: 3px;
+  font: normal 10px/1.35 ui-monospace, monospace;
+  color: #919baa;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 780px) {
+  .ahora { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 430px) {
+  .ahora { grid-template-columns: 1fr; gap: 8px; }
+}
