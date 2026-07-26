@@ -644,6 +644,49 @@ function renderOrderbook() {
   renderLargeOrders();
 }
 
+// Los muros del libro que vale la pena dibujar, en UN solo lugar.
+//
+// Existe porque el mismo defecto apareció en tres pantallas distintas y lo arreglé
+// en una sola: `strongest_whale_*` sale de `nearby_whales`, que recorta a ±5% del
+// precio. Medido en producción el 2026-07-26, el muro dominante de 78,7M quedaba
+// excluido por 6 dólares (−5,01% contra un corte de 5%), así que la escalera y la
+// brújula marcaban muros menores mientras ignoraban el que manda. `dominant_whale_*`
+// no tiene radio. `nearest_whale_*` sí puede venir del radio: ahí "el más cercano"
+// es justamente una pregunta local, y el recorte no estorba.
+//
+// Con el helper, cambiar la fuente es un cambio en una línea y no tres que se
+// desincronizan.
+function murosDelLibro(niveles) {
+  return [niveles?.nearest_whale_ask, niveles?.dominant_whale_ask,
+          niveles?.nearest_whale_bid, niveles?.dominant_whale_bid]
+    .filter((m) => m && Number.isFinite(Number(m.price)))
+    .filter((m, i, arr) => arr.findIndex((o) =>
+      Math.round(Number(o.price)) === Math.round(Number(m.price))) === i);
+}
+
+// La franja que CoinGlass realmente lista, derivada de la captura y no supuesta.
+//
+// Medido sobre 127 capturas seguidas del VPS (2026-07-26, 03:10→13:40 UTC): la lista
+// trae SIEMPRE 41 niveles —41 en las 127, con el reparto bid/ask variando— y el monto
+// más chico está pegado al piso de US$1M en las 127. Un conteo constante no es un
+// conteo natural de muros: es un tope. Y como el más chico listado está en el piso, el
+// tope NO es por tamaño; el recorte va por distancia, y cubre ~±6,5%.
+//
+// Consecuencia que hay que decir en pantalla: "no hay muro arriba" significa "no hay
+// muro LISTADO dentro de la franja", no que no exista. Fuera de esa franja no tenemos
+// dato, y callarlo convierte una ausencia de medición en una afirmación.
+function franjaListada(snapshots) {
+  const ultima = (snapshots || [])[(snapshots || []).length - 1];
+  const precio = Number(ultima?.price);
+  if (!Number.isFinite(precio) || precio <= 0) return null;
+  const dist = [...(ultima.bids || []), ...(ultima.asks || [])]
+    .map(([p]) => Number(p))
+    .filter((p) => Number.isFinite(p) && p > 0)
+    .map((p) => (p / precio - 1) * 100);
+  if (!dist.length) return null;
+  return { abajo: Math.min(...dist), arriba: Math.max(...dist), niveles: dist.length };
+}
+
 function drawVisualLevels() {
   const canvas = $("visual-level-chart");
   const { ctx, width, height } = setupCanvas(canvas);
@@ -666,11 +709,7 @@ function drawVisualLevels() {
   const niveles = visual.levels || {};
   // Muros del LIBRO en el mismo eje de precio: la confluencia entre un clUster de
   // liquidacion y una pared real de ordenes es la informacion que faltaba.
-  const muros = [niveles.nearest_whale_ask, niveles.strongest_whale_ask,
-                 niveles.nearest_whale_bid, niveles.strongest_whale_bid]
-    .filter((m) => m && Number.isFinite(Number(m.price)))
-    .filter((m, i, arr) => arr.findIndex((o) =>
-      Math.round(Number(o.price)) === Math.round(Number(m.price))) === i);
+  const muros = murosDelLibro(niveles);
 
   // El encuadre lo fijan las BANDAS y el precio, NO los muros. Los muros ballena
   // viven a ±5% mientras las bandas caen dentro de ±2%: dejarlos mandar en el eje
@@ -913,9 +952,7 @@ function drawCompass(visual) {
   ctx.fillText(`${fmt(precio, 0)} ahora`, cx - 14, cy);
 
   // anillos de muros ballena, a su distancia relativa
-  const muros = [niveles.nearest_whale_ask, niveles.strongest_whale_ask,
-                 niveles.nearest_whale_bid, niveles.strongest_whale_bid]
-    .filter((m) => m && Number.isFinite(Number(m.price)));
+  const muros = murosDelLibro(niveles);
   const distMax = Math.max(1, ...muros.map((m) => Math.abs(Number(m.distance_pct) || 0)),
                            Math.abs(Number(arriba?.distance_pct) || 0),
                            Math.abs(Number(abajo?.distance_pct) || 0));
@@ -1193,7 +1230,11 @@ function renderAhora() {
         `${fmt(dominante.price, 0)} · ${signed(dominante.distance_pct, "%")}${vive}`,
         compra ? "up" : "down");
   } else {
-    set("ahora-muro", "—", "sin muros cerca del precio");
+    // "sin muros" a secas leía como "no existen". La franja dice DÓNDE miramos.
+    const f = franjaListada(snapshots);
+    set("ahora-muro", "—", f
+      ? `ningún muro listado entre ${f.abajo.toFixed(1)}% y +${f.arriba.toFixed(1)}%`
+      : "sin muros listados");
   }
 
   // 3. Flujo de la ventana: la tasa de retirados es lo interesante
@@ -1220,6 +1261,15 @@ function renderAhora() {
     if (archivo.lleno) partes.push("ARCHIVO LLENO: dejó de guardar");
   } else if (archivo.existe === false) {
     partes.push("archivo histórico aún vacío");
+  }
+  // La cobertura va junto a la frescura porque son la misma pregunta: cuánto de lo
+  // que se ve es dato y cuánto es no-medición. Medido: la lista trae SIEMPRE 41
+  // niveles en las 127 capturas seguidas del 2026-07-26, así que el conteo es un
+  // tope, no un hallazgo. Fuera de la franja no hay dato.
+  const franja = franjaListada(snapshots);
+  if (franja) {
+    partes.push(`${franja.niveles} muros listados, ${franja.abajo.toFixed(1)}% a `
+                + `+${franja.arriba.toFixed(1)}%`);
   }
   if (Number.isFinite(edad)) {
     const min = Math.round(edad / 60);

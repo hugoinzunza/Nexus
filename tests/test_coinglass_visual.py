@@ -696,7 +696,9 @@ def test_mapa_visual_suma_eje_precio_muros_y_alcance():
     bloque = script.split("function drawVisualLevels()")[1].split("\nfunction ")[0]
 
     assert "fmt(p, 0), L - 8, y" in bloque, "el eje Y debe rotular precios"
-    assert "nearest_whale_ask" in bloque and "closePath(); ctx.fill()" in bloque, \
+    # la fuente de los muros vive en `murosDelLibro`, no repetida en cada gráfico:
+    # tenerla repetida hizo que el fix del radio de ±5% llegara a una sola pantalla
+    assert "murosDelLibro(niveles)" in bloque and "closePath(); ctx.fill()" in bloque, \
         "los muros del libro se dibujan como rombos en el mismo eje de precio"
     assert 'alcance_historico?.["4h"]' in bloque, "falta la tasa de alcance"
     # La banda mayor sigue destacada, ahora con el texto de la escalera. Antes se
@@ -1486,3 +1488,83 @@ def test_la_ventana_de_firma_tolera_la_rafaga_del_colector():
     ejecucion = (ROOT / "modules/trading/binance_account.py").read_text()
     assert "RECV_WINDOW = 5000" in ejecucion, \
         "cambio la ventana en la ruta de ORDENES: eso necesita decision explicita"
+
+
+def js_sin_comentarios():
+    """`app.js` sin los comentarios de línea.
+
+    Afirmar que un símbolo desapareció y que el test salte con el comentario que
+    documenta su eliminación ya me pasó cinco veces. El comentario tiene que quedar
+    —explica el defecto— así que lo que se arregla es el test.
+
+    Alcance real, para no creerle más de lo que hace: quita solo las líneas que
+    EMPIEZAN con `//`. Un comentario al final de una línea de código sobrevive, y no
+    lo quito porque partir por `//` rompería cualquier `"https://…"`. Y si alguien
+    mete comentarios de bloque, el assert de abajo salta para que se amplíe.
+    """
+    fuente = (ROOT / "modules/coinglass/public/app.js").read_text()
+    assert "/*" not in fuente, "aparecieron comentarios de bloque: ampliar el helper"
+    lineas = []
+    for linea in fuente.splitlines():
+        sin = linea.split("//")[0] if linea.lstrip().startswith("//") else linea
+        lineas.append(sin)
+    return "\n".join(lineas)
+
+
+def test_ninguna_pantalla_lee_los_muros_recortados_por_radio():
+    """El MISMO defecto en tres pantallas, arreglado en una sola.
+
+    `strongest_whale_*` sale de `nearby_whales`, que recorta a +-5% del precio.
+    Medido en produccion el 2026-07-26, el muro dominante de 78,7M quedaba excluido
+    por 6 dolares (-5,01% contra un corte de 5%). Corregi la tarjeta del momento y
+    la escalera y la brujula siguieron leyendo la version recortada durante todo el
+    dia, mostrando muros menores mientras ignoraban el que manda.
+
+    El candado es que la fuente viva en UN lugar: si `strongest_whale` reaparece en
+    la UI, es que alguien volvio a la version recortada.
+    """
+    assert "strongest_whale" not in js_sin_comentarios(), \
+        "volvio el muro recortado por el radio de +-5%"
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    assert "function murosDelLibro" in script
+    # las tres pantallas pasan por el helper, no cada una por su cuenta
+    assert script.count("murosDelLibro(niveles)") >= 2
+    assert "dominant_whale_ask" in script and "dominant_whale_bid" in script
+
+
+def test_la_franja_listada_se_declara_y_no_se_supone():
+    """CoinGlass no lista todos los muros: lista 41.
+
+    Medido sobre 127 capturas seguidas del VPS (2026-07-26, 03:10->13:40 UTC):
+      * 41 niveles en las 127 capturas, con el reparto bid/ask variando (21/20,
+        20/21, 23/18, 22/19) -> el TOTAL constante es un tope, no un conteo;
+      * el monto mas chico esta pegado al piso de US$1M en las 127 -> el tope NO
+        es por tamano, porque si truncara por ranking el mas chico estaria muy por
+        encima del piso;
+      * la franja cubre ~-6,2% a +6,9%.
+
+    O sea el recorte va por DISTANCIA. Decir "sin muros arriba" sin decir donde
+    miramos convierte una ausencia de medicion en una afirmacion, y eso es
+    exactamente lo que el proyecto no hace.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    assert "function franjaListada" in script
+    assert "sin muros cerca del precio" not in script, \
+        "volvio el mensaje que afirmaba ausencia sin declarar la franja"
+    assert "ningun muro listado entre" in script or "ningún muro listado entre" in script
+    # la franja se deriva de la captura, no se cablea
+    bloque = script.split("function franjaListada(")[1].split("\nfunction ")[0]
+    assert "6.5" not in bloque and "6,5" not in bloque, \
+        "la franja debe medirse de los datos, no cablearse"
+    assert "ultima.bids" in bloque and "ultima.asks" in bloque
+
+
+def test_la_franja_listada_tolera_datos_ausentes():
+    """Se dibuja en la tira de "ahora", que corre en cada refresco: si revienta con
+    una captura incompleta, se cae toda la lectura del momento y no solo la franja.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    bloque = script.split("function franjaListada(")[1].split("\nfunction ")[0]
+    assert "return null" in bloque, "debe rendirse en vez de reventar"
+    assert "ultima?.price" in bloque, "sin captura no hay precio del que derivar nada"
+    assert "(snapshots || [])" in bloque
