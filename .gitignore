@@ -31,6 +31,11 @@ data/*
 # Worktrees temporales de agentes Claude
 .claude/worktrees/
 
+# Volcado por-trade del estudio de fuerza relativa: 3 MB regenerables con el script
+# a partir de data/setup_backtest_trades.json. El JSON de resultados (925 KB) SÍ se
+# versiona porque es lo que los tests verifican y lo que sostiene el informe.
+research/relative_strength_oos_trades.json
+
 # BTA research: el zip es regenerable (bta_package_zip.py) y los os_screenshots son
 # capturas de debug de la automatizacion (no evidencia de charts) — no van al repo.
 research/bta_review_package_*.zip
