@@ -34,19 +34,26 @@ FAPI = "https://fapi.binance.com"
 SAPI = "https://api.binance.com"
 # Binance rechaza con -1021 si `timestamp` cae fuera de
 # [serverTime - recvWindow, serverTime + 1000]. Con 5.000 ms el colector del VPS
-# fallaba el 17% de las veces (142 de 843 intentos en 24 h) PESE a tener NTP activo y
-# el reloj sincronizado: no es deriva del reloj, es latencia VPS-Binance más el
-# desfase del propio reloj de Binance.
+# fallaba el 17% de las veces: 142 de 843 intentos en 24 h.
 #
-# Se atacan los DOS lados del intervalo, porque la ventana sólo cubre uno:
-#   * `RECV_WINDOW` más ancha tolera que el timestamp llegue "viejo" por latencia;
-#   * `ADELANTO_SEGURO_MS` resta un margen para no llegar nunca "adelantado", que es
-#     el lado que recvWindow NO puede cubrir (Binance sólo tolera +1000 ms fijos).
+# MEDIDO antes de elegir el número, porque mi primera explicación era falsa:
+#   * desfase del reloj contra Binance: −11 ms (mediana de 5 sondeos)
+#   * viaje ida y vuelta: ~255 ms
+# O sea NO es deriva del reloj ni latencia de red: con 5 s había 20x de margen. Y por
+# eso tampoco hace falta restarle nada al timestamp; no llegamos "adelantados".
+#
+# La causa real es una ráfaga AUTOINFLIGIDA: `futures_income` con lookback de 365 días
+# pagina en ventanas de 7 días, o sea ~53 requests firmados por corrida, y cada corrida
+# tarda ~45 s. Los -1021 caen DENTRO de esa ráfaga (medido: falla 49 s después de
+# arrancar), cuando un request firmado en T llega encolado bastante después.
+#
+# Ampliar la ventana es entonces el parche correcto para el síntoma, pero la cura está
+# en no re-leer un año entero cada 90 segundos: eso es `BINANCE_LOOKBACK_DAYS` en el
+# entorno del VPS, y cambiarlo altera qué histórico ingesta el Diario.
 #
 # 10 s sigue muy por debajo del máximo de 60 s que permite Binance, y estos endpoints
 # son de SOLO LECTURA, así que ampliar la ventana no abre superficie de riesgo real.
 RECV_WINDOW = 10_000
-ADELANTO_SEGURO_MS = 1_000
 TIMEOUT = 15
 
 # Caché en memoria con TTL (para no golpear la API en cada carga del panel).
@@ -114,7 +121,7 @@ def signed_get_with_keys(base: str, path: str, key: str, secret: str, params: di
     if not key or not secret:
         raise BinanceError("sin credenciales")
     p = dict(params or {})
-    p["timestamp"] = int(time.time() * 1000) - ADELANTO_SEGURO_MS
+    p["timestamp"] = int(time.time() * 1000)
     p["recvWindow"] = RECV_WINDOW
     qs = urllib.parse.urlencode(p)
     sig = hmac.new(secret.encode("utf-8"), qs.encode("utf-8"), hashlib.sha256).hexdigest()

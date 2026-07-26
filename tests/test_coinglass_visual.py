@@ -1449,14 +1449,19 @@ def test_el_precio_de_referencia_no_cae_a_los_klines_versionados():
     assert "BINANCE_PRICE_URL" in bloque
 
 
-def test_la_firma_de_lectura_de_binance_ataca_los_DOS_lados_del_1021():
+def test_la_ventana_de_firma_tolera_la_rafaga_del_colector():
     """Medido en el VPS: 142 de 843 intentos (17%) fallaban con -1021 "Timestamp
-    outside recvWindow" PESE a NTP activo y reloj sincronizado. No era deriva del
-    reloj: es latencia VPS-Binance mas el desfase del reloj de Binance.
+    outside recvWindow" con RECV_WINDOW = 5000.
 
-    Binance acepta timestamp en [serverTime - recvWindow, serverTime + 1000]. Ampliar
-    la ventana solo cubre el lado "viejo"; el lado "adelantado" tiene un tope FIJO de
-    1000 ms que ninguna ventana arregla. Por eso se restan mil ms al timestamp.
+    Mi primera explicacion -deriva del reloj o latencia- quedo REFUTADA al medirla:
+    desfase contra Binance -11 ms, viaje ida y vuelta 255 ms. Con 5 s habia 20x de
+    margen, asi que tampoco hay que restarle nada al timestamp: no llegamos
+    adelantados.
+
+    La causa real es una rafaga AUTOINFLIGIDA: `futures_income` con lookback de 365
+    dias hace ~53 requests firmados por corrida y cada corrida tarda ~45 s. Los -1021
+    caen dentro de la rafaga. Ampliar la ventana cura el sintoma; la cura de fondo es
+    no re-leer un ano entero cada 90 segundos (BINANCE_LOOKBACK_DAYS).
 
     Este cliente es de SOLO LECTURA. La ruta de EJECUCION del bot
     (`modules/trading/binance_account.py`) tiene el mismo RECV_WINDOW = 5000 y NO se
@@ -1466,10 +1471,16 @@ def test_la_firma_de_lectura_de_binance_ataca_los_DOS_lados_del_1021():
 
     assert bc.RECV_WINDOW >= 10_000, "la ventana volvio a quedar corta"
     assert bc.RECV_WINDOW <= 60_000, "Binance no acepta mas de 60 s"
-    assert bc.ADELANTO_SEGURO_MS >= 1_000, "sin margen, el lado adelantado sigue roto"
 
     fuente = (ROOT / "modules/journal/binance_client.py").read_text()
-    assert 'p["timestamp"] = int(time.time() * 1000) - ADELANTO_SEGURO_MS' in fuente
+    # sin correcciones al timestamp: la medicion mostro que el reloj esta bien
+    assert 'p["timestamp"] = int(time.time() * 1000)\n' in fuente
+    assert "ADELANTO_SEGURO" not in fuente, \
+        "volvio un margen que la medicion del reloj no justifica"
+    # el comentario usa el menos tipografico (U+2212); se aceptan las dos formas
+    assert "11 ms" in fuente, "la medicion del desfase debe quedar escrita"
+    assert "rafaga" in fuente or "ráfaga" in fuente, \
+        "la causa real -la rafaga autoinfligida- debe quedar escrita"
 
     # y la ruta de ejecucion queda intacta: si alguien la cambia, que sea a propósito
     ejecucion = (ROOT / "modules/trading/binance_account.py").read_text()
