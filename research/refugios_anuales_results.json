@@ -1,0 +1,3957 @@
+{
+  "meta": {
+    "research_only": true,
+    "execution_enabled": false,
+    "validated": false,
+    "generated_at": "2026-07-26T16:23:43.734956+00:00",
+    "script": "research/refugios_anuales.py",
+    "prereg": {
+      "study": "refugios_anuales_rmp",
+      "frozen_at": "2026-07-26",
+      "venue": "binance",
+      "market": "klines snapshot versionado en el repo (data/klines_*.json)",
+      "quote_asset": "USDT",
+      "timezone": "UTC",
+      "universe": [
+        "BTCUSDT",
+        "ETHUSDT",
+        "SOLUSDT",
+        "ADAUSDT",
+        "XRPUSDT"
+      ],
+      "timeframe_primary": "1d",
+      "timeframe_weekly_test": "1h",
+      "years_requested": [
+        2022,
+        2023,
+        2024,
+        2025,
+        2026
+      ],
+      "anchor_rule": "apertura de la vela diaria cuyo open_time == 1 de enero 00:00 UTC; si no existe, el anio se excluye (no se inventa el ancla)",
+      "step": 0.1,
+      "k_max": 15,
+      "drop_non_positive_levels": true,
+      "touch_tolerance_atr": 0.25,
+      "atr_period": 14,
+      "atr_is_causal": "se usa ATR calculado hasta la vela i-1 para evaluar la vela i",
+      "episode_gap_bars": 5,
+      "reaction_horizon_bars": 5,
+      "reaction_threshold_atr": 1.0,
+      "penetration_threshold_atr": 0.5,
+      "followup_window_bars": 20,
+      "level_validity": "solo dentro del anio calendario del ancla (el curso recalcula cada anio)",
+      "random_control_replicas": 20,
+      "random_control_offset": "u ~ U(0.02, 0.05) con signo aleatorio, sumado al desplazamiento relativo del nivel real",
+      "bootstrap_iters": 5000,
+      "bootstrap_block": "(activo, anio, trimestre del primer contacto)",
+      "multiple_correction": "holm",
+      "alpha": 0.05,
+      "primary_family": "primer contacto (first_arrival), metricas hit_rate y mean_reaction_atr, 6 contrastes vs controles",
+      "decision_rule": {
+        "PROMOVER": "supera a los CUATRO controles tras Holm",
+        "SEGUIR": "supera a (c) aleatorio y (d) redondos pero no a (a) densidad / (b) ancla desplazada",
+        "DESCARTAR": "no separa del placebo de igual densidad"
+      },
+      "seed": 12345
+    },
+    "anchors": [
+      {
+        "pair": "BTCUSDT",
+        "year": 2023,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1672531200000,
+        "annual_open_date": "2023-01-01",
+        "annual_open_price": 16541.77,
+        "shift_anchors": {
+          "shift_-3": 16547.32,
+          "shift_+3": 16675.65
+        },
+        "round_step": 1000.0,
+        "window_end_date": "2024-01-01"
+      },
+      {
+        "pair": "BTCUSDT",
+        "year": 2024,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1704067200000,
+        "annual_open_date": "2024-01-01",
+        "annual_open_price": 42283.58,
+        "shift_anchors": {
+          "shift_-3": 42563.76,
+          "shift_+3": 42845.23
+        },
+        "round_step": 1000.0,
+        "window_end_date": "2025-01-01"
+      },
+      {
+        "pair": "BTCUSDT",
+        "year": 2025,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1735689600000,
+        "annual_open_date": "2025-01-01",
+        "annual_open_price": 93576.0,
+        "shift_anchors": {
+          "shift_-3": 95300.0,
+          "shift_+3": 98174.17
+        },
+        "round_step": 10000.0,
+        "window_end_date": "2026-01-01"
+      },
+      {
+        "pair": "BTCUSDT",
+        "year": 2026,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1767225600000,
+        "annual_open_date": "2026-01-01",
+        "annual_open_price": 87648.21,
+        "shift_anchors": {
+          "shift_-3": 87952.71,
+          "shift_+3": 90628.01
+        },
+        "round_step": 1000.0,
+        "window_end_date": "2026-06-13"
+      },
+      {
+        "pair": "ETHUSDT",
+        "year": 2023,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1672531200000,
+        "annual_open_date": "2023-01-01",
+        "annual_open_price": 1196.13,
+        "shift_anchors": {
+          "shift_-3": 1190.15,
+          "shift_+3": 1214.56
+        },
+        "round_step": 100.0,
+        "window_end_date": "2024-01-01"
+      },
+      {
+        "pair": "ETHUSDT",
+        "year": 2024,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1704067200000,
+        "annual_open_date": "2024-01-01",
+        "annual_open_price": 2281.87,
+        "shift_anchors": {
+          "shift_-3": 2344.15,
+          "shift_+3": 2209.72
+        },
+        "round_step": 100.0,
+        "window_end_date": "2025-01-01"
+      },
+      {
+        "pair": "ETHUSDT",
+        "year": 2025,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1735689600000,
+        "annual_open_date": "2025-01-01",
+        "annual_open_price": 3337.78,
+        "shift_anchors": {
+          "shift_-3": 3404.01,
+          "shift_+3": 3609.0
+        },
+        "round_step": 100.0,
+        "window_end_date": "2026-01-01"
+      },
+      {
+        "pair": "ETHUSDT",
+        "year": 2026,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1767225600000,
+        "annual_open_date": "2026-01-01",
+        "annual_open_price": 2971.65,
+        "shift_anchors": {
+          "shift_-3": 2950.91,
+          "shift_+3": 3127.11
+        },
+        "round_step": 100.0,
+        "window_end_date": "2026-06-13"
+      },
+      {
+        "pair": "SOLUSDT",
+        "year": 2023,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1672531200000,
+        "annual_open_date": "2023-01-01",
+        "annual_open_price": 9.97,
+        "shift_anchors": {
+          "shift_-3": 9.76,
+          "shift_+3": 13.37
+        },
+        "round_step": 1.0,
+        "window_end_date": "2024-01-01"
+      },
+      {
+        "pair": "SOLUSDT",
+        "year": 2024,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1704067200000,
+        "annual_open_date": "2024-01-01",
+        "annual_open_price": 101.72,
+        "shift_anchors": {
+          "shift_-3": 101.8,
+          "shift_+3": 98.52
+        },
+        "round_step": 10.0,
+        "window_end_date": "2025-01-01"
+      },
+      {
+        "pair": "SOLUSDT",
+        "year": 2025,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1735689600000,
+        "annual_open_date": "2025-01-01",
+        "annual_open_price": 189.31,
+        "shift_anchors": {
+          "shift_-3": 195.5,
+          "shift_+3": 218.0
+        },
+        "round_step": 10.0,
+        "window_end_date": "2026-01-01"
+      },
+      {
+        "pair": "SOLUSDT",
+        "year": 2026,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1767225600000,
+        "annual_open_date": "2026-01-01",
+        "annual_open_price": 124.64,
+        "shift_anchors": {
+          "shift_-3": 125.27,
+          "shift_+3": 133.37
+        },
+        "round_step": 1.0,
+        "window_end_date": "2026-06-14"
+      },
+      {
+        "pair": "ADAUSDT",
+        "year": 2023,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1672531200000,
+        "annual_open_date": "2023-01-01",
+        "annual_open_price": 0.2458,
+        "shift_anchors": {
+          "shift_-3": 0.2483,
+          "shift_+3": 0.2529
+        },
+        "round_step": 0.01,
+        "window_end_date": "2024-01-01"
+      },
+      {
+        "pair": "ADAUSDT",
+        "year": 2024,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1704067200000,
+        "annual_open_date": "2024-01-01",
+        "annual_open_price": 0.5939,
+        "shift_anchors": {
+          "shift_-3": 0.6158,
+          "shift_+3": 0.5568
+        },
+        "round_step": 0.01,
+        "window_end_date": "2025-01-01"
+      },
+      {
+        "pair": "ADAUSDT",
+        "year": 2025,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1735689600000,
+        "annual_open_date": "2025-01-01",
+        "annual_open_price": 0.845,
+        "shift_anchors": {
+          "shift_-3": 0.8895,
+          "shift_+3": 1.0894
+        },
+        "round_step": 0.01,
+        "window_end_date": "2026-01-01"
+      },
+      {
+        "pair": "ADAUSDT",
+        "year": 2026,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1767225600000,
+        "annual_open_date": "2026-01-01",
+        "annual_open_price": 0.3336,
+        "shift_anchors": {
+          "shift_-3": 0.3689,
+          "shift_+3": 0.3893
+        },
+        "round_step": 0.01,
+        "window_end_date": "2026-06-14"
+      },
+      {
+        "pair": "XRPUSDT",
+        "year": 2023,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1672531200000,
+        "annual_open_date": "2023-01-01",
+        "annual_open_price": 0.3389,
+        "shift_anchors": {
+          "shift_-3": 0.3559,
+          "shift_+3": 0.3436
+        },
+        "round_step": 0.01,
+        "window_end_date": "2024-01-01"
+      },
+      {
+        "pair": "XRPUSDT",
+        "year": 2024,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1704067200000,
+        "annual_open_date": "2024-01-01",
+        "annual_open_price": 0.6155,
+        "shift_anchors": {
+          "shift_-3": 0.6346,
+          "shift_+3": 0.5823
+        },
+        "round_step": 0.01,
+        "window_end_date": "2025-01-01"
+      },
+      {
+        "pair": "XRPUSDT",
+        "year": 2025,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1735689600000,
+        "annual_open_date": "2025-01-01",
+        "annual_open_price": 2.0836,
+        "shift_anchors": {
+          "shift_-3": 2.1843,
+          "shift_+3": 2.4546
+        },
+        "round_step": 0.1,
+        "window_end_date": "2026-01-01"
+      },
+      {
+        "pair": "XRPUSDT",
+        "year": 2026,
+        "venue": "binance",
+        "quote_asset": "USDT",
+        "timezone": "UTC",
+        "annual_open_t": 1767225600000,
+        "annual_open_date": "2026-01-01",
+        "annual_open_price": 1.8424,
+        "shift_anchors": {
+          "shift_-3": 1.8655,
+          "shift_+3": 2.0182
+        },
+        "round_step": 0.1,
+        "window_end_date": "2026-06-14"
+      }
+    ],
+    "years_excluded": [
+      {
+        "pair": "BTCUSDT",
+        "year": 2022,
+        "reason": "sin vela diaria del 1-ene 00:00 UTC en el snapshot"
+      },
+      {
+        "pair": "ETHUSDT",
+        "year": 2022,
+        "reason": "sin vela diaria del 1-ene 00:00 UTC en el snapshot"
+      },
+      {
+        "pair": "SOLUSDT",
+        "year": 2022,
+        "reason": "sin vela diaria del 1-ene 00:00 UTC en el snapshot"
+      },
+      {
+        "pair": "ADAUSDT",
+        "year": 2022,
+        "reason": "sin vela diaria del 1-ene 00:00 UTC en el snapshot"
+      },
+      {
+        "pair": "XRPUSDT",
+        "year": 2022,
+        "reason": "sin vela diaria del 1-ene 00:00 UTC en el snapshot"
+      }
+    ],
+    "non_positive_levels_dropped": {
+      "rmp_10": 120,
+      "placebo_7.5": 40,
+      "placebo_12.5": 160
+    },
+    "data_note": "snapshot local versionado en el repo, ~41 dias de antiguedad; no es un feed"
+  },
+  "coverage_levels": {
+    "rmp_10": {
+      "n_levels": 480,
+      "n_levels_touched": 225,
+      "touch_rate": 0.46875,
+      "n_reactions": 54,
+      "unconditional_reaction_rate": 0.1125
+    },
+    "placebo_7.5": {
+      "n_levels": 560,
+      "n_levels_touched": 266,
+      "touch_rate": 0.475,
+      "n_reactions": 65,
+      "unconditional_reaction_rate": 0.11607142857142858
+    },
+    "placebo_12.5": {
+      "n_levels": 440,
+      "n_levels_touched": 188,
+      "touch_rate": 0.42727272727272725,
+      "n_reactions": 40,
+      "unconditional_reaction_rate": 0.09090909090909091
+    },
+    "shift_-3": {
+      "n_levels": 480,
+      "n_levels_touched": 223,
+      "touch_rate": 0.46458333333333335,
+      "n_reactions": 51,
+      "unconditional_reaction_rate": 0.10625
+    },
+    "shift_+3": {
+      "n_levels": 480,
+      "n_levels_touched": 218,
+      "touch_rate": 0.45416666666666666,
+      "n_reactions": 59,
+      "unconditional_reaction_rate": 0.12291666666666666
+    },
+    "random": {
+      "n_levels": 9600,
+      "n_levels_touched": 4438,
+      "touch_rate": 0.46229166666666666,
+      "n_reactions": 1059,
+      "unconditional_reaction_rate": 0.1103125
+    },
+    "round": {
+      "n_levels": 1135,
+      "n_levels_touched": 1117,
+      "touch_rate": 0.9841409691629956,
+      "n_reactions": 245,
+      "unconditional_reaction_rate": 0.21585903083700442
+    }
+  },
+  "coverage_detail": [
+    {
+      "pair": "BTCUSDT",
+      "year": 2023,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2023,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2023,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 13
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2023,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2023,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2023,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 300
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2023,
+      "family": "round",
+      "n_levels": 30,
+      "n_levels_touched": 29
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2024,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2024,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2024,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 12
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2024,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2024,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2024,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 310
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2024,
+      "family": "round",
+      "n_levels": 72,
+      "n_levels_touched": 71
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2025,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 5
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2025,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 6
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2025,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 3
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2025,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 5
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2025,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 4
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2025,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 92
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2025,
+      "family": "round",
+      "n_levels": 7,
+      "n_levels_touched": 5
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2026,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 4
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2026,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 5
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2026,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 2
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2026,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 4
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2026,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 3
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2026,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 65
+    },
+    {
+      "pair": "BTCUSDT",
+      "year": 2026,
+      "family": "round",
+      "n_levels": 40,
+      "n_levels_touched": 40
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2023,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2023,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 14
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2023,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2023,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2023,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2023,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 206
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2023,
+      "family": "round",
+      "n_levels": 15,
+      "n_levels_touched": 13
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2024,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2024,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 11
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2024,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 6
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2024,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2024,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2024,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 152
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2024,
+      "family": "round",
+      "n_levels": 22,
+      "n_levels_touched": 21
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2025,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2025,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 13
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2025,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2025,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2025,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 9
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2025,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 198
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2025,
+      "family": "round",
+      "n_levels": 38,
+      "n_levels_touched": 37
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2026,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 6
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2026,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2026,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 5
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2026,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 5
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2026,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 5
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2026,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 111
+    },
+    {
+      "pair": "ETHUSDT",
+      "year": 2026,
+      "family": "round",
+      "n_levels": 21,
+      "n_levels_touched": 20
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2023,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2023,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2023,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2023,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2023,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 17
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2023,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 302
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2023,
+      "family": "round",
+      "n_levels": 119,
+      "n_levels_touched": 118
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2024,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 17
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2024,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 18
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2024,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 14
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2024,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 17
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2024,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 17
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2024,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 338
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2024,
+      "family": "round",
+      "n_levels": 21,
+      "n_levels_touched": 19
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2025,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2025,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 13
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2025,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2025,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2025,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2025,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 199
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2025,
+      "family": "round",
+      "n_levels": 22,
+      "n_levels_touched": 20
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2026,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 7
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2026,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 9
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2026,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 5
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2026,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 6
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2026,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 6
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2026,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 120
+    },
+    {
+      "pair": "SOLUSDT",
+      "year": 2026,
+      "family": "round",
+      "n_levels": 90,
+      "n_levels_touched": 90
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2023,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2023,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2023,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 14
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2023,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2023,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2023,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 312
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2023,
+      "family": "round",
+      "n_levels": 47,
+      "n_levels_touched": 47
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2024,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 17
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2024,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 22
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2024,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 14
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2024,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2024,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 19
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2024,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 350
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2024,
+      "family": "round",
+      "n_levels": 107,
+      "n_levels_touched": 107
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2025,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2025,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 14
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2025,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2025,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2025,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2025,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 198
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2025,
+      "family": "round",
+      "n_levels": 92,
+      "n_levels_touched": 92
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2026,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2026,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 11
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2026,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 6
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2026,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 8
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2026,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 7
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2026,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 155
+    },
+    {
+      "pair": "ADAUSDT",
+      "year": 2026,
+      "family": "round",
+      "n_levels": 31,
+      "n_levels_touched": 30
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2023,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2023,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2023,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2023,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2023,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 16
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2023,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 314
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2023,
+      "family": "round",
+      "n_levels": 65,
+      "n_levels_touched": 65
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2024,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 18
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2024,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 20
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2024,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 18
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2024,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 19
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2024,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 18
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2024,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 371
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2024,
+      "family": "round",
+      "n_levels": 254,
+      "n_levels_touched": 254
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2025,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 11
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2025,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 15
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2025,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 9
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2025,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2025,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 10
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2025,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 218
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2025,
+      "family": "round",
+      "n_levels": 26,
+      "n_levels_touched": 25
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2026,
+      "family": "rmp_10",
+      "n_levels": 24,
+      "n_levels_touched": 7
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2026,
+      "family": "placebo_7.5",
+      "n_levels": 28,
+      "n_levels_touched": 9
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2026,
+      "family": "placebo_12.5",
+      "n_levels": 22,
+      "n_levels_touched": 5
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2026,
+      "family": "shift_-3",
+      "n_levels": 24,
+      "n_levels_touched": 7
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2026,
+      "family": "shift_+3",
+      "n_levels": 24,
+      "n_levels_touched": 6
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2026,
+      "family": "random",
+      "n_levels": 480,
+      "n_levels_touched": 127
+    },
+    {
+      "pair": "XRPUSDT",
+      "year": 2026,
+      "family": "round",
+      "n_levels": 16,
+      "n_levels_touched": 14
+    }
+  ],
+  "summary_by_family": {
+    "placebo_12.5": {
+      "n_episodes": 188,
+      "mean_reaction_atr": 2.0078810731690355,
+      "median_reaction_atr": 1.5594291428695377,
+      "mean_penetration_atr": 2.403838842685171,
+      "hit_rate": 0.2127659574468085,
+      "held_rate": 0.21808510638297873,
+      "moved_rate": 0.6648936170212766,
+      "close_beyond_rate": 0.6595744680851063,
+      "break_rate": 0.5106382978723404,
+      "reclaim_rate": 0.5212765957446809,
+      "n_reclaim": 94,
+      "retest_rate": 0.8297872340425532,
+      "n_retest": 94
+    },
+    "placebo_7.5": {
+      "n_episodes": 266,
+      "mean_reaction_atr": 1.7731606234283135,
+      "median_reaction_atr": 1.4870475056478156,
+      "mean_penetration_atr": 2.4122367051482674,
+      "hit_rate": 0.24436090225563908,
+      "held_rate": 0.24812030075187969,
+      "moved_rate": 0.6729323308270677,
+      "close_beyond_rate": 0.6541353383458647,
+      "break_rate": 0.5300751879699248,
+      "reclaim_rate": 0.47101449275362317,
+      "n_reclaim": 138,
+      "retest_rate": 0.782608695652174,
+      "n_retest": 138
+    },
+    "random": {
+      "n_episodes": 4438,
+      "mean_reaction_atr": 1.8651889220927929,
+      "median_reaction_atr": 1.619867198550493,
+      "mean_penetration_atr": 2.4271461465717588,
+      "hit_rate": 0.23862100045065346,
+      "held_rate": 0.24402884182063994,
+      "moved_rate": 0.6735015772870663,
+      "close_beyond_rate": 0.6538981523208652,
+      "break_rate": 0.5238846327174402,
+      "reclaim_rate": 0.5006558810668998,
+      "n_reclaim": 2287,
+      "retest_rate": 0.7997376475732401,
+      "n_retest": 2287
+    },
+    "rmp_10": {
+      "n_episodes": 225,
+      "mean_reaction_atr": 1.8435217463101845,
+      "median_reaction_atr": 1.574440644932554,
+      "mean_penetration_atr": 2.4359707411950713,
+      "hit_rate": 0.24,
+      "held_rate": 0.24,
+      "moved_rate": 0.6711111111111111,
+      "close_beyond_rate": 0.6533333333333333,
+      "break_rate": 0.5244444444444445,
+      "reclaim_rate": 0.5258620689655172,
+      "n_reclaim": 116,
+      "retest_rate": 0.8017241379310345,
+      "n_retest": 116
+    },
+    "round": {
+      "n_episodes": 1117,
+      "mean_reaction_atr": 1.8943567491849116,
+      "median_reaction_atr": 1.588379371836071,
+      "mean_penetration_atr": 2.552995736772239,
+      "hit_rate": 0.21933751119068934,
+      "held_rate": 0.22023276633840644,
+      "moved_rate": 0.657117278424351,
+      "close_beyond_rate": 0.6544315129811996,
+      "break_rate": 0.5371530886302597,
+      "reclaim_rate": 0.5151515151515151,
+      "n_reclaim": 594,
+      "retest_rate": 0.835016835016835,
+      "n_retest": 594
+    },
+    "shift_+3": {
+      "n_episodes": 218,
+      "mean_reaction_atr": 2.016509933962563,
+      "median_reaction_atr": 1.7837988321642169,
+      "mean_penetration_atr": 2.351912971717326,
+      "hit_rate": 0.2706422018348624,
+      "held_rate": 0.27522935779816515,
+      "moved_rate": 0.7155963302752294,
+      "close_beyond_rate": 0.6055045871559633,
+      "break_rate": 0.4954128440366973,
+      "reclaim_rate": 0.4672897196261682,
+      "n_reclaim": 107,
+      "retest_rate": 0.7663551401869159,
+      "n_retest": 107
+    },
+    "shift_-3": {
+      "n_episodes": 223,
+      "mean_reaction_atr": 1.9572394200467294,
+      "median_reaction_atr": 1.6744430631616507,
+      "mean_penetration_atr": 2.4735971551440348,
+      "hit_rate": 0.22869955156950672,
+      "held_rate": 0.22869955156950672,
+      "moved_rate": 0.6905829596412556,
+      "close_beyond_rate": 0.6681614349775785,
+      "break_rate": 0.515695067264574,
+      "reclaim_rate": 0.49122807017543857,
+      "n_reclaim": 114,
+      "retest_rate": 0.8070175438596491,
+      "n_retest": 114
+    }
+  },
+  "summary_by_family_year": {
+    "placebo_12.5|2023": {
+      "n_episodes": 65,
+      "mean_reaction_atr": 2.109793043901566,
+      "median_reaction_atr": 1.6070171903894372,
+      "mean_penetration_atr": 3.073864412062328,
+      "hit_rate": 0.23076923076923078,
+      "held_rate": 0.23076923076923078,
+      "moved_rate": 0.5846153846153846,
+      "close_beyond_rate": 0.676923076923077,
+      "break_rate": 0.5846153846153846,
+      "reclaim_rate": 0.4473684210526316,
+      "n_reclaim": 38,
+      "retest_rate": 0.7894736842105263,
+      "n_retest": 38
+    },
+    "placebo_12.5|2024": {
+      "n_episodes": 64,
+      "mean_reaction_atr": 1.7744251292840625,
+      "median_reaction_atr": 1.5462825935963607,
+      "mean_penetration_atr": 2.299532491836519,
+      "hit_rate": 0.171875,
+      "held_rate": 0.171875,
+      "moved_rate": 0.75,
+      "close_beyond_rate": 0.6875,
+      "break_rate": 0.53125,
+      "reclaim_rate": 0.47058823529411764,
+      "n_reclaim": 34,
+      "retest_rate": 0.8235294117647058,
+      "n_retest": 34
+    },
+    "placebo_12.5|2025": {
+      "n_episodes": 36,
+      "mean_reaction_atr": 2.7784297679969225,
+      "median_reaction_atr": 2.0603869538306494,
+      "mean_penetration_atr": 1.3750578114404874,
+      "hit_rate": 0.3333333333333333,
+      "held_rate": 0.3611111111111111,
+      "moved_rate": 0.7222222222222222,
+      "close_beyond_rate": 0.4444444444444444,
+      "break_rate": 0.2777777777777778,
+      "reclaim_rate": 1.0,
+      "n_reclaim": 10,
+      "retest_rate": 1.0,
+      "n_retest": 10
+    },
+    "placebo_12.5|2026": {
+      "n_episodes": 23,
+      "mean_reaction_atr": 1.1634093034829398,
+      "median_reaction_atr": 1.2384018699278858,
+      "mean_penetration_atr": 2.4107980413637424,
+      "hit_rate": 0.08695652173913043,
+      "held_rate": 0.08695652173913043,
+      "moved_rate": 0.5652173913043478,
+      "close_beyond_rate": 0.8695652173913043,
+      "break_rate": 0.6086956521739131,
+      "reclaim_rate": 0.5,
+      "n_reclaim": 12,
+      "retest_rate": 0.8333333333333334,
+      "n_retest": 12
+    },
+    "placebo_7.5|2023": {
+      "n_episodes": 76,
+      "mean_reaction_atr": 1.0847525328369045,
+      "median_reaction_atr": 1.1377726450151675,
+      "mean_penetration_atr": 3.573398425315633,
+      "hit_rate": 0.19736842105263158,
+      "held_rate": 0.19736842105263158,
+      "moved_rate": 0.5263157894736842,
+      "close_beyond_rate": 0.7631578947368421,
+      "break_rate": 0.618421052631579,
+      "reclaim_rate": 0.2765957446808511,
+      "n_reclaim": 47,
+      "retest_rate": 0.6595744680851063,
+      "n_retest": 47
+    },
+    "placebo_7.5|2024": {
+      "n_episodes": 87,
+      "mean_reaction_atr": 2.0321116027688393,
+      "median_reaction_atr": 1.8992833249969063,
+      "mean_penetration_atr": 2.195964109999958,
+      "hit_rate": 0.25287356321839083,
+      "held_rate": 0.25287356321839083,
+      "moved_rate": 0.7701149425287356,
+      "close_beyond_rate": 0.6666666666666666,
+      "break_rate": 0.5057471264367817,
+      "reclaim_rate": 0.4318181818181818,
+      "n_reclaim": 44,
+      "retest_rate": 0.75,
+      "n_retest": 44
+    },
+    "placebo_7.5|2025": {
+      "n_episodes": 61,
+      "mean_reaction_atr": 2.6148628084145273,
+      "median_reaction_atr": 2.11094309537981,
+      "mean_penetration_atr": 1.4094879654481587,
+      "hit_rate": 0.3114754098360656,
+      "held_rate": 0.32786885245901637,
+      "moved_rate": 0.7377049180327869,
+      "close_beyond_rate": 0.4426229508196721,
+      "break_rate": 0.3442622950819672,
+      "reclaim_rate": 0.8571428571428571,
+      "n_reclaim": 21,
+      "retest_rate": 1.0,
+      "n_retest": 21
+    },
+    "placebo_7.5|2026": {
+      "n_episodes": 42,
+      "mean_reaction_atr": 1.2599807757655082,
+      "median_reaction_atr": 1.2119774402938968,
+      "mean_penetration_atr": 2.2154533281694526,
+      "hit_rate": 0.21428571428571427,
+      "held_rate": 0.21428571428571427,
+      "moved_rate": 0.6428571428571429,
+      "close_beyond_rate": 0.7380952380952381,
+      "break_rate": 0.6904761904761905,
+      "reclaim_rate": 0.5769230769230769,
+      "n_reclaim": 26,
+      "retest_rate": 0.8846153846153846,
+      "n_retest": 26
+    },
+    "random|2023": {
+      "n_episodes": 1434,
+      "mean_reaction_atr": 1.5018624470082877,
+      "median_reaction_atr": 1.3923448943365382,
+      "mean_penetration_atr": 3.6133899403832404,
+      "hit_rate": 0.20571827057182707,
+      "held_rate": 0.20920502092050208,
+      "moved_rate": 0.5822873082287309,
+      "close_beyond_rate": 0.7412831241283124,
+      "break_rate": 0.6345885634588564,
+      "reclaim_rate": 0.3967032967032967,
+      "n_reclaim": 910,
+      "retest_rate": 0.7252747252747253,
+      "n_retest": 910
+    },
+    "random|2024": {
+      "n_episodes": 1521,
+      "mean_reaction_atr": 1.9370893227816401,
+      "median_reaction_atr": 1.822394028880802,
+      "mean_penetration_atr": 2.039281632127822,
+      "hit_rate": 0.2504930966469428,
+      "held_rate": 0.2504930966469428,
+      "moved_rate": 0.7416173570019724,
+      "close_beyond_rate": 0.646285338593031,
+      "break_rate": 0.5088757396449705,
+      "reclaim_rate": 0.4819121447028424,
+      "n_reclaim": 774,
+      "retest_rate": 0.7906976744186046,
+      "n_retest": 774
+    },
+    "random|2025": {
+      "n_episodes": 905,
+      "mean_reaction_atr": 2.718779491278331,
+      "median_reaction_atr": 2.0602847948522687,
+      "mean_penetration_atr": 1.378078242872969,
+      "hit_rate": 0.32044198895027626,
+      "held_rate": 0.3414364640883978,
+      "moved_rate": 0.7337016574585635,
+      "close_beyond_rate": 0.4430939226519337,
+      "break_rate": 0.3116022099447514,
+      "reclaim_rate": 0.8546099290780141,
+      "n_reclaim": 282,
+      "retest_rate": 1.0,
+      "n_retest": 282
+    },
+    "random|2026": {
+      "n_episodes": 578,
+      "mean_reaction_atr": 1.2408812935643,
+      "median_reaction_atr": 1.2480194973987704,
+      "mean_penetration_atr": 2.14734472614091,
+      "hit_rate": 0.16089965397923875,
+      "held_rate": 0.16089965397923875,
+      "moved_rate": 0.6262975778546713,
+      "close_beyond_rate": 0.78719723183391,
+      "break_rate": 0.6211072664359861,
+      "reclaim_rate": 0.5295950155763239,
+      "n_reclaim": 321,
+      "retest_rate": 0.8566978193146417,
+      "n_retest": 321
+    },
+    "rmp_10|2023": {
+      "n_episodes": 72,
+      "mean_reaction_atr": 1.5996321106699884,
+      "median_reaction_atr": 1.2766115067972164,
+      "mean_penetration_atr": 3.669453613577527,
+      "hit_rate": 0.19444444444444445,
+      "held_rate": 0.19444444444444445,
+      "moved_rate": 0.6111111111111112,
+      "close_beyond_rate": 0.75,
+      "break_rate": 0.6388888888888888,
+      "reclaim_rate": 0.391304347826087,
+      "n_reclaim": 46,
+      "retest_rate": 0.7391304347826086,
+      "n_retest": 46
+    },
+    "rmp_10|2024": {
+      "n_episodes": 75,
+      "mean_reaction_atr": 1.8293496925137447,
+      "median_reaction_atr": 1.7808934850326463,
+      "mean_penetration_atr": 2.0855765838767666,
+      "hit_rate": 0.2,
+      "held_rate": 0.2,
+      "moved_rate": 0.7066666666666667,
+      "close_beyond_rate": 0.6933333333333334,
+      "break_rate": 0.5066666666666667,
+      "reclaim_rate": 0.5,
+      "n_reclaim": 38,
+      "retest_rate": 0.7894736842105263,
+      "n_retest": 38
+    },
+    "rmp_10|2025": {
+      "n_episodes": 46,
+      "mean_reaction_atr": 2.6459182870872766,
+      "median_reaction_atr": 2.2435428563660675,
+      "mean_penetration_atr": 1.3230544294827637,
+      "hit_rate": 0.3695652173913043,
+      "held_rate": 0.3695652173913043,
+      "moved_rate": 0.782608695652174,
+      "close_beyond_rate": 0.391304347826087,
+      "break_rate": 0.30434782608695654,
+      "reclaim_rate": 0.9285714285714286,
+      "n_reclaim": 14,
+      "retest_rate": 1.0,
+      "n_retest": 14
+    },
+    "rmp_10|2026": {
+      "n_episodes": 32,
+      "mean_reaction_atr": 1.2720441502189603,
+      "median_reaction_atr": 1.1644079102690592,
+      "mean_penetration_atr": 2.081687782635767,
+      "hit_rate": 0.25,
+      "held_rate": 0.25,
+      "moved_rate": 0.5625,
+      "close_beyond_rate": 0.71875,
+      "break_rate": 0.625,
+      "reclaim_rate": 0.6111111111111112,
+      "n_reclaim": 18,
+      "retest_rate": 0.8333333333333334,
+      "n_retest": 18
+    },
+    "round|2023": {
+      "n_episodes": 272,
+      "mean_reaction_atr": 2.126611828078423,
+      "median_reaction_atr": 1.7206949266546079,
+      "mean_penetration_atr": 3.3164598172326016,
+      "hit_rate": 0.1875,
+      "held_rate": 0.1875,
+      "moved_rate": 0.6764705882352942,
+      "close_beyond_rate": 0.6875,
+      "break_rate": 0.5735294117647058,
+      "reclaim_rate": 0.5512820512820513,
+      "n_reclaim": 156,
+      "retest_rate": 0.8269230769230769,
+      "n_retest": 156
+    },
+    "round|2024": {
+      "n_episodes": 472,
+      "mean_reaction_atr": 1.7611461844143996,
+      "median_reaction_atr": 1.6780279635060724,
+      "mean_penetration_atr": 2.7007136517160535,
+      "hit_rate": 0.21398305084745764,
+      "held_rate": 0.21398305084745764,
+      "moved_rate": 0.6694915254237288,
+      "close_beyond_rate": 0.6864406779661016,
+      "break_rate": 0.5635593220338984,
+      "reclaim_rate": 0.4398496240601504,
+      "n_reclaim": 266,
+      "retest_rate": 0.8195488721804511,
+      "n_retest": 266
+    },
+    "round|2025": {
+      "n_episodes": 179,
+      "mean_reaction_atr": 2.6782229957915784,
+      "median_reaction_atr": 2.1956162853655514,
+      "mean_penetration_atr": 1.5208257820360302,
+      "hit_rate": 0.2905027932960894,
+      "held_rate": 0.29608938547486036,
+      "moved_rate": 0.6983240223463687,
+      "close_beyond_rate": 0.4301675977653631,
+      "break_rate": 0.3240223463687151,
+      "reclaim_rate": 0.8448275862068966,
+      "n_reclaim": 58,
+      "retest_rate": 0.9827586206896551,
+      "n_retest": 58
+    },
+    "round|2026": {
+      "n_episodes": 194,
+      "mean_reaction_atr": 1.1695626614016783,
+      "median_reaction_atr": 1.1793386946259776,
+      "mean_penetration_atr": 2.075538706664413,
+      "hit_rate": 0.211340206185567,
+      "held_rate": 0.211340206185567,
+      "moved_rate": 0.5618556701030928,
+      "close_beyond_rate": 0.7371134020618557,
+      "break_rate": 0.6185567010309279,
+      "reclaim_rate": 0.47368421052631576,
+      "n_reclaim": 114,
+      "retest_rate": 0.8070175438596491,
+      "n_retest": 114
+    },
+    "shift_+3|2023": {
+      "n_episodes": 74,
+      "mean_reaction_atr": 1.751479946653591,
+      "median_reaction_atr": 1.5194145385852162,
+      "mean_penetration_atr": 3.294403444970966,
+      "hit_rate": 0.24324324324324326,
+      "held_rate": 0.24324324324324326,
+      "moved_rate": 0.6621621621621622,
+      "close_beyond_rate": 0.6351351351351351,
+      "break_rate": 0.581081081081081,
+      "reclaim_rate": 0.4418604651162791,
+      "n_reclaim": 43,
+      "retest_rate": 0.7209302325581395,
+      "n_retest": 43
+    },
+    "shift_+3|2024": {
+      "n_episodes": 78,
+      "mean_reaction_atr": 1.9851837956705758,
+      "median_reaction_atr": 1.9026878689669406,
+      "mean_penetration_atr": 2.0806792842155173,
+      "hit_rate": 0.2564102564102564,
+      "held_rate": 0.2564102564102564,
+      "moved_rate": 0.782051282051282,
+      "close_beyond_rate": 0.6538461538461539,
+      "break_rate": 0.47435897435897434,
+      "reclaim_rate": 0.43243243243243246,
+      "n_reclaim": 37,
+      "retest_rate": 0.7297297297297297,
+      "n_retest": 37
+    },
+    "shift_+3|2025": {
+      "n_episodes": 39,
+      "mean_reaction_atr": 2.8971222344239957,
+      "median_reaction_atr": 2.091887751432881,
+      "mean_penetration_atr": 1.3471253659981142,
+      "hit_rate": 0.41025641025641024,
+      "held_rate": 0.4358974358974359,
+      "moved_rate": 0.6666666666666666,
+      "close_beyond_rate": 0.41025641025641024,
+      "break_rate": 0.358974358974359,
+      "reclaim_rate": 0.8571428571428571,
+      "n_reclaim": 14,
+      "retest_rate": 1.0,
+      "n_retest": 14
+    },
+    "shift_+3|2026": {
+      "n_episodes": 27,
+      "mean_reaction_atr": 1.5613906054308262,
+      "median_reaction_atr": 1.4934828452706332,
+      "mean_penetration_atr": 2.0037147949551417,
+      "hit_rate": 0.18518518518518517,
+      "held_rate": 0.18518518518518517,
+      "moved_rate": 0.7407407407407407,
+      "close_beyond_rate": 0.6666666666666666,
+      "break_rate": 0.5185185185185185,
+      "reclaim_rate": 0.23076923076923078,
+      "n_reclaim": 13,
+      "retest_rate": 0.7692307692307693,
+      "n_retest": 13
+    },
+    "shift_-3|2023": {
+      "n_episodes": 72,
+      "mean_reaction_atr": 1.6856709016969402,
+      "median_reaction_atr": 1.448855134594431,
+      "mean_penetration_atr": 3.7342427101507485,
+      "hit_rate": 0.16666666666666666,
+      "held_rate": 0.16666666666666666,
+      "moved_rate": 0.5972222222222222,
+      "close_beyond_rate": 0.7638888888888888,
+      "break_rate": 0.625,
+      "reclaim_rate": 0.35555555555555557,
+      "n_reclaim": 45,
+      "retest_rate": 0.7777777777777778,
+      "n_retest": 45
+    },
+    "shift_-3|2024": {
+      "n_episodes": 76,
+      "mean_reaction_atr": 1.8927577840646546,
+      "median_reaction_atr": 1.82462620101861,
+      "mean_penetration_atr": 2.0785685937876117,
+      "hit_rate": 0.21052631578947367,
+      "held_rate": 0.21052631578947367,
+      "moved_rate": 0.7631578947368421,
+      "close_beyond_rate": 0.6842105263157895,
+      "break_rate": 0.5263157894736842,
+      "reclaim_rate": 0.45,
+      "n_reclaim": 40,
+      "retest_rate": 0.775,
+      "n_retest": 40
+    },
+    "shift_-3|2025": {
+      "n_episodes": 45,
+      "mean_reaction_atr": 2.8047161909054847,
+      "median_reaction_atr": 2.189930412253028,
+      "mean_penetration_atr": 1.4425107646380928,
+      "hit_rate": 0.3333333333333333,
+      "held_rate": 0.3333333333333333,
+      "moved_rate": 0.8,
+      "close_beyond_rate": 0.4666666666666667,
+      "break_rate": 0.26666666666666666,
+      "reclaim_rate": 0.9166666666666666,
+      "n_reclaim": 12,
+      "retest_rate": 1.0,
+      "n_retest": 12
+    },
+    "shift_-3|2026": {
+      "n_episodes": 30,
+      "mean_reaction_atr": 1.5011421856193452,
+      "median_reaction_atr": 1.2316953872369443,
+      "mean_penetration_atr": 1.9954164309897764,
+      "hit_rate": 0.26666666666666666,
+      "held_rate": 0.26666666666666666,
+      "moved_rate": 0.5666666666666667,
+      "close_beyond_rate": 0.7,
+      "break_rate": 0.6,
+      "reclaim_rate": 0.6470588235294118,
+      "n_reclaim": 17,
+      "retest_rate": 0.8235294117647058,
+      "n_retest": 17
+    }
+  },
+  "summary_by_family_pair": {
+    "placebo_12.5|ADAUSDT": {
+      "n_episodes": 42,
+      "mean_reaction_atr": 2.1082806719068334,
+      "median_reaction_atr": 1.5891926691285487,
+      "mean_penetration_atr": 2.1778434573528775,
+      "hit_rate": 0.19047619047619047,
+      "held_rate": 0.19047619047619047,
+      "moved_rate": 0.7142857142857143,
+      "close_beyond_rate": 0.6190476190476191,
+      "break_rate": 0.47619047619047616,
+      "reclaim_rate": 0.7222222222222222,
+      "n_reclaim": 18,
+      "retest_rate": 0.8888888888888888,
+      "n_retest": 18
+    },
+    "placebo_12.5|BTCUSDT": {
+      "n_episodes": 30,
+      "mean_reaction_atr": 1.4123354751846664,
+      "median_reaction_atr": 1.4488513567382504,
+      "mean_penetration_atr": 2.0721720221303377,
+      "hit_rate": 0.2,
+      "held_rate": 0.2,
+      "moved_rate": 0.5666666666666667,
+      "close_beyond_rate": 0.7,
+      "break_rate": 0.5333333333333333,
+      "reclaim_rate": 0.4375,
+      "n_reclaim": 16,
+      "retest_rate": 0.8125,
+      "n_retest": 16
+    },
+    "placebo_12.5|ETHUSDT": {
+      "n_episodes": 27,
+      "mean_reaction_atr": 1.612992275618709,
+      "median_reaction_atr": 1.5236758317683998,
+      "mean_penetration_atr": 1.6394520881766221,
+      "hit_rate": 0.25925925925925924,
+      "held_rate": 0.25925925925925924,
+      "moved_rate": 0.7037037037037037,
+      "close_beyond_rate": 0.6666666666666666,
+      "break_rate": 0.4444444444444444,
+      "reclaim_rate": 0.5,
+      "n_reclaim": 12,
+      "retest_rate": 0.9166666666666666,
+      "n_retest": 12
+    },
+    "placebo_12.5|SOLUSDT": {
+      "n_episodes": 42,
+      "mean_reaction_atr": 1.5386761437857945,
+      "median_reaction_atr": 1.488460981098624,
+      "mean_penetration_atr": 1.9539532911337023,
+      "hit_rate": 0.19047619047619047,
+      "held_rate": 0.21428571428571427,
+      "moved_rate": 0.5952380952380952,
+      "close_beyond_rate": 0.6904761904761905,
+      "break_rate": 0.5238095238095238,
+      "reclaim_rate": 0.4090909090909091,
+      "n_reclaim": 22,
+      "retest_rate": 0.7727272727272727,
+      "n_retest": 22
+    },
+    "placebo_12.5|XRPUSDT": {
+      "n_episodes": 47,
+      "mean_reaction_atr": 2.944438293605174,
+      "median_reaction_atr": 2.0295450188747166,
+      "mean_penetration_atr": 3.658635573270148,
+      "hit_rate": 0.23404255319148937,
+      "held_rate": 0.23404255319148937,
+      "moved_rate": 0.723404255319149,
+      "close_beyond_rate": 0.6382978723404256,
+      "break_rate": 0.5531914893617021,
+      "reclaim_rate": 0.5384615384615384,
+      "n_reclaim": 26,
+      "retest_rate": 0.8076923076923077,
+      "n_retest": 26
+    },
+    "placebo_7.5|ADAUSDT": {
+      "n_episodes": 63,
+      "mean_reaction_atr": 2.036209004729913,
+      "median_reaction_atr": 1.5715867770909517,
+      "mean_penetration_atr": 2.241765436154282,
+      "hit_rate": 0.23809523809523808,
+      "held_rate": 0.23809523809523808,
+      "moved_rate": 0.6984126984126984,
+      "close_beyond_rate": 0.5873015873015873,
+      "break_rate": 0.4603174603174603,
+      "reclaim_rate": 0.5925925925925926,
+      "n_reclaim": 27,
+      "retest_rate": 0.8518518518518519,
+      "n_retest": 27
+    },
+    "placebo_7.5|BTCUSDT": {
+      "n_episodes": 42,
+      "mean_reaction_atr": 1.4966644569077199,
+      "median_reaction_atr": 1.557476572084974,
+      "mean_penetration_atr": 2.312382963569895,
+      "hit_rate": 0.30952380952380953,
+      "held_rate": 0.30952380952380953,
+      "moved_rate": 0.6190476190476191,
+      "close_beyond_rate": 0.6666666666666666,
+      "break_rate": 0.5238095238095238,
+      "reclaim_rate": 0.3181818181818182,
+      "n_reclaim": 22,
+      "retest_rate": 0.6818181818181818,
+      "n_retest": 22
+    },
+    "placebo_7.5|ETHUSDT": {
+      "n_episodes": 46,
+      "mean_reaction_atr": 1.5114765371594105,
+      "median_reaction_atr": 1.263917256300365,
+      "mean_penetration_atr": 1.6973668010058944,
+      "hit_rate": 0.21739130434782608,
+      "held_rate": 0.2391304347826087,
+      "moved_rate": 0.717391304347826,
+      "close_beyond_rate": 0.6521739130434783,
+      "break_rate": 0.5434782608695652,
+      "reclaim_rate": 0.625,
+      "n_reclaim": 24,
+      "retest_rate": 0.7916666666666666,
+      "n_retest": 24
+    },
+    "placebo_7.5|SOLUSDT": {
+      "n_episodes": 55,
+      "mean_reaction_atr": 1.569439026007793,
+      "median_reaction_atr": 1.4836953078757944,
+      "mean_penetration_atr": 2.223147800947324,
+      "hit_rate": 0.21818181818181817,
+      "held_rate": 0.21818181818181817,
+      "moved_rate": 0.6363636363636364,
+      "close_beyond_rate": 0.7272727272727273,
+      "break_rate": 0.6,
+      "reclaim_rate": 0.36363636363636365,
+      "n_reclaim": 33,
+      "retest_rate": 0.7878787878787878,
+      "n_retest": 33
+    },
+    "placebo_7.5|XRPUSDT": {
+      "n_episodes": 60,
+      "mean_reaction_atr": 2.0778764034010178,
+      "median_reaction_atr": 1.8895369514271527,
+      "mean_penetration_atr": 3.3825275787234976,
+      "hit_rate": 0.25,
+      "held_rate": 0.25,
+      "moved_rate": 0.6833333333333333,
+      "close_beyond_rate": 0.65,
+      "break_rate": 0.5333333333333333,
+      "reclaim_rate": 0.46875,
+      "n_reclaim": 32,
+      "retest_rate": 0.78125,
+      "n_retest": 32
+    },
+    "random|ADAUSDT": {
+      "n_episodes": 1015,
+      "mean_reaction_atr": 2.101861875040511,
+      "median_reaction_atr": 1.784548546862699,
+      "mean_penetration_atr": 2.2390135401265896,
+      "hit_rate": 0.24039408866995074,
+      "held_rate": 0.24039408866995074,
+      "moved_rate": 0.723152709359606,
+      "close_beyond_rate": 0.5822660098522168,
+      "break_rate": 0.46206896551724136,
+      "reclaim_rate": 0.6049661399548533,
+      "n_reclaim": 443,
+      "retest_rate": 0.9164785553047404,
+      "n_retest": 443
+    },
+    "random|BTCUSDT": {
+      "n_episodes": 767,
+      "mean_reaction_atr": 1.4523799772427048,
+      "median_reaction_atr": 1.407727610687711,
+      "mean_penetration_atr": 2.144994290696168,
+      "hit_rate": 0.29465449804432853,
+      "held_rate": 0.3011734028683181,
+      "moved_rate": 0.5958279009126467,
+      "close_beyond_rate": 0.6753585397653195,
+      "break_rate": 0.5345501955671447,
+      "reclaim_rate": 0.36829268292682926,
+      "n_reclaim": 410,
+      "retest_rate": 0.7121951219512195,
+      "n_retest": 410
+    },
+    "random|ETHUSDT": {
+      "n_episodes": 667,
+      "mean_reaction_atr": 1.5201903406948443,
+      "median_reaction_atr": 1.4920138187508765,
+      "mean_penetration_atr": 1.5348235690939092,
+      "hit_rate": 0.272863568215892,
+      "held_rate": 0.28785607196401797,
+      "moved_rate": 0.6776611694152923,
+      "close_beyond_rate": 0.664167916041979,
+      "break_rate": 0.5352323838080959,
+      "reclaim_rate": 0.5936599423631124,
+      "n_reclaim": 347,
+      "retest_rate": 0.8472622478386167,
+      "n_retest": 347
+    },
+    "random|SOLUSDT": {
+      "n_episodes": 959,
+      "mean_reaction_atr": 1.612834966278311,
+      "median_reaction_atr": 1.4301358117027152,
+      "mean_penetration_atr": 2.0705065481195795,
+      "hit_rate": 0.24191866527632952,
+      "held_rate": 0.24504692387904067,
+      "moved_rate": 0.6193952033368092,
+      "close_beyond_rate": 0.7101147028154328,
+      "break_rate": 0.556830031282586,
+      "reclaim_rate": 0.4492481203007519,
+      "n_reclaim": 532,
+      "retest_rate": 0.7838345864661654,
+      "n_retest": 532
+    },
+    "random|XRPUSDT": {
+      "n_episodes": 1030,
+      "mean_reaction_atr": 2.3977354375069706,
+      "median_reaction_atr": 1.9611171261466365,
+      "mean_penetration_atr": 3.732545761223983,
+      "hit_rate": 0.16990291262135923,
+      "held_rate": 0.17572815533980582,
+      "moved_rate": 0.7300970873786408,
+      "close_beyond_rate": 0.6495145631067961,
+      "break_rate": 0.5388349514563107,
+      "reclaim_rate": 0.5063063063063064,
+      "n_reclaim": 555,
+      "retest_rate": 0.7567567567567568,
+      "n_retest": 555
+    },
+    "rmp_10|ADAUSDT": {
+      "n_episodes": 51,
+      "mean_reaction_atr": 1.9305857812491372,
+      "median_reaction_atr": 1.7945685940994138,
+      "mean_penetration_atr": 2.3117443325176477,
+      "hit_rate": 0.2549019607843137,
+      "held_rate": 0.2549019607843137,
+      "moved_rate": 0.7058823529411765,
+      "close_beyond_rate": 0.5686274509803921,
+      "break_rate": 0.5098039215686274,
+      "reclaim_rate": 0.625,
+      "n_reclaim": 24,
+      "retest_rate": 0.875,
+      "n_retest": 24
+    },
+    "rmp_10|BTCUSDT": {
+      "n_episodes": 39,
+      "mean_reaction_atr": 1.499866792956196,
+      "median_reaction_atr": 1.5103676555930858,
+      "mean_penetration_atr": 2.214012632004274,
+      "hit_rate": 0.1794871794871795,
+      "held_rate": 0.1794871794871795,
+      "moved_rate": 0.6410256410256411,
+      "close_beyond_rate": 0.6923076923076923,
+      "break_rate": 0.48717948717948717,
+      "reclaim_rate": 0.3157894736842105,
+      "n_reclaim": 19,
+      "retest_rate": 0.7368421052631579,
+      "n_retest": 19
+    },
+    "rmp_10|ETHUSDT": {
+      "n_episodes": 34,
+      "mean_reaction_atr": 1.6393367533069139,
+      "median_reaction_atr": 1.247552179498499,
+      "mean_penetration_atr": 1.6286599503132448,
+      "hit_rate": 0.35294117647058826,
+      "held_rate": 0.35294117647058826,
+      "moved_rate": 0.7058823529411765,
+      "close_beyond_rate": 0.6176470588235294,
+      "break_rate": 0.47058823529411764,
+      "reclaim_rate": 0.6875,
+      "n_reclaim": 16,
+      "retest_rate": 0.875,
+      "n_retest": 16
+    },
+    "rmp_10|SOLUSDT": {
+      "n_episodes": 49,
+      "mean_reaction_atr": 1.6674600905307035,
+      "median_reaction_atr": 1.4230819916665074,
+      "mean_penetration_atr": 2.033322165240745,
+      "hit_rate": 0.1836734693877551,
+      "held_rate": 0.1836734693877551,
+      "moved_rate": 0.6530612244897959,
+      "close_beyond_rate": 0.7142857142857143,
+      "break_rate": 0.5714285714285714,
+      "reclaim_rate": 0.5,
+      "n_reclaim": 28,
+      "retest_rate": 0.7142857142857143,
+      "n_retest": 28
+    },
+    "rmp_10|XRPUSDT": {
+      "n_episodes": 52,
+      "mean_reaction_atr": 2.3152830596606595,
+      "median_reaction_atr": 1.767325528802921,
+      "mean_penetration_atr": 3.63155266836303,
+      "hit_rate": 0.25,
+      "held_rate": 0.25,
+      "moved_rate": 0.6538461538461539,
+      "close_beyond_rate": 0.6730769230769231,
+      "break_rate": 0.5576923076923077,
+      "reclaim_rate": 0.5172413793103449,
+      "n_reclaim": 29,
+      "retest_rate": 0.8275862068965517,
+      "n_retest": 29
+    },
+    "round|ADAUSDT": {
+      "n_episodes": 276,
+      "mean_reaction_atr": 2.333422335452125,
+      "median_reaction_atr": 1.9204923241348593,
+      "mean_penetration_atr": 1.924355702138789,
+      "hit_rate": 0.25,
+      "held_rate": 0.25,
+      "moved_rate": 0.75,
+      "close_beyond_rate": 0.5398550724637681,
+      "break_rate": 0.4311594202898551,
+      "reclaim_rate": 0.6491228070175439,
+      "n_reclaim": 114,
+      "retest_rate": 0.9473684210526315,
+      "n_retest": 114
+    },
+    "round|BTCUSDT": {
+      "n_episodes": 145,
+      "mean_reaction_atr": 1.5404465909294147,
+      "median_reaction_atr": 1.4646717969898047,
+      "mean_penetration_atr": 2.139222296682533,
+      "hit_rate": 0.2689655172413793,
+      "held_rate": 0.2689655172413793,
+      "moved_rate": 0.6068965517241379,
+      "close_beyond_rate": 0.696551724137931,
+      "break_rate": 0.5517241379310345,
+      "reclaim_rate": 0.3875,
+      "n_reclaim": 80,
+      "retest_rate": 0.7375,
+      "n_retest": 80
+    },
+    "round|ETHUSDT": {
+      "n_episodes": 91,
+      "mean_reaction_atr": 1.4749894589844332,
+      "median_reaction_atr": 1.3331244156945046,
+      "mean_penetration_atr": 1.5336767186531313,
+      "hit_rate": 0.2967032967032967,
+      "held_rate": 0.3076923076923077,
+      "moved_rate": 0.6263736263736264,
+      "close_beyond_rate": 0.6483516483516484,
+      "break_rate": 0.4945054945054945,
+      "reclaim_rate": 0.6666666666666666,
+      "n_reclaim": 45,
+      "retest_rate": 0.8,
+      "n_retest": 45
+    },
+    "round|SOLUSDT": {
+      "n_episodes": 247,
+      "mean_reaction_atr": 1.4656811300600014,
+      "median_reaction_atr": 1.377960924538083,
+      "mean_penetration_atr": 2.1688749506387306,
+      "hit_rate": 0.2145748987854251,
+      "held_rate": 0.2145748987854251,
+      "moved_rate": 0.6234817813765182,
+      "close_beyond_rate": 0.708502024291498,
+      "break_rate": 0.5668016194331984,
+      "reclaim_rate": 0.5755395683453237,
+      "n_reclaim": 139,
+      "retest_rate": 0.8561151079136691,
+      "n_retest": 139
+    },
+    "round|XRPUSDT": {
+      "n_episodes": 358,
+      "mean_reaction_atr": 2.101563934853605,
+      "median_reaction_atr": 1.6821874715516558,
+      "mean_penetration_atr": 3.7293579244695994,
+      "hit_rate": 0.15921787709497207,
+      "held_rate": 0.15921787709497207,
+      "moved_rate": 0.6368715083798883,
+      "close_beyond_rate": 0.6899441340782123,
+      "break_rate": 0.6033519553072626,
+      "reclaim_rate": 0.4212962962962963,
+      "n_reclaim": 216,
+      "retest_rate": 0.8055555555555556,
+      "n_retest": 216
+    },
+    "shift_+3|ADAUSDT": {
+      "n_episodes": 50,
+      "mean_reaction_atr": 2.0278710560887667,
+      "median_reaction_atr": 1.8226353406544638,
+      "mean_penetration_atr": 2.2320104649328227,
+      "hit_rate": 0.28,
+      "held_rate": 0.28,
+      "moved_rate": 0.74,
+      "close_beyond_rate": 0.58,
+      "break_rate": 0.48,
+      "reclaim_rate": 0.5652173913043478,
+      "n_reclaim": 23,
+      "retest_rate": 0.9130434782608695,
+      "n_retest": 23
+    },
+    "shift_+3|BTCUSDT": {
+      "n_episodes": 38,
+      "mean_reaction_atr": 1.471848638276077,
+      "median_reaction_atr": 1.431374692948801,
+      "mean_penetration_atr": 2.069928164288968,
+      "hit_rate": 0.3157894736842105,
+      "held_rate": 0.3157894736842105,
+      "moved_rate": 0.6052631578947368,
+      "close_beyond_rate": 0.6578947368421053,
+      "break_rate": 0.5,
+      "reclaim_rate": 0.3157894736842105,
+      "n_reclaim": 19,
+      "retest_rate": 0.6842105263157895,
+      "n_retest": 19
+    },
+    "shift_+3|ETHUSDT": {
+      "n_episodes": 32,
+      "mean_reaction_atr": 1.6425550598545864,
+      "median_reaction_atr": 1.585888227267133,
+      "mean_penetration_atr": 1.5269753201139074,
+      "hit_rate": 0.3125,
+      "held_rate": 0.34375,
+      "moved_rate": 0.75,
+      "close_beyond_rate": 0.5625,
+      "break_rate": 0.46875,
+      "reclaim_rate": 0.5333333333333333,
+      "n_reclaim": 15,
+      "retest_rate": 0.6666666666666666,
+      "n_retest": 15
+    },
+    "shift_+3|SOLUSDT": {
+      "n_episodes": 48,
+      "mean_reaction_atr": 1.8604818846203102,
+      "median_reaction_atr": 1.710074226846571,
+      "mean_penetration_atr": 1.8746445499954014,
+      "hit_rate": 0.2708333333333333,
+      "held_rate": 0.2708333333333333,
+      "moved_rate": 0.7083333333333334,
+      "close_beyond_rate": 0.6458333333333334,
+      "break_rate": 0.4791666666666667,
+      "reclaim_rate": 0.4782608695652174,
+      "n_reclaim": 23,
+      "retest_rate": 0.782608695652174,
+      "n_retest": 23
+    },
+    "shift_+3|XRPUSDT": {
+      "n_episodes": 50,
+      "mean_reaction_atr": 2.8082094433557567,
+      "median_reaction_atr": 2.2296644169406106,
+      "mean_penetration_atr": 3.6722617140266163,
+      "hit_rate": 0.2,
+      "held_rate": 0.2,
+      "moved_rate": 0.76,
+      "close_beyond_rate": 0.58,
+      "break_rate": 0.54,
+      "reclaim_rate": 0.4444444444444444,
+      "n_reclaim": 27,
+      "retest_rate": 0.7407407407407407,
+      "n_retest": 27
+    },
+    "shift_-3|ADAUSDT": {
+      "n_episodes": 50,
+      "mean_reaction_atr": 2.3140408202930063,
+      "median_reaction_atr": 1.8994263784608203,
+      "mean_penetration_atr": 2.204060123636755,
+      "hit_rate": 0.26,
+      "held_rate": 0.26,
+      "moved_rate": 0.76,
+      "close_beyond_rate": 0.56,
+      "break_rate": 0.44,
+      "reclaim_rate": 0.5714285714285714,
+      "n_reclaim": 21,
+      "retest_rate": 0.9047619047619048,
+      "n_retest": 21
+    },
+    "shift_-3|BTCUSDT": {
+      "n_episodes": 40,
+      "mean_reaction_atr": 1.4317410188289141,
+      "median_reaction_atr": 1.5200064029459388,
+      "mean_penetration_atr": 2.1825439118117758,
+      "hit_rate": 0.25,
+      "held_rate": 0.25,
+      "moved_rate": 0.625,
+      "close_beyond_rate": 0.725,
+      "break_rate": 0.5,
+      "reclaim_rate": 0.3,
+      "n_reclaim": 20,
+      "retest_rate": 0.75,
+      "n_retest": 20
+    },
+    "shift_-3|ETHUSDT": {
+      "n_episodes": 33,
+      "mean_reaction_atr": 1.5792961644829724,
+      "median_reaction_atr": 1.398983452646501,
+      "mean_penetration_atr": 1.5757284319531109,
+      "hit_rate": 0.3333333333333333,
+      "held_rate": 0.3333333333333333,
+      "moved_rate": 0.696969696969697,
+      "close_beyond_rate": 0.6363636363636364,
+      "break_rate": 0.48484848484848486,
+      "reclaim_rate": 0.625,
+      "n_reclaim": 16,
+      "retest_rate": 0.9375,
+      "n_retest": 16
+    },
+    "shift_-3|SOLUSDT": {
+      "n_episodes": 48,
+      "mean_reaction_atr": 1.5864337688078294,
+      "median_reaction_atr": 1.395501298192264,
+      "mean_penetration_atr": 2.1822607741124878,
+      "hit_rate": 0.14583333333333334,
+      "held_rate": 0.14583333333333334,
+      "moved_rate": 0.625,
+      "close_beyond_rate": 0.7708333333333334,
+      "break_rate": 0.625,
+      "reclaim_rate": 0.4666666666666667,
+      "n_reclaim": 30,
+      "retest_rate": 0.7666666666666667,
+      "n_retest": 30
+    },
+    "shift_-3|XRPUSDT": {
+      "n_episodes": 52,
+      "mean_reaction_atr": 2.600521434074997,
+      "median_reaction_atr": 2.0461041957687107,
+      "mean_penetration_atr": 3.795381683287672,
+      "hit_rate": 0.19230769230769232,
+      "held_rate": 0.19230769230769232,
+      "moved_rate": 0.7307692307692307,
+      "close_beyond_rate": 0.6538461538461539,
+      "break_rate": 0.5192307692307693,
+      "reclaim_rate": 0.5185185185185185,
+      "n_reclaim": 27,
+      "retest_rate": 0.7407407407407407,
+      "n_retest": 27
+    }
+  },
+  "summary_by_family_direction": {
+    "placebo_12.5|False": {
+      "n_episodes": 145,
+      "mean_reaction_atr": 1.8596699173955287,
+      "median_reaction_atr": 1.5497114392119227,
+      "mean_penetration_atr": 2.627185794781319,
+      "hit_rate": 0.18620689655172415,
+      "held_rate": 0.18620689655172415,
+      "moved_rate": 0.6344827586206897,
+      "close_beyond_rate": 0.7310344827586207,
+      "break_rate": 0.5724137931034483,
+      "reclaim_rate": 0.5301204819277109,
+      "n_reclaim": 83,
+      "retest_rate": 0.8313253012048193,
+      "n_retest": 83
+    },
+    "placebo_12.5|True": {
+      "n_episodes": 43,
+      "mean_reaction_atr": 2.507662877521557,
+      "median_reaction_atr": 1.6364479026209557,
+      "mean_penetration_atr": 1.6506921437563022,
+      "hit_rate": 0.3023255813953488,
+      "held_rate": 0.32558139534883723,
+      "moved_rate": 0.7674418604651163,
+      "close_beyond_rate": 0.4186046511627907,
+      "break_rate": 0.3023255813953488,
+      "reclaim_rate": 0.45454545454545453,
+      "n_reclaim": 11,
+      "retest_rate": 0.8181818181818182,
+      "n_retest": 11
+    },
+    "placebo_7.5|False": {
+      "n_episodes": 189,
+      "mean_reaction_atr": 1.4981697902922053,
+      "median_reaction_atr": 1.3950207624798452,
+      "mean_penetration_atr": 2.746431861734134,
+      "hit_rate": 0.21164021164021163,
+      "held_rate": 0.21164021164021163,
+      "moved_rate": 0.6243386243386243,
+      "close_beyond_rate": 0.746031746031746,
+      "break_rate": 0.5978835978835979,
+      "reclaim_rate": 0.46017699115044247,
+      "n_reclaim": 113,
+      "retest_rate": 0.7610619469026548,
+      "n_retest": 113
+    },
+    "placebo_7.5|True": {
+      "n_episodes": 77,
+      "mean_reaction_atr": 2.4481381229442145,
+      "median_reaction_atr": 1.7523676826417345,
+      "mean_penetration_atr": 1.591939502619323,
+      "hit_rate": 0.3246753246753247,
+      "held_rate": 0.33766233766233766,
+      "moved_rate": 0.7922077922077922,
+      "close_beyond_rate": 0.42857142857142855,
+      "break_rate": 0.36363636363636365,
+      "reclaim_rate": 0.52,
+      "n_reclaim": 25,
+      "retest_rate": 0.88,
+      "n_retest": 25
+    },
+    "random|False": {
+      "n_episodes": 3338,
+      "mean_reaction_atr": 1.660673538116144,
+      "median_reaction_atr": 1.5687821556552577,
+      "mean_penetration_atr": 2.722745084511678,
+      "hit_rate": 0.22828040742959857,
+      "held_rate": 0.231575793888556,
+      "moved_rate": 0.6408028759736369,
+      "close_beyond_rate": 0.7237866986219293,
+      "break_rate": 0.5898741761533852,
+      "reclaim_rate": 0.5012696800406298,
+      "n_reclaim": 1969,
+      "retest_rate": 0.7907567293042154,
+      "n_retest": 1969
+    },
+    "random|True": {
+      "n_episodes": 1100,
+      "mean_reaction_atr": 2.485800150923751,
+      "median_reaction_atr": 1.7927630446436025,
+      "mean_penetration_atr": 1.5301377330777155,
+      "hit_rate": 0.27,
+      "held_rate": 0.2818181818181818,
+      "moved_rate": 0.7727272727272727,
+      "close_beyond_rate": 0.44181818181818183,
+      "break_rate": 0.3236363636363636,
+      "reclaim_rate": 0.4968553459119497,
+      "n_reclaim": 318,
+      "retest_rate": 0.8553459119496856,
+      "n_retest": 318
+    },
+    "rmp_10|False": {
+      "n_episodes": 169,
+      "mean_reaction_atr": 1.6343411926646683,
+      "median_reaction_atr": 1.4459576218112753,
+      "mean_penetration_atr": 2.746888564315453,
+      "hit_rate": 0.1893491124260355,
+      "held_rate": 0.1893491124260355,
+      "moved_rate": 0.6390532544378699,
+      "close_beyond_rate": 0.7337278106508875,
+      "break_rate": 0.5857988165680473,
+      "reclaim_rate": 0.5151515151515151,
+      "n_reclaim": 99,
+      "retest_rate": 0.797979797979798,
+      "n_retest": 99
+    },
+    "rmp_10|True": {
+      "n_episodes": 56,
+      "mean_reaction_atr": 2.474798774276116,
+      "median_reaction_atr": 1.7863009992011154,
+      "mean_penetration_atr": 1.4976651678496347,
+      "hit_rate": 0.39285714285714285,
+      "held_rate": 0.39285714285714285,
+      "moved_rate": 0.7678571428571429,
+      "close_beyond_rate": 0.4107142857142857,
+      "break_rate": 0.3392857142857143,
+      "reclaim_rate": 0.5882352941176471,
+      "n_reclaim": 17,
+      "retest_rate": 0.8235294117647058,
+      "n_retest": 17
+    },
+    "round|False": {
+      "n_episodes": 811,
+      "mean_reaction_atr": 1.7547253383870507,
+      "median_reaction_atr": 1.5163149395074482,
+      "mean_penetration_atr": 2.8649615900209575,
+      "hit_rate": 0.20221948212083848,
+      "held_rate": 0.20221948212083848,
+      "moved_rate": 0.6288532675709001,
+      "close_beyond_rate": 0.7250308261405672,
+      "break_rate": 0.6029593094944513,
+      "reclaim_rate": 0.5296523517382413,
+      "n_reclaim": 489,
+      "retest_rate": 0.8445807770961146,
+      "n_retest": 489
+    },
+    "round|True": {
+      "n_episodes": 306,
+      "mean_reaction_atr": 2.264425618979241,
+      "median_reaction_atr": 1.720664165130972,
+      "mean_penetration_atr": 1.72618427603789,
+      "hit_rate": 0.2647058823529412,
+      "held_rate": 0.2679738562091503,
+      "moved_rate": 0.7320261437908496,
+      "close_beyond_rate": 0.4673202614379085,
+      "break_rate": 0.3627450980392157,
+      "reclaim_rate": 0.44761904761904764,
+      "n_reclaim": 105,
+      "retest_rate": 0.7904761904761904,
+      "n_retest": 105
+    },
+    "shift_+3|False": {
+      "n_episodes": 162,
+      "mean_reaction_atr": 1.7980157568092208,
+      "median_reaction_atr": 1.6487736191326219,
+      "mean_penetration_atr": 2.6841248477550392,
+      "hit_rate": 0.24691358024691357,
+      "held_rate": 0.24691358024691357,
+      "moved_rate": 0.6790123456790124,
+      "close_beyond_rate": 0.6851851851851852,
+      "break_rate": 0.5679012345679012,
+      "reclaim_rate": 0.4782608695652174,
+      "n_reclaim": 92,
+      "retest_rate": 0.7608695652173914,
+      "n_retest": 92
+    },
+    "shift_+3|True": {
+      "n_episodes": 56,
+      "mean_reaction_atr": 2.6485823750133024,
+      "median_reaction_atr": 2.000903768100126,
+      "mean_penetration_atr": 1.3908714731796568,
+      "hit_rate": 0.3392857142857143,
+      "held_rate": 0.35714285714285715,
+      "moved_rate": 0.8214285714285714,
+      "close_beyond_rate": 0.375,
+      "break_rate": 0.2857142857142857,
+      "reclaim_rate": 0.4,
+      "n_reclaim": 15,
+      "retest_rate": 0.8,
+      "n_retest": 15
+    },
+    "shift_-3|False": {
+      "n_episodes": 162,
+      "mean_reaction_atr": 1.7338744351728672,
+      "median_reaction_atr": 1.5301503266883705,
+      "mean_penetration_atr": 2.8429849282346047,
+      "hit_rate": 0.17901234567901234,
+      "held_rate": 0.17901234567901234,
+      "moved_rate": 0.6604938271604939,
+      "close_beyond_rate": 0.7716049382716049,
+      "break_rate": 0.5925925925925926,
+      "reclaim_rate": 0.4583333333333333,
+      "n_reclaim": 96,
+      "retest_rate": 0.8020833333333334,
+      "n_retest": 96
+    },
+    "shift_-3|True": {
+      "n_episodes": 61,
+      "mean_reaction_atr": 2.550438232334691,
+      "median_reaction_atr": 1.9426968872509138,
+      "mean_penetration_atr": 1.492600118411702,
+      "hit_rate": 0.36065573770491804,
+      "held_rate": 0.36065573770491804,
+      "moved_rate": 0.7704918032786885,
+      "close_beyond_rate": 0.39344262295081966,
+      "break_rate": 0.3114754098360656,
+      "reclaim_rate": 0.6666666666666666,
+      "n_reclaim": 18,
+      "retest_rate": 0.8333333333333334,
+      "n_retest": 18
+    }
+  },
+  "per_k_exploratory": {
+    "+10%": {
+      "n": 20,
+      "n_hit": 3,
+      "hit_rate": 0.15,
+      "mean_reaction_atr": 0.9807877380264396,
+      "p_raw_vs_base_rate": 0.44134622386094574,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "-10%": {
+      "n": 15,
+      "n_hit": 4,
+      "hit_rate": 0.26666666666666666,
+      "mean_reaction_atr": 2.227576915561344,
+      "p_raw_vs_base_rate": 0.7653891408885557,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+20%": {
+      "n": 18,
+      "n_hit": 6,
+      "hit_rate": 0.3333333333333333,
+      "mean_reaction_atr": 1.475362800142902,
+      "p_raw_vs_base_rate": 0.4045063147707216,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "-20%": {
+      "n": 13,
+      "n_hit": 5,
+      "hit_rate": 0.38461538461538464,
+      "mean_reaction_atr": 1.545146619666218,
+      "p_raw_vs_base_rate": 0.20719553127946377,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+30%": {
+      "n": 17,
+      "n_hit": 2,
+      "hit_rate": 0.11764705882352941,
+      "mean_reaction_atr": 1.777395994515127,
+      "p_raw_vs_base_rate": 0.39210518661569793,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "-30%": {
+      "n": 11,
+      "n_hit": 4,
+      "hit_rate": 0.36363636363636365,
+      "mean_reaction_atr": 2.8135069050180883,
+      "p_raw_vs_base_rate": 0.30572265412440003,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+40%": {
+      "n": 14,
+      "n_hit": 3,
+      "hit_rate": 0.21428571428571427,
+      "mean_reaction_atr": 1.7102143828533318,
+      "p_raw_vs_base_rate": 1.0,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "-40%": {
+      "n": 9,
+      "n_hit": 7,
+      "hit_rate": 0.7777777777777778,
+      "mean_reaction_atr": 3.0331575205562626,
+      "p_raw_vs_base_rate": 0.0009938543956556191,
+      "p_holm": 0.019877087913112382,
+      "significant_holm": true
+    },
+    "+50%": {
+      "n": 13,
+      "n_hit": 2,
+      "hit_rate": 0.15384615384615385,
+      "mean_reaction_atr": 1.648696737340312,
+      "p_raw_vs_base_rate": 0.7456094592098312,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "-50%": {
+      "n": 7,
+      "n_hit": 2,
+      "hit_rate": 0.2857142857142857,
+      "mean_reaction_atr": 2.573133273723493,
+      "p_raw_vs_base_rate": 0.6746041082493269,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+60%": {
+      "n": 11,
+      "n_hit": 3,
+      "hit_rate": 0.2727272727272727,
+      "mean_reaction_atr": 1.6838994865803365,
+      "p_raw_vs_base_rate": 0.7307299451384643,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+70%": {
+      "n": 11,
+      "n_hit": 2,
+      "hit_rate": 0.18181818181818182,
+      "mean_reaction_atr": 1.4329786534415352,
+      "p_raw_vs_base_rate": 1.0,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+80%": {
+      "n": 10,
+      "n_hit": 2,
+      "hit_rate": 0.2,
+      "mean_reaction_atr": 1.357136551096448,
+      "p_raw_vs_base_rate": 0.9999999999999991,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+90%": {
+      "n": 9,
+      "n_hit": 2,
+      "hit_rate": 0.2222222222222222,
+      "mean_reaction_atr": 0.9614716440081471,
+      "p_raw_vs_base_rate": 0.999999999999998,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+100%": {
+      "n": 9,
+      "n_hit": 1,
+      "hit_rate": 0.1111111111111111,
+      "mean_reaction_atr": 1.1472487099368727,
+      "p_raw_vs_base_rate": 0.6959632494069736,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+110%": {
+      "n": 8,
+      "n_hit": 1,
+      "hit_rate": 0.125,
+      "mean_reaction_atr": 1.4961358638437132,
+      "p_raw_vs_base_rate": 0.6894148270716878,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+120%": {
+      "n": 8,
+      "n_hit": 3,
+      "hit_rate": 0.375,
+      "mean_reaction_atr": 1.8854549485504002,
+      "p_raw_vs_base_rate": 0.4062724287647219,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+130%": {
+      "n": 7,
+      "n_hit": 1,
+      "hit_rate": 0.14285714285714285,
+      "mean_reaction_atr": 2.4356937392150906,
+      "p_raw_vs_base_rate": 1.0,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+140%": {
+      "n": 7,
+      "n_hit": 0,
+      "hit_rate": 0.0,
+      "mean_reaction_atr": 2.6967810331893696,
+      "p_raw_vs_base_rate": 0.20885304319265924,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    "+150%": {
+      "n": 7,
+      "n_hit": 1,
+      "hit_rate": 0.14285714285714285,
+      "mean_reaction_atr": 3.5177182003436727,
+      "p_raw_vs_base_rate": 1.0,
+      "p_holm": 1.0,
+      "significant_holm": false
+    }
+  },
+  "per_k_control_check": {
+    "rmp_10": {
+      "n_cells": 20,
+      "min_p_raw": 0.0009938543956556191,
+      "cells_surviving_holm": [
+        {
+          "k_label": "-40%",
+          "n_hit": 7,
+          "n": 9,
+          "p_raw": 0.0009938543956556191,
+          "p_holm": 0.019877087913112382
+        }
+      ]
+    },
+    "placebo_7.5": {
+      "n_cells": 22,
+      "min_p_raw": 0.015654979364278027,
+      "cells_surviving_holm": []
+    },
+    "placebo_12.5": {
+      "n_cells": 17,
+      "min_p_raw": 0.015654979364278027,
+      "cells_surviving_holm": []
+    },
+    "shift_-3": {
+      "n_cells": 20,
+      "min_p_raw": 0.0002939063296659852,
+      "cells_surviving_holm": [
+        {
+          "k_label": "-40%",
+          "n_hit": 8,
+          "n": 10,
+          "p_raw": 0.0002939063296659852,
+          "p_holm": 0.005878126593319703
+        }
+      ]
+    },
+    "shift_+3": {
+      "n_cells": 20,
+      "min_p_raw": 0.022397344567249997,
+      "cells_surviving_holm": []
+    }
+  },
+  "per_k_control_check_note": "El test binomial por celda asume independencia y NO la hay: los episodios de distintos activos en la misma semana son el mismo evento de mercado. Ademas el ancla desplazada reproduce la misma celda 'significativa', asi que la celda no mide el ancla anual.",
+  "tests_primary": [
+    {
+      "n_a": 225,
+      "n_b": 266,
+      "mean_a": 0.24,
+      "mean_b": 0.24436090225563908,
+      "diff": -0.004360902255639093,
+      "ci95": [
+        -0.061591479813714135,
+        0.05629923901272766
+      ],
+      "p_raw": 0.9232,
+      "n_blocks": 47,
+      "family_test": "primary",
+      "metric": "hit",
+      "treatment": "rmp_10",
+      "control": "placebo_7.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 188,
+      "mean_a": 0.24,
+      "mean_b": 0.2127659574468085,
+      "diff": 0.02723404255319148,
+      "ci95": [
+        -0.03328540832806686,
+        0.09479264140010868
+      ],
+      "p_raw": 0.4072,
+      "n_blocks": 48,
+      "family_test": "primary",
+      "metric": "hit",
+      "treatment": "rmp_10",
+      "control": "placebo_12.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 223,
+      "mean_a": 0.24,
+      "mean_b": 0.22869955156950672,
+      "diff": 0.01130044843049327,
+      "ci95": [
+        -0.04167151162790699,
+        0.06761804606756096
+      ],
+      "p_raw": 0.6784,
+      "n_blocks": 47,
+      "family_test": "primary",
+      "metric": "hit",
+      "treatment": "rmp_10",
+      "control": "shift_-3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 218,
+      "mean_a": 0.24,
+      "mean_b": 0.2706422018348624,
+      "diff": -0.03064220183486238,
+      "ci95": [
+        -0.08281669724619452,
+        0.02869835894541489
+      ],
+      "p_raw": 0.2884,
+      "n_blocks": 49,
+      "family_test": "primary",
+      "metric": "hit",
+      "treatment": "rmp_10",
+      "control": "shift_+3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 4438,
+      "mean_a": 0.24,
+      "mean_b": 0.23862100045065346,
+      "diff": 0.0013789995493465323,
+      "ci95": [
+        -0.05346225005536758,
+        0.05778224174537512
+      ],
+      "p_raw": 0.9384,
+      "n_blocks": 52,
+      "family_test": "primary",
+      "metric": "hit",
+      "treatment": "rmp_10",
+      "control": "random",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 1117,
+      "mean_a": 0.24,
+      "mean_b": 0.21933751119068934,
+      "diff": 0.020662488809310653,
+      "ci95": [
+        -0.03945028765851312,
+        0.07378167510710659
+      ],
+      "p_raw": 0.5352,
+      "n_blocks": 50,
+      "family_test": "primary",
+      "metric": "hit",
+      "treatment": "rmp_10",
+      "control": "round",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 266,
+      "mean_a": 1.8435217463101845,
+      "mean_b": 1.7731606234283133,
+      "diff": 0.07036112288187124,
+      "ci95": [
+        -0.11631739021738742,
+        0.31960963902682077
+      ],
+      "p_raw": 0.5292,
+      "n_blocks": 47,
+      "family_test": "primary",
+      "metric": "reaction_atr",
+      "treatment": "rmp_10",
+      "control": "placebo_7.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 188,
+      "mean_a": 1.8435217463101845,
+      "mean_b": 2.0078810731690355,
+      "diff": -0.16435932685885102,
+      "ci95": [
+        -0.504055640181415,
+        0.0845830732663792
+      ],
+      "p_raw": 0.272,
+      "n_blocks": 48,
+      "family_test": "primary",
+      "metric": "reaction_atr",
+      "treatment": "rmp_10",
+      "control": "placebo_12.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 223,
+      "mean_a": 1.8435217463101845,
+      "mean_b": 1.9572394200467294,
+      "diff": -0.11371767373654484,
+      "ci95": [
+        -0.26168772305496607,
+        0.02481358924645753
+      ],
+      "p_raw": 0.1132,
+      "n_blocks": 47,
+      "family_test": "primary",
+      "metric": "reaction_atr",
+      "treatment": "rmp_10",
+      "control": "shift_-3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 218,
+      "mean_a": 1.8435217463101845,
+      "mean_b": 2.016509933962563,
+      "diff": -0.17298818765237844,
+      "ci95": [
+        -0.2993521554662502,
+        -0.04768379503972197
+      ],
+      "p_raw": 0.0068,
+      "n_blocks": 49,
+      "family_test": "primary",
+      "metric": "reaction_atr",
+      "treatment": "rmp_10",
+      "control": "shift_+3",
+      "p_holm": 0.08159999999999999,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 4438,
+      "mean_a": 1.8435217463101845,
+      "mean_b": 1.8651889220927933,
+      "diff": -0.021667175782608794,
+      "ci95": [
+        -0.12657782728034717,
+        0.07075468449674584
+      ],
+      "p_raw": 0.6976,
+      "n_blocks": 52,
+      "family_test": "primary",
+      "metric": "reaction_atr",
+      "treatment": "rmp_10",
+      "control": "random",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 1117,
+      "mean_a": 1.8435217463101845,
+      "mean_b": 1.8943567491849111,
+      "diff": -0.05083500287472664,
+      "ci95": [
+        -0.4181911621592155,
+        0.19984796686656986
+      ],
+      "p_raw": 0.7232,
+      "n_blocks": 50,
+      "family_test": "primary",
+      "metric": "reaction_atr",
+      "treatment": "rmp_10",
+      "control": "round",
+      "p_holm": 1.0,
+      "significant_holm": false
+    }
+  ],
+  "tests_target_utility": [
+    {
+      "n_a": 225,
+      "n_b": 266,
+      "mean_a": 0.24,
+      "mean_b": 0.24812030075187969,
+      "diff": -0.008120300751879694,
+      "ci95": [
+        -0.06308732029784304,
+        0.04865799253100871
+      ],
+      "p_raw": 0.8284,
+      "n_blocks": 47,
+      "family_test": "target_utility",
+      "metric": "held",
+      "treatment": "rmp_10",
+      "control": "placebo_7.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 188,
+      "mean_a": 0.24,
+      "mean_b": 0.21808510638297873,
+      "diff": 0.021914893617021258,
+      "ci95": [
+        -0.036868613504307736,
+        0.0879907239718692
+      ],
+      "p_raw": 0.4992,
+      "n_blocks": 48,
+      "family_test": "target_utility",
+      "metric": "held",
+      "treatment": "rmp_10",
+      "control": "placebo_12.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 223,
+      "mean_a": 0.24,
+      "mean_b": 0.22869955156950672,
+      "diff": 0.01130044843049327,
+      "ci95": [
+        -0.04334684541715227,
+        0.06739995133273433
+      ],
+      "p_raw": 0.6968,
+      "n_blocks": 47,
+      "family_test": "target_utility",
+      "metric": "held",
+      "treatment": "rmp_10",
+      "control": "shift_-3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 218,
+      "mean_a": 0.24,
+      "mean_b": 0.27522935779816515,
+      "diff": -0.03522935779816516,
+      "ci95": [
+        -0.08705925010370817,
+        0.020677468418197308
+      ],
+      "p_raw": 0.2124,
+      "n_blocks": 49,
+      "family_test": "target_utility",
+      "metric": "held",
+      "treatment": "rmp_10",
+      "control": "shift_+3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 4438,
+      "mean_a": 0.24,
+      "mean_b": 0.24402884182063994,
+      "diff": -0.00402884182063995,
+      "ci95": [
+        -0.05619628636039553,
+        0.05278151758220768
+      ],
+      "p_raw": 0.9032,
+      "n_blocks": 52,
+      "family_test": "target_utility",
+      "metric": "held",
+      "treatment": "rmp_10",
+      "control": "random",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 225,
+      "n_b": 1117,
+      "mean_a": 0.24,
+      "mean_b": 0.22023276633840644,
+      "diff": 0.019767233661593553,
+      "ci95": [
+        -0.03832679938169428,
+        0.07363079405284702
+      ],
+      "p_raw": 0.5416,
+      "n_blocks": 50,
+      "family_test": "target_utility",
+      "metric": "held",
+      "treatment": "rmp_10",
+      "control": "round",
+      "p_holm": 1.0,
+      "significant_holm": false
+    }
+  ],
+  "tests_secondary_per_asset": [
+    {
+      "n_a": 39,
+      "n_b": 42,
+      "mean_a": 0.1794871794871795,
+      "mean_b": 0.30952380952380953,
+      "diff": -0.13003663003663005,
+      "ci95": [
+        -0.24649398472729664,
+        0.07072153390088133
+      ],
+      "p_raw": 0.183,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "BTCUSDT",
+      "metric": "hit",
+      "control": "placebo_7.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 39,
+      "n_b": 30,
+      "mean_a": 0.1794871794871795,
+      "mean_b": 0.2,
+      "diff": -0.020512820512820523,
+      "ci95": [
+        -0.17373712300624178,
+        0.2121212121212121
+      ],
+      "p_raw": 0.832,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "BTCUSDT",
+      "metric": "hit",
+      "control": "placebo_12.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 39,
+      "n_b": 40,
+      "mean_a": 0.1794871794871795,
+      "mean_b": 0.25,
+      "diff": -0.07051282051282051,
+      "ci95": [
+        -0.19213489952718674,
+        0.1082972582972579
+      ],
+      "p_raw": 0.377,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "BTCUSDT",
+      "metric": "hit",
+      "control": "shift_-3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 39,
+      "n_b": 38,
+      "mean_a": 0.1794871794871795,
+      "mean_b": 0.3157894736842105,
+      "diff": -0.13630229419703102,
+      "ci95": [
+        -0.23918526442835203,
+        0.04999999999999999
+      ],
+      "p_raw": 0.128,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "BTCUSDT",
+      "metric": "hit",
+      "control": "shift_+3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 39,
+      "n_b": 767,
+      "mean_a": 0.1794871794871795,
+      "mean_b": 0.29465449804432853,
+      "diff": -0.11516731855714904,
+      "ci95": [
+        -0.23297898893446672,
+        0.07753704394344059
+      ],
+      "p_raw": 0.18,
+      "n_blocks": 12,
+      "family_test": "secondary_per_asset",
+      "pair": "BTCUSDT",
+      "metric": "hit",
+      "control": "random",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 39,
+      "n_b": 145,
+      "mean_a": 0.1794871794871795,
+      "mean_b": 0.2689655172413793,
+      "diff": -0.0894783377541998,
+      "ci95": [
+        -0.19780691364814126,
+        0.08256262322730834
+      ],
+      "p_raw": 0.237,
+      "n_blocks": 10,
+      "family_test": "secondary_per_asset",
+      "pair": "BTCUSDT",
+      "metric": "hit",
+      "control": "round",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 34,
+      "n_b": 46,
+      "mean_a": 0.35294117647058826,
+      "mean_b": 0.21739130434782608,
+      "diff": 0.13554987212276218,
+      "ci95": [
+        0.016911189980518604,
+        0.277646500410509
+      ],
+      "p_raw": 0.024,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "ETHUSDT",
+      "metric": "hit",
+      "control": "placebo_7.5",
+      "p_holm": 0.72,
+      "significant_holm": false
+    },
+    {
+      "n_a": 34,
+      "n_b": 27,
+      "mean_a": 0.35294117647058826,
+      "mean_b": 0.25925925925925924,
+      "diff": 0.09368191721132901,
+      "ci95": [
+        -0.11206627812415293,
+        0.24183694530443756
+      ],
+      "p_raw": 0.354,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "ETHUSDT",
+      "metric": "hit",
+      "control": "placebo_12.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 34,
+      "n_b": 33,
+      "mean_a": 0.35294117647058826,
+      "mean_b": 0.3333333333333333,
+      "diff": 0.019607843137254943,
+      "ci95": [
+        -0.12621031746031747,
+        0.13158312447786133
+      ],
+      "p_raw": 0.811,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "ETHUSDT",
+      "metric": "hit",
+      "control": "shift_-3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 34,
+      "n_b": 32,
+      "mean_a": 0.35294117647058826,
+      "mean_b": 0.3125,
+      "diff": 0.04044117647058826,
+      "ci95": [
+        -0.1548153471915082,
+        0.21624445762376782
+      ],
+      "p_raw": 0.698,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "ETHUSDT",
+      "metric": "hit",
+      "control": "shift_+3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 34,
+      "n_b": 667,
+      "mean_a": 0.35294117647058826,
+      "mean_b": 0.272863568215892,
+      "diff": 0.08007760825469623,
+      "ci95": [
+        -0.07026548894825432,
+        0.2348512296881862
+      ],
+      "p_raw": 0.267,
+      "n_blocks": 10,
+      "family_test": "secondary_per_asset",
+      "pair": "ETHUSDT",
+      "metric": "hit",
+      "control": "random",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 34,
+      "n_b": 91,
+      "mean_a": 0.35294117647058826,
+      "mean_b": 0.2967032967032967,
+      "diff": 0.056237879767291554,
+      "ci95": [
+        -0.057601633824459944,
+        0.21922310248275517
+      ],
+      "p_raw": 0.371,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "ETHUSDT",
+      "metric": "hit",
+      "control": "round",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 49,
+      "n_b": 55,
+      "mean_a": 0.1836734693877551,
+      "mean_b": 0.21818181818181817,
+      "diff": -0.03450834879406306,
+      "ci95": [
+        -0.11795342362726262,
+        0.09168767507002751
+      ],
+      "p_raw": 0.515,
+      "n_blocks": 7,
+      "family_test": "secondary_per_asset",
+      "pair": "SOLUSDT",
+      "metric": "hit",
+      "control": "placebo_7.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 49,
+      "n_b": 42,
+      "mean_a": 0.1836734693877551,
+      "mean_b": 0.19047619047619047,
+      "diff": -0.006802721088435354,
+      "ci95": [
+        -0.10153662575491913,
+        0.14444444444444446
+      ],
+      "p_raw": 0.939,
+      "n_blocks": 8,
+      "family_test": "secondary_per_asset",
+      "pair": "SOLUSDT",
+      "metric": "hit",
+      "control": "placebo_12.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 49,
+      "n_b": 48,
+      "mean_a": 0.1836734693877551,
+      "mean_b": 0.14583333333333334,
+      "diff": 0.03784013605442177,
+      "ci95": [
+        -0.002384205048139462,
+        0.10640197568389048
+      ],
+      "p_raw": 0.109,
+      "n_blocks": 7,
+      "family_test": "secondary_per_asset",
+      "pair": "SOLUSDT",
+      "metric": "hit",
+      "control": "shift_-3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 49,
+      "n_b": 48,
+      "mean_a": 0.1836734693877551,
+      "mean_b": 0.2708333333333333,
+      "diff": -0.0871598639455782,
+      "ci95": [
+        -0.13423702335340268,
+        0.03125148244781783
+      ],
+      "p_raw": 0.105,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "SOLUSDT",
+      "metric": "hit",
+      "control": "shift_+3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 49,
+      "n_b": 959,
+      "mean_a": 0.1836734693877551,
+      "mean_b": 0.24191866527632952,
+      "diff": -0.05824519588857441,
+      "ci95": [
+        -0.12059378321570974,
+        0.023577465468945936
+      ],
+      "p_raw": 0.132,
+      "n_blocks": 7,
+      "family_test": "secondary_per_asset",
+      "pair": "SOLUSDT",
+      "metric": "hit",
+      "control": "random",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 49,
+      "n_b": 247,
+      "mean_a": 0.1836734693877551,
+      "mean_b": 0.2145748987854251,
+      "diff": -0.03090142939766999,
+      "ci95": [
+        -0.13998717806092587,
+        0.09921312634317382
+      ],
+      "p_raw": 0.485,
+      "n_blocks": 9,
+      "family_test": "secondary_per_asset",
+      "pair": "SOLUSDT",
+      "metric": "hit",
+      "control": "round",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 51,
+      "n_b": 63,
+      "mean_a": 0.2549019607843137,
+      "mean_b": 0.23809523809523808,
+      "diff": 0.016806722689075626,
+      "ci95": [
+        -0.11906245549067083,
+        0.1233482905982905
+      ],
+      "p_raw": 0.742,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "ADAUSDT",
+      "metric": "hit",
+      "control": "placebo_7.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 51,
+      "n_b": 42,
+      "mean_a": 0.2549019607843137,
+      "mean_b": 0.19047619047619047,
+      "diff": 0.06442577030812324,
+      "ci95": [
+        -0.05786672411138903,
+        0.21051883477105515
+      ],
+      "p_raw": 0.335,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "ADAUSDT",
+      "metric": "hit",
+      "control": "placebo_12.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 51,
+      "n_b": 50,
+      "mean_a": 0.2549019607843137,
+      "mean_b": 0.26,
+      "diff": -0.005098039215686301,
+      "ci95": [
+        -0.13904321903179873,
+        0.1400067873303167
+      ],
+      "p_raw": 0.973,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "ADAUSDT",
+      "metric": "hit",
+      "control": "shift_-3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 51,
+      "n_b": 50,
+      "mean_a": 0.2549019607843137,
+      "mean_b": 0.28,
+      "diff": -0.02509803921568632,
+      "ci95": [
+        -0.10483424470266574,
+        0.04187686396508845
+      ],
+      "p_raw": 0.521,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "ADAUSDT",
+      "metric": "hit",
+      "control": "shift_+3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 51,
+      "n_b": 1015,
+      "mean_a": 0.2549019607843137,
+      "mean_b": 0.24039408866995074,
+      "diff": 0.014507872114362969,
+      "ci95": [
+        -0.08316000523330305,
+        0.1130496842727385
+      ],
+      "p_raw": 0.715,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "ADAUSDT",
+      "metric": "hit",
+      "control": "random",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 51,
+      "n_b": 276,
+      "mean_a": 0.2549019607843137,
+      "mean_b": 0.25,
+      "diff": 0.004901960784313708,
+      "ci95": [
+        -0.09031129204950501,
+        0.0966575694587046
+      ],
+      "p_raw": 0.896,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "ADAUSDT",
+      "metric": "hit",
+      "control": "round",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 52,
+      "n_b": 60,
+      "mean_a": 0.25,
+      "mean_b": 0.25,
+      "diff": 0.0,
+      "ci95": [
+        -0.09107416586073501,
+        0.10971124286341666
+      ],
+      "p_raw": 0.941,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "XRPUSDT",
+      "metric": "hit",
+      "control": "placebo_7.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 52,
+      "n_b": 47,
+      "mean_a": 0.25,
+      "mean_b": 0.23404255319148937,
+      "diff": 0.015957446808510634,
+      "ci95": [
+        -0.09524489795918367,
+        0.15138449486559946
+      ],
+      "p_raw": 0.845,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "XRPUSDT",
+      "metric": "hit",
+      "control": "placebo_12.5",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 52,
+      "n_b": 52,
+      "mean_a": 0.25,
+      "mean_b": 0.19230769230769232,
+      "diff": 0.05769230769230768,
+      "ci95": [
+        -0.05696313481294823,
+        0.22171651853130253
+      ],
+      "p_raw": 0.357,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "XRPUSDT",
+      "metric": "hit",
+      "control": "shift_-3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 52,
+      "n_b": 50,
+      "mean_a": 0.25,
+      "mean_b": 0.2,
+      "diff": 0.04999999999999999,
+      "ci95": [
+        -0.04087865497076024,
+        0.18078177557209796
+      ],
+      "p_raw": 0.316,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "XRPUSDT",
+      "metric": "hit",
+      "control": "shift_+3",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 52,
+      "n_b": 1030,
+      "mean_a": 0.25,
+      "mean_b": 0.16990291262135923,
+      "diff": 0.08009708737864077,
+      "ci95": [
+        -0.012250759029342117,
+        0.20581254231182478
+      ],
+      "p_raw": 0.099,
+      "n_blocks": 12,
+      "family_test": "secondary_per_asset",
+      "pair": "XRPUSDT",
+      "metric": "hit",
+      "control": "random",
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "n_a": 52,
+      "n_b": 358,
+      "mean_a": 0.25,
+      "mean_b": 0.15921787709497207,
+      "diff": 0.09078212290502793,
+      "ci95": [
+        -0.02703988496414092,
+        0.15727414917057678
+      ],
+      "p_raw": 0.123,
+      "n_blocks": 11,
+      "family_test": "secondary_per_asset",
+      "pair": "XRPUSDT",
+      "metric": "hit",
+      "control": "round",
+      "p_holm": 1.0,
+      "significant_holm": false
+    }
+  ],
+  "weekly_open": {
+    "summary": {
+      "random_prev_week": {
+        "n_episodes": 631,
+        "mean_reaction_atr": 1.996766847690006,
+        "median_reaction_atr": 1.6544481152186081,
+        "mean_penetration_atr": 2.219895177802646,
+        "hit_rate": 0.24405705229793978,
+        "held_rate": 0.24405705229793978,
+        "moved_rate": 0.7131537242472267,
+        "close_beyond_rate": 0.7496038034865293,
+        "break_rate": 0.6085578446909667,
+        "reclaim_rate": 0.7552083333333334,
+        "n_reclaim": 384,
+        "retest_rate": 0.9296875,
+        "n_retest": 384
+      },
+      "weekly_open": {
+        "n_episodes": 820,
+        "mean_reaction_atr": 2.1345703571783723,
+        "median_reaction_atr": 1.7013930533901604,
+        "mean_penetration_atr": 2.034961147178338,
+        "hit_rate": 0.2451219512195122,
+        "held_rate": 0.24634146341463414,
+        "moved_rate": 0.724390243902439,
+        "close_beyond_rate": 0.7353658536585366,
+        "break_rate": 0.5768292682926829,
+        "reclaim_rate": 0.7568710359408034,
+        "n_reclaim": 473,
+        "retest_rate": 0.9027484143763214,
+        "n_retest": 473
+      }
+    },
+    "tests": [
+      {
+        "n_a": 820,
+        "n_b": 631,
+        "mean_a": 0.2451219512195122,
+        "mean_b": 0.24405705229793978,
+        "diff": 0.0010648989215724103,
+        "ci95": [
+          -0.0446345592628558,
+          0.044727030201328365
+        ],
+        "p_raw": 0.9672,
+        "n_blocks": 85,
+        "family_test": "weekly_open",
+        "metric": "hit",
+        "treatment": "weekly_open",
+        "control": "random_prev_week",
+        "p_holm": 0.9672,
+        "significant_holm": false
+      },
+      {
+        "n_a": 820,
+        "n_b": 631,
+        "mean_a": 2.1345703571783727,
+        "mean_b": 1.996766847690006,
+        "diff": 0.13780350948836673,
+        "ci95": [
+          -0.013088672270154011,
+          0.2870781429279988
+        ],
+        "p_raw": 0.074,
+        "n_blocks": 85,
+        "family_test": "weekly_open",
+        "metric": "reaction_atr",
+        "treatment": "weekly_open",
+        "control": "random_prev_week",
+        "p_holm": 0.148,
+        "significant_holm": false
+      }
+    ]
+  },
+  "incremental_utility": {
+    "n": 5780,
+    "terms": [
+      "intercept",
+      "is_rmp",
+      "dist_pivot_atr_z",
+      "vol_ratio_z",
+      "is_round"
+    ],
+    "coef": [
+      -1.1641000586089074,
+      0.008580076316060484,
+      0.04298286926970729,
+      0.2402965722309524,
+      -0.16587282719213128
+    ],
+    "is_rmp_coef": 0.008580076316060484,
+    "is_rmp_ci95_block_bootstrap": [
+      -0.32026283023483,
+      0.3278043863431971
+    ]
+  },
+  "verdict": "DESCARTAR",
+  "n_episodes_total": 6675
+}

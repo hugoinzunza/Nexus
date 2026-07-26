@@ -150,7 +150,28 @@ def test_la_vista_se_declara_research_y_sin_ejecucion():
     assert '"validated": False' in fuente
     html = open(INDEX, encoding="utf-8").read()
     assert "SIN VALIDAR" in html
-    assert "cero conceptos tienen evidencia cuantitativa propia" in html
+
+
+def test_el_resultado_que_refuta_la_rejilla_esta_en_la_pantalla():
+    """La rejilla anual se midio el 2026-07-26 y NO se distingue de un placebo:
+    24,00% de reaccion contra 23,86% de niveles aleatorios, CI [-5,3; +5,8], y
+    ninguno de los seis controles sobrevive a Holm.
+
+    Sigue dibujada porque es un marco de referencia legible. Pero si el numero que la
+    refuta vive solo en un informe de research, la pantalla sigue vendiendo el metodo
+    igual que la masterclass. Por eso la medicion va EN la vista, y este test la fija
+    ahi.
+    """
+    html = open(INDEX, encoding="utf-8").read()
+    assert "no funciona" in html, "el titular tiene que decir el resultado"
+    assert "23,86" in html and "24,00" in html, "faltan las dos tasas comparadas"
+    assert "6.675" in html, "falta el tamano de la muestra"
+    # el 11,3% incondicional es el numero que el curso nunca publica
+    assert "11,3" in html and "denominador" in html
+    # y el limite honesto: no se probo efecto cero
+    assert "no prueba que el efecto sea cero" in html
+    # el control que desarma la unica celda que sobrevivia
+    assert "ancla corrida" in html or "corrida tres d" in html
 
 
 def test_la_rejilla_placebo_viaja_siempre_al_lado_de_la_del_curso():

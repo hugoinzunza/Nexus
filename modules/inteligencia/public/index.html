@@ -39,8 +39,12 @@
     </header>
 
     <p class="disclaimer">
-      Del curso completo, cero conceptos tienen evidencia cuantitativa propia. Esto
-      dibuja los niveles que son objetivos y auditables, no los que funcionan.
+      <strong>La rejilla anual se midió y no funciona.</strong> Sobre 6.675 episodios
+      en 5 pares y 4 años, su tasa de reacción es 24,00% contra 23,86% de niveles
+      aleatorios: una diferencia de +0,14 puntos con intervalo [−5,3; +5,8]. Ninguno
+      de los seis controles sobrevive a la corrección por pruebas múltiples. Sigue
+      dibujada porque es un marco de referencia legible, no porque prediga algo.
+      <a href="#medicion">el detalle</a>
     </p>
 
     <!-- Gráfico: velas + niveles del método superpuestos -->
@@ -77,8 +81,10 @@
         El curso ancla una rejilla en la <strong>apertura del 1 de enero</strong> y
         pone niveles cada 10% hacia arriba y hacia abajo. El ancla es un hecho
         histórico, no una opinión: el 1 de enero ya pasó y no cambia aunque los datos
-        envejezcan. Lo que <em>no</em> está demostrado es que el 10% tenga algo
-        especial, y por eso el gráfico puede mostrar dos rejillas placebo al lado.
+        envejezcan. Eso lo hace útil como marco de referencia.
+        <br><br>
+        Lo que <em>no</em> resiste la medición es que esos niveles predigan algo. Ver
+        el bloque de abajo.
       </div>
       <div class="grid3">
         <div class="stat"><span>apertura anual</span><strong id="pa">—</strong>
@@ -124,6 +130,53 @@
         lectura.
       </div>
       <div class="grid2" id="estructuras"></div>
+    </section>
+
+    <!-- La medición va EN la pantalla, no escondida en un informe. Si el número que
+         refuta lo que se dibuja vive en otro archivo, la pantalla sigue vendiendo. -->
+    <section class="card medicion" id="medicion">
+      <h2>Qué pasó cuando lo medimos</h2>
+      <p class="med-lead">
+        Estudio pareado sobre <strong>6.675 episodios</strong>, 5 pares, anclas
+        2023-2026, con bootstrap por bloques y corrección de Holm.
+        <em>2022 quedó fuera</em>: el histórico parte el 23 de febrero y no existe la
+        vela del 1 de enero, así que no se inventó el ancla.
+      </p>
+      <div class="scroll-x"><table>
+        <thead><tr><th>tasa de reacción</th><th>valor</th><th>vs rejilla 10%</th></tr></thead>
+        <tbody>
+          <tr><td><strong>rejilla anual 10%</strong></td><td class="num">24,00%</td><td>—</td></tr>
+          <tr><td>niveles aleatorios</td><td class="num">23,86%</td><td class="num">+0,14 pp · CI [−5,3; +5,8]</td></tr>
+          <tr><td>placebo 7,5%</td><td class="num">24,44%</td><td class="num">−0,44 pp</td></tr>
+          <tr><td>placebo 12,5%</td><td class="num">21,28%</td><td class="num">+2,72 pp</td></tr>
+          <tr><td>ancla corrida ±3 días</td><td class="num">22,87% / 27,06%</td><td class="num">sin diferencia tras Holm</td></tr>
+          <tr><td>números redondos</td><td class="num">21,93%</td><td class="num">sin diferencia tras Holm</td></tr>
+        </tbody>
+      </table></div>
+      <p class="med-nota">
+        <strong>El número que el curso nunca publica:</strong> de 480 niveles, 255
+        (el 53%) nunca fueron visitados, y solo 54 produjeron reacción. Eso es un
+        <strong>11,3% incondicional</strong>. Los ejemplos de la masterclass son ese
+        11%, mostrados sin denominador.
+      </p>
+      <p class="med-nota">
+        <strong>La trampa que casi pasa:</strong> el nivel −40% sí sobrevive a Holm
+        (7 de 9, p=0,020). Pero el ancla corrida tres días atrás reproduce la misma
+        celda <em>con más fuerza</em> (8 de 10, p=0,006), y 5 de esos 9 episodios son
+        el mismo crash en activos distintos. No mide la apertura anual: mide un
+        drawdown.
+      </p>
+      <p class="med-nota">
+        Lo que sí predice la reacción es la <strong>volatilidad</strong> (coeficiente
+        +0,24). Estar en un nivel de la rejilla aporta +0,009, con intervalo
+        [−0,32; +0,33]. La <strong>apertura semanal</strong> tampoco se separa:
+        24,51% contra 24,41% del control, p=0,97.
+      </p>
+      <p class="med-nota lim">
+        Límite honesto: esto no prueba que el efecto sea cero. Prueba que si existe es
+        menor a ±5,6 puntos de tasa, con solo 20 anclas y un único régimen de cripto.
+        Informe completo en <code>research/refugios_anuales_2026-07-26.md</code>.
+      </p>
     </section>
 
     <p class="fuente">
