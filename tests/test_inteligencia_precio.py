@@ -565,3 +565,74 @@ def test_el_atraso_de_la_barra_en_formacion_se_publica():
     assert '"push": self._push_meta(instrument, timeframe),' in fuente
     assert "series_lag_seconds" in open(
         os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()
+
+
+# --- cola en vivo directo desde el navegador --------------------------
+
+def test_el_stream_lo_arma_el_servidor_no_el_javascript():
+    """El mapeo 1D->1d vive en `binance.UI_TO_BINANCE`. Duplicarlo en el cliente es el
+    mismo problema que tener dos lectores del push: el dia que cambie, uno se queda
+    atras en silencio. Por eso el servidor manda el nombre del stream armado."""
+    fuente = open(TRADING, encoding="utf-8").read()
+    assert "def _stream_vivo" in fuente
+    assert '"stream_vivo": self._stream_vivo(instrument, timeframe),' in fuente
+    bloque = fuente.split("def _stream_vivo")[1].split("\n    def ")[0]
+    assert "binance.UI_TO_BINANCE" in bloque
+    assert "kline_" in bloque
+
+    js = open(os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()
+    assert "j.stream_vivo" in js
+    # el JS no puede estar rearmando el intervalo por su cuenta
+    assert "@kline_" not in js.split("const vivoBinance")[1].split("marcarFuente(card, fuente)")[0] \
+        or "${stream}" in js
+
+
+def test_no_se_ofrece_stream_de_binance_si_las_velas_son_de_otro_exchange():
+    """Pegarle un tick de Binance a una vela de Crypto.com es la misma mezcla que
+    acabamos de corregir, al reves."""
+    fuente = open(TRADING, encoding="utf-8").read()
+    bloque = fuente.split("def _stream_vivo")[1].split("\n    def ")[0]
+    assert '!= "binance_vps"' in bloque and "return None" in bloque
+
+
+def test_un_stream_caido_o_MUDO_no_se_ve_como_en_vivo():
+    """Tres estados y ninguno se puede confundir: en vivo, stream mudo (socket abierto
+    que dejo de mandar frames — la falla que se ve igual que estar bien) y sin vivo con
+    el atraso del push a la vista.
+
+    Es la septima u octava variante del mismo defecto que corregi hoy: algo degradado
+    presentandose como completo.
+    """
+    js = open(os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()
+    estado = js.split("  estado() {")[1].split("\n  },")[0]
+    assert "readyState !== 1" in estado, "no chequea que el socket este abierto"
+    assert "this.ultimo" in estado, "no chequea que sigan llegando frames"
+    assert "vivo mudo" in estado
+
+    # CONECTADO SIN UN SOLO FRAME NO ES "EN VIVO": es conectando. Confundirlos fue mi
+    # error, y lo pille comparando el titulo contra el REST de Binance — mostraba
+    # 64.820,70 contra 64.998,10, o sea 0,27% de diferencia, con el sello diciendo
+    # "en vivo". Mientras no llegue el primer frame, el ticker de respaldo tiene que
+    # seguir trabajando.
+    assert "conectando" in estado
+    assert "if (!this.frames) return" in estado
+
+    # Stream COMBINADO: el de klines se calla con el mercado quieto. Medido hoy:
+    # `@kline_1m` y `@aggTrade` sin frame en 10 s mientras `@bookTicker` llego en 0,18 s.
+    assert "@bookTicker" in js
+    assert "streams=" in js
+
+    assert "Binance Futuros · en vivo" in js
+    assert "Binance Futuros · stream mudo" in js
+    assert "· sin vivo" in js
+    # y el latido que detecta el mudo: nadie dispara un evento cuando los frames PARAN
+    assert "vigilar()" in js and "vivoBinance.vigilar()" in js
+
+
+def test_el_reintento_no_machaca_cuando_el_bloqueo_es_permanente():
+    """Si el que mira esta en una jurisdiccion que Binance no atiende, el socket va a
+    fallar SIEMPRE. Reintentar cada segundo no lo arregla y quema bateria."""
+    js = open(os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()
+    bloque = js.split("  reintentar(card, stream) {")[1].split("\n  },")[0]
+    assert "Math.pow(2" in bloque, "el reintento debe espaciarse"
+    assert "Math.min(60_000" in bloque, "y tener tope"

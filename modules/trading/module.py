@@ -428,6 +428,21 @@ class TradingModule(NexusModule):
             entry = self._full_cache.get((instrument, timeframe))
         return (entry or {}).get("fuente") or "cryptocom"
 
+    def _stream_vivo(self, instrument: str, timeframe: str) -> str | None:
+        """Nombre del stream de Binance para la cola en vivo, o None.
+
+        Solo se ofrece cuando las velas YA son de Binance. Si el grafico muestra
+        Crypto.com, pegarle un tick de Binance seria mezclar dos instrumentos dentro de
+        una vela, que es el defecto que acabamos de corregir.
+        """
+        if self._fuente_grafico(instrument, timeframe) != "binance_vps":
+            return None
+        sym = (self._inst_by_name.get(instrument) or {}).get("binance")
+        if not sym:
+            return None
+        iv = binance.UI_TO_BINANCE.get(timeframe, timeframe)
+        return f"{sym.lower()}@kline_{iv}"
+
     def _push_meta(self, instrument: str, timeframe: str) -> dict:
         """Frescura del push. La barra en formación puede ir hasta 10 min atrasada
         —el timer del VPS corre cada 10— y sin publicar ese retraso el gráfico parece
@@ -891,6 +906,15 @@ class TradingModule(NexusModule):
                 "candles": candles,
                 "fuente": self._fuente_grafico(instrument, timeframe),
                 "push": self._push_meta(instrument, timeframe),
+                # El navegador SI puede hablar con Binance: el 451 es del datacenter
+                # de Railway, no de la ubicacion del que mira (verificado el
+                # 2026-07-26: REST 200, CORS `*` y WebSocket 101 desde la maquina de
+                # Hugo). Asi que la cola en vivo la trae el browser por su cuenta.
+                #
+                # El stream lo arma el SERVIDOR y no el JS: el mapeo 1D->1d ya vive en
+                # `binance.UI_TO_BINANCE`, y duplicarlo en el cliente es como tener dos
+                # lectores del push -el dia que cambie, uno se queda atras en silencio-.
+                "stream_vivo": self._stream_vivo(instrument, timeframe),
                 "has_more": len(subset) > len(candles),  # ¿quedan más viejas?
             }, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)

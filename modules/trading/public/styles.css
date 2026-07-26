@@ -432,3 +432,9 @@ tbody tr.hl td { font-weight: 600; }
 .fuente-velas.ajena {
   background: rgba(232,182,83,.14); color: #b98a1f; border-color: rgba(232,182,83,.4);
 }
+
+/* "stream mudo": socket abierto que dejó de mandar frames. Es la falla que se ve
+   IGUAL que estar bien, así que tiene color propio y no comparte el verde del vivo. */
+.fuente-velas.mudo {
+  background: rgba(232,182,83,.14); color: #b98a1f; border-color: rgba(232,182,83,.4);
+}

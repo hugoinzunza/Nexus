@@ -1,38 +1,213 @@
-
-function marcarFuente(card, fuente) {
-  const wrap = card.node && card.node.querySelector(".chart-wrap");
-  if (!wrap) return;
-  let tag = wrap.querySelector(".fuente-velas");
-  if (!tag) {
-    tag = document.createElement("div");
-    tag.className = "fuente-velas";
-    wrap.appendChild(tag);
-  }
-  const binance = fuente === "binance_vps";
-  // El atraso de la barra en formación va EN el sello: es la diferencia entre "el
-  // precio no coincide" y "la barra tiene 7 minutos", y llevan a buscar el problema en
-  // lugares opuestos.
-  const lag = card.pushMeta && Number(card.pushMeta.series_lag_seconds);
-  const min = Number.isFinite(lag) ? Math.floor(lag / 60) : null;
-  tag.textContent = binance
-    ? "Binance Futuros" + (min ? ` · barra +${min}m` : "")
-    : "Crypto.com";
-  tag.title = binance
-    ? "Mismo mercado donde ejecuta el bot, vía el colector del VPS."
-    : "Otro exchange que el de ejecución: en 1m y 5m el push del VPS llega cada 10 min "
-      + "y dejaría el gráfico más atrasado que la vela.";
-  tag.classList.toggle("ajena", !binance);
-}
-/* Co-piloto de Trading — frontend.
- *
- * Se conecta al stream SSE del backend (/m/trading/api/stream), que empuja el
- * estado del mercado en vivo. Por cada instrumento dibuja: precio + variación,
- * estadísticas, gráfico de velas (canvas propio, sin librerías), libro de
- * órdenes y un panel de señales.
- *
- * Si SSE falla, cae a polling de /api/state cada 3s como respaldo.
- */
 (function () {
+
+
+  /* Cola en vivo directo desde Binance, sin pasar por nuestro servidor.
+   *
+   * POR QUE SE PUEDE: el HTTP 451 que bloquea a Railway es del datacenter, no de la
+   * ubicacion del que mira. Verificado el 2026-07-26 desde la maquina de Hugo: REST 200,
+   * `access-control-allow-origin: *` y WebSocket con 101 y primer frame en 0,18 s. Es la
+   * misma forma en que un grafico tipo TradingView vive en el browser.
+   *
+   * QUE ALIMENTA Y QUE NO: solo el grafico que estas mirando. Los paneles de inteligencia
+   * y las senales se calculan en el servidor y siguen con el push del VPS. Medido: BTC se
+   * mueve 0,072% en 15 min (mediana), asi que "desde la apertura anual" pasa de -26,01% a
+   * -25,95% con ese desfase — para instrumentos de mediano plazo es ruido. Lo que las
+   * senales necesitan NO es latencia, es coherencia de venue con la ejecucion, y eso se
+   * arregla en otra parte.
+   *
+   * Y LO QUE NO PUEDE PASAR: que se caiga y el grafico quede congelado pareciendo vivo.
+   * El sello dice el estado real siempre.
+   */
+  const vivoBinance = {
+    ws: null, stream: null, card: null, intentos: 0, timer: null, ultimo: 0, frames: 0,
+
+    conectar(card, stream) {
+      if (this.stream === stream && this.ws && this.ws.readyState <= 1) return;
+      this.cerrar();
+      this.stream = stream;
+      this.card = card;
+      this.frames = 0;
+      let ws;
+      try {
+        // Stream COMBINADO a proposito. El de klines solo empuja cuando hay
+        // actividad, y con el mercado quieto puede callarse un minuto entero: medido
+        // hoy, `@kline_1m` y `@aggTrade` no dieron un frame en 10 s mientras
+        // `@bookTicker` llego en 0,18 s. Con solo klines el titulo se congelaba y el
+        // sello decia "en vivo" — falso positivo que vi comparando contra el REST.
+        //
+        // `bookTicker` da el latido y el precio del momento; `kline` da el cuerpo de la
+        // barra. Los dos del MISMO instrumento, asi que no hay mezcla.
+        const partes = `${stream}/${stream.split("@")[0]}@bookTicker`;
+        ws = new WebSocket(`wss://fstream.binance.com/stream?streams=${partes}`);
+      } catch (e) {
+        this.marcar(card, "sin vivo");
+        return;
+      }
+      this.ws = ws;
+      ws.onopen = () => {
+        this.intentos = 0;
+        // La ventana de frescura arranca AL CONECTAR, no en el epoch. Sin esto, un
+        // socket recien abierto que todavia no recibio su primer frame se reportaba
+        // "mudo" — y en 15m con el mercado quieto el primer frame puede tardar un
+        // minuto. Falso positivo mio, visto en el navegador antes de commitear.
+        this.ultimo = Date.now();
+        this.marcar(card, "conectando");
+      };
+      ws.onmessage = (ev) => {
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        const d = msg.data || msg;
+        if (!d) return;
+        this.ultimo = Date.now();
+        this.frames += 1;
+        if (d.k) {
+          const k = d.k;
+          aplicarVelaViva(card, {
+            t: Number(k.t), o: Number(k.o), h: Number(k.h),
+            l: Number(k.l), c: Number(k.c), v: Number(k.v), cerrada: !!k.x,
+          });
+        } else if (d.e === "bookTicker" && d.b && d.a) {
+          // Punto medio entre mejor bid y ask: es el precio "del momento" mas honesto
+          // que se puede sacar del libro, y el que menos salta con el spread.
+          actualizarPrecioVivo(card, (Number(d.b) + Number(d.a)) / 2);
+        }
+        this.marcar(card, "en vivo");
+      };
+      ws.onclose = () => { if (this.stream === stream) this.reintentar(card, stream); };
+      ws.onerror = () => { this.marcar(card, "sin vivo"); };
+    },
+
+    reintentar(card, stream) {
+      // Espera creciente con tope. Si el que mira esta en una jurisdiccion que Binance
+      // no atiende, esto va a fallar SIEMPRE y no tiene sentido insistir cada segundo:
+      // se reintenta cada vez mas lento y el sello queda diciendo la verdad.
+      this.marcar(card, "sin vivo");
+      this.intentos += 1;
+      const espera = Math.min(60_000, 2_000 * Math.pow(2, this.intentos - 1));
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        if (this.stream === stream) this.conectar(card, stream);
+      }, espera);
+    },
+
+    cerrar() {
+      clearTimeout(this.timer);
+      this.stream = null;
+      if (this.ws) { try { this.ws.onclose = null; this.ws.close(); } catch (e) {} }
+      this.ws = null;
+    },
+
+    // Vivo de verdad = conectado Y con datos recientes. Un socket abierto que dejo de
+    // mandar frames es justo la falla que se ve igual que estar bien.
+    estado() {
+      if (!this.ws || this.ws.readyState !== 1) return "sin vivo";
+      // Conectado SIN un solo frame no es "en vivo": es conectando. Confundirlos fue mi
+      // error —el titulo quedaba congelado mientras el sello decia que estaba vivo— y
+      // mientras dure, el ticker de respaldo tiene que seguir trabajando.
+      if (!this.frames) return "conectando";
+      return (Date.now() - this.ultimo) < 30_000 ? "en vivo" : "vivo mudo";
+    },
+
+    marcar(card, _estado) { if (card) marcarFuente(card, card.fuenteVelas); },
+
+    // El estado "mudo" solo aparece con el paso del tiempo: nadie dispara un evento
+    // cuando los frames DEJAN de llegar. Sin este latido, un stream muerto se vería
+    // "en vivo" para siempre.
+    vigilar() {
+      setInterval(() => { if (this.card) marcarFuente(this.card, this.card.fuenteVelas); },
+                  20_000);
+    },
+  };
+
+  // Escribe la vela del stream en el grafico. Si es la misma barra, la actualiza; si es
+  // nueva, la agrega. El tick es del MISMO instrumento que las barras (Binance perpetuo),
+  // asi que aplicarlo aca es correcto — al contrario del tick de Crypto.com, que venia de
+  // otro mercado.
+  function aplicarVelaViva(card, k) {
+    if (!card.series || !Array.isArray(card.candles)) return;
+    const ultima = card.candles[card.candles.length - 1];
+    if (!ultima) return;
+    if (k.t < ultima.t) return;                       // frame viejo, se ignora
+    if (k.t === ultima.t) {
+      Object.assign(ultima, { o: k.o, h: k.h, l: k.l, c: k.c, v: k.v });
+    } else {
+      card.candles.push({ t: k.t, o: k.o, h: k.h, l: k.l, c: k.c, v: k.v });
+    }
+    rebuildBars(card);
+    card.series.update({ time: Math.floor(k.t / 1000), open: k.o, high: k.h,
+                         low: k.l, close: k.c });
+
+  }
+
+  // El precio GRANDE del encabezado sigue al stream. Si no, la pantalla muestra un
+  // numero de Crypto.com al lado de un grafico de Binance en vivo — que es exactamente
+  // la discrepancia que Hugo comparaba contra TradingView. Un mismo instrumento por
+  // pantalla, o la costura vuelve por la puerta del titulo.
+  let _ultimoPintado = 0;
+
+  function actualizarPrecioVivo(card, px) {
+    const priceEl = card.node && card.node.querySelector(".ic-price");
+    if (!priceEl || !Number.isFinite(px)) return;
+    // `bookTicker` manda ~740 frames por segundo (medido: 6.650 en 9 s). Escribir el DOM
+    // en cada uno cuelga la pestana y no aporta nada: el ojo no ve mas de unos pocos
+    // cambios por segundo. Se pinta como maximo cada 200 ms; el valor guardado sigue
+    // siendo el ultimo, asi que nada queda desfasado.
+    card.precioUltimo = px;
+    const ahora = Date.now();
+    if (ahora - _ultimoPintado < 200) return;
+    _ultimoPintado = ahora;
+    const anterior = card.precioVivo;
+    card.precioVivo = px;
+    priceEl.textContent = fmtPrice(px);
+    if (anterior != null && px !== anterior) {
+      const dir = px > anterior ? "flash-up" : "flash-down";
+      priceEl.classList.remove("flash-up", "flash-down");
+      void priceEl.offsetWidth;
+      priceEl.classList.add(dir);
+      setTimeout(() => priceEl.classList.remove(dir), 350);
+    }
+  }
+
+  function marcarFuente(card, fuente) {
+    const wrap = card.node && card.node.querySelector(".chart-wrap");
+    if (!wrap) return;
+    let tag = wrap.querySelector(".fuente-velas");
+    if (!tag) {
+      tag = document.createElement("div");
+      tag.className = "fuente-velas";
+      wrap.appendChild(tag);
+    }
+    const binance = fuente === "binance_vps";
+    // El atraso de la barra en formación va EN el sello: es la diferencia entre "el
+    // precio no coincide" y "la barra tiene 7 minutos", y llevan a buscar el problema en
+    // lugares opuestos.
+    const lag = card.pushMeta && Number(card.pushMeta.series_lag_seconds);
+    const min = Number.isFinite(lag) ? Math.floor(lag / 60) : null;
+    const vivo = binance ? vivoBinance.estado() : null;
+    // Tres estados distintos y NINGUNO se puede confundir con otro: "en vivo" (stream
+    // andando), "vivo mudo" (socket abierto que dejo de mandar — la falla que se ve
+    // igual que estar bien) y el push solo, con su atraso a la vista.
+    tag.textContent = !binance ? "Crypto.com"
+      : vivo === "en vivo" ? "Binance Futuros · en vivo"
+      : vivo === "conectando" ? "Binance Futuros · conectando"
+      : vivo === "vivo mudo" ? "Binance Futuros · stream mudo"
+      : "Binance Futuros" + (min ? ` · barra +${min}m` : " · sin vivo");
+    tag.classList.toggle("mudo", vivo === "vivo mudo");
+    tag.title = binance
+      ? "Mismo mercado donde ejecuta el bot, vía el colector del VPS."
+      : "Otro exchange que el de ejecución: en 1m y 5m el push del VPS llega cada 10 min "
+        + "y dejaría el gráfico más atrasado que la vela.";
+    tag.classList.toggle("ajena", !binance);
+  }
+  /* Co-piloto de Trading — frontend.
+   *
+   * Se conecta al stream SSE del backend (/m/trading/api/stream), que empuja el
+   * estado del mercado en vivo. Por cada instrumento dibuja: precio + variación,
+   * estadísticas, gráfico de velas (canvas propio, sin librerías), libro de
+   * órdenes y un panel de señales.
+   *
+   * Si SSE falla, cae a polling de /api/state cada 3s como respaldo.
+   */
   "use strict";
 
   const container = document.getElementById("instruments");
@@ -1079,7 +1254,9 @@ function marcarFuente(card, fuente) {
       // push cada 10 min deja el gráfico más atrasado que la vela misma. Se DICE, no
       // se deja implícito: un gráfico que mezcla venues en silencio es el problema.
       if (j.fuente) { card.fuenteVelas = j.fuente; card.pushMeta = j.push || null;
-                      marcarFuente(card, j.fuente); }
+                      marcarFuente(card, j.fuente);
+                      if (j.stream_vivo) vivoBinance.conectar(card, j.stream_vivo);
+                      else vivoBinance.cerrar(); }
       if (first || card.candles.length !== prevLen) {
         rebuildBars(card);
         const range = card.chart.timeScale().getVisibleLogicalRange();
@@ -1205,6 +1382,10 @@ function marcarFuente(card, fuente) {
       setTimeout(() => priceEl.classList.remove(dir), 350);
     }
     card.lastPrice = newPrice;
+    // Si el grafico va en vivo con Binance, el titulo lo manda el STREAM y no este
+    // ticker: pisarlo aca devolveria el numero de Crypto.com sobre un grafico de
+    // Binance, que es la costura que este cambio vino a cerrar.
+    if (card.fuenteVelas === "binance_vps" && vivoBinance.estado() === "en vivo") return;
     priceEl.textContent = fmtPrice(newPrice);
 
     const changeEl = card.node.querySelector(".ic-change");
@@ -1475,5 +1656,6 @@ function marcarFuente(card, fuente) {
   }
   setupInfo();
 
+  vivoBinance.vigilar();
   init();
 })();
