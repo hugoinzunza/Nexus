@@ -747,63 +747,9 @@ function drawVisualLevels() {
   }
 }
 
-function levelText(level) {
-  return level ? `${fmt(level.price, 0)} USDT` : "—";
-}
-
-function levelMeta(level) {
-  return level ? `${signed(level.distance_pct, "%", 2)} · ${compactUsd(level.intensity_usd)}` : "—";
-}
-
-function renderVisual() {
-  const visual = state.visual_indicator;
-  const snapshot = state.visual_snapshot;
-  const fresh = $("visual-freshness");
-  if (!visual || !snapshot) {
-    fresh.querySelector("b").textContent = "—";
-    fresh.querySelector("span").textContent = "sin captura";
-    $("visual-warning").textContent = state.visual_error || "Esperando la primera captura del colector dedicado.";
-    drawVisualLevels();
-    return;
-  }
-  const score = Number(visual.score);
-  $("visual-score").textContent = Number.isFinite(score) ? signed(score, "", 1) : "—";
-  $("visual-score").className = Number.isFinite(score) ? score >= 18 ? "up" : score <= -18 ? "down" : "" : "";
-  $("visual-label").textContent = visual.label || "No validado";
-  const levels = visual.levels || {};
-  $("visual-nearest-up").textContent = levelText(levels.nearest_above);
-  $("visual-nearest-up-meta").textContent = levelMeta(levels.nearest_above);
-  $("visual-nearest-down").textContent = levelText(levels.nearest_below);
-  $("visual-nearest-down-meta").textContent = levelMeta(levels.nearest_below);
-  $("visual-depth").textContent = compactUsd(visual.depth?.latest_delta_usd);
-  $("visual-depth").className = pctClass(visual.depth?.latest_delta_usd);
-  $("visual-depth-meta").textContent = visual.depth?.decelerating ? "positivo, desacelerando" :
-    visual.depth?.slope_usd == null ? "sin pendiente" :
-    `pendiente ${signed(visual.depth.slope_usd / 1e6, "M", 2)}`;
-  fresh.querySelector("b").textContent = `${fmt(visual.age_seconds, 0)} s`;
-  fresh.querySelector("span").textContent = visual.age_seconds <= 600 ? "captura vigente" : "captura antigua";
-  $("visual-warning").textContent = visual.warning;
-  const c = visual.components || {};
-  $("visual-components").innerHTML =
-    component("Heatmap: atracción", c.heatmap_attraction) +
-    component("Mapa: atracción", c.map_attraction) +
-    component("Delta del libro", c.depth_delta) +
-    component("Muros ballena", c.whale_bid_pressure) +
-    // El consenso conserva el signo: dos componentes de acuerdo bajista deben
-    // leerse negativos (antes Math.abs los pintaba en verde con +).
-    component("Consenso", (c.heatmap_attraction != null && c.map_attraction != null)
-      ? (Math.sign(c.heatmap_attraction) === Math.sign(c.map_attraction) ? (c.heatmap_attraction + c.map_attraction) / 2 : 0)
-      : null);
-  const coverage = visual.coverage || {};
-  $("visual-source").textContent = `Captura ${new Date(snapshot.captured_at).toLocaleString("es-CL")} · tooltip scan`;
-  $("visual-coverage").innerHTML = [
-    ["Mapa acumulado", coverage.map_levels, snapshot.liquidation_map?.range],
-    ["Heatmap Model 2", coverage.heatmap_levels, snapshot.liquidation_heatmap?.range],
-    ["Delta order book", coverage.depth_points, `${snapshot.depth_delta?.interval} · ±${snapshot.depth_delta?.range_pct}%`],
-    ["Órdenes ballena activas", coverage.whale_orders, snapshot.whale_orders?.range],
-  ].map(([layer, count, range]) =>
-    `<tr><td>${escapeHtml(layer)}</td><td>${fmt(count, 0)}</td><td>${escapeHtml(range)}</td><td>Tooltips ECharts</td><td>Research · sin órdenes</td></tr>`
-  ).join("");
+// El bot virtual vive en la pestaña del libro; se separó de `renderVisual` al
+// fusionar Mapa visual con Radar para que cada bloque se pinte donde vive.
+function renderShadow() {
   const shadow = state.visual_shadow || {};
   const metrics = shadow.metrics || {};
   $("shadow-decisions").textContent = fmt(shadow.decisions, 0);
@@ -816,6 +762,35 @@ function renderVisual() {
   $("shadow-result").className = pctClass(metrics.total_net_pct);
   $("shadow-dd").textContent = metrics.max_drawdown_pct == null ? "—" : `DD ${fmt(metrics.max_drawdown_pct, 2)}%`;
   $("shadow-warning").textContent = shadow.warning || "Esperando datos forward";
+}
+
+// Tras fusionar "Mapa visual" con el Radar (auditoría 2026-07-26), esta función
+// dejó de pintar el score, los niveles cercanos y la descomposición: los tres
+// estaban DUPLICADOS con el Radar y con la lectura del momento. Queda con lo que
+// no estaba en ninguna otra parte: el gráfico de bandas, la trazabilidad del
+// colector y el bot virtual (shadow).
+function renderVisual() {
+  const visual = state.visual_indicator;
+  const snapshot = state.visual_snapshot;
+  if (!visual || !snapshot) {
+    $("visual-warning").textContent = state.visual_error
+      || "Esperando la primera captura del colector dedicado.";
+    drawVisualLevels();
+    renderShadow();
+    return;
+  }
+  $("visual-warning").textContent = visual.warning;
+  const coverage = visual.coverage || {};
+  $("visual-source").textContent = `Captura ${new Date(snapshot.captured_at).toLocaleString("es-CL")} · tooltip scan`;
+  $("visual-coverage").innerHTML = [
+    ["Mapa acumulado", coverage.map_levels, snapshot.liquidation_map?.range],
+    ["Heatmap Model 2", coverage.heatmap_levels, snapshot.liquidation_heatmap?.range],
+    ["Delta order book", coverage.depth_points, `${snapshot.depth_delta?.interval} · ±${snapshot.depth_delta?.range_pct}%`],
+    ["Órdenes ballena activas", coverage.whale_orders, snapshot.whale_orders?.range],
+  ].map(([layer, count, range]) =>
+    `<tr><td>${escapeHtml(layer)}</td><td>${fmt(count, 0)}</td><td>${escapeHtml(range)}</td><td>Tooltips ECharts</td><td>Research · sin órdenes</td></tr>`
+  ).join("");
+  renderShadow();
   drawVisualLevels();
 }
 
@@ -1239,7 +1214,8 @@ function activateTab(button) {
       if (button.dataset.tab === "flow") renderFlow();
       if (button.dataset.tab === "liquidations") renderLiquidations();
       if (button.dataset.tab === "orderbook") renderOrderbook();
-      if (button.dataset.tab === "visual") renderVisual();
+      // "visual" se fusionó con "model": el gráfico de bandas vive en el Radar.
+      if (button.dataset.tab === "model") { renderVisual(); renderModel(); }
     });
 }
 

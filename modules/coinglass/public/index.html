@@ -44,7 +44,6 @@
       <button data-tab="flow" id="tab-flow">Flujo</button>
       <button data-tab="liquidations">Liquidaciones</button>
       <button data-tab="orderbook">Libro de órdenes</button>
-      <button data-tab="visual">Mapa visual</button>
       <button data-tab="model">Radar</button>
     </nav>
 
@@ -238,75 +237,17 @@
       </div>
     </section>
 
-    <section class="view" id="view-visual">
-      <div class="visual-status">
-        <div>
-          <p class="eyebrow">SESIÓN AUTORIZADA · TOOLTIP SCAN</p>
-          <h2>Mapa visual CoinGlass</h2>
-          <p id="visual-warning">Esperando la primera captura del colector dedicado.</p>
-        </div>
-        <div class="freshness" id="visual-freshness"><b>—</b><span>sin captura</span></div>
-      </div>
-
-      <div class="visual-score-strip">
-        <div><span>Índice contextual</span><b id="visual-score">—</b><small id="visual-label">No validado</small></div>
-        <div><span>Nivel cercano arriba</span><b id="visual-nearest-up">—</b><small id="visual-nearest-up-meta">—</small></div>
-        <div><span>Nivel cercano abajo</span><b id="visual-nearest-down">—</b><small id="visual-nearest-down-meta">—</small></div>
-        <div><span>Delta libro ±1%</span><b id="visual-depth">—</b><small id="visual-depth-meta">—</small></div>
-      </div>
-
-      <div class="section-head">
-        <div><p class="eyebrow">HEATMAP MODEL 2 · NIVELES ≥ US$5M</p><h2>Bandas de liquidación cercanas</h2></div>
-        <span>Distancia respecto al precio actual</span>
-      </div>
-      <div class="lectura lectura-ancha">
-        <details>
-          <summary><span class="eyebrow">CÓMO SE LEE ESTE GRÁFICO</span><b>Dónde se acumula liquidez alrededor del precio</b></summary>
-          <div class="legend-box">
-            <p><b>Eje Y = precio.</b> Cada barra es una banda donde se acumularían
-              liquidaciones si el precio llega ahí; el <b>largo es el monto</b>. La
-              mayor queda etiquetada.</p>
-            <p><b>Rojo arriba, verde abajo</b> del precio. La línea blanca punteada
-              es BTC ahora.</p>
-            <p>Los <b>rombos celestes</b> son muros del libro de órdenes en ese mismo
-              precio: cuando un rombo coincide con una barra grande, hay
-              <b>confluencia</b> entre liquidez de liquidación y una pared real.</p>
-            <p>Las dos líneas punteadas de color marcan el clúster más cercano de cada
-              lado con su <b>probabilidad histórica de alcance a 4h</b>.</p>
-            <p class="warn">Es un mapa de dónde hay combustible, no de hacia dónde va
-              el precio. Los muros pueden retirarse.</p>
-          </div>
-        </details>
-      </div>
-      <div class="chart-frame visual-levels">
-        <canvas id="visual-level-chart" aria-label="Niveles visuales CoinGlass alrededor del precio"></canvas>
-        <div class="canvas-message" id="visual-level-message"></div>
-      </div>
-
-      <div class="section-head">
-        <div><p class="eyebrow">DESCOMPOSICIÓN</p><h2>Qué está viendo el índice</h2></div>
-        <span>Atracción no equivale a dirección</span>
-      </div>
-      <div class="components" id="visual-components"></div>
-
-      <div class="section-head">
-        <div><p class="eyebrow">TRAZABILIDAD</p><h2>Cobertura del colector</h2></div>
-        <span id="visual-source">Sin fuente visual</span>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Capa</th><th>Muestras</th><th>Rango</th><th>Método</th><th>Uso permitido</th></tr></thead>
-          <tbody id="visual-coverage"><tr><td colspan="5" class="empty">Esperando captura autorizada</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
+    <!-- La pestaña "Mapa visual" se fusionó con el Radar (auditoría 2026-07-26):
+         las dos mostraban el MISMO score y la MISMA descomposición de componentes,
+         y los niveles cercanos aparecían en tres lugares a la vez. Lo único que no
+         estaba duplicado —el gráfico de bandas y la tabla de cobertura— vive ahora
+         dentro del Radar, que es su lugar conceptual. -->
     <section class="view" id="view-model">
       <div class="model-head">
         <div>
           <p class="eyebrow">RADAR VISUAL V1 · NO VALIDADO</p>
           <h2>Contexto de microestructura</h2>
-          <p class="model-copy">Integra las capas visuales autorizadas con el contexto del plan API. Mide atracción y presión; no es una señal de trading.</p>
+          <p class="model-copy" id="visual-warning">Integra las capas visuales autorizadas con el contexto del plan API. Mide atracción y presión; no es una señal de trading.</p>
         </div>
         <div class="score" id="pressure-score"><b>—</b><span>sin datos</span></div>
       </div>
@@ -344,6 +285,34 @@
         <p class="model-copy" id="radar-alcance-nota" style="margin-bottom:22px"></p>
       </div>
 
+      <div class="section-head">
+        <div><p class="eyebrow">HEATMAP MODEL 2 · NIVELES ≥ US$5M</p><h2>Bandas de liquidación cercanas</h2></div>
+        <span>Distancia respecto al precio actual</span>
+      </div>
+      <div class="lectura lectura-ancha">
+        <details>
+          <summary><span class="eyebrow">CÓMO SE LEE ESTE GRÁFICO</span><b>Dónde se acumula liquidez alrededor del precio</b></summary>
+          <div class="legend-box">
+            <p><b>Eje Y = precio.</b> Cada barra es una banda donde se acumularían
+              liquidaciones si el precio llega ahí; el <b>largo es el monto</b>. La
+              mayor queda etiquetada.</p>
+            <p><b>Rojo arriba, verde abajo</b> del precio. La línea blanca punteada
+              es BTC ahora.</p>
+            <p>Los <b>rombos celestes</b> son muros del libro de órdenes en ese mismo
+              precio: cuando un rombo coincide con una barra grande, hay
+              <b>confluencia</b> entre liquidez de liquidación y una pared real.</p>
+            <p>Las dos líneas punteadas de color marcan el clúster más cercano de cada
+              lado con su <b>probabilidad histórica de alcance a 4h</b>.</p>
+            <p class="warn">Es un mapa de dónde hay combustible, no de hacia dónde va
+              el precio. Los muros pueden retirarse.</p>
+          </div>
+        </details>
+      </div>
+      <div class="chart-frame visual-levels">
+        <canvas id="visual-level-chart" aria-label="Niveles visuales CoinGlass alrededor del precio"></canvas>
+        <div class="canvas-message" id="visual-level-message"></div>
+      </div>
+
       <div class="card">
         <div class="card-head">
           <div><p class="eyebrow">DESCOMPOSICIÓN · QUÉ MIDE CADA UNO</p><h2>Componentes</h2></div>
@@ -352,6 +321,17 @@
         <table id="radar-glosario"><thead>
           <tr><th>Componente</th><th>Qué mide</th><th>Cómo se lee</th></tr>
         </thead><tbody></tbody></table>
+      </div>
+
+      <div class="section-head">
+        <div><p class="eyebrow">TRAZABILIDAD</p><h2>Cobertura del colector</h2></div>
+        <span id="visual-source">Sin fuente visual</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Capa</th><th>Muestras</th><th>Rango</th><th>Método</th><th>Uso permitido</th></tr></thead>
+          <tbody id="visual-coverage"><tr><td colspan="5" class="empty">Esperando captura autorizada</td></tr></tbody>
+        </table>
       </div>
 
       <div class="calibration">

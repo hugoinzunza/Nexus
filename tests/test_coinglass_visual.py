@@ -370,8 +370,12 @@ def test_visual_collector_and_model_have_no_bot_or_order_dependency():
     assert "modules.bot" not in source
     assert "place_order" not in source
     assert "execution_enabled" in source
-    assert "Mapa visual" in html
-    assert "SESIÓN AUTORIZADA" in html
+    # Marcadores de que la capa visual sigue cableada. Antes se usaban "Mapa visual"
+    # y "SESIÓN AUTORIZADA", que desaparecieron al fusionar esa pestaña con el Radar
+    # (2026-07-26). Se reemplazan por marcadores del mismo bloque que sí sobreviven,
+    # sin aflojar lo que este test protege: aislamiento de ejecución.
+    assert "Cobertura del colector" in html
+    assert "tooltip scan" in script
     assert "renderVisual" in script
     assert "visual_orderbook_history" in script
     assert "Historial de muros ballena" in html
@@ -967,3 +971,38 @@ def test_la_lectura_del_momento_junta_los_cuatro_datos():
     assert "renderAhora();" in script
     # la edad del muro dominante: un muro de dias no es lo mismo que uno de 5 min
     assert "function edadDelMuro" in script
+
+
+def test_la_pestana_mapa_visual_se_fusiono_con_el_radar():
+    """Las dos mostraban el MISMO score y la MISMA descomposición de componentes, y
+    los niveles cercanos aparecían en tres lugares a la vez (strip, brújula y tabla
+    de alcance). Es el "mucha información" que marcó Hugo.
+    """
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+
+    assert 'data-tab="visual"' not in html, "la pestaña duplicada sigue ahí"
+    assert 'id="view-visual"' not in html
+    # lo único que NO estaba duplicado vive ahora dentro del Radar
+    radar = html.split('id="view-model"')[1]
+    assert 'id="visual-level-chart"' in radar
+    assert 'id="visual-coverage"' in radar
+    # y el score y los componentes quedan UNA sola vez
+    assert html.count('id="visual-score"') == 0
+    assert html.count('id="visual-components"') == 0
+    assert html.count('id="model-components"') == 1
+    assert html.count('id="pressure-score"') == 1
+    assert 'if (button.dataset.tab === "model") { renderVisual(); renderModel(); }' in script
+
+
+def test_ningun_render_apunta_a_un_elemento_que_ya_no_existe():
+    """Candado de la fusión: borrar bloques del HTML deja `$()` devolviendo null y
+    la pestaña entera revienta en silencio."""
+    import re
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    usados = set(re.findall(r'\$\("([a-z0-9-]+)"\)', script))
+    usados |= set(re.findall(r'message\("([a-z0-9-]+)"', script))
+    existen = set(re.findall(r'id="([a-z0-9-]+)"', html))
+    faltan = sorted(usados - existen)
+    assert not faltan, f"app.js referencia ids inexistentes: {faltan}"
