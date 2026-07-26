@@ -20,6 +20,7 @@ caro que cometimos en este proyecto: un bucle que arrancaba una vela antes costa
 from __future__ import annotations
 
 import datetime as dt
+import math
 from typing import Optional
 
 from modules.trading import smc
@@ -30,13 +31,11 @@ from modules.trading import smc
 PASO_RMP = 0.10
 PASOS_PLACEBO = (0.075, 0.125)
 
-# Hasta dónde extender la rejilla. El tope es 9 A PROPÓSITO: con `k = 10` hacia abajo
-# la fórmula del curso da precio CERO, y más allá negativo, que no significa nada para
-# un activo. El apunte lo marca como algo que "una implementación debe descartar
-# explícitamente"; acá se descarta eligiendo el tope, no filtrando después. El guardia
-# de `precio <= 0` en `rejilla()` es por si alguien sube este número, y con K_MAX=9
-# nunca dispara.
-K_MAX = 9
+# El profesor extiende la rejilla hasta +150%. El límite no puede ser simétrico:
+# hacia abajo, -100% ya es precio cero. Se conserva todo lo reproducible del método
+# sin fabricar niveles económicamente imposibles.
+MAX_ARRIBA_PCT = 1.50
+MAX_ABAJO_PCT = 0.90
 
 TF_MS = {
     "1m": 60_000,
@@ -85,6 +84,28 @@ def apertura_anual(velas_diarias: list[dict], anio: int) -> Optional[dict]:
     return None
 
 
+def aperturas_anuales(velas_diarias: list[dict]) -> list[dict]:
+    """Aperturas exactas del 1 de enero presentes en el histórico.
+
+    No conserva retrospectivamente solo las que reaccionaron: devuelve todo año cuyo
+    ancla exacta existe en la serie. Esa diferencia permite mostrar contexto histórico
+    sin copiar la selección discrecional de "refugios exitosos" del curso.
+    """
+    resultado = []
+    for v in velas_diarias:
+        t = int(v["t"])
+        fecha = dt.datetime.fromtimestamp(t / 1000, dt.timezone.utc)
+        if (fecha.month, fecha.day, fecha.hour, fecha.minute) != (1, 1, 0, 0):
+            continue
+        resultado.append({
+            "anio": fecha.year,
+            "t": t,
+            "precio": float(v["o"]),
+            "fecha": fecha.strftime("%Y-%m-%d"),
+        })
+    return resultado
+
+
 def apertura_semanal(velas: list[dict], ahora_ms: int) -> Optional[dict]:
     """Apertura de la semana en curso (lunes 00:00 UTC).
 
@@ -109,23 +130,27 @@ def apertura_semanal(velas: list[dict], ahora_ms: int) -> Optional[dict]:
 
 
 def rejilla(ancla: float, precio: float, paso: float = PASO_RMP,
-            k_max: int = K_MAX) -> list[dict]:
+            max_arriba_pct: float = MAX_ARRIBA_PCT,
+            max_abajo_pct: float = MAX_ABAJO_PCT) -> list[dict]:
     """Niveles `ancla * (1 ± k*paso)`, con la distancia al precio de hoy.
 
     Los pasos son LINEALES respecto del ancla, no compuestos: +20% es `ancla*1.20`,
     no `ancla*1.10^2`. El apunte lo confirma contra la planilla del curso, y es fácil
     equivocarse porque la intuición financiera dice lo contrario.
 
-    Se excluyen los niveles con precio <= 0 (`k >= 10` hacia abajo). Salen igual en el
-    conteo de descartados para que la pantalla pueda decir cuántos se cayeron, en vez
-    de que desaparezcan sin dejar rastro.
+    Los límites se expresan como recorrido porcentual, no como cantidad de líneas. Así
+    los placebos de 7,5% y 12,5% cubren el mismo rango que la rejilla real de 10% sin
+    recibir ventaja por tener más o menos extensión visual.
     """
-    filas, descartados = [], 0
-    for k in range(1, k_max + 1):
-        for signo in (1, -1):
+    filas = []
+    limites = (
+        (1, math.floor((max_arriba_pct + 1e-12) / paso)),
+        (-1, math.floor((max_abajo_pct + 1e-12) / paso)),
+    )
+    for signo, k_max in limites:
+        for k in range(1, k_max + 1):
             px = ancla * (1 + signo * k * paso)
             if px <= 0:
-                descartados += 1
                 continue
             filas.append({
                 "k": k, "dir": "arriba" if signo > 0 else "abajo",
@@ -134,8 +159,6 @@ def rejilla(ancla: float, precio: float, paso: float = PASO_RMP,
                 "dist_pct": round((px / precio - 1) * 100, 2) if precio else None,
             })
     filas.sort(key=lambda f: f["precio"])
-    for f in filas:
-        f["descartados_por_precio_no_positivo"] = descartados
     return filas
 
 

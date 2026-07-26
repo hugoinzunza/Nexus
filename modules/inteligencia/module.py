@@ -244,9 +244,18 @@ class InteligenciaModule(NexusModule):
                 velas, fuente, meta = self._velas(symbol, tf, tope)
                 ahora_ms = int(time.time() * 1000)
                 cerradas = P.velas_cerradas(velas, tf, ahora_ms)
+                # El navegador SI puede hablar con Binance (el 451 es del datacenter
+                # de Railway, no de la ubicacion del que mira), asi que la cola en vivo
+                # la trae el browser. Sin esto el grafico quedaba 13,3 min atrasado
+                # —push cada 10 min mas la cache de 5— y se veia como precio congelado.
+                # El nombre del stream lo arma el SERVIDOR para no duplicar el mapeo.
+                stream = (f"{symbol.lower()}@kline_{tf}"
+                          if fuente == "vps_binance" and tf in klines_push.TFS_SERVIBLES
+                          else None)
                 return self._json(200, {"symbol": symbol, "tf": tf, "velas": velas,
                                         "piv": PIV_CURSO, "fuente": fuente,
                                         "fuente_meta": meta,
+                                        "stream_vivo": stream,
                                         "as_of": ahora_ms,
                                         "velas_cerradas": len(cerradas),
                                         "vela_abierta": len(velas) > len(cerradas),
@@ -273,6 +282,7 @@ class InteligenciaModule(NexusModule):
 
         anio = time.gmtime().tm_year
         ancla = P.apertura_anual(diarias_c, anio)
+        anclas_historicas = P.aperturas_anuales(diarias_c)
         # Si el año en curso no tiene ancla (par listado después del 1 de enero), se
         # dice que no la hay. Usar la primera vela disponible sería una ficción con
         # cara de dato, que es justo lo que el curso hace y nosotros no.
@@ -309,6 +319,11 @@ class InteligenciaModule(NexusModule):
             # la estructura están viejos y la pantalla tiene que decirlo.
             "fuente": fuente_h,
             "fuente_diaria": fuente_d,
+            # Medido el 2026-07-26: el push cada 10 min mas la cache de 5 min del
+            # modulo daban 13,3 min de atraso, y la pantalla no lo decia. Un precio
+            # de hace 13 minutos presentandose como el actual es la misma familia de
+            # defecto que veniamos corrigiendo todo el dia.
+            "push_edad_s": klines_push.edad_segundos(ROOT_REPO),
             "fuente_meta": meta_h,
             "fuente_diaria_meta": meta_d,
             "precio": px,
@@ -316,6 +331,7 @@ class InteligenciaModule(NexusModule):
             "ultima_1h_cerrada": horarias_c[-1]["t"] if horarias_c else None,
             "anio": anio,
             "apertura_anual": ancla,
+            "aperturas_anuales": anclas_historicas,
             "desde_apertura_anual_pct": (round((px / ancla["precio"] - 1) * 100, 2)
                                          if ancla and px else None),
             "rejilla": grid,

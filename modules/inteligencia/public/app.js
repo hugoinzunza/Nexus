@@ -28,6 +28,132 @@ function decimales(px) {
   return a >= 10 ? 2 : a >= 1 ? 4 : a >= 0.1 ? 5 : a >= 0.01 ? 6 : 8;
 }
 
+
+/* Cola en vivo directo desde Binance para el grafico.
+ *
+ * Sin esto el grafico quedaba con 13,3 minutos de atraso —medido: push cada 10 min mas
+ * la cache de 5 min del modulo— y Hugo lo vio como un precio congelado. El navegador SI
+ * puede hablar con Binance: el HTTP 451 es del datacenter de Railway, no de la
+ * ubicacion del que mira.
+ *
+ * Stream COMBINADO porque el de klines calla con el mercado quieto (medido: 0 frames en
+ * 10 s en 15m) mientras `bookTicker` manda 65-740 por segundo. Los frames de bookTicker
+ * se descartan ANTES de parsear; los de kline nunca, que son los autoritativos.
+ *
+ * LO QUE NO CAMBIA: los paneles de abajo se calculan en el SERVIDOR y siguen con el
+ * push. Medido que no les afecta —BTC se mueve 0,072% en 15 min y "desde la apertura
+ * anual" pasa de -26,01% a -25,95%— pero la edad se declara igual.
+ */
+const vivo = {
+  ws: null, stream: null, frames: 0, ultimo: 0, _bt: 0, intentos: 0, timer: null,
+
+  conectar(stream) {
+    if (this.stream === stream && this.ws && this.ws.readyState <= 1) return;
+    this.cerrar();
+    this.stream = stream;
+    this.frames = 0;
+    const partes = `${stream}/${stream.split("@")[0]}@bookTicker`;
+    let ws;
+    try { ws = new WebSocket(`wss://fstream.binance.com/stream?streams=${partes}`); }
+    catch (e) { return; }
+    this.ws = ws;
+    ws.onopen = () => { this.intentos = 0; this.ultimo = Date.now(); this.sello(); };
+    ws.onmessage = (ev) => {
+      if (ev.data.indexOf('"e":"bookTicker"') > 0) {
+        const t = Date.now();
+        if (t - this._bt < 150) return;
+        this._bt = t;
+      }
+      let d;
+      try { d = (JSON.parse(ev.data)).data; } catch (e) { return; }
+      if (!d) return;
+      this.ultimo = Date.now();
+      this.frames += 1;
+      if (d.k) tickVela({ t: Number(d.k.t), o: +d.k.o, h: +d.k.h, l: +d.k.l, c: +d.k.c });
+      else if (d.e === "bookTicker" && d.b && d.a) tickPrecio((+d.b + +d.a) / 2);
+      this.sello();
+    };
+    ws.onclose = () => { if (this.stream === stream) this.reintentar(stream); };
+  },
+
+  reintentar(stream) {
+    this.sello();
+    this.intentos += 1;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => { if (this.stream === stream) this.conectar(stream); },
+                            Math.min(60_000, 2_000 * Math.pow(2, this.intentos - 1)));
+  },
+
+  cerrar() {
+    clearTimeout(this.timer);
+    this.stream = null;
+    if (this.ws) { try { this.ws.onclose = null; this.ws.close(); } catch (e) {} }
+    this.ws = null;
+  },
+
+  estado() {
+    if (!this.ws || this.ws.readyState !== 1) return "sin vivo";
+    if (!this.frames) return "conectando";
+    return (Date.now() - this.ultimo) < 30_000 ? "en vivo" : "stream mudo";
+  },
+
+  sello() {
+    const e = $("updated");
+    if (!e) return;
+    const st = this.estado();
+    // La edad del push va al lado del estado del stream: son dos cosas distintas —el
+    // grafico puede ir en vivo mientras los paneles siguen con datos de hace 13 min— y
+    // callar la segunda es lo que hizo que Hugo viera un precio congelado sin saber por que.
+    const edad = state.data && Number(state.data.push_edad_s);
+    const min = Number.isFinite(edad) ? Math.round(edad / 60) : null;
+    e.textContent = (st === "en vivo" ? "gráfico en vivo" : `gráfico ${st}`)
+      + (min != null ? ` · paneles hace ${min} min` : "");
+  },
+};
+
+// El tick mueve la vela en curso Y el precio del encabezado. Si la vela que tenemos ya
+// no es la actual, se CREA: estirar una vieja fabrica una vela que nunca existio, y eso
+// ya nos paso en el grafico de trading.
+function tickPrecio(px) {
+  if (!Number.isFinite(px) || !state.velas.length) return;
+  const paso = state.velas.length > 1
+    ? state.velas[state.velas.length - 1].t - state.velas[state.velas.length - 2].t : 0;
+  let ult = state.velas[state.velas.length - 1];
+  if (paso > 0) {
+    const abre = Math.floor(Date.now() / paso) * paso;
+    if (abre > ult.t) {
+      ult = { t: abre, o: px, h: px, l: px, c: px, v: 0 };
+      state.velas.push(ult);
+    }
+  }
+  ult.c = px;
+  if (px > ult.h) ult.h = px;
+  if (px < ult.l) ult.l = px;
+  pintarTick(ult, px);
+}
+
+function tickVela(k) {
+  if (!state.velas.length) return;
+  const ult = state.velas[state.velas.length - 1];
+  if (k.t < ult.t) return;
+  if (k.t === ult.t) Object.assign(ult, k);
+  else state.velas.push({ ...k, v: 0 });
+  pintarTick(state.velas[state.velas.length - 1], k.c);
+}
+
+let _pintado = 0;
+function pintarTick(vela, px) {
+  const ahora = Date.now();
+  if (ahora - _pintado < 100) return;      // ~10/s: continuo sin ahogar el DOM
+  _pintado = ahora;
+  if (state.series) {
+    state.series.update({ time: Math.floor(vela.t / 1000), open: vela.o,
+                          high: vela.h, low: vela.l, close: vela.c });
+  }
+  const el = $("price");
+  if (el) el.textContent = fmt(px, decimales(px));
+}
+
 // --- gráfico ---------------------------------------------------------
 function crearGrafico() {
   if (!window.LightweightCharts || state.chart) return;
@@ -74,6 +200,7 @@ function pintarNiveles() {
   limpiarLineas();
   const d = state.data;
   const verPlacebo = $("ver-placebo").checked;
+  const verHistoricas = $("ver-historicas").checked;
 
   // Solo los niveles que caen en el rango de precio VISIBLE de las velas cargadas.
   // Sin este recorte, la rejilla anual llega a ±90% y aplasta el eje: es el mismo
@@ -100,6 +227,13 @@ function pintarNiveles() {
     for (const [paso, filas] of Object.entries(d.rejilla_placebo || {})) {
       const pct = (Number(paso) * 100).toFixed(1).replace(".", ",");
       for (const f of filas) linea(f.precio, "rgba(91,98,114,.75)", `${pct}%`, 2);
+    }
+  }
+  if (verHistoricas) {
+    for (const a of d.aperturas_anuales || []) {
+      if (a.anio !== d.anio) {
+        linea(a.precio, "#b7a7e8", `apertura ${a.anio}`, 2, 1);
+      }
     }
   }
   if (d.apertura_semanal) {
@@ -182,10 +316,10 @@ function pintarPaneles() {
     $("ps-fecha").textContent = "los datos no alcanzan la semana en curso";
   }
 
-  // Tabla de la rejilla, ordenada por cercanía al precio: lo primero que uno quiere
-  // saber es qué nivel tiene más cerca, no el mapa completo.
+  // Tabla completa, ordenada por cercanía. El indicador del profesor permite muchos
+  // niveles; recortarla a ocho hacía parecer que faltaban cálculos.
   const filas = [...(d.rejilla || [])]
-    .sort((a, b) => Math.abs(a.dist_pct) - Math.abs(b.dist_pct)).slice(0, 8);
+    .sort((a, b) => Math.abs(a.dist_pct) - Math.abs(b.dist_pct));
   $("tabla-rejilla").innerHTML =
     "<thead><tr><th>nivel</th><th>precio</th><th>distancia</th></tr></thead><tbody>" +
     filas.map((f) => `<tr><td>${f.pct_del_ancla > 0 ? "+" : ""}${f.pct_del_ancla}% del ancla</td>` +
@@ -321,6 +455,7 @@ async function cargar() {
     pintarNiveles();
     if (vl.estructura) pintarPivotes(vl.estructura);
     pintarPaneles();
+    if (vl.stream_vivo) vivo.conectar(vl.stream_vivo); else vivo.cerrar();
     pintarMapa();
     // La fuente de los datos NO es un detalle: si viene del respaldo versionado,
     // el precio y la estructura estan viejos y todo lo demas hay que leerlo distinto.
@@ -379,6 +514,7 @@ function iniciar() {
     });
   }
   $("ver-placebo").addEventListener("change", pintarNiveles);
+  $("ver-historicas").addEventListener("change", pintarNiveles);
   for (const b of document.querySelectorAll(".ayuda")) {
     b.addEventListener("click", () => {
       const caja = $(`ayuda-${b.dataset.ayuda}`);
@@ -387,6 +523,8 @@ function iniciar() {
     });
   }
   setInterval(cargar, 60_000);
+  // Latido del sello: nadie dispara un evento cuando los frames PARAN.
+  setInterval(() => vivo.sello(), 20_000);
 }
 
 iniciar();

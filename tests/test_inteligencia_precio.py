@@ -47,11 +47,14 @@ def test_la_rejilla_es_lineal_y_no_compuesta():
 
 
 def test_la_rejilla_nunca_produce_precios_cero_o_negativos():
-    """Con `k >= 10` hacia abajo la formula del curso da cero y luego negativo, que
-    no significa nada para un activo. El tope de K_MAX existe para eso."""
-    assert P.K_MAX < 10
+    """El curso llega a +150%, pero abajo -100% ya sería precio cero."""
     for ancla in (100.0, 87_608.3, 0.05):
-        for f in P.rejilla(ancla, ancla):
+        filas = P.rejilla(ancla, ancla)
+        porcentajes = {f["pct_del_ancla"] for f in filas}
+        assert max(porcentajes) == 150
+        assert min(porcentajes) == -90
+        assert len(filas) == 24
+        for f in filas:
             assert f["precio"] > 0
 
 
@@ -65,6 +68,14 @@ def test_la_apertura_anual_no_se_inventa_si_falta_el_comienzo_del_anio():
     assert ancla and ancla["fecha"] == "2024-01-01"
     empieza_el_2 = velas_diarias(desde="2024-01-02", n=100)
     assert P.apertura_anual(empieza_el_2, 2024) is None
+
+
+def test_las_aperturas_historicas_no_seleccionan_solo_anios_exitosos():
+    velas = velas_diarias(desde="2024-01-01", n=800)
+    anclas = P.aperturas_anuales(velas)
+    assert [a["anio"] for a in anclas] == [2024, 2025, 2026]
+    sin_inicio_2024 = velas_diarias(desde="2024-03-01", n=700)
+    assert [a["anio"] for a in P.aperturas_anuales(sin_inicio_2024)] == [2025, 2026]
 
 
 def test_la_apertura_semanal_no_entrega_una_semana_vieja_como_actual():
@@ -514,6 +525,7 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
         assert f'data-horizonte="{horizonte}"' in html
         assert f'"{horizonte}":' in modulo
     assert 'value="1w"' in html
+    assert 'id="ver-historicas"' in html
     assert "/mapa?" in js
     assert '"execution_enabled": False' in modulo
     assert '"validated": False' in modulo

@@ -70,6 +70,7 @@
       <div class="leyenda">
         <span><i style="background:#e8b653"></i> rejilla anual 10%</span>
         <span><i style="background:#5b6272"></i> placebo 7,5% / 12,5%</span>
+        <span><i style="background:#b7a7e8"></i> aperturas anuales históricas</span>
         <span><i style="background:#43bdd7"></i> apertura semanal</span>
         <span><i style="background:#ef6370"></i> pivote alto confirmado</span>
         <span><i style="background:#24c88a"></i> pivote bajo confirmado</span>
@@ -77,6 +78,10 @@
       <label class="toggle">
         <input type="checkbox" id="ver-placebo"> mostrar rejillas placebo
         <small>si el precio parece respetar las tres por igual, lo que ves es densidad, no niveles</small>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="ver-historicas"> mostrar aperturas anuales históricas
+        <small>se muestran todos los años disponibles, no solo aquellos donde hubo reacción</small>
       </label>
     </section>
 
@@ -129,7 +134,7 @@
         <div class="stat"><span>apertura semanal</span><strong id="ps">—</strong>
           <small id="ps-fecha"></small></div>
       </div>
-      <div class="scroll-x"><table id="tabla-rejilla"></table></div>
+      <div class="scroll-x tabla-niveles"><table id="tabla-rejilla"></table></div>
     </section>
 
     <!-- Vacío disponible: la única idea nueva del curso -->
