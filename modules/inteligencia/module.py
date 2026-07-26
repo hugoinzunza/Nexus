@@ -41,6 +41,11 @@ MAX_EDAD_PUSH_S = 25 * 60
 FAPI_KLINES = "/fapi/v1/klines"
 TTL_VELAS = 300          # 5 min: los niveles son de mediano plazo, no hace falta más
 MAX_VELAS = 500
+# El diario va aparte y mas largo: 500 dias solo alcanzan las anclas de 2025 y 2026.
+# El colector del VPS empuja 1.500 velas diarias justamente para cubrir desde 2022,
+# y servir solo 500 desperdiciaba eso y dejaba sin ancla los anos anteriores. Las
+# velas diarias son chicas, asi que traerlas todas no cuesta nada.
+MAX_VELAS_DIARIAS = 1_500
 
 # Pivotes: el curso enseña 5+1+5. No se toma como verdad —NexUX ya usa 10 para rangos
 # y 2 para el CDC, y la justificación del curso (cinco días bursátiles) no traslada a
@@ -238,7 +243,8 @@ class InteligenciaModule(NexusModule):
                 tf = query.get("tf") or "1h"
                 if tf not in self.TFS:
                     return self._json(400, {"error": "temporalidad no habilitada"})
-                velas, fuente = self._velas(symbol, tf, MAX_VELAS)
+                tope = MAX_VELAS_DIARIAS if tf == "1d" else MAX_VELAS
+                velas, fuente = self._velas(symbol, tf, tope)
                 return self._json(200, {"symbol": symbol, "tf": tf, "velas": velas,
                                         "piv": PIV_CURSO, "fuente": fuente,
                                         "estructura": P.estructura(velas, PIV_CURSO)})
@@ -250,7 +256,7 @@ class InteligenciaModule(NexusModule):
                                     "research_only": True})
 
     def _estado(self, symbol: str) -> dict:
-        diarias, fuente_d = self._velas(symbol, "1d", 400)
+        diarias, fuente_d = self._velas(symbol, "1d", MAX_VELAS_DIARIAS)
         horarias, fuente_h = self._velas(symbol, "1h", MAX_VELAS)
         ahora_ms = int(time.time() * 1000)
         px = float(horarias[-1]["c"]) if horarias else 0.0
