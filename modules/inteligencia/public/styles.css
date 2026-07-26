@@ -177,3 +177,12 @@ td.num { font-family: ui-monospace, monospace; }
   margin-top: 14px; padding-top: 12px;
   border-top: 1px solid rgba(239, 99, 112, .3);
 }
+
+/* El aviso de procedencia va en rojo y el de validez en ámbar: son dos preguntas
+   distintas —de dónde salen los datos, y qué se midió sobre ellos— y con el mismo
+   color el ojo las lee como una sola. */
+.aviso-datos {
+  background: rgba(239, 99, 112, .08);
+  border-color: rgba(239, 99, 112, .3);
+  color: #f0a6ae;
+}

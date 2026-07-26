@@ -257,15 +257,19 @@ async function cargar() {
       const ult = state.velas.length
         ? new Date(state.velas[state.velas.length - 1].t).toLocaleDateString("es-CL")
         : "?";
-      $("updated").textContent = `datos historicos hasta ${ult}`;
+      $("updated").textContent = `datos históricos hasta ${ult}`;
       const caja = document.querySelector(".disclaimer");
-      if (caja && !caja.dataset.fuente) {
-        caja.dataset.fuente = "1";
-        caja.insertAdjacentHTML("afterbegin",
-          "<strong>Datos historicos, no en vivo.</strong> Binance bloquea a este " +
-          "servidor (HTTP 451), asi que la vista usa los klines versionados del " +
-          "repo. La apertura anual sigue siendo correcta —el 1 de enero no cambia—; " +
-          "el precio y la apertura semanal no. ");
+      // Aviso PROPIO, no pegado adentro del otro: son dos cosas distintas —de dónde
+      // salen los datos, y qué se midió sobre ellos— y mezclarlas en un párrafo hace
+      // que ninguna de las dos se lea.
+      if (caja && !document.getElementById("aviso-datos")) {
+        caja.insertAdjacentHTML("beforebegin",
+          '<p class="disclaimer aviso-datos" id="aviso-datos">' +
+          "<strong>Datos históricos, no en vivo.</strong> Binance bloquea a este " +
+          "servidor (HTTP 451), así que la vista usa los klines versionados del " +
+          "repo. La apertura anual sigue siendo correcta —el 1 de enero ya pasó y no " +
+          "cambia—; el precio y la apertura semanal, no." +
+          "</p>");
       }
     } else {
       $("updated").textContent = "actualizado " +
