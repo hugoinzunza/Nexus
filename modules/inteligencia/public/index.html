@@ -179,6 +179,39 @@
       </p>
     </section>
 
+    <section class="card medicion" id="medicion-evento">
+      <h2>Y el evento de entrada tampoco</h2>
+      <p class="med-lead">
+        El gate central del curso es esperar <strong>dos cierres consecutivos</strong>
+        más allá de la referencia rota. Los cuatro brazos posibles están medidos sobre
+        los <strong>8.440 setups</strong> del mismo universo, pareados 1 a 1.
+      </p>
+      <div class="scroll-x"><table>
+        <thead><tr><th>entrada</th><th>opera</th><th>RR realizado</th><th>vs entrar al toque</th></tr></thead>
+        <tbody>
+          <tr><td><strong>al toque</strong></td><td class="num">100%</td><td class="num">4,25</td><td>—</td></tr>
+          <tr><td>en la confirmación</td><td class="num">31,6%</td><td class="num">1,15</td><td class="num">pierde</td></tr>
+          <tr><td>ruptura + retest</td><td class="num">21,0%</td><td class="num">1,30</td><td class="num">−1,22R · CI [−1,34; −1,09]</td></tr>
+        </tbody>
+      </table></div>
+      <p class="med-nota">
+        <strong>La confirmación tiene información pero destruye el precio.</strong>
+        Las zonas que después confirman rinden +0,68R contra −0,16R las que no. Pero
+        el ratio realizado cae de 4,25 a 1,15 al esperar, y el retest solo recupera
+        el 5% de eso. El 52% de los fills del retest queda con ratio menor a 1.
+      </p>
+      <p class="med-nota">
+        <strong>El control que lo cierra:</strong> el retest <em>no le gana</em> a
+        esperar 10 velas sin condición de precio (p=0,42). Lo que aporta es la espera,
+        no el retest. Y poner la orden en el nivel sin exigir ruptura ni vuelta le
+        gana al retest operando el doble.
+      </p>
+      <p class="med-nota lim">
+        Ninguno de los cuatro brazos convierte esa información en expectativa. Informe
+        en <code>research/ruptura_retest_2026-07-26.md</code>.
+      </p>
+    </section>
+
     <p class="fuente">
       Apuntes y auditoría del curso en <code>research/crecetrader/</code>. Klines
       públicas de Binance Futuros, sin firma y sin credenciales. Este módulo no crea

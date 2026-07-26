@@ -174,6 +174,23 @@ def test_el_resultado_que_refuta_la_rejilla_esta_en_la_pantalla():
     assert "ancla corrida" in html or "corrida tres d" in html
 
 
+def test_el_gate_de_entrada_del_curso_tambien_esta_medido_en_pantalla():
+    """El gate central del curso —dos cierres consecutivos— tiene los cuatro brazos
+    medidos sobre 8.440 setups pareados, y ninguno convierte la informacion de la
+    confirmacion en expectativa: el RR realizado cae de 4,25 (toque) a 1,15 (CDC), y
+    el retest recupera solo hasta 1,30.
+
+    Va en la vista por la misma razon que la rejilla: un usuario que opere mirando
+    esta pantalla tiene que ver que esperar la confirmacion le cuesta el precio.
+    """
+    html = open(INDEX, encoding="utf-8").read()
+    assert "4,25" in html and "1,15" in html and "1,30" in html
+    assert "8.440" in html
+    # el control que cierra el caso: esperar sin condicion de precio empata
+    assert "sin condición de precio" in html or "sin condicion de precio" in html
+    assert "0,42" in html
+
+
 def test_la_rejilla_placebo_viaja_siempre_al_lado_de_la_del_curso():
     """Una rejilla sola SIEMPRE parece funcionar: con suficientes niveles el precio
     reacciona en alguno. El placebo de 7,5% y 12,5% es lo que convierte la pantalla
