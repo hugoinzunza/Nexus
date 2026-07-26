@@ -399,13 +399,14 @@ class TradingModule(NexusModule):
         # las senales a mitad del dry-run haria incomparables los trades de antes y
         # despues, y la Fase 1 esta juntando muestra con un criterio pre-registrado.
         # Ese cambio va cuando la Fase 1 cierre, con su propia linea de corte.
-        fuente = "cryptocom"
+        fuente, meta_push = "cryptocom", {}
         recent = []
         inst = self._inst_by_name.get(instrument, {})
         sym = inst.get("binance")
         if sym:
             iv = binance.UI_TO_BINANCE.get(timeframe, timeframe)
-            empujadas = klines_push.serie(_ROOT_REPO, sym, iv, self.chart_candle_count)
+            empujadas, meta_push = klines_push.serie_con_meta(
+                _ROOT_REPO, sym, iv, self.chart_candle_count)
             if empujadas:
                 recent, fuente = empujadas, "binance_vps"
         if not recent:
@@ -415,7 +416,8 @@ class TradingModule(NexusModule):
         deep = self._deep_history(instrument, timeframe)
         full = self._merge_candles(deep, recent, len(deep) + len(recent) + 10) if deep else recent
         with self._chart_lock:
-            self._full_cache[key] = {"candles": full, "ts": now, "fuente": fuente}
+            self._full_cache[key] = {"candles": full, "ts": now, "fuente": fuente,
+                                     "push": meta_push}
         return full
 
     def _fuente_grafico(self, instrument: str, timeframe: str) -> str:
@@ -425,6 +427,16 @@ class TradingModule(NexusModule):
         with self._chart_lock:
             entry = self._full_cache.get((instrument, timeframe))
         return (entry or {}).get("fuente") or "cryptocom"
+
+    def _push_meta(self, instrument: str, timeframe: str) -> dict:
+        """Frescura del push. La barra en formación puede ir hasta 10 min atrasada
+        —el timer del VPS corre cada 10— y sin publicar ese retraso el gráfico parece
+        estar en desacuerdo de PRECIO con TradingView cuando el desacuerdo es de
+        TIEMPO. Son cosas distintas y confundirlas manda a buscar el bug al lugar
+        equivocado."""
+        with self._chart_lock:
+            entry = self._full_cache.get((instrument, timeframe))
+        return (entry or {}).get("push") or {}
 
     def _htf_candles(self, instrument: str) -> dict:
         """Velas de las TF de POIs: historia PROFUNDA persistida (años) con el tramo
@@ -878,6 +890,7 @@ class TradingModule(NexusModule):
                 "timeframe": timeframe,
                 "candles": candles,
                 "fuente": self._fuente_grafico(instrument, timeframe),
+                "push": self._push_meta(instrument, timeframe),
                 "has_more": len(subset) > len(candles),  # ¿quedan más viejas?
             }, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)

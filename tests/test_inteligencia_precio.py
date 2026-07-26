@@ -527,3 +527,31 @@ def test_el_lector_del_push_vive_en_un_solo_lugar():
         assert "from core import klines_push" in src
         assert "inteligencia_klines.json" not in src, \
             f"{mod} vuelve a abrir el archivo por su cuenta"
+
+
+def test_un_tick_de_otro_exchange_no_pisa_una_vela_de_binance():
+    """Hugo comparo el grafico con TradingView y no cuadraba. Una de las causas era
+    esta: el SSE trae el tick de Crypto.com y `rebuildBars`/`liveUpdate` lo escribian
+    encima del close/high/low de la ULTIMA vela — que desde el cambio a Binance viene
+    de otro instrumento. Mezcla de dos mercados DENTRO de una misma vela, justo en la
+    barra que uno mira.
+
+    Medido: el basis ronda 0,045% en la mediana, el 6% de la distancia a TP1.
+    """
+    js = open(os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()
+    assert "tickCompatible" in js
+    bloque = js.split("function rebuildBars")[1].split("\nfunction ")[0]
+    assert 'card.fuenteVelas === "cryptocom"' in bloque, \
+        "el tick vuelve a aplicarse sin mirar de que exchange son las velas"
+    vivo = js.split("function liveUpdate")[1].split("\nfunction ")[0]
+    assert 'card.fuenteVelas !== "cryptocom"' in vivo, "liveUpdate no se protegio"
+
+
+def test_el_atraso_de_la_barra_en_formacion_se_publica():
+    """"El precio no coincide" y "la barra tiene 7 minutos" mandan a buscar el problema
+    a lugares opuestos. El push llega cada 10 min, asi que el atraso es real y tiene
+    que estar a la vista."""
+    fuente = open(TRADING, encoding="utf-8").read()
+    assert '"push": self._push_meta(instrument, timeframe),' in fuente
+    assert "series_lag_seconds" in open(
+        os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()

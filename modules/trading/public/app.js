@@ -9,7 +9,14 @@ function marcarFuente(card, fuente) {
     wrap.appendChild(tag);
   }
   const binance = fuente === "binance_vps";
-  tag.textContent = binance ? "Binance Futuros" : "Crypto.com";
+  // El atraso de la barra en formación va EN el sello: es la diferencia entre "el
+  // precio no coincide" y "la barra tiene 7 minutos", y llevan a buscar el problema en
+  // lugares opuestos.
+  const lag = card.pushMeta && Number(card.pushMeta.series_lag_seconds);
+  const min = Number.isFinite(lag) ? Math.floor(lag / 60) : null;
+  tag.textContent = binance
+    ? "Binance Futuros" + (min ? ` · barra +${min}m` : "")
+    : "Crypto.com";
   tag.title = binance
     ? "Mismo mercado donde ejecuta el bot, vía el colector del VPS."
     : "Otro exchange que el de ejecución: en 1m y 5m el push del VPS llega cada 10 min "
@@ -569,7 +576,13 @@ function marcarFuente(card, fuente) {
   function _ohlc(card) {
     const cs = card.candles || [];
     const closes = cs.map((c) => c.c), highs = cs.map((c) => c.h), lows = cs.map((c) => c.l);
-    if (card.lastPrice != null && cs.length) {
+    // El tick en vivo viene del SSE de Crypto.com. Si las velas son de Binance, pisar
+    // la última con ese precio mezcla dos instrumentos DENTRO de una misma vela — y
+    // el basis spot/perp/otro-exchange ronda 0,045% en la mediana, que es el 6% de la
+    // distancia a TP1. Es la costura invisible que hace que el gráfico discrepe de
+    // TradingView justo en la barra que uno mira.
+    const tickCompatible = !card.fuenteVelas || card.fuenteVelas === "cryptocom";
+    if (tickCompatible && card.lastPrice != null && cs.length) {
       const i = cs.length - 1;
       closes[i] = card.lastPrice;
       highs[i] = Math.max(highs[i], card.lastPrice);
@@ -585,7 +598,7 @@ function marcarFuente(card, fuente) {
     const ts = (c) => Math.floor(c.t / 1000);
     if (card.ind.vol) {
       card.ind.vol.setData(cs.map((c, i) => ({ time: ts(c), value: c.v,
-        color: (i === cs.length - 1 ? card.lastPrice ?? c.c : c.c) >= c.o ? "rgba(22,199,132,0.5)" : "rgba(234,57,67,0.5)" })));
+        color: (i === cs.length - 1 && tickCompatible ? card.lastPrice ?? c.c : c.c) >= c.o ? "rgba(22,199,132,0.5)" : "rgba(234,57,67,0.5)" })));
     }
     if (card.ind.rsi) {
       const r = rsiCalc(closes, 14);
@@ -855,6 +868,10 @@ function marcarFuente(card, fuente) {
   // Actualiza la última vela con el precio en vivo del SSE.
   function liveUpdate(card) {
     if (!card.series || !card.bars.length || card.lastPrice == null) return;
+    // Mismo motivo que en rebuildBars: no inyectar un tick de otro exchange en una
+    // vela de Binance. Sin esto, la vela en formación mostraba un precio que no
+    // pertenece a la serie y el gráfico "no cuadraba" con TradingView.
+    if (card.fuenteVelas && card.fuenteVelas !== "cryptocom") return;
     const last = card.bars[card.bars.length - 1];
     card.series.update({
       time: last.time, open: last.open,
@@ -1061,7 +1078,8 @@ function marcarFuente(card, fuente) {
       // llega Binance vía el colector del VPS, y en 1m/5m sigue Crypto.com porque un
       // push cada 10 min deja el gráfico más atrasado que la vela misma. Se DICE, no
       // se deja implícito: un gráfico que mezcla venues en silencio es el problema.
-      if (j.fuente) marcarFuente(card, j.fuente);
+      if (j.fuente) { card.fuenteVelas = j.fuente; card.pushMeta = j.push || null;
+                      marcarFuente(card, j.fuente); }
       if (first || card.candles.length !== prevLen) {
         rebuildBars(card);
         const range = card.chart.timeScale().getVisibleLogicalRange();
