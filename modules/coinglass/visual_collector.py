@@ -629,6 +629,39 @@ async def bootstrap(profile: Path) -> None:
         print("Bootstrap CoinGlass cerrado; el perfil dedicado quedo persistido.")
 
 
+def archivar_local(snapshot: dict[str, Any], destino: Path) -> str | None:
+    """Copia append-only del libro, en la misma máquina que captura.
+
+    Hasta ahora el histórico vivía SOLO en la instancia remota, y de un lado que no
+    se puede leer con el token (sirve para escribir, no para leer). Guardar acá una
+    segunda copia resuelve el acceso sin abrir ninguna vía de lectura nueva en la
+    web, y de paso el dato deja de estar en un único lugar.
+
+    Se guarda la misma forma reducida que persiste el módulo —precio y muros— porque
+    es lo que consumen los estudios; el snapshot completo ya queda en `--output`.
+
+    Devuelve un mensaje de error si falla, None si salió bien. NUNCA levanta: un
+    problema de disco no puede costar un ciclo de captura. Eso ya pasó una vez con un
+    guard que fallaba cerrado y se perdió una recolección entera.
+    """
+    try:
+        filas = snapshot.get("whale_orders", {}).get("rows") or []
+        fila = {
+            "captured_at": snapshot.get("captured_at"),
+            "price": snapshot.get("price"),
+            "bids": [[r["price"], r["amount_usd"]] for r in filas
+                     if r.get("side") == "bid"],
+            "asks": [[r["price"], r["amount_usd"]] for r in filas
+                     if r.get("side") == "ask"],
+        }
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        with open(destino, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(fila, separators=(",", ":")) + "\n")
+        return None
+    except (OSError, KeyError, TypeError) as exc:
+        return str(exc)
+
+
 def publish(snapshot: dict[str, Any], remote_url: str, token: str) -> None:
     request = urllib.request.Request(
         remote_url.rstrip("/") + "/m/coinglass/api/visual-ingest",
@@ -647,6 +680,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--remote-url", default=os.environ.get("NEXUS_REMOTE_URL", ""))
     parser.add_argument("--token", default=os.environ.get("NEXUS_INGEST_TOKEN", ""))
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--archivo-local",
+        type=Path,
+        default=(Path(os.environ["NEXUS_BOOK_ARCHIVE"])
+                 if os.environ.get("NEXUS_BOOK_ARCHIVE") else None),
+        help=("copia append-only del libro en esta máquina (JSONL). Sin esto, el "
+              "histórico vive sólo en la instancia remota, que no se puede leer con "
+              "el token de ingesta."),
+    )
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--bootstrap", action="store_true")
     parser.add_argument("--interval", type=int, default=300)
@@ -676,6 +718,9 @@ async def run(args: argparse.Namespace) -> None:
                 encoding="utf-8",
             )
             os.chmod(args.output, 0o600)
+        aviso_archivo = None
+        if args.archivo_local:
+            aviso_archivo = archivar_local(snapshot, args.archivo_local)
         if args.remote_url:
             if not args.token:
                 raise RuntimeError("NEXUS_INGEST_TOKEN requerido para publicar")
@@ -687,6 +732,7 @@ async def run(args: argparse.Namespace) -> None:
             f"{len(snapshot['liquidation_heatmap']['levels'])} heatmap, "
             f"{len(snapshot['depth_delta']['series'])} delta, "
             f"{len(snapshot['whale_orders']['rows'])} whale"
+            + (f" · ARCHIVO LOCAL FALLO: {aviso_archivo}" if aviso_archivo else "")
         )
         if args.once:
             return

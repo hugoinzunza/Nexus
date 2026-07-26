@@ -814,3 +814,48 @@ def test_el_archivo_no_cruza_research_con_ejecucion():
     OFFLINE por captured_at, sin que trading importe coinglass ni al reves."""
     cg = (ROOT / "modules/coinglass/module.py").read_text()
     assert "modules.trading" not in cg and "setups_store" not in cg
+
+
+def test_el_colector_guarda_copia_local_append_only(tmp_path):
+    """Hasta ahora el historial vivía SOLO en la instancia remota, y de un lado que
+    el token no puede leer (sirve para escribir, no para leer). La copia local
+    resuelve el acceso sin abrir ninguna vía de lectura nueva en la web.
+    """
+    from modules.coinglass.visual_collector import archivar_local
+
+    destino = tmp_path / "sub" / "archivo.jsonl"
+    assert archivar_local(snapshot(), destino) is None      # crea el directorio
+    assert archivar_local(snapshot(), destino) is None      # y es APPEND
+
+    lineas = destino.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lineas) == 2
+    fila = json.loads(lineas[0])
+    assert fila["price"] == 64_238
+    assert sorted(fila) == ["asks", "bids", "captured_at", "price"]
+    # mismos muros que el snapshot, separados por lado
+    assert [64_750, 1_630_000] in fila["asks"]
+    assert [63_750, 1_800_000] in fila["bids"]
+    assert len(fila["bids"]) == 2 and len(fila["asks"]) == 2
+
+
+def test_la_copia_local_nunca_puede_costar_un_ciclo_de_captura(tmp_path):
+    """Ya pasó: un guard mío fallando cerrado le costó una recolección entera al
+    colector. Un problema de disco se reporta y se sigue."""
+    from modules.coinglass.visual_collector import archivar_local
+
+    # un archivo donde un directorio ocupa el lugar del fichero
+    ocupado = tmp_path / "ocupado.jsonl"
+    ocupado.mkdir()
+    assert archivar_local(snapshot(), ocupado) is not None   # devuelve el error
+
+    # y un snapshot corrupto tampoco levanta
+    roto = {"captured_at": "x", "whale_orders": {"rows": [{"side": "bid"}]}}
+    assert archivar_local(roto, tmp_path / "b.jsonl") is not None
+
+
+def test_el_archivo_local_es_opcional_y_va_por_env():
+    """Debe poder desplegarse sin cambiar la unidad de systemd."""
+    src = (ROOT / "modules/coinglass/visual_collector.py").read_text()
+    assert "--archivo-local" in src
+    assert "NEXUS_BOOK_ARCHIVE" in src
+    assert "aviso_archivo" in src, "un fallo silencioso no serviria de nada"
