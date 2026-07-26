@@ -6,13 +6,297 @@
   "aviso": "Research only - No senal - No bot - NO usar para activar live",
   "pregunta": "el precio reacciona distinto en un muro real que en un nivel vacio a la misma distancia",
   "diseno": "pareado por bucket de distancia y lado; el nivel evaluado es el centro del bucket tenga muro o no",
-  "piso_observado_usd": 0,
-  "corte_para_contar_como_muro": 0.0,
+  "piso_observado_usd": 1000000.0,
+  "corte_para_contar_como_muro": 1200000.0,
   "margen_sobre_el_piso": 1.2,
   "rebote_pct": 0.3,
-  "capturas": 0,
-  "independencia": "capturas consecutivas comparten muros: el CI es por bloques contiguos y aun asi hay que leerlo con cuidado",
-  "sin_datos_suficientes": true
+  "capturas": 192,
+  "independencia": "capturas consecutivas comparten muros: el CI es por bloques contiguos y aun asi hay que leerlo con cuidado"
  },
- "por_horizonte": {}
+ "por_horizonte": {
+  "12": {
+   "n": 2160,
+   "excursion_maxima_pct": 0.457,
+   "global": {
+    "alcanzado": {
+     "con_muro": 0.3,
+     "sin_muro": 0.0,
+     "bootstrap": {
+      "dif_pp": 0.33,
+      "ci95": [
+       0.0,
+       0.84
+      ],
+      "cruza_cero": true
+     }
+    },
+    "rebote": {
+     "con_muro": 0.0,
+     "sin_muro": null,
+     "bootstrap": null
+    }
+   },
+   "por_bucket": {
+    "0.25-0.5": {
+     "n_con": 349,
+     "n_sin": 11,
+     "alcanzable": true,
+     "evaluable": false,
+     "motivo": "brazo corto (con=349, sin=11, minimo 30)",
+     "alcanzado": {
+      "n_con": 349,
+      "n_sin": 11,
+      "con_muro": 1.4,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 349,
+      "n_sin": 11,
+      "con_muro": 0.0,
+      "sin_muro": null
+     }
+    },
+    "0.5-0.75": {
+     "n_con": 184,
+     "n_sin": 176,
+     "alcanzable": false,
+     "evaluable": false,
+     "motivo": "fuera del alcance del precio en la ventana",
+     "alcanzado": {
+      "n_con": 184,
+      "n_sin": 176,
+      "con_muro": 0.0,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 184,
+      "n_sin": 176,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    },
+    "0.75-1.0": {
+     "n_con": 176,
+     "n_sin": 184,
+     "alcanzable": false,
+     "evaluable": false,
+     "motivo": "fuera del alcance del precio en la ventana",
+     "alcanzado": {
+      "n_con": 176,
+      "n_sin": 184,
+      "con_muro": 0.0,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 176,
+      "n_sin": 184,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    },
+    "1.0-1.5": {
+     "n_con": 170,
+     "n_sin": 190,
+     "alcanzable": false,
+     "evaluable": false,
+     "motivo": "fuera del alcance del precio en la ventana",
+     "alcanzado": {
+      "n_con": 170,
+      "n_sin": 190,
+      "con_muro": 0.0,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 170,
+      "n_sin": 190,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    },
+    "1.5-2.0": {
+     "n_con": 302,
+     "n_sin": 58,
+     "alcanzable": false,
+     "evaluable": false,
+     "motivo": "fuera del alcance del precio en la ventana",
+     "alcanzado": {
+      "n_con": 302,
+      "n_sin": 58,
+      "con_muro": 0.0,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 302,
+      "n_sin": 58,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    },
+    "2.0-3.0": {
+     "n_con": 360,
+     "n_sin": 0,
+     "alcanzable": false,
+     "evaluable": false,
+     "motivo": "fuera del alcance del precio en la ventana",
+     "alcanzado": {
+      "n_con": 360,
+      "n_sin": 0,
+      "con_muro": 0.0,
+      "sin_muro": null
+     },
+     "rebote": {
+      "n_con": 360,
+      "n_sin": 0,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    }
+   },
+   "buckets_evaluables": [],
+   "interpretable": false
+  },
+  "36": {
+   "n": 1872,
+   "excursion_maxima_pct": 0.614,
+   "global": {
+    "alcanzado": {
+     "con_muro": 2.1,
+     "sin_muro": 0.0,
+     "bootstrap": {
+      "dif_pp": 2.07,
+      "ci95": [
+       1.1,
+       3.14
+      ],
+      "cruza_cero": false
+     }
+    },
+    "rebote": {
+     "con_muro": 0.0,
+     "sin_muro": null,
+     "bootstrap": null
+    }
+   },
+   "por_bucket": {
+    "0.25-0.5": {
+     "n_con": 301,
+     "n_sin": 11,
+     "alcanzable": true,
+     "evaluable": false,
+     "motivo": "brazo corto (con=301, sin=11, minimo 30)",
+     "alcanzado": {
+      "n_con": 301,
+      "n_sin": 11,
+      "con_muro": 9.3,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 301,
+      "n_sin": 11,
+      "con_muro": 0.0,
+      "sin_muro": null
+     }
+    },
+    "0.5-0.75": {
+     "n_con": 184,
+     "n_sin": 128,
+     "alcanzable": true,
+     "evaluable": true,
+     "motivo": null,
+     "alcanzado": {
+      "n_con": 184,
+      "n_sin": 128,
+      "con_muro": 0.0,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 184,
+      "n_sin": 128,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    },
+    "0.75-1.0": {
+     "n_con": 158,
+     "n_sin": 154,
+     "alcanzable": false,
+     "evaluable": false,
+     "motivo": "fuera del alcance del precio en la ventana",
+     "alcanzado": {
+      "n_con": 158,
+      "n_sin": 154,
+      "con_muro": 0.0,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 158,
+      "n_sin": 154,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    },
+    "1.0-1.5": {
+     "n_con": 122,
+     "n_sin": 190,
+     "alcanzable": false,
+     "evaluable": false,
+     "motivo": "fuera del alcance del precio en la ventana",
+     "alcanzado": {
+      "n_con": 122,
+      "n_sin": 190,
+      "con_muro": 0.0,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 122,
+      "n_sin": 190,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    },
+    "1.5-2.0": {
+     "n_con": 268,
+     "n_sin": 44,
+     "alcanzable": false,
+     "evaluable": false,
+     "motivo": "fuera del alcance del precio en la ventana",
+     "alcanzado": {
+      "n_con": 268,
+      "n_sin": 44,
+      "con_muro": 0.0,
+      "sin_muro": 0.0
+     },
+     "rebote": {
+      "n_con": 268,
+      "n_sin": 44,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    },
+    "2.0-3.0": {
+     "n_con": 312,
+     "n_sin": 0,
+     "alcanzable": false,
+     "evaluable": false,
+     "motivo": "fuera del alcance del precio en la ventana",
+     "alcanzado": {
+      "n_con": 312,
+      "n_sin": 0,
+      "con_muro": 0.0,
+      "sin_muro": null
+     },
+     "rebote": {
+      "n_con": 312,
+      "n_sin": 0,
+      "con_muro": null,
+      "sin_muro": null
+     }
+    }
+   },
+   "buckets_evaluables": [
+    "0.5-0.75"
+   ],
+   "interpretable": true
+  }
+ }
 }

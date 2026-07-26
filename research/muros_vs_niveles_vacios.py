@@ -120,6 +120,41 @@ def piso_observado(capturas):
     return min(montos) if montos else 0
 
 
+
+# Minimo de observaciones en CADA brazo para que un bucket se considere evaluable.
+# Es por brazo a proposito: en el corrida del 2026-07-26 el bucket 0.25-0.5% tenia
+# n_con=301 y n_sin=ONCE, y el estudio reportaba "+2,07 pp, NO cruza cero" como si
+# fuera un hallazgo. Comparar 28 eventos de 301 contra 0 de 11 no es una comparacion.
+MIN_POR_BRAZO = 30
+
+
+def excursion_maxima(capturas, horizonte):
+    """El mayor movimiento porcentual que el precio alcanzo en CUALQUIER ventana del
+    horizonte evaluado.
+
+    Existe porque el gate de suficiencia contaba CAPTURAS, que es la cantidad
+    equivocada. El 2026-07-26 hubo 192 capturas -por encima del minimo- de un mercado
+    que se movio 0,88% en 16 horas: con una excursion maxima de 0,61%, TODOS los
+    buckets desde 0,75% para arriba eran inalcanzables por aritmetica. Sus celdas
+    salian "0,0% contra 0,0%", que se lee como "no hay efecto" cuando en realidad es
+    "nunca se probo".
+
+    Contar capturas mide cuanto tiempo estuvo prendido el colector. Esto mide si
+    hubo algo que observar.
+    """
+    peor = 0.0
+    for i in range(max(0, len(capturas) - horizonte)):
+        ventana = [c["price"] for c in capturas[i:i + horizonte + 1]]
+        if not ventana:
+            continue
+        origen = ventana[0]
+        if origen <= 0:
+            continue
+        peor = max(peor, (max(ventana) / origen - 1) * 100,
+                   (origen / min(ventana) - 1) * 100)
+    return round(peor, 3)
+
+
 def observaciones(capturas, horizonte, corte_muro=0.0):
     """Una fila por (captura, lado, bucket): si había muro y qué hizo el precio.
 
@@ -262,7 +297,9 @@ def main():
 
     for h in HORIZONTES:
         filas = observaciones(capturas, h, corte_muro)
-        bloque = {"n": len(filas), "global": {}, "por_bucket": {}}
+        exc = excursion_maxima(capturas, h)
+        bloque = {"n": len(filas), "excursion_maxima_pct": exc,
+                  "global": {}, "por_bucket": {}}
         for campo in ("alcanzado", "rebote"):
             bloque["global"][campo] = {
                 "con_muro": tasa([f for f in filas if f["hay_muro"]], campo),
@@ -272,15 +309,34 @@ def main():
         for lo, hi in BUCKETS:
             b = f"{lo}-{hi}"
             sel = [f for f in filas if f["bucket"] == b]
+            n_con = sum(1 for f in sel if f["hay_muro"])
+            n_sin = sum(1 for f in sel if not f["hay_muro"])
+            # Un bucket mas lejos que la mayor excursion observada NUNCA se probo.
+            # Reportar su 0,0% como si fuera un resultado es la diferencia entre
+            # "no hay efecto" y "no hay datos", y son cosas opuestas.
+            alcanzable = lo <= exc
             bloque["por_bucket"][b] = {
-                campo: {
-                    "n_con": sum(1 for f in sel if f["hay_muro"]),
-                    "n_sin": sum(1 for f in sel if not f["hay_muro"]),
-                    "con_muro": tasa([f for f in sel if f["hay_muro"]], campo),
-                    "sin_muro": tasa([f for f in sel if not f["hay_muro"]], campo),
+                "n_con": n_con, "n_sin": n_sin,
+                "alcanzable": alcanzable,
+                "evaluable": alcanzable and n_con >= MIN_POR_BRAZO and n_sin >= MIN_POR_BRAZO,
+                "motivo": (None if alcanzable and n_con >= MIN_POR_BRAZO and n_sin >= MIN_POR_BRAZO
+                           else "fuera del alcance del precio en la ventana" if not alcanzable
+                           else f"brazo corto (con={n_con}, sin={n_sin}, minimo {MIN_POR_BRAZO})"),
+                **{
+                    campo: {
+                        "n_con": n_con,
+                        "n_sin": n_sin,
+                        "con_muro": tasa([f for f in sel if f["hay_muro"]], campo),
+                        "sin_muro": tasa([f for f in sel if not f["hay_muro"]], campo),
+                    }
+                    for campo in ("alcanzado", "rebote")
                 }
-                for campo in ("alcanzado", "rebote")
             }
+        evaluables = [b for b, v in bloque["por_bucket"].items() if v["evaluable"]]
+        bloque["buckets_evaluables"] = evaluables
+        # Sin un solo bucket evaluable, el global no significa nada: se calcula igual
+        # para poder verlo, pero queda marcado para que nadie lo lea como resultado.
+        bloque["interpretable"] = bool(evaluables)
         salida["por_horizonte"][str(h)] = bloque
 
     with open(OUT_JSON, "w", encoding="utf-8") as fh:
@@ -291,6 +347,13 @@ def main():
     for h in HORIZONTES:
         b = salida["por_horizonte"][str(h)]
         print(f"=== horizonte {h} capturas ({h*5} min) · n={b['n']} ===")
+        print(f"  excursion maxima del precio en la ventana: {b['excursion_maxima_pct']:.2f}%")
+        if not b["interpretable"]:
+            print("  NO INTERPRETABLE: ningun bucket cumple el minimo por brazo o")
+            print("  el precio nunca llego tan lejos. Lo de abajo es aritmetica, no")
+            print("  un resultado. Cero por cero no es 'no hay efecto': es 'no se probo'.")
+        else:
+            print(f"  buckets evaluables: {', '.join(b['buckets_evaluables'])}")
         for campo in ("alcanzado", "rebote"):
             g = b["global"][campo]
             bs = g["bootstrap"]

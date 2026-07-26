@@ -206,3 +206,46 @@ def test_el_fixture_patologico_no_se_puede_sanear():
     precios = [c["price"] for c in caps]
     recorrido = (max(precios) / min(precios) - 1) * 100
     assert recorrido < 2.0, f"el fixture se volvio volatil ({recorrido:.2f}%)"
+
+
+def test_un_bucket_fuera_del_alcance_del_precio_no_es_evaluable():
+    """"Cero por cero" NO es "no hay efecto": es "no se probo".
+
+    Corrida real del 2026-07-26: 192 capturas -por encima del minimo de 180- de un
+    mercado que se movio 0,88% en 16 horas. Con una excursion maxima de 0,61%, TODOS
+    los buckets desde 0,75% para arriba eran inalcanzables por aritmetica, y sus
+    celdas salian "0,0% contra 0,0%". El estudio las reportaba como si fueran
+    resultados.
+    """
+    caps = capturas_patologicas(n=200)
+    exc12 = est.excursion_maxima(caps, 12)
+    assert exc12 >= 0
+    # el fixture apenas se mueve, igual que la realidad
+    assert exc12 < 2.0
+
+    src = codigo()
+    assert "excursion_maxima" in src
+    assert "alcanzable" in src and "evaluable" in src
+    assert "MIN_POR_BRAZO" in src
+
+
+def test_el_minimo_se_exige_en_CADA_brazo_no_en_el_total():
+    """El defecto exacto: el bucket 0.25-0.5% tenia n_con=301 y n_sin=ONCE, y el
+    estudio reportaba "+2,07 pp, NO cruza cero". Comparar 28 eventos de 301 contra 0
+    de 11 no es una comparacion; el total de 312 disimulaba que un brazo no existia.
+    """
+    src = codigo()
+    bloque = src.split("por_bucket")[1][:1200]
+    assert "n_con >= MIN_POR_BRAZO and n_sin >= MIN_POR_BRAZO" in src, \
+        "el minimo tiene que exigirse en los DOS brazos"
+
+
+def test_el_gate_de_suficiencia_ya_no_mira_solo_el_conteo_de_capturas():
+    """Contar capturas mide cuanto tiempo estuvo prendido el colector, no si hubo
+    algo que observar. El estudio tiene que poder decir NO INTERPRETABLE aunque le
+    sobren capturas."""
+    src = codigo()
+    assert "interpretable" in src
+    assert "buckets_evaluables" in src
+    fuente = open(FUENTE, encoding="utf-8").read()
+    assert "no se probo" in fuente or "no se probó" in fuente
