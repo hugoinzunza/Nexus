@@ -394,16 +394,37 @@ def test_score_formula_esta_congelada_y_los_muros_quedan_fuera():
     renormalizado por el peso disponible, y la presión de muros ballena NO
     puede entrar. Sin este test, agregar `whale_bid_pressure` al cálculo pasa
     la suite en verde y promueve al score una variable sin forward.
+
+    ACTUALIZADO 2026-07-26: desde la auditoría, un heatmap atrasado más de 30 min
+    queda FUERA del score en vez de solo avisar. Y este fixture resultó tener el
+    heatmap atrasado **190 minutos** —o sea el "caso benigno" nunca lo fue en este
+    eje, y el 23,9 histórico se calculaba con el componente de mayor peso describiendo
+    el pasado—. El valor correcto ahora es 22,4, con el heatmap excluido.
+
+    Por eso el esperado se arma desde `score_components` y no desde `components`:
+    `components` publica el valor CRUDO de cada señal, que sigue siendo lo que se
+    quiere ver en la UI; `score_components` dice cuál entró de verdad al puntaje.
     """
     indicator = build_visual_indicator(snapshot(), now=NOW)
     c = indicator["components"]
+    usados = indicator["score_components"]
 
-    pesos = {"heatmap_attraction": 0.50, "map_attraction": 0.30, "depth_delta": 0.20}
-    disponible = sum(w for k, w in pesos.items() if c[k] is not None)
+    # el fixture está atrasado y por eso el heatmap no puntúa: si algún día se le
+    # arregla el reloj, este assert avisa antes de que el test mienta en silencio
+    assert indicator["coverage"]["heatmap_lag_seconds"] == 11_400
+    assert usados["heatmap"] is None and usados["degradado"] is True
+
+    pesos = {"heatmap": 0.50, "map": 0.30, "depth": 0.20}
+    disponible = sum(w for k, w in pesos.items() if usados[k] is not None)
     esperado = round(max(-100, min(100, sum(
-        c[k] * w for k, w in pesos.items() if c[k] is not None) / disponible * 100)), 1)
+        usados[k] * w for k, w in pesos.items() if usados[k] is not None)
+        / disponible * 100)), 1)
 
     assert indicator["score"] == esperado, "la fórmula del score cambió sin actualizar el test"
+    assert indicator["score"] == 22.4, "el score del fixture cambió de valor"
+    # el valor CRUDO del heatmap se sigue publicando aparte: excluirlo del puntaje no
+    # es lo mismo que dejar de medirlo
+    assert c["heatmap_attraction"] is not None
     assert "whale_bid_pressure" in c, "la presión de muros debe seguir publicándose aparte"
 
     # Un desbalance de muros extremo no puede mover el puntaje ni una décima.

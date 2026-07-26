@@ -130,6 +130,11 @@ class CoinGlassModule(NexusModule):
     def __init__(self, context):
         super().__init__(context)
         self._lock = threading.Lock()
+        # Capturas botadas por el techo duro cuando el archivo historico no acepta.
+        # Vive en memoria: se reinicia con el proceso y eso esta bien, porque lo que
+        # importa es que un operador VEA que se esta perdiendo ahora, no llevar la
+        # contabilidad historica de las perdidas.
+        self._perdidas_por_archivo = 0
 
     def api(self, subpath, query, user=None):
         if subpath != "state":
@@ -156,7 +161,11 @@ class CoinGlassModule(NexusModule):
                     book_history, hours=24, cap=PUBLIC_VISUAL_BOOK_HISTORY)
             # Observable a propósito: si el archivo dejara de crecer habría que
             # enterarse, no descubrirlo dentro de unos meses al ir a usarlo.
-            data["visual_book_archive"] = _estado_del_archivo(VISUAL_BOOK_ARCHIVE_PATH)
+            archivo = _estado_del_archivo(VISUAL_BOOK_ARCHIVE_PATH)
+            # Se publica junto a la salud del archivo: si hay perdidas, el numero
+            # tiene que estar donde ya se mira la frescura, no en un log que nadie lee.
+            archivo["capturas_perdidas"] = self._perdidas_por_archivo
+            data["visual_book_archive"] = archivo
             try:
                 indicator = build_visual_indicator(visual)
                 data["visual_indicator"] = indicator
@@ -223,16 +232,38 @@ class CoinGlassModule(NexusModule):
                             if row["side"] == "ask"
                         ],
                     })
-                    # Lo que se cae de la ventana va al histórico ANTES de recortar.
+                    # Solo se recorta lo que el archivo CONFIRMÓ haber guardado.
+                    #
+                    # Antes se archivaba, se botaba el valor de retorno y se recortaba
+                    # igual. `_archivar_descartadas` devuelve `{escritas, error,
+                    # lleno}` precisamente para que esto no pasara, y yo lo ignoré:
+                    # con el archivo lleno o un error de disco, la captura vieja no se
+                    # guardaba Y además desaparecía de la ventana caliente. Perdida
+                    # para siempre, en silencio, que es exactamente lo que este
+                    # archivo venía a evitar (auditoría 2026-07-26).
+                    #
+                    # Si el archivo falla, la ventana caliente CRECE en vez de perder.
+                    # Eso no puede ser infinito, así que hay un techo duro: pasado el
+                    # doble, se bota lo más viejo y se cuenta. Perder contando es malo;
+                    # perder sin contar es indefendible.
                     if len(book_history) > MAX_VISUAL_BOOK_HISTORY:
-                        _archivar_descartadas(
-                            VISUAL_BOOK_ARCHIVE_PATH,
-                            book_history[:-MAX_VISUAL_BOOK_HISTORY],
-                        )
-                    self._write_path(
-                        VISUAL_BOOK_HISTORY_PATH,
-                        book_history[-MAX_VISUAL_BOOK_HISTORY:],
-                    )
+                        sobrantes = book_history[:-MAX_VISUAL_BOOK_HISTORY]
+                        arch = _archivar_descartadas(VISUAL_BOOK_ARCHIVE_PATH, sobrantes)
+                        if arch["escritas"] == len(sobrantes):
+                            book_history = book_history[-MAX_VISUAL_BOOK_HISTORY:]
+                        else:
+                            self.context.log(
+                                "coinglass: el archivo historico no acepto "
+                                f"{len(sobrantes)} capturas "
+                                f"({arch['error'] or 'lleno'}); NO se recortan")
+                            if len(book_history) > 2 * MAX_VISUAL_BOOK_HISTORY:
+                                perdidas = len(book_history) - 2 * MAX_VISUAL_BOOK_HISTORY
+                                book_history = book_history[-2 * MAX_VISUAL_BOOK_HISTORY:]
+                                self._perdidas_por_archivo += perdidas
+                                self.context.log(
+                                    f"coinglass: TECHO DURO, {perdidas} capturas "
+                                    f"perdidas (total {self._perdidas_por_archivo})")
+                    self._write_path(VISUAL_BOOK_HISTORY_PATH, book_history)
             else:
                 self._write(body)
         return self._json(200, {"ok": True})

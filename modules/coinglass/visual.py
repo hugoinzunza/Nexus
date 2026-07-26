@@ -11,6 +11,11 @@ MAX_LEVELS = 400
 MAX_DEPTH_POINTS = 500
 MAX_WHALE_ORDERS = 500
 MAX_SNAPSHOT_AGE_SECONDS = 30 * 60
+# Desfase a partir del cual el heatmap deja de puntuar. Los 30 min ya eran el umbral
+# del aviso `stale_heatmap`; no se elige un número nuevo para no inventar dos
+# criterios distintos para la misma pregunta. El heatmap se muestrea en una columna
+# fija del canvas: si esa columna no es la vigente, el componente describe el pasado.
+MAX_HEATMAP_LAG_S = 30 * 60
 
 
 class VisualSnapshotError(ValueError):
@@ -483,8 +488,25 @@ def build_visual_indicator(
     escalera_arriba = _escalera(heatmap_levels, price, above=True)
     escalera_abajo = _escalera(heatmap_levels, price, above=False)
 
+    # El heatmap ATRASADO deja de puntuar, no solo de avisar.
+    #
+    # `heatmap_lag` se medía, se publicaba y `stale_heatmap` se pintaba en la UI, pero
+    # el componente seguía entrando con su 0,50 igual. Auditoría del 2026-07-26: un
+    # heatmap atrasado 3h10 daba EXACTAMENTE el mismo score que uno fresco. O sea el
+    # aviso existía y no hacía nada, que es peor que no medirlo: da la sensación de
+    # estar cubierto.
+    #
+    # Es el mismo defecto que veníamos corrigiendo todo el día en este módulo: una
+    # cantidad que sabemos degradada, usada a fuerza completa sin declararlo.
+    #
+    # Al excluirlo, `available_weight` renormaliza sola y el score pasa a ser mapa
+    # (0,30) + profundidad (0,20). Eso CAMBIA lo que el número significa, así que el
+    # payload publica cuáles componentes entraron y por qué; un score degradado que se
+    # ve igual que uno completo seria otra vez el mismo engaño.
+    heatmap_stale = heatmap_lag is not None and heatmap_lag > MAX_HEATMAP_LAG_S
+    componente_heatmap = None if heatmap_stale else heatmap_asymmetry
     components = [
-        (heatmap_asymmetry, 0.50),
+        (componente_heatmap, 0.50),
         (map_asymmetry, 0.30),
         (depth_component, 0.20),
     ]
@@ -570,13 +592,25 @@ def build_visual_indicator(
             # Desfase entre el reloj del tooltip del heatmap y la captura. El
             # heatmap es tiempo×precio y se muestrea en una columna fija del
             # canvas: si esa columna no es la vigente, el componente de mayor
-            # peso del score describe el pasado. Medirlo es la única forma de
-            # saberlo (auditoría 2026-07-24); no altera el puntaje.
+            # peso del score describe el pasado. Medirlo era la única forma de
+            # saberlo (auditoría 2026-07-24) y desde el 2026-07-26 además EXCLUYE
+            # el componente del puntaje en vez de solo avisar.
             "heatmap_lag_seconds": heatmap_lag,
         },
-        # Señal de observabilidad: el heatmap va más de media hora atrás de la
-        # captura. No bloquea nada, se muestra en la UI.
-        "stale_heatmap": (heatmap_lag is not None and heatmap_lag > 1_800),
+        "stale_heatmap": heatmap_stale,
+        # Qué compuso realmente el score. Sin esto, un puntaje degradado se ve igual
+        # que uno completo y el lector no tiene cómo saber que le falta el componente
+        # de mayor peso.
+        "score_components": {
+            "heatmap": None if heatmap_stale else heatmap_asymmetry,
+            "map": map_asymmetry,
+            "depth": depth_component,
+            "peso_disponible": round(available_weight, 2),
+            "degradado": heatmap_stale or available_weight < 1.0,
+            "motivo": ("heatmap atrasado más de "
+                       f"{MAX_HEATMAP_LAG_S // 60} min: excluido del score"
+                       if heatmap_stale else None),
+        },
         "warning": (
             "Contexto experimental: localiza liquidez, muros ballena y "
             "desequilibrios; no predice por sí solo la dirección ni habilita órdenes."
