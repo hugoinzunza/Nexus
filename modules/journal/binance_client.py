@@ -32,7 +32,21 @@ import urllib.request
 
 FAPI = "https://fapi.binance.com"
 SAPI = "https://api.binance.com"
-RECV_WINDOW = 5000
+# Binance rechaza con -1021 si `timestamp` cae fuera de
+# [serverTime - recvWindow, serverTime + 1000]. Con 5.000 ms el colector del VPS
+# fallaba el 17% de las veces (142 de 843 intentos en 24 h) PESE a tener NTP activo y
+# el reloj sincronizado: no es deriva del reloj, es latencia VPS-Binance más el
+# desfase del propio reloj de Binance.
+#
+# Se atacan los DOS lados del intervalo, porque la ventana sólo cubre uno:
+#   * `RECV_WINDOW` más ancha tolera que el timestamp llegue "viejo" por latencia;
+#   * `ADELANTO_SEGURO_MS` resta un margen para no llegar nunca "adelantado", que es
+#     el lado que recvWindow NO puede cubrir (Binance sólo tolera +1000 ms fijos).
+#
+# 10 s sigue muy por debajo del máximo de 60 s que permite Binance, y estos endpoints
+# son de SOLO LECTURA, así que ampliar la ventana no abre superficie de riesgo real.
+RECV_WINDOW = 10_000
+ADELANTO_SEGURO_MS = 1_000
 TIMEOUT = 15
 
 # Caché en memoria con TTL (para no golpear la API en cada carga del panel).
@@ -100,7 +114,7 @@ def signed_get_with_keys(base: str, path: str, key: str, secret: str, params: di
     if not key or not secret:
         raise BinanceError("sin credenciales")
     p = dict(params or {})
-    p["timestamp"] = int(time.time() * 1000)
+    p["timestamp"] = int(time.time() * 1000) - ADELANTO_SEGURO_MS
     p["recvWindow"] = RECV_WINDOW
     qs = urllib.parse.urlencode(p)
     sig = hmac.new(secret.encode("utf-8"), qs.encode("utf-8"), hashlib.sha256).hexdigest()

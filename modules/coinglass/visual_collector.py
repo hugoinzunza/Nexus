@@ -170,13 +170,43 @@ def parse_whale_order(
     }
 
 
-def public_btc_price() -> float:
-    request = urllib.request.Request(BINANCE_PRICE_URL, headers={"accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=15) as response:
-        value = float(json.loads(response.read().decode("utf-8"))["price"])
-    if not 1_000 < value < 1_000_000:
-        raise RuntimeError("Precio publico BTC fuera de rango")
-    return value
+def public_btc_price(intentos: int = 4) -> float:
+    """Precio de referencia INDEPENDIENTE de CoinGlass, con reintentos propios.
+
+    Se usa para `_assert_chart_matches_symbol`: si el perfil de Chrome cambió de
+    símbolo, el gráfico no es BTC y hay que fallar cerrado. Esa protección se queda.
+
+    Lo que cambia (2026-07-26): antes una sola llamada, y Binance responde 429 con
+    frecuencia — 5 veces en 6 h, ~7% de los ciclos. Como esto se invoca AL FINAL, un
+    429 tiraba a la basura todo el scraping ya hecho y `collect_with_retry` reiniciaba
+    Chrome completo: pico de 1,3 GB y ~60 s de CPU, unas 20 veces al día.
+
+    Reintentar acá cuesta segundos en vez de un navegador. NO se cae a los klines
+    locales, que fue mi primera idea: son un dataset versionado en el repo y en el VPS
+    tenían 41 días de antigüedad, así que no sirven como referencia de frescura.
+    """
+    espera = 2.0
+    ultimo: Exception | None = None
+    for intento in range(1, max(1, intentos) + 1):
+        try:
+            request = urllib.request.Request(
+                BINANCE_PRICE_URL, headers={"accept": "application/json"})
+            with urllib.request.urlopen(request, timeout=15) as response:
+                value = float(json.loads(response.read().decode("utf-8"))["price"])
+            if not 1_000 < value < 1_000_000:
+                raise RuntimeError("Precio publico BTC fuera de rango")
+            return value
+        except Exception as exc:  # noqa: BLE001 - 429, timeout, DNS: todos reintentables
+            ultimo = exc
+            if intento >= max(1, intentos):
+                break
+            print(f"precio de referencia intento {intento} fallo "
+                  f"({type(exc).__name__}: {exc}); reintento en {espera:.0f}s",
+                  flush=True)
+            time.sleep(espera)
+            espera *= 2          # 2, 4, 8 s: el 429 de Binance cede en segundos
+    raise RuntimeError(
+        f"precio de referencia no disponible tras {intentos} intentos: {ultimo}")
 
 
 async def _largest_canvas(page):

@@ -1384,3 +1384,94 @@ def test_con_datos_patologicos_el_iman_y_el_muro_dominante_salen_bien():
         tasas = [(b.get("alcance_historico") or {}).get("4h") for b in n[lado]]
         tasas = [t for t in tasas if t is not None]
         assert tasas == sorted(tasas, reverse=True)
+
+
+def test_el_precio_de_referencia_reintenta_en_vez_de_tirar_la_captura(monkeypatch):
+    """Binance responde 429 en ~7% de los ciclos. Como el precio se pide AL FINAL, un
+    429 tiraba todo el scraping ya hecho y `collect_with_retry` reiniciaba Chrome
+    completo: 1,3 GB de pico y ~60 s de CPU, unas 20 veces al día. Reintentar la
+    llamada barata cuesta segundos.
+    """
+    import urllib.error
+    from modules.coinglass import visual_collector as vc
+
+    llamadas = {"n": 0}
+
+    class _Resp:
+        def read(self):
+            return b'{"price":"64533.10"}'
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    def _urlopen(request, timeout=None):
+        llamadas["n"] += 1
+        if llamadas["n"] < 3:      # dos 429 seguidos, como en produccion
+            raise urllib.error.HTTPError(
+                "url", 429, "Too Many Requests", {}, None)
+        return _Resp()
+
+    monkeypatch.setattr(vc.urllib.request, "urlopen", _urlopen)
+    monkeypatch.setattr(vc.time, "sleep", lambda _s: None)   # sin esperas en el test
+
+    assert vc.public_btc_price() == 64_533.10
+    assert llamadas["n"] == 3, "deberia haber reintentado hasta lograrlo"
+
+
+def test_el_precio_de_referencia_falla_cerrado_si_nunca_llega(monkeypatch):
+    """La protección anti-cambio-de-símbolo depende de este precio, así que si no se
+    puede obtener hay que fallar, no inventar uno ni caer al precio de CoinGlass —eso
+    volvería el chequeo circular."""
+    import urllib.error
+    from modules.coinglass import visual_collector as vc
+
+    def _siempre_429(request, timeout=None):
+        raise urllib.error.HTTPError("url", 429, "Too Many Requests", {}, None)
+
+    monkeypatch.setattr(vc.urllib.request, "urlopen", _siempre_429)
+    monkeypatch.setattr(vc.time, "sleep", lambda _s: None)
+
+    with pytest.raises(RuntimeError, match="no disponible tras"):
+        vc.public_btc_price(intentos=3)
+
+
+def test_el_precio_de_referencia_no_cae_a_los_klines_versionados():
+    """Fue mi primera idea y es incorrecta: los klines son un dataset VERSIONADO en el
+    repo -no un feed- y en el VPS tenían 41 días de antigüedad. Un precio de hace 41
+    días no sirve como referencia de frescura, y por casualidad habría funcionado ese
+    día (BTC casi no se movió), que es la peor clase de fix: uno que pasa por suerte.
+    """
+    fuente = (ROOT / "modules/coinglass/visual_collector.py").read_text()
+    bloque = fuente.split("def public_btc_price(")[1].split("\ndef ")[0]
+    assert "klines" not in bloque.lower().split('"""')[2], \
+        "el fallback a klines no debe estar en el codigo, solo explicado"
+    assert "BINANCE_PRICE_URL" in bloque
+
+
+def test_la_firma_de_lectura_de_binance_ataca_los_DOS_lados_del_1021():
+    """Medido en el VPS: 142 de 843 intentos (17%) fallaban con -1021 "Timestamp
+    outside recvWindow" PESE a NTP activo y reloj sincronizado. No era deriva del
+    reloj: es latencia VPS-Binance mas el desfase del reloj de Binance.
+
+    Binance acepta timestamp en [serverTime - recvWindow, serverTime + 1000]. Ampliar
+    la ventana solo cubre el lado "viejo"; el lado "adelantado" tiene un tope FIJO de
+    1000 ms que ninguna ventana arregla. Por eso se restan mil ms al timestamp.
+
+    Este cliente es de SOLO LECTURA. La ruta de EJECUCION del bot
+    (`modules/trading/binance_account.py`) tiene el mismo RECV_WINDOW = 5000 y NO se
+    tocó acá: un cambio ahi afecta el envio de ordenes y necesita su propia decision.
+    """
+    from modules.journal import binance_client as bc
+
+    assert bc.RECV_WINDOW >= 10_000, "la ventana volvio a quedar corta"
+    assert bc.RECV_WINDOW <= 60_000, "Binance no acepta mas de 60 s"
+    assert bc.ADELANTO_SEGURO_MS >= 1_000, "sin margen, el lado adelantado sigue roto"
+
+    fuente = (ROOT / "modules/journal/binance_client.py").read_text()
+    assert 'p["timestamp"] = int(time.time() * 1000) - ADELANTO_SEGURO_MS' in fuente
+
+    # y la ruta de ejecucion queda intacta: si alguien la cambia, que sea a propósito
+    ejecucion = (ROOT / "modules/trading/binance_account.py").read_text()
+    assert "RECV_WINDOW = 5000" in ejecucion, \
+        "cambio la ventana en la ruta de ORDENES: eso necesita decision explicita"
