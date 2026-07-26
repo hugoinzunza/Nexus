@@ -1006,3 +1006,91 @@ def test_ningun_render_apunta_a_un_elemento_que_ya_no_existe():
     existen = set(re.findall(r'id="([a-z0-9-]+)"', html))
     faltan = sorted(usados - existen)
     assert not faltan, f"app.js referencia ids inexistentes: {faltan}"
+
+
+def test_la_escalera_muestra_que_hay_DESPUES_del_primer_cluster():
+    """El mapa mostraba solo el clúster más cercano de cada lado: si el precio lo
+    rompía, no había forma de saber qué venía después. La escalera devuelve la
+    secuencia hacia arriba y hacia abajo, cada peldaño con su tasa de alcance.
+    """
+    indicator = build_visual_indicator(snapshot(), now=NOW)
+    niveles = indicator["levels"]
+    arriba = niveles["escalera_arriba"]
+    abajo = niveles["escalera_abajo"]
+
+    assert len(arriba) >= 2 and len(abajo) >= 2, "una escalera de un peldaño no es escalera"
+    precio = indicator["price"]
+
+    # ordenadas de la más cercana a la más lejana, cada una del lado correcto
+    for lado, esperado_arriba in ((arriba, True), (abajo, False)):
+        distancias = [abs(b["price"] - precio) for b in lado]
+        assert distancias == sorted(distancias), "los peldaños no van de cerca a lejos"
+        for b in lado:
+            assert (b["price"] > precio) is esperado_arriba
+            assert b["intensity_usd"] > 0
+            assert b["niveles"] >= 1
+
+    # el primer peldaño de arriba coincide con el clúster más cercano de siempre
+    assert abs(arriba[0]["price"] - niveles["nearest_above"]["price"]) < precio * 0.01
+
+
+def test_la_probabilidad_de_alcance_baja_al_alejarse():
+    """Es la propiedad que hace útil la escalera: cada peldaño más lejos se alcanza
+    menos seguido. Si subiera, la tabla de tasas estaría mal construida."""
+    niveles = build_visual_indicator(snapshot(), now=NOW)["levels"]
+    for lado in (niveles["escalera_arriba"], niveles["escalera_abajo"]):
+        tasas = [(b.get("alcance_historico") or {}).get("4h") for b in lado]
+        tasas = [t for t in tasas if t is not None]
+        if len(tasas) >= 2:
+            assert tasas == sorted(tasas, reverse=True), \
+                f"la tasa de alcance sube al alejarse: {tasas}"
+
+
+def test_el_corte_de_la_escalera_es_RELATIVO_no_un_umbral_en_dolares():
+    """Medido en producción: con el corte fijo de 5M sobrevivían 7 niveles de 114,
+    porque el MÁXIMO de esa captura era 6,69M y la mediana 1,09M. Un umbral
+    absoluto sobre un dato que cambia de escala deja la vista vacía los días
+    tranquilos. Acá se escala todo el heatmap /100 y la escalera debe seguir viva.
+    """
+    chico = snapshot()
+    for nivel in chico["liquidation_heatmap"]["levels"]:
+        nivel["intensity_usd"] = nivel["intensity_usd"] / 100      # todo bajo 1M
+    niveles = build_visual_indicator(chico, now=NOW)["levels"]
+    assert niveles["escalera_arriba"], "la escalera se vacio al bajar la escala"
+    assert niveles["escalera_abajo"]
+
+    fuente = (ROOT / "modules/coinglass/visual.py").read_text()
+    bloque = fuente.split("def _escalera(")[1].split("\ndef ")[0]
+    assert "montos[len(montos) // 2]" in bloque, "el corte debe ser la mediana"
+    assert "5_000_000" not in bloque and "5e6" not in bloque
+
+
+def test_la_escalera_agrupa_niveles_contiguos_en_bandas():
+    """El heatmap trae ~114 niveles y muchos son vecinos: listarlos sueltos seria
+    ruido. Dos niveles a 0,05% uno del otro son UNA banda, con los montos sumados."""
+    pegados = snapshot()
+    pegados["liquidation_heatmap"]["levels"] = [
+        {"price": 64_500, "intensity_usd": 6_000_000, "timestamp": "14:50"},
+        {"price": 64_520, "intensity_usd": 4_000_000, "timestamp": "14:50"},
+        {"price": 66_000, "intensity_usd": 5_000_000, "timestamp": "14:50"},
+        {"price": 63_000, "intensity_usd": 5_000_000, "timestamp": "14:50"},
+        {"price": 62_000, "intensity_usd": 5_000_000, "timestamp": "14:50"},
+    ]
+    arriba = build_visual_indicator(pegados, now=NOW)["levels"]["escalera_arriba"]
+    banda = arriba[0]
+    assert banda["niveles"] == 2, "los dos niveles pegados debian fundirse"
+    assert banda["intensity_usd"] == 10_000_000, "los montos deben sumarse"
+    assert 64_500 <= banda["price"] <= 64_520
+
+
+def test_el_grafico_y_la_tabla_leen_la_MISMA_fuente():
+    """Si el gráfico filtra por un umbral y la tabla por otro, cuentan historias
+    distintas del mismo momento."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    dibujo = script.split("function drawVisualLevels()")[1].split("\nfunction ")[0]
+    assert "escalera_arriba" in dibujo and "escalera_abajo" in dibujo
+    # se busca la EXPRESION del filtro, no la mención en un comentario
+    assert "intensity_usd) >= 5e6" not in dibujo, "volvio el umbral absoluto al grafico"
+    tabla = script.split("function renderAlcance(")[1].split("\nfunction ")[0]
+    assert "escalera_arriba" in tabla and "escalera_abajo" in tabla
+    assert "fila-precio" in tabla, "falta la fila del precio actual al medio"

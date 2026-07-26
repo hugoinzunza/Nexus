@@ -280,14 +280,15 @@
         </div>
         <p class="model-copy" id="radar-veredicto">Esperando captura.</p>
         <table id="radar-alcance"><thead>
-          <tr><th>Nivel</th><th>Precio</th><th>Distancia</th><th>4h</th><th>8h</th><th>12h</th></tr>
+          <tr><th>Banda</th><th>Precio</th><th>Distancia</th><th>Monto</th>
+              <th>4h</th><th>8h</th><th>12h</th></tr>
         </thead><tbody></tbody></table>
         <p class="model-copy" id="radar-alcance-nota" style="margin-bottom:22px"></p>
       </div>
 
       <div class="section-head">
-        <div><p class="eyebrow">HEATMAP MODEL 2 · NIVELES ≥ US$5M</p><h2>Bandas de liquidación cercanas</h2></div>
-        <span>Distancia respecto al precio actual</span>
+        <div><p class="eyebrow">HEATMAP MODEL 2 · BANDAS SOBRE LA MEDIANA</p><h2>Escalera de liquidez</h2></div>
+        <span>Qué hay a cada lado, en orden</span>
       </div>
       <div class="lectura lectura-ancha">
         <details>
@@ -303,6 +304,15 @@
               <b>confluencia</b> entre liquidez de liquidación y una pared real.</p>
             <p>Las dos líneas punteadas de color marcan el clúster más cercano de cada
               lado con su <b>probabilidad histórica de alcance a 4h</b>.</p>
+            <p>La tabla de abajo es la <b>escalera completa</b>: qué viene después del
+              primer clúster si el precio lo rompe, hacia arriba y hacia abajo, con la
+              probabilidad de alcance de cada peldaño. Se leen de arriba (lo más lejos
+              por encima) hacia abajo (lo más lejos por debajo), con el precio actual
+              al medio.</p>
+            <p>Los niveles contiguos se <b>agrupan en bandas</b> (una banda ×3 son tres
+              niveles vecinos sumados) y se muestran los que superan la <b>mediana</b>
+              de esa captura. El corte es relativo a propósito: con un umbral fijo en
+              dólares, un día tranquilo dejaba la vista casi vacía.</p>
             <p class="warn">Es un mapa de dónde hay combustible, no de hacia dónde va
               el precio. Los muros pueden retirarse.</p>
           </div>

@@ -254,6 +254,63 @@ def _strongest(
     }
 
 
+def _escalera(
+    levels: list[dict[str, Any]],
+    price: float,
+    *,
+    above: bool,
+    peldanos: int = 5,
+    tolerancia: float = 0.002,
+) -> list[dict[str, Any]]:
+    """Bandas de liquidez hacia un lado, de la más cercana a la más lejana.
+
+    El mapa mostraba SOLO el clúster más cercano de cada lado, así que si el precio
+    lo rompía no había forma de saber qué venía después. Esto devuelve la escalera.
+
+    Dos decisiones que importan:
+
+    1. **Se agrupan** los niveles contiguos dentro de `tolerancia` (0,2%) en una
+       banda, sumando montos. El heatmap trae ~114 niveles y muchos son vecinos:
+       listarlos sueltos seria ruido, no una escalera.
+    2. **El corte es RELATIVO** (la mediana de las bandas de ese lado), no un umbral
+       fijo en dólares. Medido en producción: con el corte fijo de 5M sobrevivían 7
+       niveles de 114 porque el MÁXIMO de esa captura era 6,69M y la mediana 1,09M.
+       Un umbral absoluto sobre un dato que cambia de escala deja la vista vacía en
+       los días tranquilos y saturada en los volátiles.
+    """
+    lado = [row for row in levels if (row["price"] > price) == above]
+    if not lado:
+        return []
+    lado.sort(key=lambda row: abs(row["price"] - price))
+
+    bandas: list[dict[str, Any]] = []
+    for row in lado:
+        anterior = bandas[-1] if bandas else None
+        if anterior and abs(row["price"] / anterior["price"] - 1) <= tolerancia:
+            total = anterior["intensity_usd"] + row["intensity_usd"]
+            if total > 0:      # precio promedio ponderado por monto
+                anterior["price"] = round(
+                    (anterior["price"] * anterior["intensity_usd"]
+                     + row["price"] * row["intensity_usd"]) / total, 2)
+            anterior["intensity_usd"] = round(total, 2)
+            anterior["niveles"] += 1
+        else:
+            bandas.append({"price": row["price"],
+                           "intensity_usd": row["intensity_usd"],
+                           "niveles": 1})
+
+    montos = sorted(banda["intensity_usd"] for banda in bandas)
+    corte = montos[len(montos) // 2] if montos else 0
+    seleccion = [banda for banda in bandas if banda["intensity_usd"] >= corte]
+
+    salida = []
+    for banda in seleccion[:peldanos]:
+        nivel = {**banda,
+                 "distance_pct": round((banda["price"] / price - 1) * 100, 3)}
+        salida.append(_con_alcance(nivel, arriba=above))
+    return salida
+
+
 _TOUCH_RATES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  "touch_rates.json")
 _TOUCH_RATES: dict[str, Any] | None = None
@@ -494,6 +551,10 @@ def build_visual_indicator(
             # Sin radio: la pared más grande del libro, esté donde esté.
             "dominant_whale_ask": dominant_whale("ask"),
             "dominant_whale_bid": dominant_whale("bid"),
+            # La escalera completa: qué hay DESPUÉS del primer clúster. Mostrar solo
+            # el más cercano dejaba ciego a lo que viene si el precio lo rompe.
+            "escalera_arriba": _escalera(heatmap_levels, price, above=True),
+            "escalera_abajo": _escalera(heatmap_levels, price, above=False),
         },
         "coverage": {
             "map_levels": len(map_levels),

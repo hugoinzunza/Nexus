@@ -626,19 +626,18 @@ function renderOrderbook() {
   renderLargeOrders();
 }
 
-function visualLevelRows() {
-  return state.visual_snapshot?.liquidation_heatmap?.levels || [];
-}
-
 function drawVisualLevels() {
   const canvas = $("visual-level-chart");
   const { ctx, width, height } = setupCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   const visual = state.visual_indicator;
   const price = Number(visual?.price);
-  const rows = visualLevelRows().filter((row) =>
-    Number(row.intensity_usd) >= 5e6 && Math.abs(Number(row.price) / price - 1) <= 0.06
-  );
+  // Las MISMAS bandas de la escalera, para que el gráfico y la tabla cuenten lo
+  // mismo. Antes filtraba `>= 5e6` fijo: medido en producción, el máximo de una
+  // captura era 6,69M y la mediana 1,09M, así que ese corte dejaba 7 niveles de
+  // 114 y el gráfico se veía casi vacío. La escalera usa corte relativo.
+  const rows = [...(visual?.levels?.escalera_arriba || []),
+                ...(visual?.levels?.escalera_abajo || [])];
   if (!Number.isFinite(price) || !rows.length) {
     message("visual-level-message", state.visual_error || "Esperando mapa visual autorizado");
     return;
@@ -932,26 +931,36 @@ function renderAlcance(visual) {
   const niveles = visual.levels || {};
   const arriba = niveles.nearest_above;
   const abajo = niveles.nearest_below;
-  const filas = [
-    ["Clúster arriba", arriba, "up"],
-    ["Clúster abajo", abajo, "down"],
-  ].filter(([, nivel]) => nivel && nivel.price != null);
+  // ESCALERA completa, no solo el clúster más cercano. Antes, si el precio rompía
+  // el primer nivel, la tabla no decía qué venía después; ahora se ve la secuencia
+  // hacia arriba y hacia abajo con la probabilidad de alcance de cada peldaño.
+  const haciaArriba = niveles.escalera_arriba || [];
+  const haciaAbajo = niveles.escalera_abajo || [];
 
-  if (!filas.length) {
-    cuerpo.innerHTML = `<tr><td colspan="6" class="empty">Sin captura visual vigente.</td></tr>`;
+  if (!haciaArriba.length && !haciaAbajo.length) {
+    cuerpo.innerHTML = `<tr><td colspan="7" class="empty">Sin captura visual vigente.</td></tr>`;
     $("radar-veredicto").textContent = "Sin captura visual vigente: no hay lectura.";
     $("radar-alcance-nota").textContent = "";
     return;
   }
 
-  cuerpo.innerHTML = filas.map(([etiqueta, nivel, clase]) => {
-    const a = nivel.alcance_historico || {};
-    const celda = (v) => v == null ? "—" : `${fmt(v, 0)}%`;
-    return `<tr><td class="${clase}">${escapeHtml(etiqueta)}</td>` +
-      `<td>${fmt(nivel.price, 1)}</td>` +
-      `<td>${signed(nivel.distance_pct, "%")}</td>` +
+  const celda = (v) => v == null ? "—" : `${fmt(v, 0)}%`;
+  const peldano = (b, clase) => {
+    const a = b.alcance_historico || {};
+    return `<tr><td class="${clase}">${b.niveles > 1 ? `banda ×${b.niveles}` : "nivel"}</td>` +
+      `<td>${fmt(b.price, 0)}</td>` +
+      `<td class="${clase}">${signed(b.distance_pct, "%")}</td>` +
+      `<td>${compactUsd(b.intensity_usd)}</td>` +
       `<td>${celda(a["4h"])}</td><td>${celda(a["8h"])}</td><td>${celda(a["12h"])}</td></tr>`;
-  }).join("");
+  };
+
+  // Se lee como una escalera de precios: lo más lejano arriba, el precio al medio,
+  // lo más lejano abajo al final.
+  cuerpo.innerHTML =
+    [...haciaArriba].reverse().map((b) => peldano(b, "down")).join("") +
+    `<tr class="fila-precio"><td>AHORA</td><td>${fmt(visual.price, 0)}</td>` +
+    `<td colspan="5">precio actual de BTC</td></tr>` +
+    haciaAbajo.map((b) => peldano(b, "up")).join("");
 
   // El "veredicto" es deliberadamente descriptivo: cuál imán está más cerca y
   // qué tan seguido se alcanza. NO se publica una direccion probable porque los
