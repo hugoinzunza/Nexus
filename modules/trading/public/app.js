@@ -180,8 +180,33 @@
   let _ultimaBarra = 0;
   function extenderBarraViva(card, px) {
     if (!card.series || !Array.isArray(card.candles) || !Number.isFinite(px)) return;
-    const ultima = card.candles[card.candles.length - 1];
+    let ultima = card.candles[card.candles.length - 1];
     if (!ultima) return;
+
+    // PRIMERO: la vela que tenemos puede NO ser la vela actual.
+    //
+    // El push del VPS llega con hasta 10 minutos de atraso, asi que a las 22:20 la
+    // ultima vela de 15m que tenemos puede ser la de las 22:00. Estirar ESA con el
+    // precio de ahora fabrica una vela Frankenstein: Hugo la vio como un pico alto en
+    // el borde derecho, con la leyenda marcando O 64.821,70 H 65.200,00 — un recorrido
+    // de 0,58% en 15 min con el mercado plano, o sea imposible.
+    //
+    // El paso se deduce de las dos ultimas velas en vez de mapear la temporalidad otra
+    // vez en el cliente: el dato ya esta ahi y no se puede desincronizar.
+    const penultima = card.candles[card.candles.length - 2];
+    const paso = penultima ? ultima.t - penultima.t : 0;
+    if (paso > 0) {
+      const abreAhora = Math.floor(Date.now() / paso) * paso;
+      if (abreAhora > ultima.t) {
+        // Nace la vela en curso. Se abre EN el precio del momento, que es lo unico
+        // honesto: el open real de esa vela no lo tenemos hasta que llegue el push o
+        // un frame de kline, y los dos van a corregirla.
+        ultima = { t: abreAhora, o: px, h: px, l: px, c: px, v: 0, parcial: true };
+        card.candles.push(ultima);
+        rebuildBars(card);
+      }
+    }
+
     ultima.c = px;
     if (px > ultima.h) ultima.h = px;
     if (px < ultima.l) ultima.l = px;
@@ -1279,7 +1304,25 @@
   function mergeCandles(a, b) {
     const by = new Map();
     for (const c of a) by.set(c.t, c);
-    for (const c of b) by.set(c.t, c);
+    for (const c of b) {
+      const previa = by.get(c.t);
+      // La vela que el stream esta construyendo NO se pisa con la del servidor.
+      //
+      // El push del VPS llega con hasta 10 min de atraso, asi que en cada refresco su
+      // version de la barra en curso es MAS VIEJA que la que el WebSocket viene
+      // estirando. Sin este guard, el grafico se movia y volvia atras a cada refresco:
+      // es la mitad de "la tasa de refresco es muy baja" que reporto Hugo — no era la
+      // tasa, era que se deshacia el avance.
+      //
+      // Se conserva el recorrido observado en vivo y se toma el open y el volumen del
+      // servidor, que son los datos que el stream no puede saber con certeza.
+      if (previa && previa.parcial) {
+        by.set(c.t, { ...c, h: Math.max(c.h, previa.h), l: Math.min(c.l, previa.l),
+                      c: previa.c, parcial: true });
+      } else {
+        by.set(c.t, c);
+      }
+    }
     return Array.from(by.values()).sort((x, y) => x.t - y.t);
   }
 

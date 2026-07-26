@@ -662,7 +662,12 @@ def test_el_tick_no_remapea_toda_la_serie():
     from tests.test_coinglass_visual import js_sin_comentarios_trading as limpio
     js = limpio()
     ext = js.split("function extenderBarraViva(card, px) {")[1].split("\n  }")[0]
-    assert "rebuildBars" not in ext, "el tick volvio a remapear la serie completa"
+    # `rebuildBars` SI puede aparecer, pero solo cuando NACE una vela: ahi la serie
+    # necesita la barra nueva. Lo que no puede es correr en cada tick.
+    nacimiento = ext.split("if (abreAhora > ultima.t) {")[1].split("      }")[0]
+    assert "rebuildBars(card)" in nacimiento, "al nacer una vela hay que remapear"
+    resto = ext.replace(nacimiento, "")
+    assert "rebuildBars" not in resto, "el tick volvio a remapear la serie completa"
     assert "card.bars[card.bars.length - 1]" in ext, "falta la actualizacion O(1)"
 
     # en el camino de kline, `rebuildBars` solo cuando NACE una barra
@@ -683,3 +688,34 @@ def test_los_frames_se_descartan_ANTES_de_parsearlos():
         "se parsea antes de decidir si el frame sirve"
     assert '"e":"bookTicker"' in handler
     assert "_ultimoBt" in handler
+
+
+def test_no_se_estira_una_vela_VIEJA_con_el_precio_de_ahora():
+    """El bug que Hugo vio en la captura: el push del VPS llega con hasta 10 min de
+    atraso, asi que a las 22:20 la ultima vela de 15m que tenemos puede ser la de las
+    22:00. Estirar ESA con el precio actual fabrica una vela Frankenstein.
+
+    En la captura: `O 64.821,70 H 65.200,00 C 65.185,73` = 0,58% de recorrido en 15 min
+    con el mercado plano. Imposible. Despues del fix: 0,02%.
+
+    El paso se deduce de las dos ultimas velas y NO se remapea la temporalidad en el
+    cliente: el dato ya esta ahi y asi no se puede desincronizar.
+    """
+    from tests.test_coinglass_visual import js_sin_comentarios_trading as limpio
+    ext = limpio().split("function extenderBarraViva(card, px) {")[1].split("\n  }")[0]
+    assert "penultima" in ext and "ultima.t - penultima.t" in ext, \
+        "el paso debe deducirse de los datos, no cablearse"
+    assert "abreAhora > ultima.t" in ext, "no detecta que la vela en curso es otra"
+    assert "card.candles.push(ultima)" in ext, "no crea la vela en curso"
+    assert "parcial: true" in ext, "la vela viva debe quedar marcada"
+
+
+def test_el_refresco_del_servidor_no_deshace_el_avance_en_vivo():
+    """La otra mitad de "la tasa de refresco es muy baja": no era la tasa, era que cada
+    refresco traia la version ATRASADA de la barra en curso y borraba lo que el stream
+    venia construyendo. El grafico avanzaba y volvia atras."""
+    from tests.test_coinglass_visual import js_sin_comentarios_trading as limpio
+    merge = limpio().split("function mergeCandles(a, b) {")[1].split("\n  }")[0]
+    assert "previa.parcial" in merge, "el refresco vuelve a pisar la barra viva"
+    assert "Math.max(c.h, previa.h)" in merge, "se pierde el recorrido observado"
+    assert "c: previa.c" in merge, "se pierde el cierre en vivo"
