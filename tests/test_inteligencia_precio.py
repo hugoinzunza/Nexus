@@ -539,12 +539,22 @@ def test_un_tick_de_otro_exchange_no_pisa_una_vela_de_binance():
     Medido: el basis ronda 0,045% en la mediana, el 6% de la distancia a TP1.
     """
     js = open(os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()
-    assert "tickCompatible" in js
-    bloque = js.split("function rebuildBars")[1].split("\nfunction ")[0]
-    assert 'card.fuenteVelas === "cryptocom"' in bloque, \
-        "el tick vuelve a aplicarse sin mirar de que exchange son las velas"
-    vivo = js.split("function liveUpdate")[1].split("\nfunction ")[0]
+
+    # Los DOS lugares que aplican el tick, verificados leyendo el archivo y no de
+    # memoria: `_ohlc` lo mete en las series de los indicadores y `liveUpdate` lo
+    # escribe en la ultima barra del grafico. `rebuildBars` NO lo aplica -mi primer
+    # test miraba ahi y por eso fallaba-.
+    ohlc = js.split("function _ohlc(")[1].split("\n  function ")[0]
+    assert "tickCompatible" in ohlc
+    assert 'card.fuenteVelas === "cryptocom"' in ohlc, \
+        "el tick vuelve a entrar a los indicadores sin mirar el exchange"
+
+    vivo = js.split("function liveUpdate(")[1].split("\n  function ")[0]
     assert 'card.fuenteVelas !== "cryptocom"' in vivo, "liveUpdate no se protegio"
+
+    # y donde NO estaba el problema, que quede escrito para no volver a buscar ahi
+    barras = js.split("function rebuildBars(")[1].split("\n  function ")[0]
+    assert "lastPrice" not in barras
 
 
 def test_el_atraso_de_la_barra_en_formacion_se_publica():

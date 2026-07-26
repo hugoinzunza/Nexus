@@ -868,7 +868,7 @@ function marcarFuente(card, fuente) {
   // Actualiza la última vela con el precio en vivo del SSE.
   function liveUpdate(card) {
     if (!card.series || !card.bars.length || card.lastPrice == null) return;
-    // Mismo motivo que en rebuildBars: no inyectar un tick de otro exchange en una
+    // Mismo motivo que en `_ohlc`: no inyectar un tick de otro exchange en una
     // vela de Binance. Sin esto, la vela en formación mostraba un precio que no
     // pertenece a la serie y el gráfico "no cuadraba" con TradingView.
     if (card.fuenteVelas && card.fuenteVelas !== "cryptocom") return;
