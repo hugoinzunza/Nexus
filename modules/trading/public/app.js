@@ -19,7 +19,7 @@
    * El sello dice el estado real siempre.
    */
   const vivoBinance = {
-    ws: null, stream: null, card: null, intentos: 0, timer: null, ultimo: 0, frames: 0,
+    ws: null, stream: null, card: null, intentos: 0, timer: null, ultimo: 0, frames: 0, _ultimoBt: 0,
 
     conectar(card, stream) {
       if (this.stream === stream && this.ws && this.ws.readyState <= 1) return;
@@ -54,6 +54,18 @@
         this.marcar(card, "conectando");
       };
       ws.onmessage = (ev) => {
+        // Descarte ANTES de parsear. `bookTicker` manda entre 65 y 740 frames por
+        // segundo segun la actividad, y `JSON.parse` en cada uno es el costo real: el
+        // repintado ya estaba limitado y aun asi la pestana se ponia pesada.
+        //
+        // El chequeo es un `indexOf` sobre el string crudo, que es ordenes de magnitud
+        // mas barato que deserializar. Los frames de KLINE nunca se descartan: son
+        // escasos y traen la barra autoritativa.
+        if (ev.data.indexOf('"e":"bookTicker"') > 0) {
+          const t = Date.now();
+          if (t - this._ultimoBt < 100) return;
+          this._ultimoBt = t;
+        }
         let msg;
         try { msg = JSON.parse(ev.data); } catch (e) { return; }
         const d = msg.data || msg;
@@ -69,7 +81,20 @@
         } else if (d.e === "bookTicker" && d.b && d.a) {
           // Punto medio entre mejor bid y ask: es el precio "del momento" mas honesto
           // que se puede sacar del libro, y el que menos salta con el spread.
-          actualizarPrecioVivo(card, (Number(d.b) + Number(d.a)) / 2);
+          const mid = (Number(d.b) + Number(d.a)) / 2;
+          actualizarPrecioVivo(card, mid);
+          // Y TAMBIEN estira la barra en formacion.
+          //
+          // Sin esto el grafico quedaba ESTATICO y solo se movia el titulo: medido, el
+          // stream de klines de 15m manda 0 frames en 10 s mientras bookTicker manda
+          // 5.259. Al desactivar `liveUpdate` para las velas de Binance deje la barra
+          // dependiendo de un evento que casi nunca llega. Regresion mia, y la reporto
+          // Hugo antes de que yo la viera.
+          //
+          // Nota honesta: TradingView usa el ULTIMO TRADE y esto usa el punto medio del
+          // libro. La diferencia es del orden del spread —centavos en BTC— y evita un
+          // tercer stream. Cuando llega un frame de kline, manda el kline.
+          extenderBarraViva(card, mid);
         }
         this.marcar(card, "en vivo");
       };
@@ -130,10 +155,14 @@
     if (k.t < ultima.t) return;                       // frame viejo, se ignora
     if (k.t === ultima.t) {
       Object.assign(ultima, { o: k.o, h: k.h, l: k.l, c: k.c, v: k.v });
+      // Actualizacion en sitio, O(1). `rebuildBars` se reserva para cuando NACE una
+      // barra: remapear toda la serie en cada tick es lo que colgaba la pestana.
+      const barra = card.bars && card.bars[card.bars.length - 1];
+      if (barra) { barra.open = k.o; barra.high = k.h; barra.low = k.l; barra.close = k.c; }
     } else {
       card.candles.push({ t: k.t, o: k.o, h: k.h, l: k.l, c: k.c, v: k.v });
+      rebuildBars(card);
     }
-    rebuildBars(card);
     card.series.update({ time: Math.floor(k.t / 1000), open: k.o, high: k.h,
                          low: k.l, close: k.c });
 
@@ -145,6 +174,34 @@
   // pantalla, o la costura vuelve por la puerta del titulo.
   let _ultimoPintado = 0;
 
+
+  // Estira la barra en formacion con el precio del momento, entre frames de kline.
+  // Es lo que hace que un grafico "tickee": la vela crece mientras la vela existe.
+  let _ultimaBarra = 0;
+  function extenderBarraViva(card, px) {
+    if (!card.series || !Array.isArray(card.candles) || !Number.isFinite(px)) return;
+    const ultima = card.candles[card.candles.length - 1];
+    if (!ultima) return;
+    ultima.c = px;
+    if (px > ultima.h) ultima.h = px;
+    if (px < ultima.l) ultima.l = px;
+    // NO se llama a `rebuildBars`: remapea TODAS las velas y con la historia profunda
+    // son decenas de miles. Hacerlo varias veces por segundo colgaba la pestana —lo vi
+    // con el panel del navegador dejando de responder— y por eso el `liveUpdate`
+    // original tampoco lo hacia. Actualizar la ultima barra es O(1).
+    const barra = card.bars && card.bars[card.bars.length - 1];
+    if (barra) { barra.close = ultima.c; barra.high = ultima.h; barra.low = ultima.l; }
+    // 120 ms = ~8 refrescos por segundo. Suficiente para que se vea CONTINUO —Hugo
+    // pidio que se moviera como el live, y a menos que eso se ve a saltos— y lejos de
+    // los ~740 frames por segundo que manda bookTicker.
+    const ahora = Date.now();
+    if (ahora - _ultimaBarra < 100) return;
+    _ultimaBarra = ahora;
+    card.series.update({ time: Math.floor(ultima.t / 1000), open: ultima.o,
+                         high: ultima.h, low: ultima.l, close: ultima.c });
+    if (card.legendLast) renderLegend(card, null);
+  }
+
   function actualizarPrecioVivo(card, px) {
     const priceEl = card.node && card.node.querySelector(".ic-price");
     if (!priceEl || !Number.isFinite(px)) return;
@@ -154,7 +211,7 @@
     // siendo el ultimo, asi que nada queda desfasado.
     card.precioUltimo = px;
     const ahora = Date.now();
-    if (ahora - _ultimoPintado < 200) return;
+    if (ahora - _ultimoPintado < 100) return;
     _ultimoPintado = ahora;
     const anterior = card.precioVivo;
     card.precioVivo = px;

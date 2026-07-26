@@ -1589,3 +1589,15 @@ def test_la_franja_listada_tolera_datos_ausentes():
     assert "return null" in bloque, "debe rendirse en vez de reventar"
     assert "ultima?.price" in bloque, "sin captura no hay precio del que derivar nada"
     assert "(snapshots || [])" in bloque
+
+def js_sin_comentarios_trading():
+    """Igual que `js_sin_comentarios` pero para `modules/trading/public/app.js`.
+
+    Mismo motivo y misma trampa: afirmar que un simbolo NO esta y que el assert salte
+    con el comentario que explica por que no esta. Van seis veces el 2026-07-26.
+    """
+    ruta = ROOT / "modules/trading/public/app.js"
+    fuente = ruta.read_text()
+    lineas = [("" if linea.lstrip().startswith("//") else linea)
+              for linea in fuente.splitlines()]
+    return "\n".join(lineas)

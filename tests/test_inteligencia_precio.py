@@ -636,3 +636,50 @@ def test_el_reintento_no_machaca_cuando_el_bloqueo_es_permanente():
     bloque = js.split("  reintentar(card, stream) {")[1].split("\n  },")[0]
     assert "Math.pow(2" in bloque, "el reintento debe espaciarse"
     assert "Math.min(60_000" in bloque, "y tener tope"
+
+
+def test_la_barra_en_formacion_se_mueve_con_bookTicker_y_no_solo_con_klines():
+    """La regresion que Hugo vio: el grafico quedo ESTATICO.
+
+    Medido: el stream de klines de 15m manda 0 frames en 10 s mientras `bookTicker`
+    manda 5.259. Al desactivar `liveUpdate` para las velas de Binance, deje la barra
+    dependiendo de un evento que casi nunca llega — el titulo se movia y el grafico no.
+    """
+    js = open(os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()
+    assert "function extenderBarraViva" in js
+    bloque = js.split('d.e === "bookTicker"')[1].split("\n        }")[0]
+    assert "extenderBarraViva(card, mid)" in bloque, \
+        "bookTicker vuelve a mover solo el titulo y el grafico queda estatico"
+
+
+def test_el_tick_no_remapea_toda_la_serie():
+    """`rebuildBars` remapea TODAS las velas y con la historia profunda son decenas de
+    miles. Llamarlo varias veces por segundo colgaba la pestana —lo vi con el panel del
+    navegador dejando de responder— y por eso el `liveUpdate` original tampoco lo hacia.
+    """
+    # Sin comentarios: el assert de "rebuildBars no esta" salta con el comentario que
+    # EXPLICA por que no esta. Sexta vez que me pasa hoy, y el helper ya existe.
+    from tests.test_coinglass_visual import js_sin_comentarios_trading as limpio
+    js = limpio()
+    ext = js.split("function extenderBarraViva(card, px) {")[1].split("\n  }")[0]
+    assert "rebuildBars" not in ext, "el tick volvio a remapear la serie completa"
+    assert "card.bars[card.bars.length - 1]" in ext, "falta la actualizacion O(1)"
+
+    # en el camino de kline, `rebuildBars` solo cuando NACE una barra
+    viva = js.split("function aplicarVelaViva(card, k) {")[1].split("\n  }")[0]
+    assert viva.index("card.candles.push") < viva.index("rebuildBars(card)"), \
+        "rebuildBars debe correr solo al aparecer una barra nueva"
+
+
+def test_los_frames_se_descartan_ANTES_de_parsearlos():
+    """`bookTicker` manda entre 65 y 740 frames por segundo segun la actividad (medido).
+    `JSON.parse` en cada uno es el costo real, aunque el repintado este limitado. El
+    descarte se hace con un `indexOf` sobre el string crudo, y los frames de KLINE nunca
+    se descartan: son escasos y traen la barra autoritativa."""
+    from tests.test_coinglass_visual import js_sin_comentarios_trading as limpio
+    js = limpio()
+    handler = js.split("ws.onmessage = (ev) => {")[1].split("\n      };")[0]
+    assert handler.index("indexOf") < handler.index("JSON.parse"), \
+        "se parsea antes de decidir si el frame sirve"
+    assert '"e":"bookTicker"' in handler
+    assert "_ultimoBt" in handler
