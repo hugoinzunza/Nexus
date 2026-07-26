@@ -1,3 +1,21 @@
+
+function marcarFuente(card, fuente) {
+  const wrap = card.node && card.node.querySelector(".chart-wrap");
+  if (!wrap) return;
+  let tag = wrap.querySelector(".fuente-velas");
+  if (!tag) {
+    tag = document.createElement("div");
+    tag.className = "fuente-velas";
+    wrap.appendChild(tag);
+  }
+  const binance = fuente === "binance_vps";
+  tag.textContent = binance ? "Binance Futuros" : "Crypto.com";
+  tag.title = binance
+    ? "Mismo mercado donde ejecuta el bot, vía el colector del VPS."
+    : "Otro exchange que el de ejecución: en 1m y 5m el push del VPS llega cada 10 min "
+      + "y dejaría el gráfico más atrasado que la vela.";
+  tag.classList.toggle("ajena", !binance);
+}
 /* Co-piloto de Trading — frontend.
  *
  * Se conecta al stream SSE del backend (/m/trading/api/stream), que empuja el
@@ -1038,6 +1056,12 @@
       const prevLen = card.candles.length;
       card.candles = first ? j.candles : mergeCandles(card.candles, j.candles);
       if (first) card.hasMore = !!j.has_more;   // ¿hay historia más vieja para scroll?
+      // De qué exchange salió el tramo reciente. El bot ejecuta en Binance Futuros,
+      // así que mirar Crypto.com era mirar otro mercado; con 15m y más arriba ahora
+      // llega Binance vía el colector del VPS, y en 1m/5m sigue Crypto.com porque un
+      // push cada 10 min deja el gráfico más atrasado que la vela misma. Se DICE, no
+      // se deja implícito: un gráfico que mezcla venues en silencio es el problema.
+      if (j.fuente) marcarFuente(card, j.fuente);
       if (first || card.candles.length !== prevLen) {
         rebuildBars(card);
         const range = card.chart.timeScale().getVisibleLogicalRange();

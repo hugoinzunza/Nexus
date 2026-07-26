@@ -24,17 +24,14 @@ import threading
 import time
 
 from core.module_base import NexusModule
-from core.paths import persist_dir
+from core import klines_push
 from modules.journal import binance_client as bc
 from . import precio as P
 
 ROOT_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-KLINES_PATH = os.path.join(persist_dir(ROOT_REPO), "inteligencia_klines.json")
-
-# Cuanto vale un push antes de considerarse viejo. 25 min deja pasar un ciclo perdido
-# del timer de 10 min sin gritar, y no tanto como para que un colector muerto pase
-# desapercibido media hora larga.
-MAX_EDAD_PUSH_S = 25 * 60
+# La lectura/escritura del push vive en `core/klines_push.py` porque tambien la usa
+# el modulo de trading para su grafico: con el lector duplicado, el dia que cambie el
+# formato uno de los dos se queda atras en silencio.
 
 # Klines públicas de futuros: mismo mercado que opera el bot, sin firma y sin llaves.
 # Se usa el endpoint público a propósito: este módulo no debe poder tocar la cuenta.
@@ -137,26 +134,7 @@ class InteligenciaModule(NexusModule):
         que las versionadas, porque PARECEN en vivo. Si el colector murio, se cae al
         siguiente respaldo y la pantalla lo dice.
         """
-        datos = self._leer_klines()
-        if not datos:
-            return []
-        bloque = (datos.get("series") or {}).get(f"{symbol}:{tf}")
-        if not isinstance(bloque, list) or not bloque:
-            return []
-        try:
-            edad = time.time() - float(datos.get("empujado_ts") or 0)
-        except (TypeError, ValueError):
-            return []
-        if edad > MAX_EDAD_PUSH_S:
-            return []
-        return bloque[-limit:]
-
-    def _leer_klines(self) -> dict:
-        try:
-            with open(KLINES_PATH, encoding="utf-8") as fh:
-                return json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            return {}
+        return klines_push.serie(ROOT_REPO, symbol, tf, limit)
 
     def api_post(self, subpath, body, headers, user=None):
         """Ingesta de klines desde el colector del VPS.
@@ -206,21 +184,14 @@ class InteligenciaModule(NexusModule):
             return self._json(400, {"error": "ninguna serie valida"})
 
         with self._lock:
-            self._escribir_klines({"empujado_ts": time.time(),
-                                   "empujado_at": body.get("captured_at"),
-                                   "fuente": "binance_futuros_vps",
-                                   "series": limpio})
+            klines_push.escribir(ROOT_REPO, {
+                "empujado_ts": time.time(),
+                "empujado_at": body.get("captured_at"),
+                "fuente": "binance_futuros_vps",
+                "series": limpio})
             self._cache.clear()   # el push manda sobre lo cacheado
         return self._json(200, {"ok": True, "series": len(limpio),
                                 "velas": sum(len(v) for v in limpio.values())})
-
-    @staticmethod
-    def _escribir_klines(datos: dict) -> None:
-        os.makedirs(os.path.dirname(KLINES_PATH), exist_ok=True)
-        tmp = KLINES_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(datos, fh, separators=(",", ":"))
-        os.replace(tmp, KLINES_PATH)
 
     def _pares(self) -> list[str]:
         return list(self.config.get("pares") or ["BTCUSDT", "ETHUSDT", "SOLUSDT",

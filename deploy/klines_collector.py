@@ -35,7 +35,9 @@ FAPI = "https://fapi.binance.com/fapi/v1/klines"
 
 # Los pares del módulo. Se declaran acá y se validan otra vez del lado del servidor:
 # que el colector mande algo no significa que el servidor deba creerlo.
-PARES = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "XRPUSDT")
+# Los 6 instrumentos del modulo de trading, no los 5 del bot: el grafico los
+# muestra todos y sin DOGE ese par se quedaba en Crypto.com sin razon.
+PARES = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "XRPUSDT", "DOGEUSDT")
 
 # Cuántas velas por temporalidad. El 1d va con 1.500 a propósito: cubre desde
 # 2022-06-18 (medido), o sea TODAS las aperturas anuales que la vista necesita para

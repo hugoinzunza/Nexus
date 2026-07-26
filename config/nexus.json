@@ -113,7 +113,8 @@
         "ETHUSDT",
         "SOLUSDT",
         "ADAUSDT",
-        "XRPUSDT"
+        "XRPUSDT",
+        "DOGEUSDT"
       ],
       "_nota": "Vista Accion del precio (curso CreceTrader). research_only, sin senal, sin ordenes. Solo klines publicas sin firma."
     }

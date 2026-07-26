@@ -21,6 +21,7 @@ import threading
 import time
 
 from core.module_base import NexusModule
+from core import klines_push
 from . import cryptocom
 from . import binance
 from . import smc_live
@@ -38,6 +39,7 @@ _APP_VERSION = (os.environ.get("RAILWAY_GIT_COMMIT_SHA") or str(int(time.time())
 # en Railway/launchd el CWD no siempre es la raíz; con ruta relativa la historia
 # profunda no cargaría y caería silenciosa al feed en vivo (sin scroll/zonas).
 _DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(_MOD_DIR)), "data")
+_ROOT_REPO = os.path.dirname(os.path.dirname(_MOD_DIR))
 _BACKTEST_PATH = os.path.join(_MOD_DIR, "backtest_results.json")
 _POI_LAYERS_PATH = os.path.join(_MOD_DIR, "poi_layers_results.json")
 _SETUP_BT_PATH = os.path.join(_MOD_DIR, "setup_backtest_results.json")
@@ -380,12 +382,49 @@ class TradingModule(NexusModule):
             entry = self._full_cache.get(key)
             if entry and now - entry["ts"] < self._chart_ttl(timeframe):
                 return entry["candles"]
-        recent = self._candles_cached(instrument, timeframe)
+        # El tramo reciente sale de BINANCE cuando el push del VPS lo tiene fresco.
+        #
+        # Antes salia siempre de Crypto.com, y como `_deep_history` lee los klines de
+        # BINANCE de `data/`, el grafico venia siendo un EMPALME DE DOS EXCHANGES
+        # pegados en el borde. Peor todavia: el bot ejecuta en Binance Futuros, asi que
+        # lo que se miraba no era el mercado donde se operaba.
+        #
+        # Medido el 2026-07-26 sobre 200 velas 1h del mismo par: los extremos difieren
+        # 0,045% en la mediana y hasta 0,183% en el peor caso, o sea el 6% y el 23% de
+        # la distancia a TP1. Chico, pero es la costura exacta donde el grafico deja de
+        # describir el mercado que se opera.
+        #
+        # OJO CON EL ALCANCE: esto cambia SOLO el grafico. El analisis SMC sigue
+        # usando `_candles_cached` (Crypto.com) a proposito, porque cambiarle el feed a
+        # las senales a mitad del dry-run haria incomparables los trades de antes y
+        # despues, y la Fase 1 esta juntando muestra con un criterio pre-registrado.
+        # Ese cambio va cuando la Fase 1 cierre, con su propia linea de corte.
+        fuente = "cryptocom"
+        recent = []
+        inst = self._inst_by_name.get(instrument, {})
+        sym = inst.get("binance")
+        if sym:
+            iv = binance.UI_TO_BINANCE.get(timeframe, timeframe)
+            empujadas = klines_push.serie(_ROOT_REPO, sym, iv, self.chart_candle_count)
+            if empujadas:
+                recent, fuente = empujadas, "binance_vps"
+        if not recent:
+            # 1m y 5m caen aca siempre: un push cada 10 min deja el grafico atrasado
+            # mas que la vela misma, y eso es peor que mostrar otro exchange declarado.
+            recent = self._candles_cached(instrument, timeframe)
         deep = self._deep_history(instrument, timeframe)
         full = self._merge_candles(deep, recent, len(deep) + len(recent) + 10) if deep else recent
         with self._chart_lock:
-            self._full_cache[key] = {"candles": full, "ts": now}
+            self._full_cache[key] = {"candles": full, "ts": now, "fuente": fuente}
         return full
+
+    def _fuente_grafico(self, instrument: str, timeframe: str) -> str:
+        """De que exchange salio el tramo reciente del grafico. Va al payload para que
+        la pantalla lo diga: un grafico que mezcla venues sin avisar es el problema
+        que este cambio viene a resolver, no algo que se pueda dejar implicito."""
+        with self._chart_lock:
+            entry = self._full_cache.get((instrument, timeframe))
+        return (entry or {}).get("fuente") or "cryptocom"
 
     def _htf_candles(self, instrument: str) -> dict:
         """Velas de las TF de POIs: historia PROFUNDA persistida (años) con el tramo
@@ -838,6 +877,7 @@ class TradingModule(NexusModule):
                 "instrument": instrument,
                 "timeframe": timeframe,
                 "candles": candles,
+                "fuente": self._fuente_grafico(instrument, timeframe),
                 "has_more": len(subset) > len(candles),  # ¿quedan más viejas?
             }, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)

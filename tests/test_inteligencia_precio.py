@@ -275,7 +275,8 @@ def test_la_ingesta_exige_token(monkeypatch, tmp_path):
     """El endpoint se salta la sesion del navegador (lo llama un colector), asi que
     el token es lo UNICO que lo protege."""
     m, mod = _modulo()
-    monkeypatch.setattr(mod, "KLINES_PATH", str(tmp_path / "k.json"))
+    from core import klines_push
+    monkeypatch.setattr(klines_push, "_ruta", lambda _root: str(tmp_path / "k.json"))
     monkeypatch.setenv("NEXUS_INGEST_TOKEN", "secreto")
     cuerpo = {"series": {"BTCUSDT:1h": _serie()}}
 
@@ -291,7 +292,8 @@ def test_la_ingesta_no_cree_lo_que_le_manden(monkeypatch, tmp_path):
     """Que el colector mande algo no significa que el servidor deba creerlo: par y
     temporalidad se validan contra las listas blancas del modulo."""
     m, mod = _modulo()
-    monkeypatch.setattr(mod, "KLINES_PATH", str(tmp_path / "k.json"))
+    from core import klines_push
+    monkeypatch.setattr(klines_push, "_ruta", lambda _root: str(tmp_path / "k.json"))
     monkeypatch.setenv("NEXUS_INGEST_TOKEN", "secreto")
     cab = {"x-nexus-token": "secreto"}
 
@@ -312,10 +314,11 @@ def test_un_push_viejo_NO_se_sirve_como_si_fuera_en_vivo(monkeypatch, tmp_path):
     import time as _time
     m, mod = _modulo()
     ruta = tmp_path / "k.json"
-    monkeypatch.setattr(mod, "KLINES_PATH", str(ruta))
+    from core import klines_push
+    monkeypatch.setattr(klines_push, "_ruta", lambda _root: str(ruta))
 
     ruta.write_text(_json.dumps({
-        "empujado_ts": _time.time() - (mod.MAX_EDAD_PUSH_S + 60),
+        "empujado_ts": _time.time() - (klines_push.MAX_EDAD_S + 60),
         "series": {"BTCUSDT:1h": _serie()}}))
     assert m._velas_empujadas("BTCUSDT", "1h", 500) == [], "sirvio un push vencido"
 
@@ -377,3 +380,59 @@ def test_el_shell_se_versiona_igual_en_todas_las_paginas():
         for m in re.finditer(r"nexux-shell\.js\?v=(\d+)", open(ruta, encoding="utf-8").read()):
             versiones.add(m.group(1))
     assert len(versiones) == 1, f"hay paginas con versiones distintas del shell: {versiones}"
+
+
+# --- el grafico de Trading y el feed de las senales ------------------
+
+TRADING = os.path.join(ROOT, "modules/trading/module.py")
+
+
+def test_el_grafico_de_trading_usa_binance_pero_las_senales_NO_cambian():
+    """La costura que Codex encontro: el bot ejecuta en Binance Futuros y el grafico
+    mostraba Crypto.com. Peor: `_deep_history` lee los klines de BINANCE de `data/`,
+    asi que el grafico venia siendo un EMPALME de dos exchanges pegados en el borde.
+
+    Medido el 2026-07-26 sobre 200 velas 1h: los extremos difieren 0,045% en la
+    mediana y 0,183% en el peor caso — el 6% y el 23% de la distancia a TP1.
+
+    Y el candado que importa: el ANALISIS sigue con `_candles_cached` a proposito.
+    Cambiarle el feed a las senales a mitad del dry-run haria incomparables los trades
+    de antes y despues, y la Fase 1 esta juntando muestra con criterio pre-registrado.
+    """
+    fuente = open(TRADING, encoding="utf-8").read()
+
+    grafico = fuente.split("def _full_candles")[1].split("def _fuente_grafico")[0]
+    assert "klines_push.serie" in grafico, "el grafico no toma el push de Binance"
+    assert '"binance_vps"' in grafico
+
+    analisis = fuente.split("def _smc_analysis")[1].split("\n    def ")[0]
+    assert "_candles_cached" in analisis, "el analisis debe seguir con su feed"
+    assert "klines_push" not in analisis, \
+        "el analisis cambio de feed: eso invalida la muestra de la Fase 1 en curso"
+
+
+def test_1m_y_5m_no_pueden_venir_del_push():
+    """Un push cada 10 min deja una vela de 1m mas atrasada que la vela misma. Servir
+    eso como si fuera en vivo es peor que mostrar otro exchange declarado."""
+    from core import klines_push
+    assert "1m" not in klines_push.TFS_SERVIBLES
+    assert "5m" not in klines_push.TFS_SERVIBLES
+    assert set(klines_push.TFS_SERVIBLES) == {"15m", "1h", "4h", "1d"}
+
+
+def test_la_fuente_del_grafico_se_declara_en_pantalla():
+    fuente = open(TRADING, encoding="utf-8").read()
+    assert '"fuente": self._fuente_grafico(instrument, timeframe)' in fuente
+    js = open(os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()
+    assert "marcarFuente(card, j.fuente)" in js
+    assert "Binance Futuros" in js and "Crypto.com" in js
+
+
+def test_el_lector_del_push_vive_en_un_solo_lugar():
+    """Con el lector duplicado, el dia que cambie el formato o la ventana de frescura
+    uno de los dos consumidores se queda atras en silencio."""
+    for mod in ("modules/inteligencia/module.py", "modules/trading/module.py"):
+        src = open(os.path.join(ROOT, mod), encoding="utf-8").read()
+        assert "from core import klines_push" in src
+        assert "inteligencia_klines.json" not in src, \
+            f"{mod} vuelve a abrir el archivo por su cuenta"
