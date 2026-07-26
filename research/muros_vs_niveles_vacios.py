@@ -221,12 +221,12 @@ def main():
         salida["meta"]["sin_datos_suficientes"] = True
         with open(OUT_JSON, "w", encoding="utf-8") as fh:
             json.dump(salida, fh, indent=1)
+        faltan = max(HORIZONTES) + BLOQUE * 6 - len(capturas)
         print(f"capturas disponibles: {len(capturas)} — insuficientes.\n"
-              f"Se necesitan al menos {max(HORIZONTES) + BLOQUE * 6}.\n\n"
-              "El historial del libro vive en la instancia donde postea el colector\n"
-              "(Railway). Para correr esto hace falta ese archivo:\n"
-              "  data/coinglass_visual_book_history.json\n"
-              "o dejar que el archivo append-only acumule.")
+              f"Se necesitan al menos {max(HORIZONTES) + BLOQUE * 6}: faltan {faltan},\n"
+              f"o sea ~{faltan * 5 / 60:.1f} horas de colector a 5 min por captura.\n\n"
+              "El archivo local del VPS acumula solo; esto no es un error, es que\n"
+              "todavia no hay historia suficiente. Vuelve a correrlo mas tarde.")
         return
 
     for h in HORIZONTES:
