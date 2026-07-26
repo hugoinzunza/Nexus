@@ -17,16 +17,24 @@ la pantalla insinúe que un nivel funciona.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import threading
 import time
 
 from core.module_base import NexusModule
+from core.paths import persist_dir
 from modules.journal import binance_client as bc
 from . import precio as P
 
 ROOT_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+KLINES_PATH = os.path.join(persist_dir(ROOT_REPO), "inteligencia_klines.json")
+
+# Cuanto vale un push antes de considerarse viejo. 25 min deja pasar un ciclo perdido
+# del timer de 10 min sin gritar, y no tanto como para que un colector muerto pase
+# desapercibido media hora larga.
+MAX_EDAD_PUSH_S = 25 * 60
 
 # Klines públicas de futuros: mismo mercado que opera el bot, sin firma y sin llaves.
 # Se usa el endpoint público a propósito: este módulo no debe poder tocar la cuenta.
@@ -77,6 +85,14 @@ class InteligenciaModule(NexusModule):
             item = self._cache.get(clave)
             if item and (time.time() - item[0]) < TTL_VELAS:
                 return item[1]
+        # 1) lo que el VPS empujo. Es la fuente BUENA: Binance en vivo, desde una
+        # region que Binance si atiende.
+        empujadas = self._velas_empujadas(symbol, tf, limit)
+        if empujadas:
+            with self._lock:
+                self._cache[clave] = (time.time(), (empujadas, "vps_binance"))
+            return empujadas, "vps_binance"
+        # 2) Binance directo. Funciona en local y en el VPS; en Railway da 451.
         try:
             filas = bc.public_get(bc.FAPI, FAPI_KLINES,
                                   {"symbol": symbol, "interval": tf, "limit": limit})
@@ -107,6 +123,99 @@ class InteligenciaModule(NexusModule):
         if not isinstance(filas, list):
             return []
         return filas[-limit:]
+
+
+    def _velas_empujadas(self, symbol: str, tf: str, limit: int) -> list[dict]:
+        """Las klines que empuja el colector del VPS, si estan frescas.
+
+        Se exige frescura a proposito: unas klines empujadas hace tres horas son peor
+        que las versionadas, porque PARECEN en vivo. Si el colector murio, se cae al
+        siguiente respaldo y la pantalla lo dice.
+        """
+        datos = self._leer_klines()
+        if not datos:
+            return []
+        bloque = (datos.get("series") or {}).get(f"{symbol}:{tf}")
+        if not isinstance(bloque, list) or not bloque:
+            return []
+        try:
+            edad = time.time() - float(datos.get("empujado_ts") or 0)
+        except (TypeError, ValueError):
+            return []
+        if edad > MAX_EDAD_PUSH_S:
+            return []
+        return bloque[-limit:]
+
+    def _leer_klines(self) -> dict:
+        try:
+            with open(KLINES_PATH, encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def api_post(self, subpath, body, headers, user=None):
+        """Ingesta de klines desde el colector del VPS.
+
+        Existe porque Railway esta geo-bloqueado por Binance (HTTP 451) y el patron
+        del proyecto es que el VPS recolecte y Railway muestre. No hay ningun otro
+        POST en este modulo: no crea ordenes, no toca el bot, no escribe config.
+        """
+        if subpath != "klines-ingest":
+            return None
+        token = os.environ.get("NEXUS_INGEST_TOKEN", "").strip()
+        if not token:
+            return self._json(503, {"error": "ingesta no configurada"})
+        if not hmac.compare_digest(headers.get("x-nexus-token", ""), token):
+            return self._json(401, {"error": "token invalido"})
+        if not isinstance(body, dict):
+            return self._json(400, {"error": "payload invalido"})
+        series = body.get("series")
+        if not isinstance(series, dict) or not series:
+            return self._json(400, {"error": "series requerido"})
+
+        limpio = {}
+        for clave, filas in series.items():
+            # La clave manda a que par y temporalidad pertenece la serie, asi que se
+            # valida contra las listas blancas en vez de confiar en lo que llegue.
+            partes = str(clave).split(":")
+            if len(partes) != 2:
+                continue
+            symbol, tf = partes[0].upper(), partes[1]
+            if symbol not in self._pares() or tf not in self.TFS:
+                continue
+            if not isinstance(filas, list) or len(filas) > 2_000:
+                continue
+            velas = []
+            for f in filas:
+                if not isinstance(f, dict):
+                    continue
+                try:
+                    velas.append({"t": int(f["t"]), "o": float(f["o"]),
+                                  "h": float(f["h"]), "l": float(f["l"]),
+                                  "c": float(f["c"]), "v": float(f.get("v") or 0)})
+                except (KeyError, TypeError, ValueError):
+                    continue
+            if velas:
+                limpio[f"{symbol}:{tf}"] = velas
+        if not limpio:
+            return self._json(400, {"error": "ninguna serie valida"})
+
+        with self._lock:
+            self._escribir_klines({"empujado_ts": time.time(),
+                                   "empujado_at": body.get("captured_at"),
+                                   "fuente": "binance_futuros_vps",
+                                   "series": limpio})
+            self._cache.clear()   # el push manda sobre lo cacheado
+        return self._json(200, {"ok": True, "series": len(limpio),
+                                "velas": sum(len(v) for v in limpio.values())})
+
+    @staticmethod
+    def _escribir_klines(datos: dict) -> None:
+        os.makedirs(os.path.dirname(KLINES_PATH), exist_ok=True)
+        tmp = KLINES_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(datos, fh, separators=(",", ":"))
+        os.replace(tmp, KLINES_PATH)
 
     def _pares(self) -> list[str]:
         return list(self.config.get("pares") or ["BTCUSDT", "ETHUSDT", "SOLUSDT",

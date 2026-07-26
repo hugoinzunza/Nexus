@@ -1,0 +1,13 @@
+[Unit]
+Description=Empuja klines de Binance a NexUX cada 10 minutos
+
+# 10 min y no 5: la vista es de mediano plazo (apertura anual, rejilla, estructura)
+# y el modulo considera viejo un push de mas de 25 min, asi que hay margen para
+# perder un ciclo sin que la pantalla se caiga al respaldo.
+[Timer]
+OnCalendar=*:0/10
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

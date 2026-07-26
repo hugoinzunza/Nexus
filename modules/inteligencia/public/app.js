@@ -253,6 +253,8 @@ async function cargar() {
     pintarPaneles();
     // La fuente de los datos NO es un detalle: si viene del respaldo versionado,
     // el precio y la estructura estan viejos y todo lo demas hay que leerlo distinto.
+    // `vps_binance` = el colector del VPS empujo klines frescas: es la fuente
+    // buena y no hay nada que advertir. Las otras dos si.
     if (st.fuente === "klines_versionados") {
       const ult = state.velas.length
         ? new Date(state.velas[state.velas.length - 1].t).toLocaleDateString("es-CL")

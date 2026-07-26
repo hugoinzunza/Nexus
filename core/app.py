@@ -397,6 +397,7 @@ _TOKEN_AUTH_POSTS = {
     ("coinglass", "ingest"),
     ("coinglass", "visual-ingest"),
     ("coinsignals", "ingest"),
+    ("inteligencia", "klines-ingest"),
     ("journal", "ingest"),
     ("journal", "ingest_setups"),
     ("journal", "connections"),

@@ -247,3 +247,104 @@ def test_la_medicion_del_vacio_disponible_esta_en_pantalla():
     assert "permutado al azar" in html
     # el control de fuga: sin el, un resultado negativo no es creible
     assert "control de fuga" in html
+
+
+# --- ingesta de klines desde el VPS ----------------------------------
+
+def _modulo(tmp_path=None):
+    import threading
+    from modules.inteligencia import module as mod
+    m = mod.InteligenciaModule.__new__(mod.InteligenciaModule)
+    m._lock = threading.Lock()
+    m._cache = {}
+    m.config = {"pares": ["BTCUSDT", "ETHUSDT"]}
+
+    class Ctx:
+        def log(self, _m):
+            pass
+    m.context = Ctx()
+    return m, mod
+
+
+def _serie(n=5, t0=1_700_000_000_000, paso=3_600_000):
+    return [{"t": t0 + i * paso, "o": 100.0 + i, "h": 101.0 + i,
+             "l": 99.0 + i, "c": 100.5 + i, "v": 1.0} for i in range(n)]
+
+
+def test_la_ingesta_exige_token(monkeypatch, tmp_path):
+    """El endpoint se salta la sesion del navegador (lo llama un colector), asi que
+    el token es lo UNICO que lo protege."""
+    m, mod = _modulo()
+    monkeypatch.setattr(mod, "KLINES_PATH", str(tmp_path / "k.json"))
+    monkeypatch.setenv("NEXUS_INGEST_TOKEN", "secreto")
+    cuerpo = {"series": {"BTCUSDT:1h": _serie()}}
+
+    st, _, _ = m.api_post("klines-ingest", cuerpo, {}, None)
+    assert st == 401
+    st, _, _ = m.api_post("klines-ingest", cuerpo, {"x-nexus-token": "otro"}, None)
+    assert st == 401
+    st, _, _ = m.api_post("klines-ingest", cuerpo, {"x-nexus-token": "secreto"}, None)
+    assert st == 200
+
+
+def test_la_ingesta_no_cree_lo_que_le_manden(monkeypatch, tmp_path):
+    """Que el colector mande algo no significa que el servidor deba creerlo: par y
+    temporalidad se validan contra las listas blancas del modulo."""
+    m, mod = _modulo()
+    monkeypatch.setattr(mod, "KLINES_PATH", str(tmp_path / "k.json"))
+    monkeypatch.setenv("NEXUS_INGEST_TOKEN", "secreto")
+    cab = {"x-nexus-token": "secreto"}
+
+    st, _, _ = m.api_post("klines-ingest", {"series": {"HACKUSDT:1h": _serie()}}, cab, None)
+    assert st == 400, "acepto un par fuera de la lista"
+    st, _, _ = m.api_post("klines-ingest", {"series": {"BTCUSDT:3m": _serie()}}, cab, None)
+    assert st == 400, "acepto una temporalidad fuera de la lista"
+    st, _, _ = m.api_post("klines-ingest", {"series": {}}, cab, None)
+    assert st == 400
+    # y este modulo no expone ningun otro POST
+    assert m.api_post("cualquier-otra-cosa", {}, cab, None) is None
+
+
+def test_un_push_viejo_NO_se_sirve_como_si_fuera_en_vivo(monkeypatch, tmp_path):
+    """Klines empujadas hace horas son PEOR que las versionadas, porque parecen en
+    vivo. Pasada la ventana se cae al siguiente respaldo y la pantalla lo dice."""
+    import json as _json
+    import time as _time
+    m, mod = _modulo()
+    ruta = tmp_path / "k.json"
+    monkeypatch.setattr(mod, "KLINES_PATH", str(ruta))
+
+    ruta.write_text(_json.dumps({
+        "empujado_ts": _time.time() - (mod.MAX_EDAD_PUSH_S + 60),
+        "series": {"BTCUSDT:1h": _serie()}}))
+    assert m._velas_empujadas("BTCUSDT", "1h", 500) == [], "sirvio un push vencido"
+
+    ruta.write_text(_json.dumps({
+        "empujado_ts": _time.time(),
+        "series": {"BTCUSDT:1h": _serie()}}))
+    assert len(m._velas_empujadas("BTCUSDT", "1h", 500)) == 5
+
+
+def test_el_orden_de_respaldos_es_push_binance_versionadas():
+    """El respaldo bueno primero. Si esto se invierte, Railway seguiria mostrando
+    datos de hace 41 dias aunque el VPS este empujando en vivo."""
+    fuente = open(os.path.join(ROOT, "modules/inteligencia/module.py"),
+                  encoding="utf-8").read()
+    bloque = fuente.split("def _velas(")[1].split("\n    @staticmethod")[0]
+    assert bloque.index("_velas_empujadas") < bloque.index("bc.public_get")
+    assert bloque.index("bc.public_get") < bloque.index("_velas_versionadas")
+    for etiqueta in ("vps_binance", "binance_publico", "klines_versionados"):
+        assert f'"{etiqueta}"' in bloque
+
+
+def test_el_colector_del_vps_no_puede_tocar_la_cuenta():
+    """Solo GET publicos y un POST con token. Si aparece una firma aca, el colector
+    dejo de ser lo que dice ser."""
+    fuente = open(os.path.join(ROOT, "deploy/klines_collector.py"), encoding="utf-8").read()
+    assert "BINANCE_API" not in fuente and "hmac" not in fuente
+    assert "signed" not in fuente
+    assert "X-Nexus-Token" in fuente
+    # el 1d tiene que traer historia suficiente para anclar la rejilla anual
+    assert '("1d", 1_500)' in fuente
+    # y no publica vacio: pisaria lo que ya esta servido
+    assert "no se pisa lo que ya está servido" in fuente

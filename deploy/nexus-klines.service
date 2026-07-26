@@ -1,0 +1,17 @@
+[Unit]
+Description=NexUX klines collector (Binance Futuros -> nexux.cl)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hugo
+WorkingDirectory=/home/hugo/Nexus
+EnvironmentFile=/home/hugo/Nexus/deploy/collector.env
+UMask=0077
+ExecStart=/home/hugo/Nexus/.venv/bin/python3 /home/hugo/Nexus/deploy/klines_collector.py --destino https://nexux.cl
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# Solo lectura del repo: este colector no escribe nada en disco, solo POSTea.
+ProtectHome=read-only
