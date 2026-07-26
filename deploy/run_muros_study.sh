@@ -19,7 +19,10 @@ PY="$RAIZ/.venv/bin/python3"
 {
     echo "===== $(date -u +%Y-%m-%dT%H:%M:%SZ) ====="
     "$PY" "$RAIZ/research/muros_vs_niveles_vacios.py" 2>&1 || \
-        echo "el estudio fallo con codigo $?"
+        echo "el estudio pareado fallo con codigo $?"
+    echo "--- BOT2 contrafactual ---"
+    "$PY" "$RAIZ/research/bot2_contrafactual.py" 2>&1 || \
+        echo "bot2 fallo con codigo $?"
 } >> "$LOG" 2>&1
 
 # El log no puede crecer sin fin: se queda con lo ultimo. Se hace con un temporal

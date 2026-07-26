@@ -1,0 +1,29 @@
+{
+ "meta": {
+  "research_only": true,
+  "execution_enabled": false,
+  "validated": false,
+  "aviso": "Research only - No senal - No bot - NO usar para activar live",
+  "que_es": "evaluador contrafactual sobre los MISMOS setups de BOT1; NO es un segundo bot con universo propio",
+  "reglas_congeladas_en": "docs/BOT2_REGLAS_CONGELADAS_2026-07-26.md",
+  "umbral_muro_usd": 5000000,
+  "causalidad": "captura anterior o igual a la activacion, nunca posterior",
+  "simbolo": "BTC_USDT",
+  "capturas_disponibles": 0,
+  "setups_cerrados_btc": 8,
+  "con_cobertura": 0,
+  "sin_cobertura": 8,
+  "gate2_n_minimo_afectados": 50,
+  "limitacion": "solo BTCUSDT y ~15 setups BTC cada 43 dias: llegar a n>=50 AFECTADOS toma mas de un ano"
+ },
+ "r1_veto": {
+  "n_total": 0,
+  "n_vetados": 0,
+  "n_sobreviven": 0,
+  "avgR_bot1": null,
+  "avgR_bot2": null,
+  "avgR_de_los_vetados": null,
+  "cobertura_pct": null
+ },
+ "filas": []
+}
