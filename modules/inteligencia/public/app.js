@@ -12,8 +12,10 @@
 const $ = (id) => document.getElementById(id);
 const API = "/m/inteligencia/api";
 
-const state = { symbol: null, tf: "1h", data: null, velas: [], chart: null,
-                series: null, lineas: [], marcas: [] };
+const state = { symbol: null, tf: "4h", horizonte: "medio", data: null, mapa: null,
+                velas: [], chart: null, series: null, lineas: [], marcas: [],
+                loadSeq: 0 };
+const TF_PRINCIPAL = { corto: "1h", medio: "4h", largo: "1d" };
 
 const fmt = (v, d = 2) => (v == null || !Number.isFinite(Number(v))) ? "—"
   : Number(v).toLocaleString("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -50,7 +52,11 @@ function crearGrafico() {
 }
 
 function pintarVelas() {
-  if (!state.series || !state.velas.length) return;
+  if (!state.series) return;
+  if (!state.velas.length) {
+    state.series.setData([]);
+    return;
+  }
   const prec = decimales(state.velas[state.velas.length - 1].c);
   state.series.applyOptions({ priceFormat: { type: "price", precision: prec,
                                              minMove: Math.pow(10, -prec) } });
@@ -198,6 +204,64 @@ function pintarPaneles() {
       `${e.motivo ? `<br>${e.motivo}` : ""}</div></div>`).join("");
 }
 
+function tablaMapa(id, filas) {
+  $(id).innerHTML =
+    "<thead><tr><th>nivel</th><th>precio</th><th>desde ahora</th></tr></thead><tbody>" +
+    (filas || []).map((f) =>
+      `<tr><td>${fmt(f.ratio * 100, 1)}%</td>` +
+      `<td class="num">${fmt(f.precio, decimales(state.mapa && state.mapa.precio))}</td>` +
+      `<td class="num">${signed(f.dist_pct, "%")}</td></tr>`).join("") +
+    "</tbody>";
+}
+
+function referencias(id, titulo, filas) {
+  const el = $(id);
+  if (!filas || !filas.length) {
+    el.innerHTML = `<h3>${titulo}</h3><div class="px">sin referencias</div>`;
+    return;
+  }
+  el.innerHTML = `<h3>${titulo}</h3>` + filas.map((r) =>
+    `<div class="meta"><span class="cuenta">${fmt(r.precio, decimales(state.mapa.precio))}</span>` +
+    ` · ${r.tf} · ${r.tipo}</div>`).join("");
+}
+
+function pintarMapa() {
+  const d = state.mapa;
+  if (!d) return;
+  const p = d.perfil || {};
+  $("mapa-sub").textContent = `${p.label || state.horizonte} · ${d.symbol}`;
+  $("roles").innerHTML = [
+    ["Panorama", (p.panorama || []).map((x) => x.toUpperCase()).join(" + ")],
+    ["Principal", String(p.principal || "—").toUpperCase()],
+    ["Sincronismo", String(p.sincronismo || "—").toUpperCase()],
+  ].map(([k, v]) => `<div class="role"><span>${k}</span><strong>${v}</strong></div>`).join("");
+
+  const m = d.mapa;
+  if (!m || !m.pierna) {
+    $("pierna-stats").innerHTML =
+      '<div class="stat"><span>pierna</span><strong>sin contexto confirmado</strong></div>';
+    tablaMapa("tabla-retrocesos", []);
+    tablaMapa("tabla-extensiones", []);
+  } else {
+    const leg = m.pierna;
+    $("pierna-stats").innerHTML = [
+      ["Dirección descriptiva", leg.direccion, `${leg.tf} · ventana ${leg.piv}+1+${leg.piv}`],
+      ["Pierna congelada", `${fmt(leg.inicio, decimales(d.precio))} → ${fmt(leg.fin, decimales(d.precio))}`,
+        `confirmada ${new Date(leg.confirmed_at).toLocaleString("es-CL")}`],
+      ["Estado de la pierna", `${m.estado} · ${fmt((m.profundidad_correccion || 0) * 100, 1)}%`,
+        `invalidación de referencia ${fmt(m.invalidation_reference, decimales(d.precio))}`],
+    ].map(([k, v, s]) =>
+      `<div class="stat"><span>${k}</span><strong>${v}</strong><small>${s}</small></div>`).join("");
+    tablaMapa("tabla-retrocesos", m.retrocesos);
+    tablaMapa("tabla-extensiones", m.extensiones);
+  }
+  referencias("refs-arriba", "Referencias confirmadas arriba",
+              (d.referencias_cercanas || {}).arriba);
+  referencias("refs-abajo", "Referencias confirmadas abajo",
+              (d.referencias_cercanas || {}).abajo);
+  $("mapa-nota").textContent = d.nota || "";
+}
+
 function vacio(id, titulo, v, precio) {
   const el = $(id);
   if (!v || !v.primer_obstaculo) {
@@ -216,46 +280,53 @@ function vacio(id, titulo, v, precio) {
 
 // Un fallo de datos NO puede verse como una pantalla vacía.
 //
-// Railway está geo-bloqueado por Binance (HTTP 451, verificado el 2026-07-26): este
-// módulo llama a Binance desde el proceso web y eso rompe el patrón del proyecto,
-// donde el VPS recolecta y Railway muestra. Mientras no exista un push de klines
-// desde el VPS, en producción la vista no tiene datos — y tiene que DECIRLO, no
-// quedarse en blanco dando a entender que no hay nada que ver.
+// Railway está geo-bloqueado por Binance (HTTP 451, verificado el 2026-07-26).
+// La ruta normal es el snapshot del colector VPS; si tampoco está disponible, la
+// pantalla debe decirlo en vez de parecer vacía.
 function mostrarFallo(msg) {
   const geo = /451|restricted location/i.test(String(msg));
   const caja = document.querySelector(".disclaimer");
   if (caja) {
     caja.innerHTML = geo
       ? "<strong>Sin datos en este despliegue.</strong> Binance responde 451 " +
-        "(ubicación restringida) al servidor de Railway. El módulo pide las velas " +
-        "directamente al exchange, y eso solo funciona desde el VPS o en local. " +
-        "Falta mover la recolección al VPS, como el resto del proyecto."
+        "(ubicación restringida) al servidor de Railway y el snapshot del colector " +
+        "VPS no está disponible o está vencido."
       : `<strong>Sin datos.</strong> ${String(msg).slice(0, 200)}`;
   }
   $("updated").textContent = geo ? "bloqueo geográfico" : "sin datos";
   $("price").textContent = "—";
+  state.velas = [];
+  pintarVelas();
 }
 
 // --- carga -----------------------------------------------------------
 async function cargar() {
+  const seq = ++state.loadSeq;
   const q = `symbol=${encodeURIComponent(state.symbol)}`;
   try {
-    const [st, vl] = await Promise.all([
+    const [st, vl, mp] = await Promise.all([
       fetch(`${API}/state?${q}`).then((r) => r.json()),
       fetch(`${API}/velas?${q}&tf=${state.tf}`).then((r) => r.json()),
+      fetch(`${API}/mapa?${q}&horizonte=${state.horizonte}`).then((r) => r.json()),
     ]);
-    if (st.error) { mostrarFallo(st.error); return; }
+    if (seq !== state.loadSeq) return;
+    if (st.error || vl.error || mp.error) {
+      mostrarFallo(st.error || vl.error || mp.error);
+      return;
+    }
     state.data = st;
+    state.mapa = mp;
     state.velas = vl.velas || [];
     pintarVelas();
     pintarNiveles();
     if (vl.estructura) pintarPivotes(vl.estructura);
     pintarPaneles();
+    pintarMapa();
     // La fuente de los datos NO es un detalle: si viene del respaldo versionado,
     // el precio y la estructura estan viejos y todo lo demas hay que leerlo distinto.
     // `vps_binance` = el colector del VPS empujo klines frescas: es la fuente
     // buena y no hay nada que advertir. Las otras dos si.
-    if (st.fuente === "klines_versionados") {
+    if (vl.fuente === "klines_versionados") {
       const ult = state.velas.length
         ? new Date(state.velas[state.velas.length - 1].t).toLocaleDateString("es-CL")
         : "?";
@@ -274,8 +345,12 @@ async function cargar() {
           "</p>");
       }
     } else {
-      $("updated").textContent = "actualizado " +
-        new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+      const meta = vl.fuente_meta || {};
+      const edad = Number(meta.push_age_seconds);
+      $("updated").textContent = Number.isFinite(edad)
+        ? `Binance VPS · hace ${Math.max(0, Math.round(edad / 60))} min`
+        : `${vl.fuente || "Binance"} · ${new Date().toLocaleTimeString("es-CL",
+          { hour: "2-digit", minute: "2-digit" })}`;
     }
   } catch (exc) {
     $("updated").textContent = `sin datos: ${exc}`;
@@ -292,6 +367,17 @@ function iniciar() {
   });
   $("par").addEventListener("change", (e) => { state.symbol = e.target.value; cargar(); });
   $("tf").addEventListener("change", (e) => { state.tf = e.target.value; cargar(); });
+  for (const b of document.querySelectorAll("[data-horizonte]")) {
+    b.addEventListener("click", () => {
+      state.horizonte = b.dataset.horizonte;
+      for (const x of document.querySelectorAll("[data-horizonte]")) {
+        x.classList.toggle("active", x === b);
+      }
+      state.tf = TF_PRINCIPAL[state.horizonte];
+      $("tf").value = state.tf;
+      cargar();
+    });
+  }
   $("ver-placebo").addEventListener("change", pintarNiveles);
   for (const b of document.querySelectorAll(".ayuda")) {
     b.addEventListener("click", () => {

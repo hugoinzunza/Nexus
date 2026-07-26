@@ -49,6 +49,27 @@ MAX_VELAS_DIARIAS = 1_500
 # cripto 24/7— pero es el parámetro del método y la pantalla dice cuál usó.
 PIV_CURSO = 5
 
+HORIZONTES = {
+    "corto": {
+        "label": "Corto / intradía",
+        "panorama": ["1d", "4h"],
+        "principal": "1h",
+        "sincronismo": "15m",
+    },
+    "medio": {
+        "label": "Medio / swing",
+        "panorama": ["1w", "1d"],
+        "principal": "4h",
+        "sincronismo": "1h",
+    },
+    "largo": {
+        "label": "Largo / posición",
+        "panorama": ["1w"],
+        "principal": "1d",
+        "sincronismo": "4h",
+    },
+}
+
 
 class InteligenciaModule(NexusModule):
     slug = "inteligencia"
@@ -66,21 +87,15 @@ class InteligenciaModule(NexusModule):
 
     # --- datos ---------------------------------------------------------
     def _velas(self, symbol: str, tf: str, limit: int = MAX_VELAS) -> tuple:
-        """Klines públicas con caché. Devuelve `(velas, fuente)`.
+        """Klines públicas con caché. Devuelve `(velas, fuente, metadata)`.
 
         Sin firma y sin credenciales: este módulo no puede tocar la cuenta.
 
-        Y con respaldo, porque el camino directo NO funciona en producción:
         Railway responde HTTP 451 desde Binance ("ubicación restringida", verificado
-        el 2026-07-26). El patrón del proyecto es que el VPS recolecta y Railway
-        muestra; pedirle las velas al exchange desde el proceso web fue un error de
-        diseño mío. Mientras no exista un push de klines desde el VPS, se cae a los
-        klines VERSIONADOS del repo, que sí viajan en el deploy.
-
-        Ese respaldo está viejo (unos 41 días) y eso NO se disimula: la fuente viaja
-        en el payload y la pantalla la muestra. Para la apertura anual da igual —el 1
-        de enero ya pasó y no cambia—, para la apertura semanal no sirve y por eso esa
-        función devuelve None sola.
+        el 2026-07-26). Por eso la ruta principal es el snapshot que recolecta el VPS.
+        Binance directo queda como respaldo local y los klines versionados como último
+        recurso. La fuente y su edad viajan en el payload para que la pantalla nunca
+        presente un respaldo viejo como dato actual.
         """
         clave = f"{symbol}:{tf}:{limit}"
         with self._lock:
@@ -89,25 +104,35 @@ class InteligenciaModule(NexusModule):
                 return item[1]
         # 1) lo que el VPS empujo. Es la fuente BUENA: Binance en vivo, desde una
         # region que Binance si atiende.
-        empujadas = self._velas_empujadas(symbol, tf, limit)
+        empujadas, push_meta = klines_push.serie_con_meta(
+            ROOT_REPO, symbol, tf, limit)
         if empujadas:
+            resultado = (empujadas, "vps_binance", push_meta)
             with self._lock:
-                self._cache[clave] = (time.time(), (empujadas, "vps_binance"))
-            return empujadas, "vps_binance"
+                self._cache[clave] = (time.time(), resultado)
+            return resultado
         # 2) Binance directo. Funciona en local y en el VPS; en Railway da 451.
         try:
             filas = bc.public_get(bc.FAPI, FAPI_KLINES,
                                   {"symbol": symbol, "interval": tf, "limit": limit})
             velas = [{"t": int(f[0]), "o": float(f[1]), "h": float(f[2]),
                       "l": float(f[3]), "c": float(f[4]), "v": float(f[5])} for f in filas]
-            resultado = (velas, "binance_publico")
+            resultado = (velas, "binance_publico", {
+                "fuente": "binance_publico",
+                "valida": True,
+                "last_bar_open_t": velas[-1]["t"] if velas else None,
+            })
         except Exception as exc:  # noqa: BLE001
             velas = self._velas_versionadas(symbol, tf, limit)
             if not velas:
                 raise
             self.context.log(f"inteligencia: sin Binance ({str(exc)[:80]}), "
                              "uso klines versionados")
-            resultado = (velas, "klines_versionados")
+            resultado = (velas, "klines_versionados", {
+                "fuente": "klines_versionados",
+                "valida": False,
+                "last_bar_open_t": velas[-1]["t"] if velas else None,
+            })
         with self._lock:
             self._cache[clave] = (time.time(), resultado)
         return resultado
@@ -178,8 +203,9 @@ class InteligenciaModule(NexusModule):
                                   "c": float(f["c"]), "v": float(f.get("v") or 0)})
                 except (KeyError, TypeError, ValueError):
                     continue
-            if velas:
-                limpio[f"{symbol}:{tf}"] = velas
+            normalizadas, error, _ = klines_push.validar_serie(velas, tf)
+            if normalizadas and not error:
+                limpio[f"{symbol}:{tf}"] = normalizadas
         if not limpio:
             return self._json(400, {"error": "ninguna serie valida"})
 
@@ -201,10 +227,10 @@ class InteligenciaModule(NexusModule):
     # Temporalidades que la vista puede pedir. Es una lista blanca a propósito: el
     # `interval` va a una URL de Binance, y aceptar lo que venga del query sería
     # dejar que el navegador arme el request.
-    TFS = ("15m", "1h", "4h", "1d")
+    TFS = ("15m", "1h", "4h", "1d", "1w")
 
     def api(self, subpath, query, user=None):
-        if subpath not in ("state", "velas"):
+        if subpath not in ("state", "velas", "mapa"):
             return None
         symbol = (query.get("symbol") or self._pares()[0]).upper()
         if symbol not in self._pares():
@@ -215,10 +241,21 @@ class InteligenciaModule(NexusModule):
                 if tf not in self.TFS:
                     return self._json(400, {"error": "temporalidad no habilitada"})
                 tope = MAX_VELAS_DIARIAS if tf == "1d" else MAX_VELAS
-                velas, fuente = self._velas(symbol, tf, tope)
+                velas, fuente, meta = self._velas(symbol, tf, tope)
+                ahora_ms = int(time.time() * 1000)
+                cerradas = P.velas_cerradas(velas, tf, ahora_ms)
                 return self._json(200, {"symbol": symbol, "tf": tf, "velas": velas,
                                         "piv": PIV_CURSO, "fuente": fuente,
-                                        "estructura": P.estructura(velas, PIV_CURSO)})
+                                        "fuente_meta": meta,
+                                        "as_of": ahora_ms,
+                                        "velas_cerradas": len(cerradas),
+                                        "vela_abierta": len(velas) > len(cerradas),
+                                        "estructura": P.estructura(cerradas, PIV_CURSO)})
+            if subpath == "mapa":
+                horizonte = query.get("horizonte") or "medio"
+                if horizonte not in HORIZONTES:
+                    return self._json(400, {"error": "horizonte no habilitado"})
+                return self._json(200, self._mapa_horizonte(symbol, horizonte))
             return self._json(200, self._estado(symbol))
         except Exception as exc:  # noqa: BLE001
             # Un fallo de red no puede tumbar la vista entera: se reporta como dato.
@@ -227,13 +264,15 @@ class InteligenciaModule(NexusModule):
                                     "research_only": True})
 
     def _estado(self, symbol: str) -> dict:
-        diarias, fuente_d = self._velas(symbol, "1d", MAX_VELAS_DIARIAS)
-        horarias, fuente_h = self._velas(symbol, "1h", MAX_VELAS)
+        diarias, fuente_d, meta_d = self._velas(symbol, "1d", MAX_VELAS_DIARIAS)
+        horarias, fuente_h, meta_h = self._velas(symbol, "1h", MAX_VELAS)
         ahora_ms = int(time.time() * 1000)
         px = float(horarias[-1]["c"]) if horarias else 0.0
+        diarias_c = P.velas_cerradas(diarias, "1d", ahora_ms)
+        horarias_c = P.velas_cerradas(horarias, "1h", ahora_ms)
 
         anio = time.gmtime().tm_year
-        ancla = P.apertura_anual(diarias, anio)
+        ancla = P.apertura_anual(diarias_c, anio)
         # Si el año en curso no tiene ancla (par listado después del 1 de enero), se
         # dice que no la hay. Usar la primera vela disponible sería una ficción con
         # cara de dato, que es justo lo que el curso hace y nosotros no.
@@ -241,9 +280,9 @@ class InteligenciaModule(NexusModule):
         placebo = ({str(p): P.rejilla(ancla["precio"], px, paso=p)
                     for p in P.PASOS_PLACEBO} if ancla else {})
 
-        semanal = P.apertura_semanal(horarias, ahora_ms)
-        est_1h = P.estructura(horarias, PIV_CURSO)
-        est_1d = P.estructura(diarias, PIV_CURSO)
+        semanal = P.apertura_semanal(horarias_c, ahora_ms)
+        est_1h = P.estructura(horarias_c, PIV_CURSO)
+        est_1d = P.estructura(diarias_c, PIV_CURSO)
 
         # Referencias para el vacío: los niveles de la rejilla más los pivotes
         # confirmados. Es deliberadamente amplio — el punto del concepto es NO omitir
@@ -270,8 +309,11 @@ class InteligenciaModule(NexusModule):
             # la estructura están viejos y la pantalla tiene que decirlo.
             "fuente": fuente_h,
             "fuente_diaria": fuente_d,
+            "fuente_meta": meta_h,
+            "fuente_diaria_meta": meta_d,
             "precio": px,
-            "vela_1h_cierre": horarias[-1]["t"] if horarias else None,
+            "precio_as_of": horarias[-1]["t"] if horarias else None,
+            "ultima_1h_cerrada": horarias_c[-1]["t"] if horarias_c else None,
             "anio": anio,
             "apertura_anual": ancla,
             "desde_apertura_anual_pct": (round((px / ancla["precio"] - 1) * 100, 2)
@@ -289,6 +331,64 @@ class InteligenciaModule(NexusModule):
             "vacio_abajo": abajo,
             "nota_vacio": ("El SL de referencia es 1,5% (el techo MAX_SL_PCT del bot), "
                            "solo para dar escala al ratio. No es el SL de ningún plan."),
+        }
+
+    def _mapa_horizonte(self, symbol: str, horizonte: str) -> dict:
+        perfil = HORIZONTES[horizonte]
+        ahora_ms = int(time.time() * 1000)
+        requeridas = list(dict.fromkeys(
+            perfil["panorama"] + [perfil["principal"], perfil["sincronismo"]]))
+        series = {}
+        fuentes = {}
+        for tf in requeridas:
+            tope = MAX_VELAS_DIARIAS if tf == "1d" else MAX_VELAS
+            velas, fuente, meta = self._velas(symbol, tf, tope)
+            cerradas = P.velas_cerradas(velas, tf, ahora_ms)
+            series[tf] = {"raw": velas, "closed": cerradas}
+            fuentes[tf] = {"fuente": fuente, **meta,
+                           "closed_bars": len(cerradas),
+                           "open_bar_excluded": len(velas) > len(cerradas)}
+
+        principal_tf = perfil["principal"]
+        principal = series[principal_tf]
+        precio = float(principal["raw"][-1]["c"]) if principal["raw"] else 0.0
+        piernas = P.piernas_confirmadas(
+            principal["closed"], principal_tf, PIV_CURSO)
+        seleccionada = piernas[-1] if piernas else None
+        mapa = P.mapa_precios(seleccionada, precio) if seleccionada else None
+
+        estructuras = {}
+        referencias = []
+        for tf in perfil["panorama"] + [principal_tf, perfil["sincronismo"]]:
+            est = P.estructura(series[tf]["closed"], PIV_CURSO)
+            estructuras[tf] = est
+            for p in est["highs"] + est["lows"]:
+                referencias.append({
+                    "precio": p["price"],
+                    "tipo": "pivote confirmado",
+                    "tf": tf,
+                    "confirm_idx": p["confirm_idx"],
+                })
+        arriba = sorted((r for r in referencias if r["precio"] > precio),
+                        key=lambda r: r["precio"])[:5]
+        abajo = sorted((r for r in referencias if r["precio"] < precio),
+                       key=lambda r: r["precio"], reverse=True)[:5]
+        return {
+            "research_only": True,
+            "execution_enabled": False,
+            "validated": False,
+            "symbol": symbol,
+            "horizonte": horizonte,
+            "perfil": perfil,
+            "as_of": ahora_ms,
+            "precio": precio,
+            "fuentes": fuentes,
+            "estructuras": estructuras,
+            "mapa": mapa,
+            "piernas_candidatas": piernas[-4:],
+            "referencias_cercanas": {"arriba": arriba, "abajo": abajo},
+            "nota": ("Escenario causal calculado con barras cerradas. No predice "
+                     "dirección, probabilidad ni resultado."),
         }
 
     @staticmethod

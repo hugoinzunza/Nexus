@@ -30,7 +30,14 @@ MAX_EDAD_S = 25 * 60
 # Temporalidades donde un dato de hasta 10 min de atraso es aceptable. En 1m y 5m NO
 # lo es: una vela de 1m alimentada por un push de 10 minutos deja el gráfico atrasado
 # más que la vela misma, y eso es peor que mostrar otro exchange declarado.
-TFS_SERVIBLES = ("15m", "1h", "4h", "1d")
+TFS_SERVIBLES = ("15m", "1h", "4h", "1d", "1w")
+TF_MS = {
+    "15m": 900_000,
+    "1h": 3_600_000,
+    "4h": 14_400_000,
+    "1d": 86_400_000,
+    "1w": 604_800_000,
+}
 
 
 def _ruta(root: str) -> str:
@@ -54,8 +61,8 @@ def escribir(root: str, datos: dict) -> None:
     os.replace(tmp, ruta)
 
 
-def edad_segundos(root: str) -> float | None:
-    datos = leer_todo(root)
+def edad_segundos(root: str, datos: dict | None = None) -> float | None:
+    datos = datos if datos is not None else leer_todo(root)
     if not datos:
         return None
     try:
@@ -64,20 +71,73 @@ def edad_segundos(root: str) -> float | None:
         return None
 
 
-def serie(root: str, symbol: str, tf: str, limit: int = 500) -> list[dict]:
-    """Las velas de `symbol`/`tf` si el push está fresco. Lista vacía si no.
+def validar_serie(filas: list, tf: str, now: float | None = None,
+                  exigir_frescura: bool = True) -> tuple[list[dict], str | None, float | None]:
+    """Normaliza una serie y rechaza huecos, duplicados, futuro u OHLCV imposible."""
+    if tf not in TF_MS or not isinstance(filas, list) or not filas:
+        return [], "serie ausente", None
+    ahora = time.time() if now is None else now
+    paso = TF_MS[tf]
+    prev_t = None
+    limpias = []
+    for fila in filas:
+        try:
+            t = int(fila["t"])
+            o, h, l, c = (float(fila[k]) for k in ("o", "h", "l", "c"))
+            v = float(fila.get("v") or 0)
+        except (KeyError, TypeError, ValueError):
+            return [], "vela inválida", None
+        if h < max(o, c) or l > min(o, c) or h < l or v < 0:
+            return [], "OHLCV incoherente", None
+        if prev_t is not None and t - prev_t != paso:
+            return [], "timestamps con huecos o duplicados", None
+        if t / 1000 > ahora + 5:
+            return [], "vela futura", None
+        limpias.append({"t": t, "o": o, "h": h, "l": l, "c": c, "v": v})
+        prev_t = t
+    lag = ahora - limpias[-1]["t"] / 1000
+    if exigir_frescura and lag > paso / 1000 + MAX_EDAD_S:
+        return [], "serie vencida", lag
+    return limpias, None, lag
 
-    `symbol` en formato Binance (BTCUSDT) y `tf` en el del colector (15m/1h/4h/1d).
+
+def serie_con_meta(root: str, symbol: str, tf: str, limit: int = 500,
+                   now: float | None = None) -> tuple[list[dict], dict]:
+    """Serie validada y metadatos de frescura propios de esa serie.
+
+    `symbol` en formato Binance (BTCUSDT) y `tf` en el del colector
+    (15m/1h/4h/1d/1w).
     """
+    ahora = time.time() if now is None else now
+    meta = {"fuente": "binance_vps", "tf": tf, "symbol": symbol, "valida": False}
     if tf not in TFS_SERVIBLES:
-        return []
+        return [], {**meta, "error": "temporalidad no servible"}
     datos = leer_todo(root)
     if not datos:
-        return []
-    edad = edad_segundos(root)
+        return [], {**meta, "error": "sin push"}
+    edad = edad_segundos(root, datos)
     if edad is None or edad > MAX_EDAD_S:
-        return []
+        return [], {**meta, "error": "push vencido", "push_age_seconds": edad}
     filas = (datos.get("series") or {}).get(f"{symbol}:{tf}")
     if not isinstance(filas, list) or not filas:
-        return []
-    return filas[-limit:]
+        return [], {**meta, "error": "serie ausente", "push_age_seconds": edad}
+
+    limpias, error, lag = validar_serie(filas, tf, ahora)
+    if error:
+        return [], {**meta, "error": error, "push_age_seconds": edad,
+                    "series_lag_seconds": lag}
+    ultima_t = limpias[-1]["t"]
+    return limpias[-limit:], {
+        **meta,
+        "valida": True,
+        "push_age_seconds": round(edad, 3),
+        "series_lag_seconds": round(lag, 3),
+        "captured_at": datos.get("empujado_at"),
+        "last_bar_open_t": ultima_t,
+    }
+
+
+def serie(root: str, symbol: str, tf: str, limit: int = 500) -> list[dict]:
+    """Compatibilidad para consumidores que solo necesitan las velas."""
+    filas, _ = serie_con_meta(root, symbol, tf, limit)
+    return filas

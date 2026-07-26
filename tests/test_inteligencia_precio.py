@@ -63,6 +63,8 @@ def test_la_apertura_anual_no_se_inventa_si_falta_el_comienzo_del_anio():
     completo = velas_diarias(desde="2024-01-01", n=100)
     ancla = P.apertura_anual(completo, 2024)
     assert ancla and ancla["fecha"] == "2024-01-01"
+    empieza_el_2 = velas_diarias(desde="2024-01-02", n=100)
+    assert P.apertura_anual(empieza_el_2, 2024) is None
 
 
 def test_la_apertura_semanal_no_entrega_una_semana_vieja_como_actual():
@@ -71,6 +73,16 @@ def test_la_apertura_semanal_no_entrega_una_semana_vieja_como_actual():
     viejas = velas_diarias(desde="2024-01-01", n=30)
     ahora = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
     assert P.apertura_semanal(viejas, ahora) is None
+
+
+def test_la_apertura_semanal_exige_el_lunes_exacto():
+    lunes = dt.datetime(2026, 7, 20, tzinfo=dt.timezone.utc)
+    ahora = int((lunes + dt.timedelta(days=2)).timestamp() * 1000)
+    desde_una = [{
+        "t": int((lunes + dt.timedelta(hours=1)).timestamp() * 1000),
+        "o": 100, "h": 101, "l": 99, "c": 100, "v": 1,
+    }]
+    assert P.apertura_semanal(desde_una, ahora) is None
 
 
 # --- causalidad ------------------------------------------------------
@@ -107,6 +119,54 @@ def test_agregar_velas_futuras_no_cambia_un_pivote_ya_confirmado():
     despues = P.estructura(velas, piv=5, as_of_idx=corte - 1)
     clave = lambda e: [(p["idx"], p["confirm_idx"]) for p in e["highs"]]  # noqa: E731
     assert clave(antes) == clave(despues)
+
+
+def test_agregar_futuro_no_reescribe_una_pierna_ya_confirmada():
+    paso = P.TF_MS["1h"]
+    patron = (100, 104, 109, 104, 100, 96, 91, 96)
+    velas = []
+    for i in range(96):
+        px = patron[i % len(patron)]
+        velas.append({"t": i * paso, "o": px, "h": px + 1,
+                      "l": px - 1, "c": px, "v": 1})
+    corte = 64
+    antes = P.piernas_confirmadas(velas[:corte], "1h", piv=2)
+    despues = [
+        p for p in P.piernas_confirmadas(velas, "1h", piv=2)
+        if p["confirm_idx"] < corte
+    ]
+    clave = lambda p: (p["direccion"], p["inicio_idx"], p["fin_idx"],  # noqa: E731
+                       p["confirm_idx"], p["confirmed_at"])
+    assert antes
+    assert [clave(p) for p in antes] == [clave(p) for p in despues]
+
+
+def test_una_vela_abierta_no_puede_confirmar_un_pivote():
+    velas = []
+    for i in range(14):
+        velas.append({"t": i * P.TF_MS["1h"], "o": 5, "h": 5 + i * .01,
+                      "l": 4 - i * .01, "c": 5, "v": 1})
+    velas[8]["h"] = 10
+    velas[13]["h"] = 9
+    assert any(p["idx"] == 8 for p in P.estructura(velas, 5)["highs"])
+
+    as_of = velas[13]["t"] + P.TF_MS["1h"] // 2
+    cerradas = P.velas_cerradas(velas, "1h", as_of)
+    assert not any(p["idx"] == 8 for p in P.estructura(cerradas, 5)["highs"])
+
+
+def test_mapa_de_precios_es_simetrico_y_aritmetico():
+    alcista = P.mapa_precios({"inicio": 100, "fin": 200}, 160)
+    bajista = P.mapa_precios({"inicio": 200, "fin": 100}, 140)
+    ra = {x["ratio"]: x["precio"] for x in alcista["retrocesos"]}
+    rb = {x["ratio"]: x["precio"] for x in bajista["retrocesos"]}
+    ea = {x["ratio"]: x["precio"] for x in alcista["extensiones"]}
+    eb = {x["ratio"]: x["precio"] for x in bajista["extensiones"]}
+    assert ra[.40] == 160 and rb[.40] == 140
+    assert ea[1.50] == 250 and eb[1.50] == 50
+    assert alcista["estado"] == "correccion"
+    assert bajista["estado"] == "correccion"
+    assert P.mapa_precios({"inicio": 200, "fin": 100}, 210)["estado"] == "invalidada"
 
 
 def test_la_tendencia_dice_indefinida_en_vez_de_inventar():
@@ -266,7 +326,10 @@ def _modulo(tmp_path=None):
     return m, mod
 
 
-def _serie(n=5, t0=1_700_000_000_000, paso=3_600_000):
+def _serie(n=5, t0=None, paso=3_600_000):
+    if t0 is None:
+        import time
+        t0 = int((time.time() // (paso / 1000) - n + 1) * paso)
     return [{"t": t0 + i * paso, "o": 100.0 + i, "h": 101.0 + i,
              "l": 99.0 + i, "c": 100.5 + i, "v": 1.0} for i in range(n)]
 
@@ -324,7 +387,8 @@ def test_un_push_viejo_NO_se_sirve_como_si_fuera_en_vivo(monkeypatch, tmp_path):
 
     ruta.write_text(_json.dumps({
         "empujado_ts": _time.time(),
-        "series": {"BTCUSDT:1h": _serie()}}))
+        "series": {"BTCUSDT:1h": _serie(
+            t0=int((_time.time() // 3600 - 4) * 3_600_000))}}))
     assert len(m._velas_empujadas("BTCUSDT", "1h", 500)) == 5
 
 
@@ -334,7 +398,7 @@ def test_el_orden_de_respaldos_es_push_binance_versionadas():
     fuente = open(os.path.join(ROOT, "modules/inteligencia/module.py"),
                   encoding="utf-8").read()
     bloque = fuente.split("def _velas(")[1].split("\n    @staticmethod")[0]
-    assert bloque.index("_velas_empujadas") < bloque.index("bc.public_get")
+    assert bloque.index("klines_push.serie_con_meta") < bloque.index("bc.public_get")
     assert bloque.index("bc.public_get") < bloque.index("_velas_versionadas")
     for etiqueta in ("vps_binance", "binance_publico", "klines_versionados"):
         assert f'"{etiqueta}"' in bloque
@@ -350,7 +414,7 @@ def test_el_colector_del_vps_no_puede_tocar_la_cuenta():
     # el 1d tiene que traer historia suficiente para anclar la rejilla anual
     assert '("1d", 1_500)' in fuente
     # y no publica vacio: pisaria lo que ya esta servido
-    assert "no se pisa lo que ya está servido" in fuente
+    assert "snapshot incompleto" in fuente and "no se pisa lo que ya" in fuente
 
 
 def test_el_modulo_aparece_en_el_menu_compartido():
@@ -417,7 +481,21 @@ def test_1m_y_5m_no_pueden_venir_del_push():
     from core import klines_push
     assert "1m" not in klines_push.TFS_SERVIBLES
     assert "5m" not in klines_push.TFS_SERVIBLES
-    assert set(klines_push.TFS_SERVIBLES) == {"15m", "1h", "4h", "1d"}
+    assert set(klines_push.TFS_SERVIBLES) == {"15m", "1h", "4h", "1d", "1w"}
+
+
+def test_un_envelope_nuevo_no_disfraza_una_serie_vieja(monkeypatch, tmp_path):
+    import json as _json
+    import time as _time
+    from core import klines_push
+    ruta = tmp_path / "k.json"
+    monkeypatch.setattr(klines_push, "_ruta", lambda _root: str(ruta))
+    ruta.write_text(_json.dumps({
+        "empujado_ts": _time.time(),
+        "series": {"BTCUSDT:1h": _serie(t0=1_700_000_000_000)}}))
+    filas, meta = klines_push.serie_con_meta(str(tmp_path), "BTCUSDT", "1h")
+    assert filas == []
+    assert meta["error"] == "serie vencida"
 
 
 def test_la_fuente_del_grafico_se_declara_en_pantalla():
@@ -426,6 +504,19 @@ def test_la_fuente_del_grafico_se_declara_en_pantalla():
     js = open(os.path.join(ROOT, "modules/trading/public/app.js"), encoding="utf-8").read()
     assert "marcarFuente(card, j.fuente)" in js
     assert "Binance Futuros" in js and "Crypto.com" in js
+
+
+def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
+    html = open(INDEX, encoding="utf-8").read()
+    js = open(APP_JS, encoding="utf-8").read()
+    modulo = open(MODULE, encoding="utf-8").read()
+    for horizonte in ("corto", "medio", "largo"):
+        assert f'data-horizonte="{horizonte}"' in html
+        assert f'"{horizonte}":' in modulo
+    assert 'value="1w"' in html
+    assert "/mapa?" in js
+    assert '"execution_enabled": False' in modulo
+    assert '"validated": False' in modulo
 
 
 def test_el_lector_del_push_vive_en_un_solo_lugar():

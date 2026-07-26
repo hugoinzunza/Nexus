@@ -29,14 +29,21 @@
         <select id="par"></select>
         <select id="tf">
           <option value="15m">15m</option>
-          <option value="1h" selected>1h</option>
-          <option value="4h">4h</option>
+          <option value="1h">1h</option>
+          <option value="4h" selected>4h</option>
           <option value="1d">1D</option>
+          <option value="1w">1W</option>
         </select>
         <strong id="price">—</strong>
         <span id="updated">Cargando</span>
       </div>
     </header>
+
+    <div class="horizontes" role="group" aria-label="Horizonte de cálculo">
+      <button type="button" data-horizonte="corto">Corto</button>
+      <button type="button" data-horizonte="medio" class="active">Medio</button>
+      <button type="button" data-horizonte="largo">Largo</button>
+    </div>
 
     <p class="disclaimer">
       <strong>La rejilla anual se midió y no funciona.</strong> Sobre 6.675 episodios
@@ -71,6 +78,34 @@
         <input type="checkbox" id="ver-placebo"> mostrar rejillas placebo
         <small>si el precio parece respetar las tres por igual, lo que ves es densidad, no niveles</small>
       </label>
+    </section>
+
+    <section class="card mapa-precios">
+      <h2>Mapa de precios calculados <small id="mapa-sub"></small>
+        <button class="ayuda" data-ayuda="mapa">criterio</button></h2>
+      <div class="ayuda-txt" id="ayuda-mapa" hidden>
+        Los niveles nacen de la última pierna entre dos pivotes opuestos ya
+        confirmados. La pierna queda congelada cuando cierra la quinta vela posterior
+        al segundo pivote. Los porcentajes son escenarios aritméticos del curso, no
+        señales ni probabilidades.
+      </div>
+      <div class="roles" id="roles"></div>
+      <div class="grid3" id="pierna-stats"></div>
+      <div class="grid2">
+        <div>
+          <h3>Zona de corrección</h3>
+          <div class="scroll-x"><table id="tabla-retrocesos"></table></div>
+        </div>
+        <div>
+          <h3>Proyecciones</h3>
+          <div class="scroll-x"><table id="tabla-extensiones"></table></div>
+        </div>
+      </div>
+      <div class="grid2 refs-grid">
+        <div class="vac" id="refs-arriba"></div>
+        <div class="vac" id="refs-abajo"></div>
+      </div>
+      <p class="mapa-nota" id="mapa-nota"></p>
     </section>
 
     <!-- Dónde está el precio respecto del año -->

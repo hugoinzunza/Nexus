@@ -38,6 +38,29 @@ PASOS_PLACEBO = (0.075, 0.125)
 # nunca dispara.
 K_MAX = 9
 
+TF_MS = {
+    "1m": 60_000,
+    "5m": 300_000,
+    "15m": 900_000,
+    "1h": 3_600_000,
+    "4h": 14_400_000,
+    "1d": 86_400_000,
+    "1w": 604_800_000,
+}
+
+RETROCESOS = (0.382, 0.40, 0.50, 0.60, 0.618)
+EXTENSIONES = (1.25, 1.50, 1.618, 2.00)
+
+
+def velas_cerradas(velas: list[dict], tf: str, as_of_ms: int) -> list[dict]:
+    """Solo barras cuyo cierre ya existía en `as_of_ms`.
+
+    Binance incluye la barra en formación. Usarla como quinta vela derecha permite
+    confirmar un pivote que todavía puede desaparecer antes del cierre.
+    """
+    paso = TF_MS[tf]
+    return [v for v in velas if int(v["t"]) + paso <= as_of_ms]
+
 
 def apertura_anual(velas_diarias: list[dict], anio: int) -> Optional[dict]:
     """Apertura de la primera vela diaria del año `anio`.
@@ -52,11 +75,10 @@ def apertura_anual(velas_diarias: list[dict], anio: int) -> Optional[dict]:
     ese año sería una ficción con cara de dato.
     """
     inicio = dt.datetime(anio, 1, 1, tzinfo=dt.timezone.utc)
-    fin = dt.datetime(anio, 1, 3, tzinfo=dt.timezone.utc)   # margen de 2 días
-    ini_ms, fin_ms = int(inicio.timestamp() * 1000), int(fin.timestamp() * 1000)
+    ini_ms = int(inicio.timestamp() * 1000)
     for v in velas_diarias:
         t = int(v["t"])
-        if ini_ms <= t < fin_ms:
+        if t == ini_ms:
             return {"t": t, "precio": float(v["o"]),
                     "fecha": dt.datetime.fromtimestamp(t / 1000, dt.timezone.utc)
                               .strftime("%Y-%m-%d")}
@@ -79,11 +101,10 @@ def apertura_semanal(velas: list[dict], ahora_ms: int) -> Optional[dict]:
     lunes = (ahora - dt.timedelta(days=ahora.weekday())).replace(
         hour=0, minute=0, second=0, microsecond=0)
     ini_ms = int(lunes.timestamp() * 1000)
-    candidatas = [v for v in velas if int(v["t"]) >= ini_ms]
-    if not candidatas:
+    exacta = next((v for v in velas if int(v["t"]) == ini_ms), None)
+    if exacta is None:
         return None
-    primera = min(candidatas, key=lambda v: int(v["t"]))
-    return {"t": int(primera["t"]), "precio": float(primera["o"]),
+    return {"t": int(exacta["t"]), "precio": float(exacta["o"]),
             "fecha": lunes.strftime("%Y-%m-%d")}
 
 
@@ -157,6 +178,90 @@ def estructura(velas: list[dict], piv: int, as_of_idx: Optional[int] = None) -> 
     return {"piv": piv, "highs": hs[-6:], "lows": ls[-6:], "tendencia": tendencia,
             "n_highs": len(hs), "n_lows": len(ls),
             "retraso_velas": piv}
+
+
+def piernas_confirmadas(velas: list[dict], tf: str, piv: int = 5) -> list[dict]:
+    """Piernas entre pivotes opuestos consecutivos, ambos ya confirmados.
+
+    No numera fases I-V ni elige retrospectivamente el swing más bonito. Cada par de
+    pivotes opuestos contiguos es una candidata auditable y conserva cuándo quedó
+    disponible el segundo extremo.
+    """
+    if len(velas) < 2 * piv + 3:
+        return []
+    highs, lows = smc.swing_points(velas, piv)
+    puntos = ([{"tipo": "high", **p} for p in highs]
+              + [{"tipo": "low", **p} for p in lows])
+    puntos.sort(key=lambda p: (p["idx"], p["tipo"]))
+    piernas = []
+    paso = TF_MS[tf]
+    for a, b in zip(puntos, puntos[1:]):
+        if a["tipo"] == b["tipo"] or a["idx"] == b["idx"]:
+            continue
+        direccion = "alcista" if a["tipo"] == "low" else "bajista"
+        inicio, fin = float(a["price"]), float(b["price"])
+        recorrido = fin - inicio
+        if recorrido == 0:
+            continue
+        confirmado_idx = max(a["confirm_idx"], b["confirm_idx"])
+        piernas.append({
+            "direccion": direccion,
+            "inicio": inicio,
+            "fin": fin,
+            "recorrido_abs": abs(recorrido),
+            "inicio_idx": a["idx"],
+            "fin_idx": b["idx"],
+            "inicio_t": int(velas[a["idx"]]["t"]),
+            "fin_t": int(velas[b["idx"]]["t"]),
+            "confirm_idx": confirmado_idx,
+            "confirmed_at": int(velas[confirmado_idx]["t"]) + paso,
+            "piv": piv,
+            "tf": tf,
+        })
+    return piernas
+
+
+def mapa_precios(pierna: dict, precio: float) -> dict:
+    """Retrocesos y extensiones aritméticas de una pierna ya congelada.
+
+    Son escenarios calculados, no targets validados. La misma fórmula funciona en
+    ambas direcciones porque el recorrido conserva su signo.
+    """
+    inicio = float(pierna["inicio"])
+    fin = float(pierna["fin"])
+    recorrido = fin - inicio
+    retros = [{
+        "ratio": r,
+        "precio": fin - r * recorrido,
+        "dist_pct": round(((fin - r * recorrido) / precio - 1) * 100, 2)
+                    if precio else None,
+    } for r in RETROCESOS]
+    exts = [{
+        "ratio": r,
+        "precio": inicio + r * recorrido,
+        "dist_pct": round(((inicio + r * recorrido) / precio - 1) * 100, 2)
+                    if precio else None,
+    } for r in EXTENSIONES]
+    profundidad = (fin - precio) / recorrido if recorrido else None
+    if profundidad is None:
+        estado = "sin_datos"
+    elif profundidad > 1:
+        estado = "invalidada"
+    elif profundidad < 0:
+        estado = "extension"
+    else:
+        estado = "correccion"
+    return {
+        "pierna": pierna,
+        "precio_actual": precio,
+        "profundidad_correccion": round(profundidad, 4)
+                                  if profundidad is not None else None,
+        "estado": estado,
+        "retrocesos": retros,
+        "extensiones": exts,
+        "invalidation_reference": inicio,
+        "nota": "Mapa aritmético research; no es señal ni objetivo validado.",
+    }
 
 
 def vacio_disponible(precio: float, direccion: str, sl: float,

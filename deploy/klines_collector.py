@@ -41,8 +41,8 @@ PARES = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "XRPUSDT", "DOGEUSDT")
 
 # Cuántas velas por temporalidad. El 1d va con 1.500 a propósito: cubre desde
 # 2022-06-18 (medido), o sea TODAS las aperturas anuales que la vista necesita para
-# anclar la rejilla. Las otras van más cortas porque solo alimentan el gráfico.
-SERIES = (("15m", 500), ("1h", 500), ("4h", 500), ("1d", 1_500))
+# anclar la rejilla. `1w` cubre hasta 9,6 años para el panorama de largo plazo.
+SERIES = (("15m", 500), ("1h", 500), ("4h", 500), ("1d", 1_500), ("1w", 500))
 
 TIMEOUT = 20
 REINTENTOS = 3
@@ -86,7 +86,7 @@ def recolectar() -> dict:
                 series[f"{symbol}:{tf}"] = velas
             else:
                 fallos += 1
-            # Cortesía con el rate limit: 20 requests por corrida es poco, pero
+            # Cortesía con el rate limit: 30 requests por corrida es poco, pero
             # dispararlos juntos es justo lo que produjo la ráfaga que nos costó los
             # -1021 en el colector de cuenta.
             time.sleep(0.2)
@@ -116,10 +116,12 @@ def main() -> int:
     n_velas = sum(len(v) for v in payload["series"].values())
     print(f"{n_series} series, {n_velas} velas, {payload['fallos']} fallos")
 
-    if not n_series:
-        # Publicar un payload vacío borraría de hecho lo que hay servido. Mejor fallar
-        # ruidoso y que la pantalla siga mostrando lo último bueno con su edad visible.
-        print("nada que publicar: no se pisa lo que ya está servido", file=sys.stderr)
+    esperadas = len(PARES) * len(SERIES)
+    if n_series != esperadas or payload["fallos"]:
+        # La ingesta reemplaza el snapshot completo. Publicar uno parcial borraría la
+        # última serie buena de los pares que fallaron.
+        print(f"snapshot incompleto ({n_series}/{esperadas}): no se pisa lo que ya "
+              "está servido", file=sys.stderr)
         return 1
     if args.dry_run:
         muestra = next(iter(payload["series"]))
