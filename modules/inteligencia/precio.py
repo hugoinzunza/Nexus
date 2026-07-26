@@ -20,7 +20,6 @@ caro que cometimos en este proyecto: un bucle que arrancaba una vela antes costa
 from __future__ import annotations
 
 import datetime as dt
-import math
 from typing import Optional
 
 from modules.trading import smc
@@ -31,11 +30,9 @@ from modules.trading import smc
 PASO_RMP = 0.10
 PASOS_PLACEBO = (0.075, 0.125)
 
-# El profesor extiende la rejilla hasta +150%. El límite no puede ser simétrico:
-# hacia abajo, -100% ya es precio cero. Se conserva todo lo reproducible del método
-# sin fabricar niveles económicamente imposibles.
-MAX_ARRIBA_PCT = 1.50
-MAX_ABAJO_PCT = 0.90
+# El estudio pre-registrado y la hoja del profesor usan k=1..15. Hacia abajo, los
+# niveles que llegan a cero o negativo se descartan; hacia arriba esto conserva +150%.
+K_MAX = 15
 
 TF_MS = {
     "1m": 60_000,
@@ -130,24 +127,19 @@ def apertura_semanal(velas: list[dict], ahora_ms: int) -> Optional[dict]:
 
 
 def rejilla(ancla: float, precio: float, paso: float = PASO_RMP,
-            max_arriba_pct: float = MAX_ARRIBA_PCT,
-            max_abajo_pct: float = MAX_ABAJO_PCT) -> list[dict]:
+            k_max: int = K_MAX) -> list[dict]:
     """Niveles `ancla * (1 ± k*paso)`, con la distancia al precio de hoy.
 
     Los pasos son LINEALES respecto del ancla, no compuestos: +20% es `ancla*1.20`,
     no `ancla*1.10^2`. El apunte lo confirma contra la planilla del curso, y es fácil
     equivocarse porque la intuición financiera dice lo contrario.
 
-    Los límites se expresan como recorrido porcentual, no como cantidad de líneas. Así
-    los placebos de 7,5% y 12,5% cubren el mismo rango que la rejilla real de 10% sin
-    recibir ventaja por tener más o menos extensión visual.
+    `k_max` también se conserva igual en los placebos: esa fue la especificación
+    pre-registrada del estudio cuyos resultados muestra la interfaz. Cambiar el rango
+    visible de un placebo sin recalcular sus métricas mezclaría dos experimentos.
     """
     filas = []
-    limites = (
-        (1, math.floor((max_arriba_pct + 1e-12) / paso)),
-        (-1, math.floor((max_abajo_pct + 1e-12) / paso)),
-    )
-    for signo, k_max in limites:
+    for signo in (1, -1):
         for k in range(1, k_max + 1):
             px = ancla * (1 + signo * k * paso)
             if px <= 0:
@@ -179,8 +171,17 @@ def estructura(velas: list[dict], piv: int, as_of_idx: Optional[int] = None) -> 
                 "motivo": f"hacen falta al menos {2 * piv + 3} velas"}
     tope = len(velas) - 1 if as_of_idx is None else as_of_idx
     highs, lows = smc.swing_points(velas, piv)
-    hs = [p for p in highs if p["confirm_idx"] <= tope]
-    ls = [p for p in lows if p["confirm_idx"] <= tope]
+    paso = int(velas[1]["t"]) - int(velas[0]["t"])
+
+    def enriquecer(p):
+        return {
+            **p,
+            "pivot_t": int(velas[p["idx"]]["t"]),
+            "confirmed_at": int(velas[p["confirm_idx"]]["t"]) + paso,
+        }
+
+    hs = [enriquecer(p) for p in highs if p["confirm_idx"] <= tope]
+    ls = [enriquecer(p) for p in lows if p["confirm_idx"] <= tope]
 
     # Tendencia por los DOS últimos pivotes de cada lado. Dos no es un número mágico:
     # es el mínimo para hablar de "creciente" y el máximo que se puede exigir sin
@@ -203,6 +204,37 @@ def estructura(velas: list[dict], piv: int, as_of_idx: Optional[int] = None) -> 
             "retraso_velas": piv}
 
 
+def pivotes_alternados(highs: list[dict], lows: list[dict]) -> list[dict]:
+    """Zigzag causal de pivotes, resolviendo repeticiones del mismo tipo.
+
+    Si aparecen dos highs sin un low intermedio, se conserva el más alto; para dos
+    lows, el más bajo. El reemplazo ocurre solo cuando el segundo pivote ya está
+    confirmado. Una vela que es high y low a la vez se excluye porque el OHLC no
+    permite saber cuál extremo ocurrió primero.
+    """
+    por_idx = {}
+    for tipo, puntos in (("high", highs), ("low", lows)):
+        for p in puntos:
+            por_idx.setdefault(p["idx"], []).append({"tipo": tipo, **p})
+
+    secuencia = []
+    for idx in sorted(por_idx):
+        candidatos = por_idx[idx]
+        if len({p["tipo"] for p in candidatos}) != 1:
+            continue
+        actual = candidatos[0]
+        if not secuencia or secuencia[-1]["tipo"] != actual["tipo"]:
+            secuencia.append(actual)
+            continue
+        anterior = secuencia[-1]
+        mas_extremo = (actual["price"] > anterior["price"]
+                       if actual["tipo"] == "high"
+                       else actual["price"] < anterior["price"])
+        if mas_extremo:
+            secuencia[-1] = actual
+    return secuencia
+
+
 def piernas_confirmadas(velas: list[dict], tf: str, piv: int = 5) -> list[dict]:
     """Piernas entre pivotes opuestos consecutivos, ambos ya confirmados.
 
@@ -213,14 +245,10 @@ def piernas_confirmadas(velas: list[dict], tf: str, piv: int = 5) -> list[dict]:
     if len(velas) < 2 * piv + 3:
         return []
     highs, lows = smc.swing_points(velas, piv)
-    puntos = ([{"tipo": "high", **p} for p in highs]
-              + [{"tipo": "low", **p} for p in lows])
-    puntos.sort(key=lambda p: (p["idx"], p["tipo"]))
+    puntos = pivotes_alternados(highs, lows)
     piernas = []
     paso = TF_MS[tf]
     for a, b in zip(puntos, puntos[1:]):
-        if a["tipo"] == b["tipo"] or a["idx"] == b["idx"]:
-            continue
         direccion = "alcista" if a["tipo"] == "low" else "bajista"
         inicio, fin = float(a["price"]), float(b["price"])
         recorrido = fin - inicio
@@ -238,6 +266,7 @@ def piernas_confirmadas(velas: list[dict], tf: str, piv: int = 5) -> list[dict]:
             "fin_t": int(velas[b["idx"]]["t"]),
             "confirm_idx": confirmado_idx,
             "confirmed_at": int(velas[confirmado_idx]["t"]) + paso,
+            "selection_reason": "zigzag causal; pivotes repetidos colapsados al extremo",
             "piv": piv,
             "tf": tf,
         })
@@ -269,7 +298,7 @@ def mapa_precios(pierna: dict, precio: float) -> dict:
     if profundidad is None:
         estado = "sin_datos"
     elif profundidad > 1:
-        estado = "invalidada"
+        estado = "mas_alla_origen"
     elif profundidad < 0:
         estado = "extension"
     else:
@@ -280,10 +309,40 @@ def mapa_precios(pierna: dict, precio: float) -> dict:
         "profundidad_correccion": round(profundidad, 4)
                                   if profundidad is not None else None,
         "estado": estado,
+        "invalidacion_estructural_evaluada": False,
         "retrocesos": retros,
         "extensiones": exts,
         "invalidation_reference": inicio,
         "nota": "Mapa aritmético research; no es señal ni objetivo validado.",
+    }
+
+
+def alineacion_temporal(panorama: list[str], principal: str, sincronismo: str,
+                        tendencias: dict[str, str]) -> dict:
+    """Describe precedencia entre TF sin convertirla en un gate de entrada."""
+    superiores = [tendencias.get(tf, "indefinida") for tf in panorama]
+    direccion = (superiores[0]
+                 if superiores and superiores[0] in ("alcista", "bajista")
+                 and all(t == superiores[0] for t in superiores)
+                 else None)
+    principal_tendencia = tendencias.get(principal, "indefinida")
+    sync_tendencia = tendencias.get(sincronismo, "indefinida")
+    if direccion is None:
+        estado = "contexto_superior_mixto_o_indefinido"
+    elif principal_tendencia != direccion:
+        estado = "principal_no_alineado"
+    elif sync_tendencia == direccion:
+        estado = "alineado"
+    else:
+        estado = "principal_alineado_sin_sincronismo"
+    return {
+        "estado": estado,
+        "direccion_contexto": direccion,
+        "tendencias": tendencias,
+        "principal_alineado": bool(direccion and principal_tendencia == direccion),
+        "sincronismo_alineado": bool(direccion and sync_tendencia == direccion),
+        "nota": ("El timeframe superior define contexto; el inferior solo describe "
+                 "sincronismo. No es un gate ni una señal validada."),
     }
 
 

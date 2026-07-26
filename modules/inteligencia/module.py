@@ -210,14 +210,20 @@ class InteligenciaModule(NexusModule):
             return self._json(400, {"error": "ninguna serie valida"})
 
         with self._lock:
+            # Una ingesta parcial no puede borrar pares que el snapshot anterior sí
+            # tenía. El colector normal publica todo, pero el servidor también debe
+            # ser atómico frente a un caller interrumpido o una recolección manual.
+            anterior = klines_push.leer_todo(ROOT_REPO) or {}
+            combinadas = dict(anterior.get("series") or {})
+            combinadas.update(limpio)
             klines_push.escribir(ROOT_REPO, {
                 "empujado_ts": time.time(),
                 "empujado_at": body.get("captured_at"),
                 "fuente": "binance_futuros_vps",
-                "series": limpio})
+                "series": combinadas})
             self._cache.clear()   # el push manda sobre lo cacheado
-        return self._json(200, {"ok": True, "series": len(limpio),
-                                "velas": sum(len(v) for v in limpio.values())})
+        return self._json(200, {"ok": True, "series": len(combinadas),
+                                "velas": sum(len(v) for v in combinadas.values())})
 
     def _pares(self) -> list[str]:
         return list(self.config.get("pares") or ["BTCUSDT", "ETHUSDT", "SOLUSDT",
@@ -382,9 +388,76 @@ class InteligenciaModule(NexusModule):
                 referencias.append({
                     "precio": p["price"],
                     "tipo": "pivote confirmado",
+                    "familia": "estructura",
                     "tf": tf,
                     "confirm_idx": p["confirm_idx"],
+                    "pivot_t": p["pivot_t"],
+                    "confirmed_at": p["confirmed_at"],
+                    "selection_reason": "pivote fractal confirmado 5+1+5",
                 })
+
+        # Los RMP son referencias objetivas y existen desde la apertura anual. Se
+        # agregan al mismo universo del primer obstáculo, sin promoverlos por cercanía
+        # ni seleccionar retrospectivamente los que reaccionaron.
+        diarias = series["1d"]["closed"]
+        ancla = P.apertura_anual(diarias, time.gmtime().tm_year)
+        if ancla:
+            for nivel in P.rejilla(ancla["precio"], precio):
+                referencias.append({
+                    "precio": nivel["precio"],
+                    "tipo": f"RMP {nivel['pct_del_ancla']:+.0f}%",
+                    "familia": "rmp",
+                    "tf": "1D",
+                    "pivot_t": ancla["t"],
+                    "confirmed_at": ancla["t"] + P.TF_MS["1d"],
+                    "selection_reason": "rejilla anual mecánica vigente",
+                })
+        if mapa:
+            for familia, niveles in (("retroceso", mapa["retrocesos"]),
+                                     ("extension", mapa["extensiones"])):
+                for nivel in niveles:
+                    referencias.append({
+                        "precio": nivel["precio"],
+                        "tipo": f"{familia} {nivel['ratio'] * 100:g}%",
+                        "familia": f"pierna_{familia}",
+                        "tf": principal_tf,
+                        "pivot_t": seleccionada["fin_t"],
+                        "confirmed_at": seleccionada["confirmed_at"],
+                        "selection_reason": "nivel aritmético de la pierna seleccionada",
+                    })
+
+        tendencias = {tf: est["tendencia"] for tf, est in estructuras.items()}
+        alineacion = P.alineacion_temporal(
+            perfil["panorama"], principal_tf, perfil["sincronismo"], tendencias)
+        direccion = alineacion["direccion_contexto"]
+
+        vacio = {"evaluado": False, "motivo": "contexto superior sin dirección unívoca"}
+        if direccion:
+            est_principal = estructuras[principal_tf]
+            candidatos_sl = (est_principal["lows"] if direccion == "alcista"
+                              else est_principal["highs"])
+            candidatos_sl = [
+                p for p in candidatos_sl
+                if (p["price"] < precio if direccion == "alcista"
+                    else p["price"] > precio)
+            ]
+            if candidatos_sl:
+                stop_ref = min(candidatos_sl, key=lambda p: abs(p["price"] - precio))
+                medido = P.vacio_disponible(
+                    precio, "long" if direccion == "alcista" else "short",
+                    stop_ref["price"], referencias)
+                vacio = {
+                    "evaluado": True,
+                    "direccion": direccion,
+                    "stop_estructural": stop_ref,
+                    **medido,
+                    "nota": ("Distancia al primer referente usando el pivote estructural "
+                             "principal como stop. Research; no es plan de entrada."),
+                }
+            else:
+                vacio = {"evaluado": False,
+                         "motivo": "no existe stop estructural principal detrás del precio"}
+
         arriba = sorted((r for r in referencias if r["precio"] > precio),
                         key=lambda r: r["precio"])[:5]
         abajo = sorted((r for r in referencias if r["precio"] < precio),
@@ -400,7 +473,9 @@ class InteligenciaModule(NexusModule):
             "precio": precio,
             "fuentes": fuentes,
             "estructuras": estructuras,
+            "alineacion": alineacion,
             "mapa": mapa,
+            "vacio_horizonte": vacio,
             "piernas_candidatas": piernas[-4:],
             "referencias_cercanas": {"arriba": arriba, "abajo": abajo},
             "nota": ("Escenario causal calculado con barras cerradas. No predice "

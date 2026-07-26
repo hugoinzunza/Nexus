@@ -63,8 +63,9 @@
         <strong style="color:#e8b653">la rejilla anual</strong> anclada en la apertura
         del 1 de enero, <strong style="color:#43bdd7">la apertura semanal</strong>, y
         <strong>los pivotes confirmados</strong> de la temporalidad que estés viendo.
-        Los pivotes se dibujan en la vela que los <em>confirma</em>, no en su extremo:
-        ese retraso de 5 velas es real y esconderlo sería mirar el futuro.
+        Los pivotes se dibujan en su extremo estructural y la etiqueta declara
+        <em>conf +5</em>: recién estuvieron disponibles cinco velas después. El payload
+        conserva por separado el instante del extremo y el de confirmación.
       </div>
       <div class="chart-wrap"><div id="chart"></div></div>
       <div class="leyenda">
@@ -92,9 +93,11 @@
         Los niveles nacen de la última pierna entre dos pivotes opuestos ya
         confirmados. La pierna queda congelada cuando cierra la quinta vela posterior
         al segundo pivote. Los porcentajes son escenarios aritméticos del curso, no
-        señales ni probabilidades.
+        señales ni probabilidades. La alineación solo compara tendencias confirmadas;
+        todavía no evalúa el evento de uno/dos cierres de la estrategia.
       </div>
       <div class="roles" id="roles"></div>
+      <div class="grid3" id="alineacion-stats"></div>
       <div class="grid3" id="pierna-stats"></div>
       <div class="grid2">
         <div>
@@ -139,7 +142,7 @@
 
     <!-- Vacío disponible: la única idea nueva del curso -->
     <section class="card">
-      <h2>Vacío disponible
+      <h2>Vacío de referencia 1D / 1h
         <button class="ayuda" data-ayuda="vacio">qué es</button></h2>
       <div class="ayuda-txt" id="ayuda-vacio" hidden>
         La distancia hasta el <strong>primer obstáculo</strong>, no hasta un objetivo
@@ -148,7 +151,8 @@
         fuertes que quedan en el camino. Un ratio alto medido a través de tres paredes
         es aritméticamente correcto y operativamente ilusorio. El ratio de acá usa un
         riesgo de referencia de 1,5%, que es el techo de SL del bot, solo para dar
-        escala: no es el SL de ningún plan.
+        escala: no es el SL de ningún plan. El mapa superior calcula aparte el vacío
+        del horizonte elegido usando un pivote estructural como stop.
       </div>
       <div class="grid2">
         <div class="vac arriba" id="vac-arriba"></div>

@@ -58,6 +58,15 @@ def test_la_rejilla_nunca_produce_precios_cero_o_negativos():
             assert f["precio"] > 0
 
 
+def test_los_placebos_visibles_son_los_mismos_del_estudio():
+    """El estudio fijo k=1..15 para las tres familias. Igualar después el rango
+    porcentual cambiaría el experimento sin recalcular las tasas de la pantalla."""
+    assert P.K_MAX == 15
+    assert len(P.rejilla(100, 100, paso=.10)) == 24
+    assert len(P.rejilla(100, 100, paso=.075)) == 28
+    assert len(P.rejilla(100, 100, paso=.125)) == 22
+
+
 def test_la_apertura_anual_no_se_inventa_si_falta_el_comienzo_del_anio():
     """Si el par se listo en marzo, su "apertura anual" seria una ficcion con cara
     de dato. Tiene que devolver None, no la primera vela que haya."""
@@ -152,6 +161,22 @@ def test_agregar_futuro_no_reescribe_una_pierna_ya_confirmada():
     assert [clave(p) for p in antes] == [clave(p) for p in despues]
 
 
+def test_el_zigzag_actualiza_pivotes_repetidos_al_extremo():
+    highs = [
+        {"idx": 5, "price": 110, "confirm_idx": 7},
+        {"idx": 8, "price": 115, "confirm_idx": 10},
+    ]
+    lows = [
+        {"idx": 2, "price": 90, "confirm_idx": 4},
+        {"idx": 12, "price": 95, "confirm_idx": 14},
+        {"idx": 16, "price": 97, "confirm_idx": 18},
+    ]
+    puntos = P.pivotes_alternados(highs, lows)
+    assert [(p["tipo"], p["idx"], p["price"]) for p in puntos] == [
+        ("low", 2, 90), ("high", 8, 115), ("low", 12, 95)
+    ]
+
+
 def test_una_vela_abierta_no_puede_confirmar_un_pivote():
     velas = []
     for i in range(14):
@@ -177,7 +202,36 @@ def test_mapa_de_precios_es_simetrico_y_aritmetico():
     assert ea[1.50] == 250 and eb[1.50] == 50
     assert alcista["estado"] == "correccion"
     assert bajista["estado"] == "correccion"
-    assert P.mapa_precios({"inicio": 200, "fin": 100}, 210)["estado"] == "invalidada"
+    fuera = P.mapa_precios({"inicio": 200, "fin": 100}, 210)
+    assert fuera["estado"] == "mas_alla_origen"
+    assert fuera["invalidacion_estructural_evaluada"] is False
+
+
+def test_cada_pivote_publica_extremo_y_confirmacion():
+    velas = velas_diarias(n=80)
+    velas[30]["h"] *= 1.2
+    est = P.estructura(velas, 5)
+    pivote = next(p for p in est["highs"] if p["idx"] == 30)
+    assert pivote["pivot_t"] == velas[30]["t"]
+    assert pivote["confirmed_at"] == velas[35]["t"] + P.TF_MS["1d"]
+    assert pivote["confirmed_at"] > pivote["pivot_t"]
+
+
+def test_el_timeframe_inferior_no_puede_inventar_direccion():
+    perfil = (["1w", "1d"], "4h", "1h")
+    mixto = P.alineacion_temporal(*perfil, {
+        "1w": "alcista", "1d": "bajista", "4h": "alcista", "1h": "alcista",
+    })
+    assert mixto["direccion_contexto"] is None
+    assert mixto["estado"] == "contexto_superior_mixto_o_indefinido"
+
+    sin_sync = P.alineacion_temporal(*perfil, {
+        "1w": "bajista", "1d": "bajista", "4h": "bajista", "1h": "alcista",
+    })
+    assert sin_sync["direccion_contexto"] == "bajista"
+    assert sin_sync["principal_alineado"] is True
+    assert sin_sync["sincronismo_alineado"] is False
+    assert sin_sync["estado"] == "principal_alineado_sin_sincronismo"
 
 
 def test_la_tendencia_dice_indefinida_en_vez_de_inventar():
@@ -281,7 +335,7 @@ def test_ningun_nivel_desaparece_en_silencio_del_grafico():
     js = open(APP_JS, encoding="utf-8").read()
     assert "fuera del encuadre" in js
     assert "fuera.length" in js, "hay que contar los que quedaron afuera"
-    # y el encuadre lo fijan las VELAS, no los niveles: si un nivel a +90% mandara en
+    # y el encuadre lo fijan las VELAS, no los niveles: si un nivel a +150% mandara en
     # el eje, aplastaria todo el grafico en una franja
     bloque = js.split("function pintarNiveles()")[1].split("\nfunction ")[0]
     assert "state.velas.flatMap" in bloque
@@ -379,6 +433,28 @@ def test_la_ingesta_no_cree_lo_que_le_manden(monkeypatch, tmp_path):
     assert st == 400
     # y este modulo no expone ningun otro POST
     assert m.api_post("cualquier-otra-cosa", {}, cab, None) is None
+
+
+def test_una_ingesta_parcial_no_borra_el_snapshot_anterior(monkeypatch, tmp_path):
+    import json as _json
+    import time as _time
+    m, _ = _modulo()
+    from core import klines_push
+    ruta = tmp_path / "k.json"
+    monkeypatch.setattr(klines_push, "_ruta", lambda _root: str(ruta))
+    monkeypatch.setenv("NEXUS_INGEST_TOKEN", "secreto")
+    vieja = _serie(t0=int((_time.time() // 3600 - 4) * 3_600_000))
+    klines_push.escribir(str(tmp_path), {
+        "empujado_ts": _time.time(),
+        "series": {"ETHUSDT:1h": vieja},
+    })
+    nueva = _serie(t0=int((_time.time() // 3600 - 4) * 3_600_000))
+    st, _, _ = m.api_post(
+        "klines-ingest", {"series": {"BTCUSDT:1h": nueva}},
+        {"x-nexus-token": "secreto"}, None)
+    assert st == 200
+    guardado = _json.loads(ruta.read_text())
+    assert set(guardado["series"]) == {"BTCUSDT:1h", "ETHUSDT:1h"}
 
 
 def test_un_push_viejo_NO_se_sirve_como_si_fuera_en_vivo(monkeypatch, tmp_path):
@@ -527,6 +603,8 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert 'value="1w"' in html
     assert 'id="ver-historicas"' in html
     assert "/mapa?" in js
+    assert "alineacion-stats" in html and "vacio_horizonte" in modulo
+    assert "invalidación estructural no evaluada" in js
     assert '"execution_enabled": False' in modulo
     assert '"validated": False' in modulo
 

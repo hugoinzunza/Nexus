@@ -16,6 +16,18 @@ const state = { symbol: null, tf: "4h", horizonte: "medio", data: null, mapa: nu
                 velas: [], chart: null, series: null, lineas: [], marcas: [],
                 loadSeq: 0 };
 const TF_PRINCIPAL = { corto: "1h", medio: "4h", largo: "1d" };
+const LABEL_ALINEACION = {
+  alineado: "alineado",
+  principal_alineado_sin_sincronismo: "principal alineado · sin sincronismo",
+  principal_no_alineado: "principal no alineado",
+  contexto_superior_mixto_o_indefinido: "contexto superior mixto / indefinido",
+};
+const LABEL_PIERNA = {
+  correccion: "corrección",
+  extension: "extensión",
+  mas_alla_origen: "precio más allá del origen",
+  sin_datos: "sin datos",
+};
 
 const fmt = (v, d = 2) => (v == null || !Number.isFinite(Number(v))) ? "—"
   : Number(v).toLocaleString("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -203,7 +215,7 @@ function pintarNiveles() {
   const verHistoricas = $("ver-historicas").checked;
 
   // Solo los niveles que caen en el rango de precio VISIBLE de las velas cargadas.
-  // Sin este recorte, la rejilla anual llega a ±90% y aplasta el eje: es el mismo
+  // Sin este recorte, la rejilla anual llega hasta +150% y aplasta el eje: es el mismo
   // error de encuadre que ya corregimos dos veces en los gráficos de CoinGlass,
   // donde un muro lejano estiraba el eje y dejaba todo lo demás en una franja.
   const precios = state.velas.flatMap((v) => [v.h, v.l]);
@@ -263,23 +275,22 @@ function pintarNiveles() {
   $("g-sub").textContent = partes.join(" · ");
 }
 
-// Los pivotes se marcan en la vela que los CONFIRMA, no en su extremo. El desfase de
-// 5 velas es real y esconderlo sería exactamente el look-ahead que el resto del
-// código evita con tanto cuidado.
+// El marcador vive en el extremo para señalar el precio estructural correcto, pero
+// declara el retraso de confirmación en su texto. En el payload viajan ambos tiempos.
 function pintarPivotes(est) {
   if (!state.series || !window.LightweightCharts) return;
   const LC = window.LightweightCharts;
   const marcas = [];
   const at = (idx) => state.velas[idx] ? Math.floor(state.velas[idx].t / 1000) : null;
   for (const p of est.highs || []) {
-    const t = at(p.confirm_idx);
+    const t = at(p.idx);
     if (t) marcas.push({ time: t, position: "aboveBar", color: "#ef6370",
-                         shape: "arrowDown", text: "H" });
+                         shape: "arrowDown", text: `H · conf +${est.piv}` });
   }
   for (const p of est.lows || []) {
-    const t = at(p.confirm_idx);
+    const t = at(p.idx);
     if (t) marcas.push({ time: t, position: "belowBar", color: "#24c88a",
-                         shape: "arrowUp", text: "L" });
+                         shape: "arrowUp", text: `L · conf +${est.piv}` });
   }
   marcas.sort((a, b) => a.time - b.time);
   try {
@@ -370,6 +381,26 @@ function pintarMapa() {
     ["Sincronismo", String(p.sincronismo || "—").toUpperCase()],
   ].map(([k, v]) => `<div class="role"><span>${k}</span><strong>${v}</strong></div>`).join("");
 
+  const a = d.alineacion || {};
+  const vh = d.vacio_horizonte || {};
+  const tendencia = (tf) => (a.tendencias || {})[tf] || "—";
+  const vacioTxt = vh.evaluado && vh.primer_obstaculo
+    ? `${fmt(vh.vacuum_rr, 2)}R`
+    : "no evaluable";
+  const vacioSub = vh.evaluado && vh.primer_obstaculo
+    ? `${vh.primer_obstaculo.tipo} · stop ${fmt(vh.stop_estructural.price,
+      decimales(d.precio))}`
+    : (vh.motivo || "sin primer referente");
+  $("alineacion-stats").innerHTML = [
+    ["Contexto superior", a.direccion_contexto || "mixto / indefinido",
+      (p.panorama || []).map((tf) => `${tf.toUpperCase()} ${tendencia(tf)}`).join(" · ")],
+    ["Principal / sincronismo", LABEL_ALINEACION[a.estado] || a.estado || "—",
+      `${String(p.principal || "").toUpperCase()} ${tendencia(p.principal)} · ` +
+      `${String(p.sincronismo || "").toUpperCase()} ${tendencia(p.sincronismo)}`],
+    ["Vacío estructural", vacioTxt, vacioSub],
+  ].map(([k, v, s]) =>
+    `<div class="stat"><span>${k}</span><strong>${v}</strong><small>${s}</small></div>`).join("");
+
   const m = d.mapa;
   if (!m || !m.pierna) {
     $("pierna-stats").innerHTML =
@@ -382,8 +413,10 @@ function pintarMapa() {
       ["Dirección descriptiva", leg.direccion, `${leg.tf} · ventana ${leg.piv}+1+${leg.piv}`],
       ["Pierna congelada", `${fmt(leg.inicio, decimales(d.precio))} → ${fmt(leg.fin, decimales(d.precio))}`,
         `confirmada ${new Date(leg.confirmed_at).toLocaleString("es-CL")}`],
-      ["Estado de la pierna", `${m.estado} · ${fmt((m.profundidad_correccion || 0) * 100, 1)}%`,
-        `invalidación de referencia ${fmt(m.invalidation_reference, decimales(d.precio))}`],
+      ["Ubicación en la pierna", `${LABEL_PIERNA[m.estado] || m.estado} · ` +
+        `${fmt((m.profundidad_correccion || 0) * 100, 1)}%`,
+        `origen de referencia ${fmt(m.invalidation_reference, decimales(d.precio))} · ` +
+        "invalidación estructural no evaluada"],
     ].map(([k, v, s]) =>
       `<div class="stat"><span>${k}</span><strong>${v}</strong><small>${s}</small></div>`).join("");
     tablaMapa("tabla-retrocesos", m.retrocesos);
