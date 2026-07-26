@@ -386,6 +386,12 @@ async def admin_set_user_role(user_id: int, request: Request):
 # Slugs que exigen sesión iniciada (datos personales). El resto es público.
 _LOGIN_REQUIRED = {"journal", "coinsignals", "coinglass"}
 _ADMIN_REQUIRED = {"bot"}
+# Tope duro del cuerpo de CUALQUIER POST de modulo, aplicado antes de leerlo.
+# Es holgado a proposito: el snapshot visual de CoinGlass ronda los 40 KB y el mas
+# grande que ingesta el proyecto (CoinSignals) declara 4 MB. 8 MB deja margen sin
+# permitir que alguien sin sesion haga bufferizar cientos de MB.
+MAX_POST_BYTES = 8_000_000
+
 _TOKEN_AUTH_POSTS = {
     ("bot", "ingest"),
     ("coinglass", "ingest"),
@@ -468,7 +474,34 @@ async def module_api_post(slug: str, subpath: str, request: Request):
         if blocked is not None:
             return blocked
 
-    raw = await request.body()
+    # El tope se aplica ANTES de leer y parsear, no después.
+    #
+    # Los módulos tenían su propio límite (`MAX_BODY`), pero recién lo miraban dentro
+    # de `api_post`, o sea con el cuerpo entero ya en memoria y ya deserializado. Y
+    # las rutas de ingesta se saltan `_gate`, así que cualquiera sin sesión podía
+    # hacer que el servidor bufferizara y parseara lo que quisiera antes de que nadie
+    # mirara el token (auditoría 2026-07-26).
+    #
+    # Verificado el 2026-07-26: uvicorn 0.32 con h11 NO trae límite de cuerpo por
+    # defecto y no hay ninguno configurado en el deploy, así que nada corta aguas
+    # arriba. El de acá es el primero.
+    largo = request.headers.get("content-length")
+    if largo is not None:
+        try:
+            if int(largo) > MAX_POST_BYTES:
+                return JSONResponse({"error": "cuerpo demasiado grande"}, status_code=413)
+        except ValueError:
+            return JSONResponse({"error": "content-length invalido"}, status_code=400)
+    # Sin `content-length` (transfer-encoding: chunked) el header no sirve de nada, así
+    # que se lee por trozos y se corta apenas se pasa. Confiar en el header declarado
+    # sería dejar la puerta abierta justo al que miente.
+    trozos, total = [], 0
+    async for trozo in request.stream():
+        total += len(trozo)
+        if total > MAX_POST_BYTES:
+            return JSONResponse({"error": "cuerpo demasiado grande"}, status_code=413)
+        trozos.append(trozo)
+    raw = b"".join(trozos)
     try:
         data = __import__("json").loads(raw) if raw else None
     except Exception:  # noqa: BLE001

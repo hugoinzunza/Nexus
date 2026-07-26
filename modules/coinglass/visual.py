@@ -123,8 +123,17 @@ def normalize_visual_snapshot(
         "active_only": True,
         "rows": [],
     }
+    # OJO con lo que este guard SI y NO garantiza: rechaza un snapshot que declare
+    # incluir canceladas, pero nuestro propio colector siempre manda `active_only:
+    # True`, asi que desde el colector NUNCA dispara. Lo que de verdad dice si la
+    # exclusion fue verificable es `cancel_filter`, mas abajo. Se mantiene el guard
+    # por si alguna vez ingesta otra fuente, no como prueba de nada.
     if whale_data.get("active_only") is not True:
         raise VisualSnapshotError("solo se aceptan ordenes ballena activas")
+    # `by_label` = el control de canceladas se encontro por su etiqueta.
+    # Cualquier otra cosa = heuristica no verificada, y hay que decirlo.
+    cancel_filter = str(whale_data.get("cancel_filter") or "desconocido")[:40]
+    cancel_verificado = cancel_filter == "by_label"
     raw_whales = whale_data.get("rows", [])
     if not isinstance(raw_whales, list) or len(raw_whales) > MAX_WHALE_ORDERS:
         raise VisualSnapshotError("ordenes ballena invalidas")
@@ -183,6 +192,10 @@ def normalize_visual_snapshot(
         },
         "whale_orders": {
             "active_only": True,
+            # Se propaga: antes la normalizacion descartaba `cancel_filter` y el
+            # panel quedaba afirmando actividad verificada sin haberla verificado.
+            "cancel_filter": cancel_filter,
+            "cancel_filter_verificado": cancel_verificado,
             "range": str(whale_data.get("range") or "unknown"),
             "rows": whale_orders,
         },
@@ -598,6 +611,13 @@ def build_visual_indicator(
             "heatmap_lag_seconds": heatmap_lag,
         },
         "stale_heatmap": heatmap_stale,
+        # Si la exclusion de canceladas NO se pudo verificar, los muros de abajo
+        # pueden incluir ordenes ya canceladas: contaminan el muro dominante y el
+        # flujo. No se bloquea la ingesta -perder el ciclo es peor- pero el panel
+        # tiene que poder decirlo en vez de afirmar actividad que nadie verifico.
+        "whale_cancel_filter": clean["whale_orders"].get("cancel_filter"),
+        "whale_cancel_verificado": bool(
+            clean["whale_orders"].get("cancel_filter_verificado")),
         # Qué compuso realmente el score. Sin esto, un puntaje degradado se ve igual
         # que uno completo y el lector no tiene cómo saber que le falta el componente
         # de mayor peso.

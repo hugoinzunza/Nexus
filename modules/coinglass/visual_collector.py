@@ -593,6 +593,18 @@ async def collect(profile: Path, *, headless: bool = True) -> dict[str, Any]:
         },
         "whale_orders": {
             "active_only": True,
+            # `active_only` dice que INTENTAMOS excluir canceladas. Esto otro dice si
+            # lo logramos de forma verificable: `by_label` es haber encontrado el
+            # control por su etiqueta; `first_checkbox_unverified` es la heuristica
+            # historica de desmarcar el primer checkbox del DOM, que apaga el control
+            # equivocado si CoinGlass agrega otro filtro antes.
+            #
+            # Antes esta distincion se marcaba por fila y se perdia en la
+            # normalizacion, asi que el panel afirmaba actividad verificada que nunca
+            # verifico (auditoria 2026-07-26). Ahora viaja a nivel de snapshot, que es
+            # donde se puede leer.
+            "cancel_filter": (whale_rows[0].get("cancel_filter")
+                              if whale_rows else "sin_filas"),
             "range": "visible_near_price",
             "rows": whale_rows,
         },

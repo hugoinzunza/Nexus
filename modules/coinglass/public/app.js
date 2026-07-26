@@ -1266,6 +1266,12 @@ function renderAhora() {
   // que se ve es dato y cuánto es no-medición. Medido: la lista trae SIEMPRE 41
   // niveles en las 127 capturas seguidas del 2026-07-26, así que el conteo es un
   // tope, no un hallazgo. Fuera de la franja no hay dato.
+  // Si la exclusion de canceladas no se pudo verificar, los muros de esta tarjeta
+  // pueden incluir ordenes ya canceladas. Va junto a la frescura porque es la misma
+  // pregunta: cuanto de lo que se ve es dato confiable.
+  if (visual && visual.whale_cancel_verificado === false) {
+    partes.push("muros SIN verificar exclusion de canceladas");
+  }
   const franja = franjaListada(snapshots);
   if (franja) {
     partes.push(`${franja.niveles} muros listados, ${franja.abajo.toFixed(1)}% a `

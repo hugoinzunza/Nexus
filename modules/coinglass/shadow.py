@@ -108,12 +108,30 @@ def replay_shadow(records: list[dict[str, Any]]) -> dict[str, Any]:
                 else "opposite" if opposite else "time" if expired else None
             )
             if reason:
-                net = _return_pct(direction, open_trade["entry"], price) - ROUND_TRIP_COST_PCT
+                # Se sale AL NIVEL, no al precio observado.
+                #
+                # Antes el cierre usaba el precio de la captura. Como las capturas van
+                # cada horas, un salto por encima del target regalaba beneficio que
+                # una orden planificada nunca habria cobrado -la orden se llena EN el
+                # target- y un salto por debajo del stop exageraba la perdida.
+                # Inflaba las dos colas a la vez (auditoria 2026-07-26).
+                #
+                # Salir al nivel es OPTIMISTA en el stop: un gap real se llena peor.
+                # Es el sesgo menos malo de los dos disponibles y queda declarado en
+                # `exit_model`; el shadow no observa el recorrido intrabar y por eso
+                # no puede saber cual de los dos ocurrio.
+                salida = (open_trade["target"] if reason == "target"
+                          else open_trade["stop"] if reason == "stop"
+                          else price)
+                net = _return_pct(direction, open_trade["entry"], salida) - ROUND_TRIP_COST_PCT
                 trades.append({
                     **open_trade,
                     "closed_at": row["captured_at"],
-                    "exit": price,
+                    "exit": salida,
+                    "exit_observado": price,
                     "exit_reason": reason,
+                    "exit_model": ("al_nivel" if reason in ("target", "stop")
+                                   else "al_precio_observado"),
                     "net_pct": round(net, 4),
                 })
                 open_trade = None

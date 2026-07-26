@@ -132,3 +132,97 @@ def test_las_perdidas_del_techo_duro_se_cuentan_y_se_publican():
     fuente = open(os.path.join(ROOT, "modules/coinglass/module.py"), encoding="utf-8").read()
     assert 'archivo["capturas_perdidas"] = self._perdidas_por_archivo' in fuente
     assert "2 * MAX_VISUAL_BOOK_HISTORY" in fuente, "falta el techo duro"
+
+
+# --- #2: la exclusion de canceladas -----------------------------------
+
+def test_la_traza_del_filtro_de_canceladas_sobrevive_a_la_normalizacion():
+    """El colector marcaba cada fila con `cancel_filter` y la normalizacion la
+    descartaba, mientras persistia `active_only: true`. O sea el panel afirmaba
+    actividad verificada que nadie verifico, y muros cancelados podian contaminar el
+    muro dominante y el flujo sin aviso."""
+    snap = json.loads(json.dumps(snapshot_patologico()))
+    cap = datetime.fromisoformat(snap["captured_at"])
+    ahora = cap + timedelta(seconds=30)
+
+    snap["whale_orders"]["cancel_filter"] = "first_checkbox_unverified"
+    i = cgv.build_visual_indicator(snap, now=ahora)
+    assert i["whale_cancel_filter"] == "first_checkbox_unverified"
+    assert i["whale_cancel_verificado"] is False
+
+    snap["whale_orders"]["cancel_filter"] = "by_label"
+    ok = cgv.build_visual_indicator(snap, now=ahora)
+    assert ok["whale_cancel_verificado"] is True
+
+    # y sin el campo NO se asume verificado: la ausencia de prueba no es prueba
+    del snap["whale_orders"]["cancel_filter"]
+    mudo = cgv.build_visual_indicator(snap, now=ahora)
+    assert mudo["whale_cancel_verificado"] is False
+
+
+def test_el_aviso_de_canceladas_llega_a_la_pantalla():
+    js = open(os.path.join(ROOT, "modules/coinglass/public/app.js"), encoding="utf-8").read()
+    assert "whale_cancel_verificado === false" in js
+    assert "SIN verificar exclusion de canceladas" in js
+
+
+# --- #4: contabilidad de observaciones --------------------------------
+
+def test_el_gate_no_puede_decir_listo_con_cero_observaciones_independientes():
+    """Reproduccion: 100 capturas sin NINGUNA barra independiente daban
+    `forward_observations: 0` y `status: ready_for_backtest` a la vez. Un gate que se
+    contradice a si mismo es peor que no tenerlo."""
+    from modules.coinglass import provider
+
+    basic = {"price": 64_000.0, "open_interest_usd": 1e9, "funding_rate": 0.0001,
+             "long_short_ratio": 1.0, "taker_buy_sell_ratio": 1.0}
+    # 120 filas SIN bar_time: no son observaciones independientes
+    historia = [{**basic, "captured_at": f"2026-07-26T{h:02d}:{m:02d}:00+00:00",
+                 "time": f"t{h}{m}", "origin": "forward"}
+                for h in range(12) for m in (0, 5, 10, 15, 20, 25, 30, 35, 40, 45)]
+    d = provider.build_dashboard(basic, historia, {})
+    ep = d["experimental_pressure"]
+
+    assert ep["forward_observations"] == 0
+    assert ep["observations"] == 0, "observations debe contar independientes, no filas"
+    assert ep["filas_sin_barra"] == len(historia)
+    assert ep["status"] != "ready_for_backtest", \
+        "el gate declaro listo un historial sin una sola observacion independiente"
+
+
+# --- #5: fills del shadow ---------------------------------------------
+
+def test_el_shadow_sale_al_nivel_y_no_al_precio_observado():
+    """Las capturas van cada horas: un salto por encima del target regalaba beneficio
+    que la orden nunca habria cobrado, y uno por debajo del stop exageraba la perdida.
+    Inflaba las dos colas a la vez."""
+    fuente = open(os.path.join(ROOT, "modules/coinglass/shadow.py"), encoding="utf-8").read()
+    bloque = fuente.split("if reason:")[1].split("open_trade = None")[0]
+    assert 'open_trade["target"] if reason == "target"' in bloque
+    assert 'open_trade["stop"] if reason == "stop"' in bloque
+    assert '_return_pct(direction, open_trade["entry"], salida)' in bloque, \
+        "el neto se sigue calculando con el precio observado"
+    # el precio observado NO se pierde: queda al lado para poder medir el gap
+    assert '"exit_observado": price' in bloque
+    assert '"exit_model"' in bloque, "hay que declarar con que modelo se salio"
+
+
+# --- #6: el tope del cuerpo ------------------------------------------
+
+def test_el_tope_del_cuerpo_se_aplica_antes_de_leerlo():
+    """Los endpoints de ingesta se saltan la sesion, y FastAPI cargaba y parseaba el
+    cuerpo entero antes de que nadie mirara el token ni el tamano. Verificado el
+    2026-07-26: uvicorn 0.32 con h11 no trae limite por defecto y no hay ninguno
+    configurado en el deploy, asi que este es el primero."""
+    fuente = open(os.path.join(ROOT, "core/app.py"), encoding="utf-8").read()
+    bloque = fuente.split("async def module_api_post")[1].split("\n@app.")[0]
+
+    # el chequeo va ANTES de cualquier lectura del cuerpo
+    assert bloque.index("content-length") < bloque.index("json"), \
+        "el tope tiene que mirarse antes de parsear"
+    assert "MAX_POST_BYTES" in bloque and "413" in bloque
+    # y no se confia solo en el header declarado: chunked se lee por trozos con corte
+    assert "request.stream()" in bloque
+    assert "total > MAX_POST_BYTES" in bloque
+    assert "await request.body()" not in bloque, \
+        "volvio la lectura completa sin tope"

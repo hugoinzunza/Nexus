@@ -213,6 +213,29 @@ function vacio(id, titulo, v, precio) {
     `hay <span class="cuenta">${v.n_adelante}</span> referencias conocidas en esa dirección</div>`;
 }
 
+
+// Un fallo de datos NO puede verse como una pantalla vacía.
+//
+// Railway está geo-bloqueado por Binance (HTTP 451, verificado el 2026-07-26): este
+// módulo llama a Binance desde el proceso web y eso rompe el patrón del proyecto,
+// donde el VPS recolecta y Railway muestra. Mientras no exista un push de klines
+// desde el VPS, en producción la vista no tiene datos — y tiene que DECIRLO, no
+// quedarse en blanco dando a entender que no hay nada que ver.
+function mostrarFallo(msg) {
+  const geo = /451|restricted location/i.test(String(msg));
+  const caja = document.querySelector(".disclaimer");
+  if (caja) {
+    caja.innerHTML = geo
+      ? "<strong>Sin datos en este despliegue.</strong> Binance responde 451 " +
+        "(ubicación restringida) al servidor de Railway. El módulo pide las velas " +
+        "directamente al exchange, y eso solo funciona desde el VPS o en local. " +
+        "Falta mover la recolección al VPS, como el resto del proyecto."
+      : `<strong>Sin datos.</strong> ${String(msg).slice(0, 200)}`;
+  }
+  $("updated").textContent = geo ? "bloqueo geográfico" : "sin datos";
+  $("price").textContent = "—";
+}
+
 // --- carga -----------------------------------------------------------
 async function cargar() {
   const q = `symbol=${encodeURIComponent(state.symbol)}`;
@@ -221,15 +244,33 @@ async function cargar() {
       fetch(`${API}/state?${q}`).then((r) => r.json()),
       fetch(`${API}/velas?${q}&tf=${state.tf}`).then((r) => r.json()),
     ]);
-    if (st.error) { $("updated").textContent = `error: ${st.error}`; return; }
+    if (st.error) { mostrarFallo(st.error); return; }
     state.data = st;
     state.velas = vl.velas || [];
     pintarVelas();
     pintarNiveles();
     if (vl.estructura) pintarPivotes(vl.estructura);
     pintarPaneles();
-    $("updated").textContent = "actualizado " +
-      new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+    // La fuente de los datos NO es un detalle: si viene del respaldo versionado,
+    // el precio y la estructura estan viejos y todo lo demas hay que leerlo distinto.
+    if (st.fuente === "klines_versionados") {
+      const ult = state.velas.length
+        ? new Date(state.velas[state.velas.length - 1].t).toLocaleDateString("es-CL")
+        : "?";
+      $("updated").textContent = `datos historicos hasta ${ult}`;
+      const caja = document.querySelector(".disclaimer");
+      if (caja && !caja.dataset.fuente) {
+        caja.dataset.fuente = "1";
+        caja.insertAdjacentHTML("afterbegin",
+          "<strong>Datos historicos, no en vivo.</strong> Binance bloquea a este " +
+          "servidor (HTTP 451), asi que la vista usa los klines versionados del " +
+          "repo. La apertura anual sigue siendo correcta —el 1 de enero no cambia—; " +
+          "el precio y la apertura semanal no. ");
+      }
+    } else {
+      $("updated").textContent = "actualizado " +
+        new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+    }
   } catch (exc) {
     $("updated").textContent = `sin datos: ${exc}`;
   }

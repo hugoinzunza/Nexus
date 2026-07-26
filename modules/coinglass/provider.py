@@ -410,13 +410,25 @@ def build_dashboard(
         "advanced": advanced,
         "experimental_pressure": {
             **pressure,
-            "observations": len(history),
+            # `observations` y `status` cuentan INDEPENDIENTES, no filas.
+            #
+            # Antes usaban `len(history)`, que incluye las filas sin `bar_time`. Esas
+            # filas ya se excluian de `forward_observations` justamente porque no son
+            # observaciones independientes -sin barra, cada captura de 5 min se
+            # convertia en una "observacion" y ~12 por hora llenaban el gate con datos
+            # rotos-, pero el gate seguia mirando el total. Reproducido en la auditoria
+            # del 2026-07-26: 100 capturas sin NINGUNA barra independiente daban
+            # `forward_observations: 0` y `status: ready_for_backtest` al mismo tiempo.
+            # Un gate que se contradice a si mismo es peor que no tenerlo.
+            "observations": len(independientes),
+            "filas_totales": len(history),
+            "filas_sin_barra": len(history) - len(independientes),
             "historical_observations": historical_observations,
             "forward_observations": forward_observations,
             "minimum_for_calibration": 100,
             "status": (
                 "model_incomplete" if pressure["score"] is None
-                else "collecting" if len(history) < 100
+                else "collecting" if len(independientes) < 100
                 else "ready_for_backtest"
             ),
         },
