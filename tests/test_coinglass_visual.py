@@ -693,11 +693,15 @@ def test_mapa_visual_suma_eje_precio_muros_y_alcance():
     assert "nearest_whale_ask" in bloque and "closePath(); ctx.fill()" in bloque, \
         "los muros del libro se dibujan como rombos en el mismo eje de precio"
     assert 'alcance_historico?.["4h"]' in bloque, "falta la tasa de alcance"
-    assert "mayor clúster" in bloque
+    # La banda mayor sigue destacada, ahora con el texto de la escalera. Antes se
+    # rotulaba "mayor clúster"; el cambio es deliberado (2026-07-26).
+    assert "el mayor" in bloque
 
-    # las tres columnas de etiquetas no pueden compartir la misma x
+    # las columnas de etiquetas no pueden compartir la misma x
     assert "const L = 78, R = 232" in bloque
-    assert "width - 10, y + dy" in bloque, "el alcance va al borde, desplazado"
+    # el alcance ya no es un caso especial de los dos más cercanos: es una columna
+    # propia con su encabezado, y CADA banda escribe en ella
+    assert "colProb" in bloque and "SE ALCANZA EN 4h" in bloque
 
     assert "confluencia" in html, "la leyenda debe explicar la confluencia"
 
@@ -1094,3 +1098,30 @@ def test_el_grafico_y_la_tabla_leen_la_MISMA_fuente():
     tabla = script.split("function renderAlcance(")[1].split("\nfunction ")[0]
     assert "escalera_arriba" in tabla and "escalera_abajo" in tabla
     assert "fila-precio" in tabla, "falta la fila del precio actual al medio"
+
+
+def test_los_muros_no_mandan_en_el_encuadre_del_grafico():
+    """Los muros ballena viven a ±5% mientras las bandas caen dentro de ±2%: si el
+    eje los incluye, TODA la escalera se aplasta en una franja del medio. Es el
+    mismo error que ya habíamos corregido en el gráfico del libro, cometido otra
+    vez acá. Los muros fuera de rango se fijan al borde y se marcan con flecha.
+    """
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    dibujo = script.split("function drawVisualLevels()")[1].split("\nfunction ")[0]
+    encuadre = dibujo.split("const todos =")[1].split("const fuerte")[0]
+    assert "muros" not in encuadre, "los muros volvieron a definir el eje"
+    # y siguen dibujándose, fijados al borde
+    assert "p > max ? 1 : p < min ? -1 : 0" in dibujo
+    assert "↑" in dibujo and "↓" in dibujo
+
+
+def test_cada_banda_lleva_su_probabilidad_en_el_grafico():
+    """Era el pedido de Hugo: que el gráfico -no solo la tabla- muestre los niveles
+    con sus porcentajes. Antes solo dos niveles tenían su tasa dibujada."""
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    dibujo = script.split("function drawVisualLevels()")[1].split("\nfunction ")[0]
+    assert "SE ALCANZA EN 4h" in dibujo, "falta el encabezado de la columna"
+    # la barrita de probabilidad se dibuja dentro del bucle de bandas, no aparte
+    bucle = dibujo.split("for (const row of")[1].split("// encabezado")[0]
+    assert 'alcance_historico?.["4h"]' in bucle
+    assert "anchoProb" in bucle and "distance_pct" in bucle

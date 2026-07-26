@@ -654,10 +654,14 @@ function drawVisualLevels() {
     .filter((m, i, arr) => arr.findIndex((o) =>
       Math.round(Number(o.price)) === Math.round(Number(m.price))) === i);
 
-  const todos = rows.map((r) => Number(r.price)).concat(price)
-    .concat(muros.map((m) => Number(m.price)));
+  // El encuadre lo fijan las BANDAS y el precio, NO los muros. Los muros ballena
+  // viven a ±5% mientras las bandas caen dentro de ±2%: dejarlos mandar en el eje
+  // aplastaba toda la escalera en una franja del medio. Es el mismo error que ya
+  // corregimos en el gráfico del libro. Los muros fuera de rango se fijan al borde
+  // y se marcan con una flecha, para no perderlos ni deformar la vista.
+  const todos = rows.map((r) => Number(r.price)).concat(price);
   let min = Math.min(...todos), max = Math.max(...todos);
-  const pad = (max - min) * 0.05 || 1;
+  const pad = (max - min) * 0.08 || 1;
   min -= pad; max += pad;
   const fuerte = Math.max(...rows.map((r) => Number(r.intensity_usd)), 1);
   const Y = (v) => T + (max - v) / (max - min || 1) * (height - T - B);
@@ -675,42 +679,84 @@ function drawVisualLevels() {
     ctx.fillText(fmt(p, 0), L - 8, y);
   }
 
-  // --- barras de intensidad de liquidacion ---
+  // --- cada banda: monto a la IZQUIERDA, probabilidad de alcance a la DERECHA ---
+  // Son las dos preguntas de una decisión y antes solo se veía una. La barra mide
+  // cuánta liquidez hay; la barrita de la derecha, cuán seguido el precio llega
+  // hasta ahí. Al recorrer la escalera se ve la probabilidad DECAER al alejarse,
+  // que es justo lo que un número suelto no transmite.
   const masFuerte = rows.reduce((a, b) =>
     Number(b.intensity_usd) > Number(a.intensity_usd) ? b : a, rows[0]);
-  ctx.textAlign = "left";
+  const colProb = width - R + 74;          // dónde arranca la columna de alcance
+  const anchoProb = 56;                    // 0-50% de probabilidad mapeado acá
+  const usadas = [];
   for (const row of [...rows].sort((a, b) => Number(a.price) - Number(b.price))) {
     const p = Number(row.price);
     const usd = Number(row.intensity_usd);
     const y = Y(p);
-    const ancho = Math.max(6, usd / fuerte * (width - L - R - 20));
+    const arriba = p > price;
     const esElMayor = row === masFuerte;
-    ctx.fillStyle = p > price
-      ? `rgba(239,99,112,${esElMayor ? .95 : .6})`
-      : `rgba(36,200,138,${esElMayor ? .95 : .6})`;
+    const color = arriba ? "239,99,112" : "36,200,138";
+
+    const ancho = Math.max(6, usd / fuerte * (width - L - R - 20));
+    ctx.fillStyle = `rgba(${color},${esElMayor ? .95 : .55})`;
     ctx.fillRect(L, y - 4, ancho, 8);
-    if (esElMayor) {
-      // dentro de la barra: afuera choca con la columna de alcance de la derecha
-      const etiqueta = `mayor clúster ${compactUsd(usd)}`;
-      const cabe = ancho > ctx.measureText(etiqueta).width + 16;
-      ctx.fillStyle = cabe ? "#0b0e14" : "#edf1f7";
-      ctx.textAlign = cabe ? "right" : "left";
-      ctx.fillText(etiqueta, cabe ? L + ancho - 8 : L + ancho + 8, y);
-      ctx.textAlign = "left";
+
+    // El monto se rotula solo cuando cabe holgado dentro de la barra. El largo ya
+    // lo comunica y la tabla trae la cifra exacta: rotular las diez bandas dejaba
+    // el gráfico ilegible.
+    ctx.font = esElMayor ? "700 10px ui-monospace, monospace"
+                         : "10px ui-monospace, monospace";
+    const etiqueta = esElMayor ? `${compactUsd(usd)} · el mayor` : compactUsd(usd);
+    if (ancho > ctx.measureText(etiqueta).width + 20) {
+      ctx.fillStyle = "#0b0e14";
+      ctx.textAlign = "right";
+      ctx.fillText(etiqueta, L + ancho - 8, y);
     }
+
+    // --- columna de alcance: barrita + porcentaje, para CADA banda ---
+    if (usadas.some((otra) => Math.abs(y - otra) < 13)) continue;
+    usadas.push(y);
+    const p4 = Number(row.alcance_historico?.["4h"]);
+    ctx.textAlign = "left";
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.fillStyle = "#7d879a";
+    ctx.fillText(signed(row.distance_pct, "%"), width - R + 6, y);
+    if (!Number.isFinite(p4)) {
+      ctx.fillText("sin tasa", colProb, y);
+      continue;
+    }
+    ctx.fillStyle = "#1e2532";
+    ctx.fillRect(colProb, y - 3, anchoProb, 6);
+    ctx.fillStyle = `rgba(${color},.85)`;
+    ctx.fillRect(colProb, y - 3, Math.max(2, Math.min(1, p4 / 50) * anchoProb), 6);
+    ctx.fillStyle = "#b9c1ce";
+    ctx.fillText(`${fmt(p4, 0)}%`, colProb + anchoProb + 7, y);
   }
+  // encabezado de la columna, para que el número no quede sin unidad
+  ctx.textAlign = "left";
+  ctx.font = "600 9px ui-monospace, monospace";
+  ctx.fillStyle = "#5d6675";
+  ctx.fillText("DIST.", width - R + 6, T - 8);
+  ctx.fillText("SE ALCANZA EN 4h", colProb, T - 8);
 
   // --- muros del libro como rombos sobre el mismo eje ---
+  // Van DENTRO del área del gráfico: la columna de la derecha es ahora del alcance
+  // y antes se pisaban con ella.
+  ctx.font = "10px ui-monospace, monospace";
   for (const m of muros) {
-    const y = Y(Number(m.price));
-    const x = width - R - 10;
+    const p = Number(m.price);
+    const fuera = p > max ? 1 : p < min ? -1 : 0;
+    const y = fuera ? Y(fuera > 0 ? max : min) : Y(p);
+    const x = width - R - 16;
     ctx.fillStyle = "#43bdd7";
     ctx.beginPath();
     ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y);
     ctx.closePath(); ctx.fill();
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#43bdd7";
-    ctx.fillText(compactUsd(m.amount_usd), x + 12, y);
+    ctx.textAlign = "right";
+    // la flecha avisa que el muro esta MAS ALLA del encuadre, no en el borde
+    const flecha = fuera > 0 ? "↑ " : fuera < 0 ? "↓ " : "";
+    ctx.fillText(`${flecha}muro ${compactUsd(m.amount_usd)}`
+                 + (fuera ? ` a ${fmt(p, 0)}` : ""), x - 10, y - 10);
   }
 
   // --- precio actual y los dos imanes con su tasa de alcance ---
@@ -725,24 +771,18 @@ function drawVisualLevels() {
   ctx.textAlign = "right";
   ctx.fillText(`BTC ${fmt(price, 0)}`, L - 8, yPrecio - 13);
 
-  ctx.font = "10px ui-monospace, monospace";
-  ctx.textAlign = "left";
-  for (const [nivel, color] of [[niveles.nearest_above, "#ef6370"],
-                                [niveles.nearest_below, "#24c88a"]]) {
-    const p4 = Number(nivel?.alcance_historico?.["4h"]);
-    if (!nivel || !Number.isFinite(Number(nivel.price)) || !Number.isFinite(p4)) continue;
+  // Ya no se destacan "los dos más cercanos" con su tasa: ahora TODAS las bandas
+  // muestran la suya en la columna de la derecha, que era el punto del cambio.
+  // Solo queda marcar cuál es el primero de cada lado, que es el que el precio
+  // tiene que romper antes que ningún otro.
+  for (const [nivel, color] of [[niveles.escalera_arriba?.[0], "#ef6370"],
+                                [niveles.escalera_abajo?.[0], "#24c88a"]]) {
+    if (!nivel || !Number.isFinite(Number(nivel.price))) continue;
     const y = Y(Number(nivel.price));
     ctx.strokeStyle = color;
     ctx.setLineDash([2, 3]);
-    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(width - 12, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(width - R, y); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = color;
-    ctx.textAlign = "right";
-    // desplazado en vertical: en la primera version caia sobre la etiqueta del
-    // muro que esta al mismo precio y quedaban ilegibles
-    const dy = Number(nivel.price) > price ? -11 : 11;
-    ctx.fillText(`el más cercano · ${fmt(p4, 0)}% en 4h`, width - 10, y + dy);
-    ctx.textAlign = "left";
   }
 }
 
