@@ -1256,3 +1256,131 @@ def test_el_bot_virtual_lee_los_mismos_niveles_que_la_ui():
     if plan["action"] == "virtual_entry":
         objetivos = {niveles["nearest_above"]["price"], niveles["nearest_below"]["price"]}
         assert plan["target"] in objetivos and plan["stop"] in objetivos
+
+
+# --- FIXTURE PATOLÓGICO -------------------------------------------------------
+# El `snapshot()` de arriba es demasiado amable: montos parejos, sin ballenas, sin
+# ceros, sin umbral de plataforma. Los CUATRO defectos encontrados el 2026-07-26
+# eran invisibles en él y visibles con el snapshot real del VPS. Este fixture
+# replica lo que produce producción, para que la próxima vez el test lo cace.
+def snapshot_patologico():
+    """Réplica de la captura real del VPS (2026-07-26, BTC ~64.462).
+
+    Patologías incluidas, todas medidas en producción:
+      * heatmap con máximo 6,98M y mediana 1,14M -> cualquier umbral fijo en 5M
+        se come el 93% de los niveles;
+      * niveles redondeados a EXACTAMENTE 0 (CoinGlass muestra "0.00M"), y el más
+        cercano al precio es uno de ellos;
+      * muros con piso exacto en 1.000.000, el umbral de listado de CoinGlass;
+      * ballena de 78,7M a -5,01%, apenas FUERA del radio de ±5%;
+      * los cuatro muros mayores, todos fuera de ese radio.
+    """
+    # 64.533,1 es la captura donde medí la ballena a −5,01%: con 64.461,8 queda a
+    # −4,905%, o sea DENTRO del radio, y el fixture perdería justo la patología.
+    precio = 64_533.1
+    heatmap = []
+    # los tres mas cercanos hacia abajo vienen en 0: es ruido de redondeo
+    for k, (dist, usd) in enumerate([
+        (+0.040, 0), (+0.191, 4_890_000), (+0.341, 6_310_000),
+        (+0.492, 4_550_000), (+0.642, 6_230_000), (+0.792, 6_430_000),
+        (+0.943, 5_360_000), (+1.093, 3_860_000), (+1.244, 2_950_000),
+        (-0.110, 0), (-0.260, 0), (-0.411, 0),
+        (-0.561, 1_140_000), (-0.712, 3_040_000), (-0.862, 4_430_000),
+        (-1.012, 3_540_000), (-1.163, 5_990_000), (-1.313, 6_320_000),
+        (-1.464, 6_980_000), (-1.615, 2_100_000),
+    ]):
+        heatmap.append({"price": round(precio * (1 + dist / 100), 1),
+                        "intensity_usd": usd,
+                        "timestamp": (NOW - timedelta(hours=3, minutes=10)).strftime("%H:%M")})
+    # COLA LEJANA generada: el heatmap real trae ~114 niveles y 52 bajo 1M, y esa
+    # proporción es la que hace que un umbral fijo de 5M se coma el 93%. Con sólo los
+    # 20 niveles cercanos escritos a mano el fixture quedaba demasiado concentrado en
+    # montos grandes y dejaba de reproducir la patología.
+    for k in range(45):
+        for signo in (1, -1):
+            dist = signo * (1.8 + 0.15 * k)
+            heatmap.append({
+                "price": round(precio * (1 + dist / 100), 1),
+                # decae al alejarse y casi todo queda bajo 1M, como en producción
+                "intensity_usd": round(max(0, 1_600_000 - 34_000 * k), -4),
+                "timestamp": (NOW - timedelta(hours=3, minutes=10)).strftime("%H:%M"),
+            })
+    muros = [
+        {"side": "bid", "price": 61_300.0, "amount_usd": 78_700_000},   # -5,01%: FUERA
+        {"side": "bid", "price": 60_000.0, "amount_usd": 10_000_000},   # -6,92%: FUERA
+        {"side": "bid", "price": 60_600.0, "amount_usd": 6_900_000},    # -5,99%: FUERA
+        {"side": "ask", "price": 68_000.0, "amount_usd": 6_200_000},    # +5,49%: FUERA
+        {"side": "bid", "price": 62_000.0, "amount_usd": 5_090_000},    # dentro
+        {"side": "ask", "price": 64_766.0, "amount_usd": 3_620_000},    # dentro
+        {"side": "bid", "price": 64_214.0, "amount_usd": 3_430_000},    # dentro
+        {"side": "ask", "price": 65_500.0, "amount_usd": PISO_COINGLASS},   # en el borde
+        {"side": "bid", "price": 63_900.0, "amount_usd": PISO_COINGLASS},   # en el borde
+    ]
+    base = snapshot()
+    base["price"] = precio
+    base["liquidation_map"]["current_price"] = precio
+    base["liquidation_heatmap"]["levels"] = heatmap
+    base["whale_orders"]["rows"] = [
+        {**m, "duration": "1D 3H", "market": "S", "exchange": "binance"} for m in muros]
+    return base
+
+
+PISO_COINGLASS = 1_000_000
+
+
+def test_el_fixture_patologico_conserva_sus_patologias():
+    """Candado del candado. Si alguien "limpia" este fixture, los tests que lo usan
+    pasan a probar un caso amable y dejan de servir — que es exactamente por qué los
+    cuatro defectos del 2026-07-26 sobrevivieron tanto tiempo sin que nadie los viera.
+    """
+    snap = snapshot_patologico()
+    niveles = snap["liquidation_heatmap"]["levels"]
+    montos = sorted(n["intensity_usd"] for n in niveles)
+    vivos = [v for v in montos if v > 0]
+
+    assert max(montos) < 7_500_000, "el heatmap perdio su techo bajo (max ~7M)"
+    assert sum(1 for v in montos if v == 0) >= 3, "el fixture perdio los ceros"
+    assert sum(1 for v in montos if v >= 5_000_000) / len(montos) < 0.35, \
+        "un umbral fijo de 5M ya no se come la mayoria: el fixture se volvio amable"
+    assert vivos[len(vivos) // 2] < 5_000_000, "la mediana subio sobre el umbral fijo"
+
+    muros = snap["whale_orders"]["rows"]
+    fuera = [m for m in muros
+             if abs(m["price"] / snap["price"] - 1) * 100 > 5]
+    assert max(m["amount_usd"] for m in muros) == 78_700_000
+    assert max(m["amount_usd"] for m in fuera) == 78_700_000, \
+        "la ballena volvio a caer DENTRO del radio: se perdio la patologia"
+    assert len(fuera) >= 4, "los cuatro muros mayores deben quedar fuera del radio"
+    assert min(m["amount_usd"] for m in muros) == PISO_COINGLASS, \
+        "se perdio el piso exacto del umbral de listado"
+
+
+def test_con_datos_patologicos_el_iman_y_el_muro_dominante_salen_bien():
+    """Los cuatro defectos de hoy, en un solo test de integración sobre el snapshot
+    que los destapó."""
+    ind = build_visual_indicator(snapshot_patologico(), now=NOW)
+    n, precio = ind["levels"], ind["price"]
+
+    # 1. el muro dominante es la ballena, aunque este fuera del radio de +-5%
+    assert n["dominant_whale_bid"]["amount_usd"] == 78_700_000
+    assert n["dominant_whale_bid"]["distance_pct"] < -5
+    #    y el de radio corto NO la toma, porque mide otra cosa
+    assert n["strongest_whale_bid"]["amount_usd"] != 78_700_000
+
+    # 2. ningun nivel en 0 puede ser el iman, aunque sea el mas cercano
+    assert n["nearest_below"]["intensity_usd"] > 0
+    assert n["nearest_above"]["intensity_usd"] > 0
+
+    # 3. el corte relativo no vacia la escalera pese al techo bajo (~7M)
+    assert len(n["escalera_arriba"]) >= 3 and len(n["escalera_abajo"]) >= 3
+
+    # 4. el iman de abajo NO se reporta 35% mas lejos de lo que esta: con el umbral
+    #    absoluto de 5M caia en -1,16%; los clusters reales estan mas cerca
+    assert n["nearest_below"]["distance_pct"] > -1.10, \
+        "volvio a saltarse los clusters cercanos por debajo"
+
+    # y la tasa de alcance baja al alejarse, en los dos lados
+    for lado in ("escalera_arriba", "escalera_abajo"):
+        tasas = [(b.get("alcance_historico") or {}).get("4h") for b in n[lado]]
+        tasas = [t for t in tasas if t is not None]
+        assert tasas == sorted(tasas, reverse=True)
