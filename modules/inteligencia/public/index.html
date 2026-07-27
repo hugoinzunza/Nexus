@@ -62,8 +62,10 @@
         Sobre las velas van los niveles del método, cada uno con su origen visible:
         <strong style="color:#e8b653">la rejilla anual</strong> anclada en la apertura
         del 1 de enero, <strong style="color:#43bdd7">la apertura semanal</strong>, y
-        <strong>los pivotes confirmados</strong> de la temporalidad que estés viendo.
-        Los pivotes se dibujan en su extremo estructural y la etiqueta declara
+        <strong>los pivotes estructurales confirmados</strong> de la temporalidad que
+        estés viendo. Los fractales consecutivos del mismo tipo se reducen al extremo
+        más alto o más bajo, igual que en las piernas calculadas. Los pivotes se
+        dibujan en su extremo estructural y la etiqueta declara
         <em>conf +5</em>: recién estuvieron disponibles cinco velas después. El payload
         conserva por separado el instante del extremo y el de confirmación.
       </div>
@@ -71,7 +73,8 @@
       <div class="leyenda">
         <span><i style="background:#e8b653"></i> rejilla anual 10%</span>
         <span><i style="background:#5b6272"></i> placebo 7,5% / 12,5%</span>
-        <span><i style="background:#b7a7e8"></i> aperturas anuales históricas</span>
+        <span><i style="background:#b7a7e8"></i> cálculos anuales históricos</span>
+        <span><i style="background:#f4f6f8"></i> refugio promovido</span>
         <span><i style="background:#43bdd7"></i> apertura semanal</span>
         <span><i style="background:#35c9c1"></i> niveles del TF principal</span>
         <span><i style="background:#7698d9"></i> niveles de panorama</span>
@@ -84,12 +87,16 @@
         <small>solo se dibujan los que caben en el encuadre; las tablas conservan todos</small>
       </label>
       <label class="toggle">
+        <input type="checkbox" id="ver-fractales"> mostrar todos los fractales 5+1+5
+        <small>diagnóstico: incluye puntos que el zigzag estructural descarta</small>
+      </label>
+      <label class="toggle">
         <input type="checkbox" id="ver-placebo"> mostrar rejillas placebo
         <small>si el precio parece respetar las tres por igual, lo que ves es densidad, no niveles</small>
       </label>
       <label class="toggle">
-        <input type="checkbox" id="ver-historicas"> mostrar aperturas anuales históricas
-        <small>se muestran todos los años disponibles, no solo aquellos donde hubo reacción</small>
+        <input type="checkbox" id="ver-historicas"> mostrar precios calculados históricos
+        <small>violeta discontinuo; incluye todos los años, no solo los que reaccionaron</small>
       </label>
     </section>
 
@@ -154,6 +161,7 @@
           <small id="ps-fecha"></small></div>
       </div>
       <div class="scroll-x tabla-niveles"><table id="tabla-rejilla"></table></div>
+      <div class="grid3" id="familias-historicas"></div>
     </section>
 
     <!-- Vacío disponible: la única idea nueva del curso -->
@@ -305,6 +313,6 @@
   </main>
 
   <script src="/static/nexux-shell.js?v=6"></script>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

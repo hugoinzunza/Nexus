@@ -44,8 +44,20 @@ TF_MS = {
     "1w": 604_800_000,
 }
 
-RETROCESOS = (0.382, 0.40, 0.50, 0.60, 0.618)
+# 0.236 aparece explícitamente en el taller y en la plantilla RLP. 0.812 no entra:
+# la propia transcripción dice que podría ser 0.786 u otro valor y el profesor suele
+# ocultarlo. Una cifra ambigua no puede convertirse en línea automática.
+RETROCESOS = (0.236, 0.382, 0.40, 0.50, 0.60, 0.618)
 EXTENSIONES = (1.25, 1.50, 1.618, 2.00)
+
+# Inventario de la familia RLP descrita en el curso. La fórmula es exacta; el ancla
+# histórica L/H no lo es. Se publica para declarar qué falta, no para aplicarla a una
+# pierna elegida retrospectivamente.
+RLP_RATIOS_DOCUMENTADOS = (
+    0.0, 0.236, 0.382, 0.5, 0.618, 1.0, 1.236, 1.5, 1.618,
+    2.0, 2.618, 4.236, 6.854, 11.09,
+)
+RLP_RATIOS_AMBIGUOS = (0.812,)
 
 
 def velas_cerradas(velas: list[dict], tf: str, as_of_ms: int) -> list[dict]:
@@ -170,7 +182,9 @@ def estructura(velas: list[dict], piv: int, as_of_idx: Optional[int] = None) -> 
     hacer trampa sin darse cuenta.
     """
     if not velas or len(velas) < 2 * piv + 3:
-        return {"piv": piv, "highs": [], "lows": [], "tendencia": "sin_datos",
+        return {"piv": piv, "highs": [], "lows": [],
+                "fractales_highs": [], "fractales_lows": [],
+                "tendencia": "sin_datos",
                 "motivo": f"hacen falta al menos {2 * piv + 3} velas"}
     tope = len(velas) - 1 if as_of_idx is None else as_of_idx
     highs, lows = smc.swing_points(velas, piv)
@@ -183,8 +197,13 @@ def estructura(velas: list[dict], piv: int, as_of_idx: Optional[int] = None) -> 
             "confirmed_at": int(velas[p["confirm_idx"]]["t"]) + paso,
         }
 
-    hs = [enriquecer(p) for p in highs if p["confirm_idx"] <= tope]
-    ls = [enriquecer(p) for p in lows if p["confirm_idx"] <= tope]
+    fractales_h = [enriquecer(p) for p in highs if p["confirm_idx"] <= tope]
+    fractales_l = [enriquecer(p) for p in lows if p["confirm_idx"] <= tope]
+    zigzag = pivotes_alternados(fractales_h, fractales_l)
+    hs = [{k: v for k, v in p.items() if k != "tipo"}
+          for p in zigzag if p["tipo"] == "high"]
+    ls = [{k: v for k, v in p.items() if k != "tipo"}
+          for p in zigzag if p["tipo"] == "low"]
 
     # Tendencia por los DOS últimos pivotes de cada lado. Dos no es un número mágico:
     # es el mínimo para hablar de "creciente" y el máximo que se puede exigir sin
@@ -202,8 +221,13 @@ def estructura(velas: list[dict], piv: int, as_of_idx: Optional[int] = None) -> 
             tendencia = "bajista"
         else:
             tendencia = "lateral"
-    return {"piv": piv, "highs": hs[-6:], "lows": ls[-6:], "tendencia": tendencia,
+    return {"piv": piv, "highs": hs[-6:], "lows": ls[-6:],
+            "fractales_highs": fractales_h[-6:],
+            "fractales_lows": fractales_l[-6:],
+            "tendencia": tendencia,
             "n_highs": len(hs), "n_lows": len(ls),
+            "n_fractales_highs": len(fractales_h),
+            "n_fractales_lows": len(fractales_l),
             "retraso_velas": piv}
 
 

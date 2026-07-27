@@ -293,6 +293,12 @@ class InteligenciaModule(NexusModule):
         # dice que no la hay. Usar la primera vela disponible sería una ficción con
         # cara de dato, que es justo lo que el curso hace y nosotros no.
         grid = P.rejilla(ancla["precio"], px) if ancla else []
+        grids_historicos = [{
+            "anio": a["anio"],
+            "ancla": a,
+            "niveles": P.rejilla(a["precio"], px),
+            "clasificacion": "calculado_historico_no_promovido",
+        } for a in anclas_historicas if a["anio"] != anio]
         placebo = ({str(p): P.rejilla(ancla["precio"], px, paso=p)
                     for p in P.PASOS_PLACEBO} if ancla else {})
 
@@ -345,6 +351,34 @@ class InteligenciaModule(NexusModule):
                                          if ancla and px else None),
             "rejilla": grid,
             "paso_rejilla": P.PASO_RMP,
+            "rejillas_historicas": grids_historicos,
+            # Vacío a propósito: el curso no define una promoción causal. Cuando
+            # exista una regla, cada elemento deberá guardar `promoted_at` y la
+            # evidencia disponible en esa fecha para impedir selección retrospectiva.
+            "refugios_promovidos": [],
+            "nota_refugios": (
+                "Los niveles históricos calculados no son refugios. No hay ninguno "
+                "promovido hasta definir una regla causal y versionada."),
+            "catalogo_formulas": {
+                "rmp_vigente": {
+                    "aplicado": bool(ancla),
+                    "ratios": [round(x * P.PASO_RMP, 3)
+                               for x in range(1, P.K_MAX + 1)],
+                    "ancla": "apertura anual exacta",
+                },
+                "pierna_activa": {
+                    "aplicado": True,
+                    "retrocesos": list(P.RETROCESOS),
+                    "extensiones": list(P.EXTENSIONES),
+                    "ancla": "última pierna de pivotes estructurales confirmados",
+                },
+                "rlp_historico": {
+                    "aplicado": False,
+                    "ratios_documentados": list(P.RLP_RATIOS_DOCUMENTADOS),
+                    "ratios_ambiguos": list(P.RLP_RATIOS_AMBIGUOS),
+                    "motivo": "la selección histórica L/H no tiene regla causal",
+                },
+            },
             "rejilla_placebo": placebo,
             "nota_placebo": ("Los pasos de 7,5% y 12,5% van al lado a propósito: el 10% "
                              "del curso no está demostrado como especial, y una rejilla "

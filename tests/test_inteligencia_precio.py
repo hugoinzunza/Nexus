@@ -220,6 +220,36 @@ def test_mapa_de_precios_es_simetrico_y_aritmetico():
     assert fuera["invalidacion_estructural_evaluada"] is False
 
 
+def test_el_236_confirmado_se_aplica_y_el_812_ambiguo_no():
+    assert 0.236 in P.RETROCESOS
+    assert 0.812 not in P.RETROCESOS
+    assert P.RLP_RATIOS_AMBIGUOS == (0.812,)
+    mapa = P.mapa_precios({"inicio": 100, "fin": 200}, 180)
+    assert {x["ratio"] for x in mapa["retrocesos"]} == set(P.RETROCESOS)
+
+
+def test_estructura_publica_zigzag_y_conserva_fractales_diagnosticos():
+    paso = P.TF_MS["1h"]
+    patron = (100, 104, 109, 104, 106, 111, 106, 101, 96, 91, 96, 93, 89, 94)
+    velas = [
+        {"t": i * paso, "o": patron[i % len(patron)],
+         "h": patron[i % len(patron)] + 1,
+         "l": patron[i % len(patron)] - 1,
+         "c": patron[i % len(patron)], "v": 1}
+        for i in range(196)
+    ]
+    est = P.estructura(velas, 2)
+    oficiales = sorted(
+        [(p["idx"], "high") for p in est["highs"]] +
+        [(p["idx"], "low") for p in est["lows"]]
+    )
+    assert oficiales
+    assert all(a[1] != b[1] for a, b in zip(oficiales, oficiales[1:]))
+    assert est["n_highs"] + est["n_lows"] < (
+        est["n_fractales_highs"] + est["n_fractales_lows"])
+    assert est["fractales_highs"] and est["fractales_lows"]
+
+
 def test_cada_pivote_publica_extremo_y_confirmacion():
     velas = velas_diarias(n=80)
     velas[30]["h"] *= 1.2
@@ -662,8 +692,12 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert "mapas-temporales" in html and "mapas_temporales" in modulo
     assert "mostrando ${filas.length} de ${total}" in js
     assert 'id="ver-mapa" checked' in html
+    assert 'id="ver-fractales"' in html
     assert "Precios calculados" in js
-    assert "app.js?v=8" in html and "styles.css?v=8" in html
+    assert "app.js?v=9" in html and "styles.css?v=8" in html
+    assert "rejillas_historicas" in modulo and "refugios_promovidos" in modulo
+    assert '"refugios_promovidos": []' in modulo
+    assert "state.marcas.setMarkers" in js
     assert "invalidación estructural no evaluada" in js
     assert '"execution_enabled": False' in modulo
     assert '"validated": False' in modulo
