@@ -774,7 +774,7 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert 'id="ver-pivotes-linea" checked' in html
     assert 'id="ver-fractales"' in html
     assert "Precios calculados" in js
-    assert "app.js?v=12" in html and "styles.css?v=10" in html
+    assert "app.js?v=13" in html and "styles.css?v=10" in html
     assert 'id="ver-fases" checked' in html
     assert '"fases": F.fases_para_grafico' in modulo
     assert "rejillas_historicas" in modulo and "refugios_promovidos" in modulo
@@ -796,6 +796,9 @@ def test_viewport_desacopla_lineas_y_limita_etiquetas():
     assert "state.velas.flatMap" not in js
     assert "etiquetasUsadas >= 3" in js and ".slice(0, 2)" in js
     assert "precioVivo = state.velas.length" in js
+    assert "${causa}_respaldo_80" in js
+    assert "lastValidLogicalRange" in js
+    assert 'dataset.viewportStatus' in js
     assert "p.pivot_t" in js and "distancia" in js
     assert 'id="escalera-arriba"' in html and 'id="escalera-abajo"' in html
     assert "Ninguna capa predice reacción" in html

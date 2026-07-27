@@ -15,8 +15,12 @@ const API = "/m/inteligencia/api";
 const state = { symbol: null, tf: "4h", horizonte: "medio", data: null, mapa: null,
                 velas: [], chart: null, series: null, lineas: [], marcas: null,
                 estructura: null, fases: [], faseSeries: [], loadSeq: 0,
-                viewportKey: null, viewportTimer: null };
+                viewportKey: null, viewportTimer: null, lastValidLogicalRange: null,
+                viewportStatus: "sin_inicializar", awaitingInitialViewport: true };
 const VELAS_INICIALES = 80;
+const VIEWPORT_MIN_VALIDO = 5;
+const VIEWPORT_INICIAL_MIN = 40;
+const VIEWPORT_INICIAL_MAX = 150;
 const TF_PRINCIPAL = { corto: "1h", medio: "4h", largo: "1d" };
 const LABEL_ALINEACION = {
   alineado: "alineado",
@@ -42,10 +46,41 @@ function decimales(px) {
   return a >= 10 ? 2 : a >= 1 ? 4 : a >= 0.1 ? 5 : a >= 0.01 ? 6 : 8;
 }
 
+function rangoLogicoDeRespaldo() {
+  const fin = Math.max(0, state.velas.length - 1);
+  return { from: Math.max(0, fin - VELAS_INICIALES + 1), to: fin };
+}
+
+function rangoLogicoSeguro() {
+  if (!state.velas.length || !state.chart) {
+    state.viewportStatus = "sin_grafico_respaldo_80";
+    return rangoLogicoDeRespaldo();
+  }
+  const observado = state.chart.timeScale().getVisibleLogicalRange();
+  const ancho = observado && Number(observado.to) - Number(observado.from) + 1;
+  const finito = observado && Number.isFinite(Number(observado.from)) &&
+    Number.isFinite(Number(observado.to));
+  const colapsado = !finito || !Number.isFinite(ancho) || ancho < VIEWPORT_MIN_VALIDO;
+  const fueraObjetivoInicial = state.awaitingInitialViewport && finito &&
+    (ancho < VIEWPORT_INICIAL_MIN || ancho > VIEWPORT_INICIAL_MAX);
+  if (!colapsado && !fueraObjetivoInicial) {
+    state.lastValidLogicalRange = { from: Number(observado.from), to: Number(observado.to) };
+    state.awaitingInitialViewport = false;
+    state.viewportStatus = "valido";
+    return state.lastValidLogicalRange;
+  }
+  const causa = !finito ? "null" : colapsado ? "colapsado" : "fuera_objetivo_inicial";
+  if (state.lastValidLogicalRange) {
+    state.viewportStatus = `${causa}_ultimo_valido`;
+    return state.lastValidLogicalRange;
+  }
+  state.viewportStatus = `${causa}_respaldo_80`;
+  return rangoLogicoDeRespaldo();
+}
+
 function velasDelViewport() {
-  if (!state.velas.length || !state.chart) return state.velas;
-  const rango = state.chart.timeScale().getVisibleLogicalRange();
-  if (!rango) return state.velas;
+  if (!state.velas.length) return [];
+  const rango = rangoLogicoSeguro();
   const desde = Math.max(0, Math.floor(rango.from));
   const hasta = Math.min(state.velas.length, Math.ceil(rango.to) + 1);
   return state.velas.slice(desde, hasta);
@@ -251,6 +286,9 @@ function pintarVelas() {
   const clave = `${state.symbol}:${state.tf}`;
   if (state.viewportKey !== clave) {
     state.viewportKey = clave;
+    state.lastValidLogicalRange = null;
+    state.viewportStatus = "inicializando";
+    state.awaitingInitialViewport = true;
     const fin = state.velas.length - 1;
     const inicio = Math.max(0, fin - VELAS_INICIALES + 1);
     try {
@@ -467,6 +505,11 @@ function pintarNiveles() {
       .filter(Boolean).join(" · ");
     partes.push(`fuera del encuadre: ${cercanos}` +
                 (fuera.length > 2 ? ` (+${fuera.length - 2} más)` : ""));
+  }
+  const estadoViewport = state.viewportStatus || "sin_estado";
+  $("g-sub").dataset.viewportStatus = estadoViewport;
+  if (estadoViewport !== "valido") {
+    partes.push(`encuadre de respaldo: ${estadoViewport.replaceAll("_", " ")}`);
   }
   $("g-sub").textContent = partes.join(" · ");
 }
