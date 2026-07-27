@@ -114,6 +114,9 @@ def apertura_semanal(velas: list[dict], ahora_ms: int) -> Optional[dict]:
     A diferencia de la apertura anual, ESTA sí envejece: si el dataset no llega a la
     semana en curso, devuelve None en vez de entregar la de una semana vieja
     disfrazada de actual.
+
+    Puede recibir la vela de 1h todavía abierta: su OHLC final no existe, pero su
+    apertura quedó fijada en el instante en que comenzó la semana.
     """
     ahora = dt.datetime.fromtimestamp(ahora_ms / 1000, dt.timezone.utc)
     lunes = (ahora - dt.timedelta(days=ahora.weekday())).replace(

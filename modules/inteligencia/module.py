@@ -296,7 +296,10 @@ class InteligenciaModule(NexusModule):
         placebo = ({str(p): P.rejilla(ancla["precio"], px, paso=p)
                     for p in P.PASOS_PLACEBO} if ancla else {})
 
-        semanal = P.apertura_semanal(horarias_c, ahora_ms)
+        # La apertura de una vela es inmutable desde que la vela nace. Esperar a que
+        # cierre la primera 1h del lunes retrasaba el ancla semanal hasta las 01:00
+        # UTC y dejaba la pantalla en `None` justo al comenzar una semana nueva.
+        semanal = P.apertura_semanal(horarias, ahora_ms)
         est_1h = P.estructura(horarias_c, PIV_CURSO)
         est_1d = P.estructura(diarias_c, PIV_CURSO)
 

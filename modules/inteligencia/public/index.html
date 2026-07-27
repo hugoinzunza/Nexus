@@ -6,7 +6,7 @@
   <link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
   <meta name="theme-color" content="#090b10">
   <title>Acción del precio · NexUX</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=8">
   <link rel="stylesheet" href="/static/nexux-shell.css">
   <!-- TradingView Lightweight Charts (Apache-2.0), la misma que usa el módulo de
        trading, bundleada localmente. -->
@@ -73,9 +73,16 @@
         <span><i style="background:#5b6272"></i> placebo 7,5% / 12,5%</span>
         <span><i style="background:#b7a7e8"></i> aperturas anuales históricas</span>
         <span><i style="background:#43bdd7"></i> apertura semanal</span>
+        <span><i style="background:#35c9c1"></i> niveles del TF principal</span>
+        <span><i style="background:#7698d9"></i> niveles de panorama</span>
+        <span><i style="background:#d88ab0"></i> niveles de sincronismo</span>
         <span><i style="background:#ef6370"></i> pivote alto confirmado</span>
         <span><i style="background:#24c88a"></i> pivote bajo confirmado</span>
       </div>
+      <label class="toggle">
+        <input type="checkbox" id="ver-mapa" checked> mostrar precios calculados multitemporales
+        <small>solo se dibujan los que caben en el encuadre; las tablas conservan todos</small>
+      </label>
       <label class="toggle">
         <input type="checkbox" id="ver-placebo"> mostrar rejillas placebo
         <small>si el precio parece respetar las tres por igual, lo que ves es densidad, no niveles</small>
@@ -298,6 +305,6 @@
   </main>
 
   <script src="/static/nexux-shell.js?v=6"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

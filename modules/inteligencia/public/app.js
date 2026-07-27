@@ -213,6 +213,7 @@ function pintarNiveles() {
   const d = state.data;
   const verPlacebo = $("ver-placebo").checked;
   const verHistoricas = $("ver-historicas").checked;
+  const verMapa = $("ver-mapa").checked;
 
   // Solo los niveles que caen en el rango de precio VISIBLE de las velas cargadas.
   // Sin este recorte, la rejilla anual llega hasta +150% y aplasta el eje: es el mismo
@@ -224,8 +225,11 @@ function pintarNiveles() {
   const visible = (p) => p >= min - margen && p <= max + margen;
   const fuera = [];
 
-  const linea = (precio, color, titulo, estilo = 0, ancho = 1) => {
-    if (!visible(precio)) { fuera.push({ precio, titulo, color }); return; }
+  const linea = (precio, color, titulo, estilo = 0, ancho = 1, contarFuera = true) => {
+    if (!visible(precio)) {
+      if (contarFuera) fuera.push({ precio, titulo, color });
+      return;
+    }
     state.lineas.push(state.series.createPriceLine({
       price: precio, color, lineWidth: ancho, lineStyle: estilo,
       axisLabelVisible: true, title: titulo }));
@@ -253,6 +257,26 @@ function pintarNiveles() {
   }
   if (d.apertura_anual) {
     linea(d.apertura_anual.precio, "#ffffff", `apertura ${d.anio}`, 0, 2);
+  }
+  if (verMapa && state.mapa) {
+    const colores = { principal: "#35c9c1", panorama: "#7698d9",
+                      sincronismo: "#d88ab0" };
+    const estilos = { principal: 0, panorama: 2, sincronismo: 1 };
+    for (const capa of Object.values(state.mapa.mapas_temporales || {})) {
+      if (!capa.mapa) continue;
+      const color = colores[capa.rol] || "#9aa4b5";
+      const estilo = estilos[capa.rol] ?? 2;
+      for (const nivel of capa.mapa.retrocesos || []) {
+        linea(nivel.precio, color,
+              `${String(capa.tf).toUpperCase()} C${fmt(nivel.ratio * 100, 1)}%`,
+              estilo, capa.rol === "principal" ? 2 : 1, false);
+      }
+      for (const nivel of capa.mapa.extensiones || []) {
+        linea(nivel.precio, color,
+              `${String(capa.tf).toUpperCase()} P${fmt(nivel.ratio * 100, 1)}%`,
+              estilo, capa.rol === "principal" ? 2 : 1, false);
+      }
+    }
   }
 
   // Un nivel fuera del encuadre NO puede desaparecer en silencio. En 1h la rejilla
@@ -432,9 +456,17 @@ function pintarMapa() {
     `<div class="stat"><span>${k}</span><strong>${v}</strong><small>${s}</small></div>`).join("");
 
   const m = d.mapa;
+  const capasCalculadas = Object.values(d.mapas_temporales || {})
+    .filter((c) => c.mapa);
+  const totalCalculados = capasCalculadas.reduce((n, c) =>
+    n + c.mapa.retrocesos.length + c.mapa.extensiones.length, 0);
+  const resumenCalculos = ["Precios calculados", `${totalCalculados} niveles · ` +
+    `${capasCalculadas.length} TF`, "9 niveles por cada pierna confirmada"];
   if (!m || !m.pierna) {
     $("pierna-stats").innerHTML =
-      '<div class="stat"><span>pierna</span><strong>sin contexto confirmado</strong></div>';
+      '<div class="stat"><span>pierna</span><strong>sin contexto confirmado</strong></div>' +
+      `<div class="stat"><span>${resumenCalculos[0]}</span>` +
+      `<strong>${resumenCalculos[1]}</strong><small>${resumenCalculos[2]}</small></div>`;
     tablaMapa("tabla-retrocesos", []);
     tablaMapa("tabla-extensiones", []);
   } else {
@@ -447,6 +479,7 @@ function pintarMapa() {
         `${fmt((m.profundidad_correccion || 0) * 100, 1)}%`,
         `origen de referencia ${fmt(m.invalidation_reference, decimales(d.precio))} · ` +
         "invalidación estructural no evaluada"],
+      resumenCalculos,
     ].map(([k, v, s]) =>
       `<div class="stat"><span>${k}</span><strong>${v}</strong><small>${s}</small></div>`).join("");
     tablaMapa("tabla-retrocesos", m.retrocesos);
@@ -580,6 +613,7 @@ function iniciar() {
   }
   $("ver-placebo").addEventListener("change", pintarNiveles);
   $("ver-historicas").addEventListener("change", pintarNiveles);
+  $("ver-mapa").addEventListener("change", pintarNiveles);
   for (const b of document.querySelectorAll(".ayuda")) {
     b.addEventListener("click", () => {
       const caja = $(`ayuda-${b.dataset.ayuda}`);

@@ -105,6 +105,19 @@ def test_la_apertura_semanal_exige_el_lunes_exacto():
     assert P.apertura_semanal(desde_una, ahora) is None
 
 
+def test_la_apertura_semanal_existe_desde_que_abre_la_primera_vela():
+    """El open ya es definitivo a las 00:00; esperar el cierre de 1h retrasa el nivel
+    precisamente durante la primera hora de la semana."""
+    lunes = dt.datetime(2026, 7, 27, tzinfo=dt.timezone.utc)
+    ahora = int((lunes + dt.timedelta(minutes=2)).timestamp() * 1000)
+    abierta = [{
+        "t": int(lunes.timestamp() * 1000),
+        "o": 65_432.1, "h": 65_450, "l": 65_420, "c": 65_440, "v": 1,
+    }]
+    assert P.velas_cerradas(abierta, "1h", ahora) == []
+    assert P.apertura_semanal(abierta, ahora)["precio"] == 65_432.1
+
+
 # --- causalidad ------------------------------------------------------
 
 
@@ -648,6 +661,9 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert "alineacion-stats" in html and "vacio_horizonte" in modulo
     assert "mapas-temporales" in html and "mapas_temporales" in modulo
     assert "mostrando ${filas.length} de ${total}" in js
+    assert 'id="ver-mapa" checked' in html
+    assert "Precios calculados" in js
+    assert "app.js?v=8" in html and "styles.css?v=8" in html
     assert "invalidación estructural no evaluada" in js
     assert '"execution_enabled": False' in modulo
     assert '"validated": False' in modulo
