@@ -1,9 +1,22 @@
 [Unit]
-Description=Actualiza CoinSignals shadow cada 60 segundos
+Description=Actualiza CoinSignals shadow cada 180 segundos
 
 [Timer]
 OnBootSec=20
-OnUnitActiveSec=60
+# 180 s y no 60.
+#
+# MEDIDO el 2026-07-27: el canal publica 0,34 mensajes por hora y las senales BTC
+# operables salen a 0,7 POR SEMANA. Cada corrida baja los ULTIMOS 500 mensajes -no los
+# nuevos-, asi que la ventana cubre 61 dias al ritmo actual y la peor rafaga vista en
+# 30 minutos desde 2019 fue de 44 mensajes. No se pierde nada.
+#
+# Y el resultado registrado NO depende de cuando leemos: `replay_swing` resuelve cada
+# senal contra las velas POSTERIORES a su propio timestamp de Telegram. Leerla tarde da
+# la misma fila en el libro.
+#
+# Lo que se corta es el martilleo: 1.440 conexiones diarias a Telegram, cada una con un
+# escaneo completo de los 117 dialogos de la cuenta, pasan a 480.
+OnUnitActiveSec=180
 AccuracySec=3
 Persistent=true
 

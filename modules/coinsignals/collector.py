@@ -66,6 +66,31 @@ def atomic_json(path: Path, payload: dict[str, Any]) -> None:
     temp.replace(path)
 
 
+
+CANAL_CACHE = HISTORY_PATH.parent / "coinsignals_channel.json"
+
+
+def _canal_cacheado(titulo: str) -> int | None:
+    """Id del canal guardado, o None. Si el titulo cambio, el cache no sirve."""
+    try:
+        d = json.loads(CANAL_CACHE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if d.get("title") != titulo:
+        return None
+    valor = d.get("id")
+    return int(valor) if isinstance(valor, (int, str)) and str(valor).lstrip("-").isdigit() else None
+
+
+def _guardar_canal(titulo: str, ident: int) -> None:
+    """Nunca rompe la corrida: si no se puede escribir, la proxima vuelve a escanear."""
+    try:
+        CANAL_CACHE.write_text(
+            json.dumps({"title": titulo, "id": int(ident)}), encoding="utf-8")
+    except OSError:
+        pass
+
+
 async def refresh_telegram(config: Path, session: Path, channel_title: str) -> int:
     env = load_env(config)
     client = TelegramClient(str(session), int(env["TELEGRAM_API_ID"]), env["TELEGRAM_API_HASH"])
@@ -73,11 +98,23 @@ async def refresh_telegram(config: Path, session: Path, channel_title: str) -> i
     try:
         if not await client.is_user_authorized():
             raise RuntimeError("Telegram session is not authorized; run the export login first")
+        # El id del canal se cachea en disco: buscarlo por nombre obliga a recorrer los
+        # 117 dialogos de la cuenta en CADA corrida, y el id no cambia nunca. Eran 1.440
+        # escaneos completos al dia para obtener siempre lo mismo.
         entity = None
-        async for dialog in client.iter_dialogs():
-            if dialog.name.strip().casefold() == channel_title.strip().casefold():
-                entity = dialog.entity
-                break
+        cacheado = _canal_cacheado(channel_title)
+        if cacheado is not None:
+            try:
+                entity = await client.get_entity(cacheado)
+            except Exception:  # noqa: BLE001 - el cache quedo obsoleto; se rehace abajo
+                entity = None
+        if entity is None:
+            async for dialog in client.iter_dialogs():
+                if dialog.name.strip().casefold() == channel_title.strip().casefold():
+                    entity = dialog.entity
+                    break
+            if entity is not None:
+                _guardar_canal(channel_title, entity.id)
         if entity is None:
             raise RuntimeError(f"Telegram channel not found: {channel_title}")
         payload = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
