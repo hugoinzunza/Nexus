@@ -21,6 +21,11 @@ const VELAS_INICIALES = 80;
 const VIEWPORT_MIN_VALIDO = 5;
 const VIEWPORT_INICIAL_MIN = 40;
 const VIEWPORT_INICIAL_MAX = 150;
+const TF_MS = {
+  "15m": 15 * 60_000, "1h": 60 * 60_000, "4h": 4 * 60 * 60_000,
+  "1d": 24 * 60 * 60_000, "1w": 7 * 24 * 60 * 60_000,
+};
+const SEMANA_UTC_ORIGEN = Date.UTC(1970, 0, 5); // lunes 00:00 UTC
 const TF_PRINCIPAL = { corto: "1h", medio: "4h", largo: "1d" };
 const LABEL_ALINEACION = {
   alineado: "alineado",
@@ -44,6 +49,43 @@ const signed = (v, suf = "") => v == null ? "—" : `${v > 0 ? "+" : ""}${fmt(v,
 function decimales(px) {
   const a = Math.abs(px || 0);
   return a >= 10 ? 2 : a >= 1 ? 4 : a >= 0.1 ? 5 : a >= 0.01 ? 6 : 8;
+}
+
+function inicioVelaActual(tf, ahora = Date.now()) {
+  const paso = TF_MS[tf];
+  if (!paso) return null;
+  const origen = tf === "1w" ? SEMANA_UTC_ORIGEN : 0;
+  return Math.floor((ahora - origen) / paso) * paso + origen;
+}
+
+function textoDuracion(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const dias = Math.floor(total / 86_400);
+  const horas = Math.floor((total % 86_400) / 3_600);
+  const minutos = Math.floor((total % 3_600) / 60);
+  const segundos = total % 60;
+  const reloj = [horas, minutos, segundos].map((n) => String(n).padStart(2, "0")).join(":");
+  return dias ? `${dias}d ${reloj}` : reloj;
+}
+
+function actualizarContadorVela(ahora = Date.now()) {
+  const el = $("candle-countdown");
+  if (!el) return;
+  const inicio = inicioVelaActual(state.tf, ahora);
+  const paso = TF_MS[state.tf];
+  const ultima = state.velas[state.velas.length - 1];
+  if (inicio == null || !ultima || Number(ultima.t) !== inicio) {
+    el.textContent = "vela actual no disponible";
+    el.classList.add("stale");
+    el.removeAttribute("title");
+    return;
+  }
+  const cierre = inicio + paso;
+  el.textContent = `cierra en ${textoDuracion(cierre - ahora)}`;
+  el.classList.remove("stale");
+  const fecha = new Date(cierre);
+  el.title = `Cierre ${fecha.toISOString().replace(".000Z", "Z")} · ` +
+    fecha.toLocaleString("es-CL");
 }
 
 function rangoLogicoDeRespaldo() {
@@ -861,6 +903,7 @@ async function cargar() {
     state.estructura = vl.estructura || null;
     state.fases = vl.fases || [];
     pintarVelas();
+    actualizarContadorVela();
     pintarNiveles();
     pintarFases();
     if (state.estructura) pintarPivotes(state.estructura);
@@ -911,7 +954,11 @@ function iniciar() {
     cargar();
   });
   $("par").addEventListener("change", (e) => { state.symbol = e.target.value; cargar(); });
-  $("tf").addEventListener("change", (e) => { state.tf = e.target.value; cargar(); });
+  $("tf").addEventListener("change", (e) => {
+    state.tf = e.target.value;
+    $("candle-countdown").textContent = "calculando cierre";
+    cargar();
+  });
   for (const b of document.querySelectorAll("[data-horizonte]")) {
     b.addEventListener("click", () => {
       state.horizonte = b.dataset.horizonte;
@@ -920,6 +967,7 @@ function iniciar() {
       }
       state.tf = TF_PRINCIPAL[state.horizonte];
       $("tf").value = state.tf;
+      $("candle-countdown").textContent = "calculando cierre";
       cargar();
     });
   }
@@ -941,6 +989,7 @@ function iniciar() {
     });
   }
   setInterval(cargar, 60_000);
+  setInterval(() => actualizarContadorVela(), 1_000);
   // Latido del sello: nadie dispara un evento cuando los frames PARAN.
   setInterval(() => vivo.sello(), 20_000);
 }

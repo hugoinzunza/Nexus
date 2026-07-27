@@ -9,8 +9,9 @@ import os
 import re
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from selenium import webdriver
@@ -40,13 +41,19 @@ def _fixture_estado():
     }
 
 
-def _fixture_velas():
-    inicio = 1_750_000_000_000
+def _fixture_velas(tf="4h"):
+    pasos = {
+        "15m": 15 * 60_000, "1h": 60 * 60_000, "4h": 4 * 60 * 60_000,
+        "1d": 24 * 60 * 60_000, "1w": 7 * 24 * 60 * 60_000,
+    }
+    paso = pasos.get(tf, pasos["4h"])
+    actual = int(time.time() * 1000) // paso * paso
+    inicio = actual - 499 * paso
     velas = []
     for i in range(500):
         base = 64_000 + i * 2 + ((i % 20) - 10) * 12
         velas.append({
-            "t": inicio + i * 3_600_000, "o": base - 8, "h": base + 45,
+            "t": inicio + i * paso, "o": base - 8, "h": base + 45,
             "l": base - 45, "c": base + 8, "v": 1,
         })
     return {
@@ -106,7 +113,9 @@ def servidor_nexux():
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            ruta = urlparse(self.path).path
+            parsed = urlparse(self.path)
+            ruta = parsed.path
+            query = parse_qs(parsed.query)
             if ruta in rutas:
                 archivo, mime = rutas[ruta]
                 with open(archivo, "rb") as fh:
@@ -115,7 +124,8 @@ def servidor_nexux():
                 self.send_header("Content-Type", mime)
             else:
                 payload = (
-                    _fixture_velas() if ruta.endswith("/api/velas")
+                    _fixture_velas(query.get("tf", ["4h"])[0])
+                    if ruta.endswith("/api/velas")
                     else _fixture_mapa() if ruta.endswith("/api/mapa")
                     else _fixture_estado() if ruta.endswith("/api/state")
                     else {"ok": True}
@@ -169,6 +179,7 @@ def _encuadre(driver, tf: str) -> tuple[int, str]:
     assert tf in driver.find_element(By.ID, "g-sub").text
     assert 40 <= n <= 150, f"encuadre roto en {tf}: {n} velas; estado={estado}"
     assert estado, "el gráfico cargó sin declarar el estado del viewport"
+    assert driver.find_element(By.ID, "candle-countdown").text.startswith("cierra en ")
     return n, estado
 
 
@@ -179,11 +190,19 @@ def test_viewport_real_carga_recarga_y_cambia_tf(servidor_nexux, chrome):
     chrome.refresh()
     _encuadre(chrome, "4h")
 
-    Select(chrome.find_element(By.ID, "tf")).select_by_value("1h")
-    WebDriverWait(chrome, 15).until(
-        lambda driver: "BTCUSDT 1h" in driver.find_element(By.ID, "g-sub").text
-    )
-    _encuadre(chrome, "1h")
+    for tf in ("15m", "1h", "4h"):
+        Select(chrome.find_element(By.ID, "tf")).select_by_value(tf)
+        WebDriverWait(chrome, 15).until(
+            lambda driver, esperado=tf:
+                f"BTCUSDT {esperado}" in driver.find_element(By.ID, "g-sub").text
+        )
+        _encuadre(chrome, tf)
+
+    assert chrome.execute_script("""
+      return inicioVelaActual("1w", Date.UTC(2026, 6, 27, 0, 0, 0))
+        === Date.UTC(2026, 6, 27, 0, 0, 0);
+    """)
+    assert chrome.execute_script('return textoDuracion(90061000)') == "1d 01:01:01"
 
     # Reproduce explícitamente el estado observado por Claude: la API existe, pero
     # devuelve null. El respaldo debe ser visible y jamás volver a las 500 velas.
@@ -193,14 +212,14 @@ def test_viewport_real_carga_recarga_y_cambia_tf(servidor_nexux, chrome):
       state.awaitingInitialViewport = true;
       pintarNiveles();
     """)
-    _, estado = _encuadre(chrome, "1h")
+    _, estado = _encuadre(chrome, "4h")
     assert estado == "null_ultimo_valido"
 
     chrome.execute_script("""
       state.lastValidLogicalRange = null;
       pintarNiveles();
     """)
-    n, estado = _encuadre(chrome, "1h")
+    n, estado = _encuadre(chrome, "4h")
     assert n == 80
     assert estado == "null_respaldo_80"
     assert "encuadre de respaldo: null respaldo 80" in chrome.find_element(

@@ -56,6 +56,11 @@ main { max-width: 1080px; margin: 0 auto; padding: 18px 16px 64px; }
   font: 600 22px ui-monospace, monospace;
 }
 .price-block span { font-size: 11px; color: var(--muted); }
+.price-meta { display: grid; gap: 2px; min-width: 128px; }
+.price-meta #candle-countdown {
+  color: var(--cyan); font: 600 11px ui-monospace, monospace;
+}
+.price-meta #candle-countdown.stale { color: var(--amber); }
 .price-block select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 6px 10px; font-size: 13px;
@@ -297,6 +302,7 @@ td.num { font-family: ui-monospace, monospace; }
 
 @media (max-width: 620px) {
   .price-block { width: 100%; flex-wrap: wrap; }
+  .price-meta { flex: 1 1 100%; grid-template-columns: auto 1fr; gap: 10px; }
   .roles { grid-template-columns: 1fr; }
   .horizontes { display: grid; width: 100%; }
   .chart-head { grid-template-columns: 1fr auto; align-items: start !important; }

@@ -6,7 +6,7 @@
   <link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
   <meta name="theme-color" content="#090b10">
   <title>Acción del precio · NexUX</title>
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
   <link rel="stylesheet" href="/static/nexux-shell.css">
   <!-- TradingView Lightweight Charts (Apache-2.0), la misma que usa el módulo de
        trading, bundleada localmente. -->
@@ -35,7 +35,10 @@
           <option value="1w">1W</option>
         </select>
         <strong id="price">—</strong>
-        <span id="updated">Cargando</span>
+        <div class="price-meta">
+          <span id="candle-countdown">calculando cierre</span>
+          <span id="updated">Cargando</span>
+        </div>
       </div>
     </header>
 
@@ -352,6 +355,6 @@
   </main>
 
   <script src="/static/nexux-shell.js?v=7"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>
