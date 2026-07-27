@@ -2,8 +2,8 @@
 
 Traduce a pantalla los conceptos del curso CreceTrader que SÍ tienen definición
 objetiva: apertura anual y su rejilla, apertura semanal, pivotes confirmados y el
-vacío disponible hasta el primer obstáculo. Los apuntes y la auditoría están en
-`research/crecetrader/`.
+vacío disponible hasta el primer obstáculo. Los apuntes privados del curso se
+conservan fuera del repositorio.
 
 QUÉ NO ES ESTE MÓDULO: no emite señales, no toca el bot, no crea ni cancela órdenes,
 no lee credenciales. Solo consulta klines PÚBLICAS de Binance (sin firma) y calcula.

@@ -43,3 +43,7 @@ research/vacio_disponible_trades.json
 # capturas de debug de la automatizacion (no evidencia de charts) — no van al repo.
 research/bta_review_package_*.zip
 research/tradingview_bta_night_2026-06-30/os_screenshots/
+
+# Apuntes privados de un curso pagado. Se conservan localmente como fuente de
+# estudio, pero no se publican ni viajan en clones/deploys.
+research/crecetrader/

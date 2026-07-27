@@ -29,7 +29,7 @@ temporalidades, o liquidez del lado contrario. `strong_high`/`strong_low` (`rhi`
 entran sólo como **respaldo** cuando no hay weak, nunca como obstrucción intermedia.
 No existe en el repo ninguna variable de conteo de obstáculos.
 
-La clase 7 de CreceTrader (`research/crecetrader/07_vacio_disponible.md`) llama **vacío
+La clase 7 de CreceTrader (documentada en los apuntes privados) llama **vacío
 disponible** a la distancia entrada → primer referente capaz de obstaculizar, y advierte
 que "un RR alto construido con un target posterior a varios obstáculos puede ser
 matemáticamente correcto pero operativamente ilusorio".

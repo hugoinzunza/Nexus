@@ -1,7 +1,7 @@
 """Acción del precio — cálculo puro, sin red y sin estado.
 
-Traduce a datos los conceptos del curso CreceTrader (apuntes en
-`research/crecetrader/`) que tienen una definición OBJETIVA. Lo que en el curso es
+Traduce a datos los conceptos del curso CreceTrader, cuyos apuntes privados se
+conservan fuera del repositorio, que tienen una definición OBJETIVA. Lo que es
 lectura visual —numerar fases I-V, trazar una directriz a mano, elegir qué fase
 histórica ancla los refugios de largo plazo— NO está acá y no debe agregarse: son
 decisiones que dependen de qué extremos eligió el ojo, y el propio material admite
