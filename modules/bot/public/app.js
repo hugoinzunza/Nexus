@@ -151,6 +151,63 @@ function phase1(data) {
   </div>`;
 }
 
+
+/* Precio en vivo de los pares con trade abierto, pedido por el NAVEGADOR.
+ *
+ * El HTTP 451 de Binance es del datacenter de Railway, no de la ubicacion del que
+ * mira (verificado el 2026-07-26: REST 200 y `access-control-allow-origin: *` desde
+ * la maquina de Hugo). Asi no hay que cambiar nada en el VPS ni en la ingesta.
+ *
+ * Si falla —viaje, VPN, jurisdiccion restringida— se cae al `price_now` que ya trae
+ * `watching`, y si tampoco esta, la fila muestra "—". Nunca inventa un precio.
+ */
+const preciosVivos = { mapa: {}, ts: 0, fuente: "—" };
+
+async function refrescarPrecios(simbolos, respaldo) {
+  for (const [sym, px] of Object.entries(respaldo || {})) {
+    if (Number.isFinite(px)) preciosVivos.mapa[sym] = px;
+  }
+  if (Object.keys(respaldo || {}).length) preciosVivos.fuente = "ingesta VPS";
+  if (!simbolos.length) return;
+  try {
+    const r = await fetch("https://fapi.binance.com/fapi/v1/ticker/price");
+    if (!r.ok) throw new Error(String(r.status));
+    const filas = await r.json();
+    const quiero = new Set(simbolos);
+    for (const f of filas) {
+      if (quiero.has(f.symbol)) preciosVivos.mapa[f.symbol] = Number(f.price);
+    }
+    preciosVivos.ts = Date.now();
+    preciosVivos.fuente = "Binance en vivo";
+  } catch (e) {
+    // Sin red a Binance queda el respaldo; el encabezado dice cual se uso.
+  }
+}
+
+/* Resultado vivo de un trade con parciales ya tomados.
+ *
+ * NO se puede mirar solo el precio contra la entrada: si ya se cerro la mitad en TP1,
+ * esa mitad esta realizada y el resto es lo unico que sigue expuesto. En el SOL real
+ * de hoy, `qty` 18,633 -> `qty_open` 9,317: la mitad ya no depende del precio.
+ *
+ * R por unidad = |entrada - SL|. El tramo vivo se pondera por `qty_open/qty` para que
+ * los dos sumandos esten en la misma escala, igual que `realized_r` que el store ya
+ * guarda ponderado.
+ */
+function resultadoVivo(t, precio) {
+  const entry = Number(t.entry_price ?? t.setup_entry);
+  const sl = Number(t.sl);
+  const runit = Math.abs(entry - sl);
+  const q = Number(t.qty || 0), qo = Number(t.qty_open ?? t.qty ?? 0);
+  const realizado = (t.partials || []).reduce((a, p) => a + Number(p.realized_r || 0), 0);
+  if (!Number.isFinite(precio) || !runit || !q) {
+    return { precio: null, rVivo: null, rTotal: realizado || null, realizado };
+  }
+  const signo = t.dir === "long" ? 1 : -1;
+  const rVivo = ((precio - entry) * signo / runit) * (qo / q);
+  return { precio, rVivo, rTotal: realizado + rVivo, realizado };
+}
+
 // Los trades ABIERTOS de la Fase 1, no solo su cantidad.
 //
 // Antes `open` se usaba unicamente para el contador "Dry abiertos: 2": se sabia que
@@ -171,6 +228,11 @@ function abiertosHtml(abiertos) {
     const restante = q > 0 ? Math.round(qo / q * 100) : null;
     const legs = (t.partials || []).map((p) => p.leg).join(", ");
     const rGan = (t.partials || []).reduce((a, p) => a + Number(p.realized_r || 0), 0);
+    const riesgo = Number(t.risk_usd);
+    const res = resultadoVivo(t, preciosVivos.mapa[t.symbol]);
+    // Verde/rojo solo cuando hay precio: sin dato no se pinta un color que sugiera
+    // que vamos ganando o perdiendo.
+    const clase = (r) => r === null ? "" : r >= 0 ? "pos" : "neg";
     const horas = t.opened_at ? (Date.now() / 1000 - t.opened_at) / 3600 : null;
     const tiempo = horas === null ? "—"
       : horas < 48 ? `${fmt(horas, 0)} h` : `${fmt(horas / 24, 0)} d`;
@@ -183,6 +245,7 @@ function abiertosHtml(abiertos) {
       <td>${pairLabel(t.pair || t.symbol)}</td>
       <td class="${largo ? "pos" : "neg"}">${largo ? "long" : "short"}</td>
       <td class="num">${fmt(entry, 4)}</td>
+      <td class="num">${res.precio === null ? "—" : fmt(res.precio, 4)}</td>
       <td class="num neg">${fmt(sl, 4)}</td>
       <td class="num pos">${fmt(tp, 4)}</td>
       <td class="num${rrAlto ? " rr-alto" : ""}" title="${rrAlto
@@ -190,15 +253,17 @@ function abiertosHtml(abiertos) {
         : ""}">${fmt(t.rr, 1)}</td>
       <td class="num">${restante === null ? "—" : restante + "%"}</td>
       <td>${legs ? `${legs} (${signed(rGan)})` : "—"}</td>
-      <td class="num">${fmt(t.risk_usd, 2)}</td>
+      <td class="num ${clase(res.rTotal)}">${res.rTotal === null ? "—" : signed(res.rTotal)}</td>
+      <td class="num ${clase(res.rTotal)}">${res.rTotal === null || !Number.isFinite(riesgo)
+        ? "—" : signed(res.rTotal * riesgo) + " USD"}</td>
       <td class="num">${tiempo}</td>
     </tr>`;
   }).join("");
   return `<div class="phase-table abiertos">
-    <div class="abiertos-head">Abiertos ahora · <span>papel, no son posiciones reales</span></div>
+    <div class="abiertos-head">Abiertos ahora · <span>papel, no son posiciones reales · precio: ${preciosVivos.fuente}</span></div>
     <table><thead><tr>
-      <th>Par</th><th>Dir</th><th>Entrada</th><th>SL</th><th>TP</th><th>RR</th>
-      <th>Vivo</th><th>Parciales</th><th>Riesgo</th><th>Tiempo</th>
+      <th>Par</th><th>Dir</th><th>Entrada</th><th>Precio</th><th>SL</th><th>TP</th><th>RR</th>
+      <th>Vivo</th><th>Parciales</th><th>R total</th><th>P&L</th><th>Tiempo</th>
     </tr></thead><tbody>${filas}</tbody></table>
   </div>`;
 }
@@ -315,6 +380,21 @@ async function load() {
     if (r.status === 401) { location.href = "/login"; return; }
     const data = await r.json();
     header(data); watchdog(data); cards(data); phase1(data); position(data); watching(data); orders(data); trades(data);
+    // Los precios se piden DESPUES del primer pintado para no retrasar la pantalla, y
+    // la seccion se repinta cuando llegan. Sin esto la tabla mostraria "—" para
+    // siempre en la primera carga.
+    const abiertas = (data.trades || []).filter(
+      (t) => t.mode === "dry" && t.phase_id === PHASE1_V2 && t.status === "abierta");
+    if (abiertas.length) {
+      const respaldo = {};
+      for (const w of data.watching || []) {
+        if (w.symbol && Number.isFinite(Number(w.price_now))) {
+          respaldo[w.symbol] = Number(w.price_now);
+        }
+      }
+      refrescarPrecios([...new Set(abiertas.map((t) => t.symbol))], respaldo)
+        .then(() => phase1(data));
+    }
   } catch (e) {
     $("rows").innerHTML = `<tr><td colspan="12" class="empty">No se pudo cargar: ${e}</td></tr>`;
   }
