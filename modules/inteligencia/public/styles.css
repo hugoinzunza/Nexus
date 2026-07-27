@@ -89,6 +89,8 @@ main { max-width: 1080px; margin: 0 auto; padding: 18px 16px 64px; }
   display: flex; align-items: center; gap: 10px;
 }
 .card h2 small { color: var(--muted); font-weight: 400; font-family: ui-monospace, monospace; }
+.chart-head { display: grid !important; grid-template-columns: auto minmax(0,1fr) auto; }
+.chart-head small { min-width: 0; overflow-wrap: anywhere; }
 
 .ayuda {
   margin-left: auto; background: transparent; color: var(--cyan);
@@ -147,9 +149,58 @@ td.num { font-family: ui-monospace, monospace; }
 .scroll-x { overflow-x: auto; }
 
 /* --- gráfico --- */
-.chart-wrap { position: relative; }
+.chart-layout {
+  display: grid; grid-template-columns: minmax(0, 1fr) 238px; gap: 12px;
+  align-items: stretch;
+}
+.chart-wrap { position: relative; min-width: 0; }
 #chart { height: 460px; width: 100%; }
 @media (max-width: 720px) { #chart { height: 340px; } }
+
+.level-ladder {
+  height: 460px; min-width: 0; display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  border: 1px solid var(--line); background: #0d1118; overflow: hidden;
+}
+.level-ladder > header {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 10px; border-bottom: 1px solid var(--line);
+}
+.level-ladder > header strong,.level-ladder > header small { display: block; }
+.level-ladder > header strong { font-size: 12px; }
+.level-ladder > header small { color: var(--muted); font-size: 10px; }
+.level-ladder > header span {
+  color: var(--amber); border: 1px solid rgba(232,182,83,.3);
+  padding: 2px 5px; font: 700 9px ui-monospace,monospace;
+}
+.ladder-side { min-height: 0; overflow: auto; padding: 8px 9px; }
+.ladder-side h3 {
+  position: sticky; top: -8px; z-index: 1; margin: 0 0 5px; padding: 4px 0;
+  background: #0d1118; color: var(--muted); font-size: 9px;
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.ladder-row {
+  display: grid; grid-template-columns: 20px minmax(0,1fr) auto;
+  gap: 6px; align-items: center; padding: 5px 0; border-bottom: 1px solid #1b222c;
+}
+.ladder-row i {
+  display: grid; place-items: center; width: 19px; height: 19px;
+  border: 1px solid currentColor; font: 700 9px ui-monospace,monospace;
+  font-style: normal;
+}
+.ladder-row.estructura i { color: var(--green); }
+.ladder-row.calculados i { color: var(--cyan); border-style: dashed; }
+.ladder-row.rejilla i { color: var(--amber); border-style: dotted; }
+.ladder-row strong,.ladder-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ladder-row strong { font: 600 11px ui-monospace,monospace; }
+.ladder-row small { color: var(--muted); font-size: 9px; }
+.ladder-row > span { color: var(--muted); font: 10px ui-monospace,monospace; }
+.ladder-price {
+  padding: 6px 10px; border-block: 1px solid rgba(67,189,215,.45);
+  color: var(--cyan); background: rgba(67,189,215,.08);
+  font: 700 12px ui-monospace,monospace; text-align: right;
+}
+.level-ladder > p { margin: 0; padding: 7px 9px; color: var(--muted); font-size: 9px; line-height: 1.35; border-top: 1px solid var(--line); }
 
 .leyenda {
   display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px;
@@ -228,11 +279,32 @@ td.num { font-family: ui-monospace, monospace; }
 }
 .refs-grid { margin-top: 14px; }
 .mapa-nota { margin: 12px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.evidence-note {
+  margin: 0 0 14px; padding: 9px 11px; color: #d9c28f;
+  border-left: 2px solid var(--amber); background: rgba(232,182,83,.06);
+  font-size: 11.5px; line-height: 1.5;
+}
+.layers-summary {
+  display: grid; grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 1px; margin-top: 12px; background: var(--line);
+  border: 1px solid var(--line);
+}
+.layer-summary { min-width: 0; padding: 9px 10px; background: var(--panel-2); }
+.layer-summary span,.layer-summary strong,.layer-summary small { display: block; }
+.layer-summary span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+.layer-summary strong { margin: 3px 0; font: 600 15px ui-monospace,monospace; }
+.layer-summary small { color: var(--muted); font-size: 9.5px; line-height: 1.35; }
 
 @media (max-width: 620px) {
   .price-block { width: 100%; flex-wrap: wrap; }
   .roles { grid-template-columns: 1fr; }
   .horizontes { display: grid; width: 100%; }
+  .chart-head { grid-template-columns: 1fr auto; align-items: start !important; }
+  .chart-head small { grid-column: 1 / -1; grid-row: 2; line-height: 1.35; }
+  .chart-head .ayuda { grid-column: 2; grid-row: 1; }
+  .chart-layout { grid-template-columns: 1fr; }
+  .level-ladder { height: 390px; }
+  .layers-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 
 /* El aviso de procedencia va en rojo y el de validez en ámbar: son dos preguntas

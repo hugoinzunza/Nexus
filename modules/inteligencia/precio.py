@@ -20,6 +20,7 @@ caro que cometimos en este proyecto: un bucle que arrancaba una vela antes costa
 from __future__ import annotations
 
 import datetime as dt
+from collections import Counter
 from typing import Optional
 
 from modules.trading import smc
@@ -169,7 +170,8 @@ def rejilla(ancla: float, precio: float, paso: float = PASO_RMP,
     return filas
 
 
-def estructura(velas: list[dict], piv: int, as_of_idx: Optional[int] = None) -> dict:
+def estructura(velas: list[dict], piv: int, as_of_idx: Optional[int] = None,
+               tf: Optional[str] = None) -> dict:
     """Pivotes confirmados y estructura, tal como los vería alguien en `as_of_idx`.
 
     `piv` es la mitad de la ventana: el curso enseña 5+1+5, o sea `piv=5`. No se toma
@@ -188,7 +190,11 @@ def estructura(velas: list[dict], piv: int, as_of_idx: Optional[int] = None) -> 
                 "motivo": f"hacen falta al menos {2 * piv + 3} velas"}
     tope = len(velas) - 1 if as_of_idx is None else as_of_idx
     highs, lows = smc.swing_points(velas, piv)
-    paso = int(velas[1]["t"]) - int(velas[0]["t"])
+    # Acción del precio siempre entrega `tf`: el tiempo de confirmación pertenece a
+    # la temporalidad declarada, no al primer salto observado entre dos filas. El
+    # fallback conserva compatibilidad con consumidores históricos, pero no se usa
+    # en la vista ni en sus cálculos.
+    paso = TF_MS[tf] if tf else int(velas[1]["t"]) - int(velas[0]["t"])
 
     def enriquecer(p):
         return {
@@ -324,7 +330,7 @@ def mapa_precios(pierna: dict, precio: float) -> dict:
     profundidad = (fin - precio) / recorrido if recorrido else None
     if profundidad is None:
         estado = "sin_datos"
-    elif profundidad > 1:
+    elif profundidad >= 1:
         estado = "mas_alla_origen"
     elif profundidad < 0:
         estado = "extension"
@@ -375,23 +381,15 @@ def alineacion_temporal(panorama: list[str], principal: str, sincronismo: str,
 
 def vacio_disponible(precio: float, direccion: str, sl: float,
                      referencias: list[dict]) -> dict:
-    """Distancia al PRIMER obstáculo, y cuántos hay antes de un objetivo lejano.
+    """Distancia al primer referente de la familia recibida.
 
-    Es la única idea del curso que NexUX no tenía. El TP del bot
-    (`smc_live._opposite_liquidity`) toma la liquidez weak más cercana y NO cuenta
-    como obstáculo los niveles strong intermedios, los POIs de otras temporalidades
-    ni la liquidez del lado contrario. Un RR alto medido a través de tres paredes es
-    aritméticamente correcto y operativamente ilusorio.
+    La función es descriptiva: no afirma que el referente frene, atraiga ni prediga
+    el precio. El llamador debe pasar una sola familia coherente. En Acción del precio
+    se usa exclusivamente estructura confirmada; rejillas y niveles aritméticos se
+    cuentan por separado para que no se conviertan en paredes ficticias.
 
-    `referencias` son dicts con al menos `precio`; opcionalmente `tipo` y `tf`. El
-    llamador decide qué cuenta como referencia — esta función no elige por él, porque
-    "cuál es el primer obstáculo" elegido después de ver el recorrido es exactamente
-    la trampa que el concepto viene a denunciar.
-
-    OJO con el alcance: esto NO explica la brecha entre el backtest (67,4% llega a
-    TP1) y el Diario real (33,3%), porque ambos usan el mismo cálculo de TP y una
-    ceguera compartida no produce divergencia. Lo que pone en duda es la coherencia
-    del gate rr>=5, que es otra cosa.
+    `referencias` son dicts con al menos `precio`; `familia` permite auditar que no se
+    mezclaron taxonomías sin querer.
     """
     largo = direccion == "long"
     adelante = [r for r in referencias
@@ -399,6 +397,7 @@ def vacio_disponible(precio: float, direccion: str, sl: float,
                     else float(r["precio"]) < precio)]
     if not adelante:
         return {"primer_obstaculo": None, "vacuum_rr": None, "n_adelante": 0,
+                "n_adelante_por_familia": {},
                 "nota": "no hay referencias conocidas en la dirección del trade"}
     primero = min(adelante, key=lambda r: abs(float(r["precio"]) - precio))
     riesgo = abs(precio - sl)
@@ -408,7 +407,21 @@ def vacio_disponible(precio: float, direccion: str, sl: float,
         "vacuum_rr": round(abs(float(primero["precio"]) - precio) / riesgo, 2)
                      if riesgo > 0 else None,
         "n_adelante": len(adelante),
+        "n_adelante_por_familia": dict(Counter(
+            str(r.get("familia") or "sin_familia") for r in adelante)),
     }
+
+
+def conteos_adelante(precio: float, direccion: str,
+                     referencias: list[dict]) -> dict:
+    """Cuenta referentes por familia sin otorgarles poder predictivo."""
+    largo = direccion == "long"
+    adelante = [r for r in referencias
+                if (float(r["precio"]) > precio if largo
+                    else float(r["precio"]) < precio)]
+    por_familia = Counter(str(r.get("familia") or "sin_familia")
+                         for r in adelante)
+    return {"total": len(adelante), "por_familia": dict(por_familia)}
 
 
 def obstaculos_entre(entry: float, target: float, direccion: str,

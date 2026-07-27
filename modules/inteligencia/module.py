@@ -266,7 +266,8 @@ class InteligenciaModule(NexusModule):
                                         "as_of": ahora_ms,
                                         "velas_cerradas": len(cerradas),
                                         "vela_abierta": len(velas) > len(cerradas),
-                                        "estructura": P.estructura(cerradas, PIV_CURSO),
+                                        "estructura": P.estructura(
+                                            cerradas, PIV_CURSO, tf=tf),
                                         "fases": F.fases_para_grafico(
                                             cerradas, tf, PIV_CURSO, limit=3)})
             if subpath == "mapa":
@@ -312,21 +313,31 @@ class InteligenciaModule(NexusModule):
         # cierre la primera 1h del lunes retrasaba el ancla semanal hasta las 01:00
         # UTC y dejaba la pantalla en `None` justo al comenzar una semana nueva.
         semanal = P.apertura_semanal(horarias, ahora_ms)
-        est_1h = P.estructura(horarias_c, PIV_CURSO)
-        est_1d = P.estructura(diarias_c, PIV_CURSO)
+        est_1h = P.estructura(horarias_c, PIV_CURSO, tf="1h")
+        est_1d = P.estructura(diarias_c, PIV_CURSO, tf="1d")
 
-        # Referencias para el vacío: los niveles de la rejilla más los pivotes
-        # confirmados. Es deliberadamente amplio — el punto del concepto es NO omitir
-        # obstáculos, y omitir uno es la forma de inflar un RR sin darse cuenta.
-        refs = [{"precio": f["precio"], "tipo": f"rejilla {f['pct_del_ancla']:+.0f}%",
-                 "tf": "anual"} for f in grid]
+        refs_estructura = []
         for p in est_1d["highs"] + est_1d["lows"]:
-            refs.append({"precio": p["price"], "tipo": "pivote confirmado", "tf": "1D"})
+            refs_estructura.append({
+                "precio": p["price"], "tipo": "pivote confirmado",
+                "familia": "estructura", "tf": "1D"})
         for p in est_1h["highs"] + est_1h["lows"]:
-            refs.append({"precio": p["price"], "tipo": "pivote confirmado", "tf": "1h"})
+            refs_estructura.append({
+                "precio": p["price"], "tipo": "pivote confirmado",
+                "familia": "estructura", "tf": "1h"})
+        refs_rejilla = [{
+            "precio": f["precio"], "tipo": f"rejilla {f['pct_del_ancla']:+.0f}%",
+            "familia": "rmp", "tf": "anual",
+        } for f in grid]
 
-        arriba = P.vacio_disponible(px, "long", px * 0.985, refs)
-        abajo = P.vacio_disponible(px, "short", px * 1.015, refs)
+        arriba = P.vacio_disponible(
+            px, "long", px * 0.985, refs_estructura)
+        arriba["conteos_capas"] = P.conteos_adelante(
+            px, "long", refs_estructura + refs_rejilla)
+        abajo = P.vacio_disponible(
+            px, "short", px * 1.015, refs_estructura)
+        abajo["conteos_capas"] = P.conteos_adelante(
+            px, "short", refs_estructura + refs_rejilla)
 
         return {
             "research_only": True,
@@ -449,7 +460,7 @@ class InteligenciaModule(NexusModule):
         estructuras = {}
         referencias = []
         for tf in perfil["panorama"] + [principal_tf, perfil["sincronismo"]]:
-            est = P.estructura(series[tf]["closed"], PIV_CURSO)
+            est = P.estructura(series[tf]["closed"], PIV_CURSO, tf=tf)
             estructuras[tf] = est
             for p in est["highs"] + est["lows"]:
                 referencias.append({
@@ -461,6 +472,7 @@ class InteligenciaModule(NexusModule):
                     "pivot_t": p["pivot_t"],
                     "confirmed_at": p["confirmed_at"],
                     "selection_reason": "pivote fractal confirmado 5+1+5",
+                    "evidence_status": "observado_descriptivo_no_predictivo",
                 })
 
         # Los RMP son referencias objetivas y existen desde la apertura anual. Se
@@ -478,6 +490,7 @@ class InteligenciaModule(NexusModule):
                     "pivot_t": ancla["t"],
                     "confirmed_at": ancla["t"] + P.TF_MS["1d"],
                     "selection_reason": "rejilla anual mecánica vigente",
+                    "evidence_status": "calculado_refutado_como_predictor",
                 })
         for tf, capa in mapas_temporales.items():
             mapa_tf = capa["mapa"]
@@ -497,8 +510,14 @@ class InteligenciaModule(NexusModule):
                         "confirmed_at": pierna_tf["confirmed_at"],
                         "selection_reason": (
                             "nivel aritmético de la última pierna confirmada del TF"),
+                        "evidence_status": "calculado_no_predictivo",
                     })
 
+        refs_estructura = [r for r in referencias if r["familia"] == "estructura"]
+        refs_calculados = [r for r in referencias
+                           if r["familia"] in ("pierna_retroceso",
+                                               "pierna_extension")]
+        refs_rejilla = [r for r in referencias if r["familia"] == "rmp"]
         tendencias = {tf: est["tendencia"] for tf, est in estructuras.items()}
         alineacion = P.alineacion_temporal(
             perfil["panorama"], principal_tf, perfil["sincronismo"], tendencias)
@@ -518,24 +537,54 @@ class InteligenciaModule(NexusModule):
                 stop_ref = min(candidatos_sl, key=lambda p: abs(p["price"] - precio))
                 medido = P.vacio_disponible(
                     precio, "long" if direccion == "alcista" else "short",
-                    stop_ref["price"], referencias)
+                    stop_ref["price"], refs_estructura)
+                conteos = P.conteos_adelante(
+                    precio, "long" if direccion == "alcista" else "short",
+                    referencias)
                 vacio = {
                     "evaluado": True,
                     "direccion": direccion,
                     "stop_estructural": stop_ref,
                     **medido,
-                    "nota": ("Distancia al primer referente usando el pivote estructural "
-                             "principal como stop. Research; no es plan de entrada."),
+                    "conteos_capas": conteos,
+                    "nota": ("Distancia al pivote confirmado más cercano usando el "
+                             "pivote principal como stop. Es descriptiva: no predice "
+                             "reacción y no es un plan de entrada."),
                 }
             else:
                 vacio = {"evaluado": False,
                          "motivo": "no existe stop estructural principal detrás del precio"}
 
-        todas_arriba = sorted((r for r in referencias if r["precio"] > precio),
-                              key=lambda r: r["precio"])
-        todas_abajo = sorted((r for r in referencias if r["precio"] < precio),
-                             key=lambda r: r["precio"], reverse=True)
-        limite_referencias = 12
+        def capa_referencias(nombre, filas, estatus):
+            arriba = sorted((r for r in filas if r["precio"] > precio),
+                            key=lambda r: r["precio"])
+            abajo = sorted((r for r in filas if r["precio"] < precio),
+                           key=lambda r: r["precio"], reverse=True)
+            return {
+                "familia": nombre, "evidence_status": estatus,
+                "total": len(filas), "arriba": arriba, "abajo": abajo,
+                "n_arriba": len(arriba), "n_abajo": len(abajo),
+            }
+
+        capas_referencias = {
+            "estructura": capa_referencias(
+                "estructura", refs_estructura,
+                "descriptiva; poder predictivo no demostrado"),
+            "calculados": capa_referencias(
+                "calculados", refs_calculados,
+                "aritmética no predictiva; no es obstáculo ni señal"),
+            "rejilla": capa_referencias(
+                "rejilla", refs_rejilla,
+                "marco refutado como predictor"),
+            "liquidez": {
+                "familia": "liquidez", "evidence_status": "no implementada",
+                "total": 0, "arriba": [], "abajo": [],
+                "n_arriba": 0, "n_abajo": 0,
+            },
+        }
+        estructurales_arriba = capas_referencias["estructura"]["arriba"]
+        estructurales_abajo = capas_referencias["estructura"]["abajo"]
+        limite_referencias = 3
         return {
             "research_only": True,
             "execution_enabled": False,
@@ -553,15 +602,17 @@ class InteligenciaModule(NexusModule):
             "mapas_temporales": mapas_temporales,
             "vacio_horizonte": vacio,
             "piernas_candidatas": piernas[-4:],
+            "capas_referencias": capas_referencias,
             "referencias_cercanas": {
-                "arriba": todas_arriba[:limite_referencias],
-                "abajo": todas_abajo[:limite_referencias],
-                "total_arriba": len(todas_arriba),
-                "total_abajo": len(todas_abajo),
+                "arriba": estructurales_arriba[:limite_referencias],
+                "abajo": estructurales_abajo[:limite_referencias],
+                "total_arriba": len(estructurales_arriba),
+                "total_abajo": len(estructurales_abajo),
                 "limite_por_lado": limite_referencias,
             },
-            "nota": ("Escenario causal calculado con barras cerradas. No predice "
-                     "dirección, probabilidad ni resultado."),
+            "nota": ("Escenario causal calculado con barras cerradas. El vacío usa "
+                     "solo estructura confirmada; cálculos y rejilla se muestran "
+                     "aparte. Ninguna capa predice dirección, reacción ni resultado."),
         }
 
     @staticmethod

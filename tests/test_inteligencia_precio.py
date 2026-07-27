@@ -218,6 +218,10 @@ def test_mapa_de_precios_es_simetrico_y_aritmetico():
     fuera = P.mapa_precios({"inicio": 200, "fin": 100}, 210)
     assert fuera["estado"] == "mas_alla_origen"
     assert fuera["invalidacion_estructural_evaluada"] is False
+    assert P.mapa_precios({"inicio": 100, "fin": 200}, 100)["estado"] == \
+        "mas_alla_origen"
+    assert P.mapa_precios({"inicio": 200, "fin": 100}, 200)["estado"] == \
+        "mas_alla_origen"
 
 
 def test_el_236_confirmado_se_aplica_y_el_812_ambiguo_no():
@@ -258,6 +262,19 @@ def test_cada_pivote_publica_extremo_y_confirmacion():
     assert pivote["pivot_t"] == velas[30]["t"]
     assert pivote["confirmed_at"] == velas[35]["t"] + P.TF_MS["1d"]
     assert pivote["confirmed_at"] > pivote["pivot_t"]
+
+
+def test_confirmacion_usa_tf_declarado_aunque_haya_hueco_inicial():
+    paso = P.TF_MS["1h"]
+    tiempos = [0, 2 * paso] + [i * paso for i in range(3, 22)]
+    velas = [{"t": t, "o": 5, "h": 6, "l": 4, "c": 5, "v": 1}
+             for t in tiempos]
+    velas[8]["h"] = 12
+    est = P.estructura(velas, piv=2, tf="1h")
+    pivote = next(p for p in est["fractales_highs"] if p["idx"] == 8)
+    assert pivote["confirmed_at"] == velas[pivote["confirm_idx"]]["t"] + paso
+    assert pivote["confirmed_at"] != \
+        velas[pivote["confirm_idx"]]["t"] + 2 * paso
 
 
 def test_el_timeframe_inferior_no_puede_inventar_direccion():
@@ -310,13 +327,18 @@ def test_cada_timeframe_del_horizonte_conserva_su_propio_mapa():
         assert len(capa["mapa"]["extensiones"]) == len(P.EXTENSIONES)
 
     refs = corto["referencias_cercanas"]
-    assert refs["limite_por_lado"] == 12
-    assert len(refs["arriba"]) == 12 and len(refs["abajo"]) == 12
-    assert refs["total_arriba"] > len(refs["arriba"])
-    assert refs["total_abajo"] > len(refs["abajo"])
-    assert {r.get("tf") for r in refs["arriba"] + refs["abajo"]} >= {
-        "1d", "4h", "1h", "15m",
-    }
+    assert refs["limite_por_lado"] == 3
+    assert len(refs["arriba"]) <= 3 and len(refs["abajo"]) <= 3
+    assert all(r["familia"] == "estructura"
+               for r in refs["arriba"] + refs["abajo"])
+    capas_refs = corto["capas_referencias"]
+    assert set(capas_refs) == {"estructura", "calculados", "rejilla", "liquidez"}
+    assert capas_refs["calculados"]["total"] == len(capas) * (
+        len(P.RETROCESOS) + len(P.EXTENSIONES))
+    assert "no predictiv" in capas_refs["calculados"]["evidence_status"]
+    if corto["vacio_horizonte"].get("primer_obstaculo"):
+        assert corto["vacio_horizonte"]["primer_obstaculo"]["familia"] == \
+            "estructura"
 
 
 def test_el_mapa_visible_pertenece_al_tf_seleccionado():
@@ -371,11 +393,28 @@ def test_la_tendencia_dice_indefinida_en_vez_de_inventar():
 def test_el_vacio_toma_el_primer_obstaculo_y_no_el_conveniente():
     """El punto entero del concepto: elegir el "primer" referente despues de ver el
     recorrido es la trampa que viene a denunciar."""
-    refs = [{"precio": 105.0}, {"precio": 120.0}, {"precio": 95.0}]
+    refs = [{"precio": 105.0, "familia": "estructura"},
+            {"precio": 120.0, "familia": "estructura"},
+            {"precio": 95.0, "familia": "estructura"}]
     v = P.vacio_disponible(100.0, "long", 98.0, refs)
     assert v["primer_obstaculo"]["precio"] == 105.0
     assert v["n_adelante"] == 2
+    assert v["n_adelante_por_familia"] == {"estructura": 2}
     assert v["vacuum_rr"] == 2.5          # (105-100)/(100-98)
+
+
+def test_los_conteos_separan_familias_sin_convertirlas_en_obstaculo():
+    refs = [
+        {"precio": 101, "familia": "pierna_retroceso"},
+        {"precio": 103, "familia": "estructura"},
+        {"precio": 110, "familia": "rmp"},
+    ]
+    conteos = P.conteos_adelante(100, "long", refs)
+    assert conteos == {"total": 3, "por_familia": {
+        "pierna_retroceso": 1, "estructura": 1, "rmp": 1}}
+    estructural = P.vacio_disponible(
+        100, "long", 98, [r for r in refs if r["familia"] == "estructura"])
+    assert estructural["primer_obstaculo"]["precio"] == 103
 
 
 def test_los_obstaculos_intermedios_se_cuentan():
@@ -458,10 +497,12 @@ def test_ningun_nivel_desaparece_en_silencio_del_grafico():
     js = open(APP_JS, encoding="utf-8").read()
     assert "fuera del encuadre" in js
     assert "fuera.length" in js, "hay que contar los que quedaron afuera"
-    # y el encuadre lo fijan las VELAS, no los niveles: si un nivel a +150% mandara en
-    # el eje, aplastaria todo el grafico en una franja
+    # y el encuadre lo fijan las VELAS VISIBLES, no los niveles: si un nivel a +150%
+    # mandara en el eje, aplastaria todo el grafico en una franja
     bloque = js.split("function pintarNiveles()")[1].split("\nfunction ")[0]
-    assert "state.velas.flatMap" in bloque
+    assert "rangoPreciosVisible()" in bloque
+    assert "rango.min - rango.margen" in bloque
+    assert "state.velas.flatMap" not in bloque
 
 
 def test_el_modulo_no_puede_tocar_la_cuenta():
@@ -733,7 +774,7 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert 'id="ver-pivotes-linea" checked' in html
     assert 'id="ver-fractales"' in html
     assert "Precios calculados" in js
-    assert "app.js?v=11" in html and "styles.css?v=8" in html
+    assert "app.js?v=12" in html and "styles.css?v=10" in html
     assert 'id="ver-fases" checked' in html
     assert '"fases": F.fases_para_grafico' in modulo
     assert "rejillas_historicas" in modulo and "refugios_promovidos" in modulo
@@ -742,6 +783,22 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert "invalidación estructural no evaluada" in js
     assert '"execution_enabled": False' in modulo
     assert '"validated": False' in modulo
+
+
+def test_viewport_desacopla_lineas_y_limita_etiquetas():
+    js = open(APP_JS, encoding="utf-8").read()
+    html = open(INDEX, encoding="utf-8").read()
+    assert "VELAS_INICIALES = 80" in js
+    assert "getVisibleLogicalRange()" in js
+    assert "setVisibleLogicalRange({ from: inicio, to: fin + 4 })" in js
+    assert "autoscaleInfoProvider: () => autoscaleSoloVelas()" in js
+    assert "const rango = rangoPreciosVisible()" in js
+    assert "state.velas.flatMap" not in js
+    assert "etiquetasUsadas >= 3" in js and ".slice(0, 2)" in js
+    assert "precioVivo = state.velas.length" in js
+    assert "p.pivot_t" in js and "distancia" in js
+    assert 'id="escalera-arriba"' in html and 'id="escalera-abajo"' in html
+    assert "Ninguna capa predice reacción" in html
 
 
 def test_el_lector_del_push_vive_en_un_solo_lugar():

@@ -6,7 +6,7 @@
   <link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
   <meta name="theme-color" content="#090b10">
   <title>Acción del precio · NexUX</title>
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=10">
   <link rel="stylesheet" href="/static/nexux-shell.css">
   <!-- TradingView Lightweight Charts (Apache-2.0), la misma que usa el módulo de
        trading, bundleada localmente. -->
@@ -56,7 +56,7 @@
 
     <!-- Gráfico: velas + niveles del método superpuestos -->
     <section class="card">
-      <h2>Gráfico <small id="g-sub"></small>
+      <h2 class="chart-head">Gráfico <small id="g-sub"></small>
         <button class="ayuda" data-ayuda="grafico">qué se ve</button></h2>
       <div class="ayuda-txt" id="ayuda-grafico" hidden>
         Sobre las velas van los niveles del método, cada uno con su origen visible:
@@ -69,7 +69,23 @@
         <em>conf +5</em>: recién estuvieron disponibles cinco velas después. El payload
         conserva por separado el instante del extremo y el de confirmación.
       </div>
-      <div class="chart-wrap"><div id="chart"></div></div>
+      <div class="chart-layout">
+        <div class="chart-wrap"><div id="chart"></div></div>
+        <aside class="level-ladder" aria-label="Escalera de referentes">
+          <header>
+            <div><strong>Qué hay enfrente</strong><small>ordenado por distancia</small></div>
+            <span>descriptivo</span>
+          </header>
+          <div class="ladder-side arriba">
+            <h3>Arriba</h3><div id="escalera-arriba"></div>
+          </div>
+          <div class="ladder-price" id="escalera-precio">—</div>
+          <div class="ladder-side abajo">
+            <h3>Abajo</h3><div id="escalera-abajo"></div>
+          </div>
+          <p>Estructura observada, cálculos y rejilla se mantienen separados. Ninguna capa predice reacción.</p>
+        </aside>
+      </div>
       <div class="leyenda">
         <span><i style="background:#e8b653"></i> rejilla anual 10%</span>
         <span><i style="background:#5b6272"></i> placebo 7,5% / 12,5%</span>
@@ -128,6 +144,11 @@
         señales ni probabilidades. La alineación solo compara tendencias confirmadas;
         todavía no evalúa el evento de uno/dos cierres de la estrategia.
       </div>
+      <p class="evidence-note">
+        <strong>Lectura descriptiva, no filtro.</strong> El vacío mide hasta el pivote
+        confirmado más próximo. Los niveles calculados y la rejilla se cuentan aparte:
+        ninguna familia demostró poder predictivo tras corrección de Holm.
+      </p>
       <div class="roles" id="roles"></div>
       <div class="grid3" id="alineacion-stats"></div>
       <div class="grid3" id="pierna-stats"></div>
@@ -153,6 +174,7 @@
         <div class="vac" id="refs-arriba"></div>
         <div class="vac" id="refs-abajo"></div>
       </div>
+      <div class="layers-summary" id="capas-resumen"></div>
       <p class="mapa-nota" id="mapa-nota"></p>
     </section>
 
@@ -330,6 +352,6 @@
   </main>
 
   <script src="/static/nexux-shell.js?v=7"></script>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
