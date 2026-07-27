@@ -43,7 +43,7 @@ body {
 
 button, select { font: inherit; }
 
-main { max-width: 1080px; margin: 0 auto; padding: 18px 16px 64px; }
+main { width: min(1560px, 100%); margin: 0 auto; padding: 18px 20px 64px; }
 
 .workspace-head {
   display: flex; justify-content: space-between; align-items: flex-end;
@@ -168,11 +168,11 @@ td.num { font-family: ui-monospace, monospace; }
   align-items: stretch;
 }
 .chart-wrap { position: relative; min-width: 0; }
-#chart { height: 460px; width: 100%; }
+#chart { height: clamp(500px, 62vh, 720px); width: 100%; }
 @media (max-width: 720px) { #chart { height: 340px; } }
 
 .level-ladder {
-  height: 460px; min-width: 0; display: grid;
+  height: clamp(500px, 62vh, 720px); min-width: 0; display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
   border: 1px solid var(--line); background: #0d1118; overflow: hidden;
 }
@@ -215,6 +215,23 @@ td.num { font-family: ui-monospace, monospace; }
   font: 700 12px ui-monospace,monospace; text-align: right;
 }
 .level-ladder > p { margin: 0; padding: 7px 9px; color: var(--muted); font-size: 9px; line-height: 1.35; border-top: 1px solid var(--line); }
+
+.chart-actions { display: inline-flex; align-items: center; gap: 7px; }
+.icon-button {
+  display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2);
+  color: var(--muted); cursor: pointer; font-size: 17px; line-height: 1;
+}
+.icon-button:hover,.icon-button:focus-visible { color: var(--text); border-color: var(--cyan); }
+
+.chart-card:fullscreen {
+  width: 100vw; height: 100vh; margin: 0; padding: 18px;
+  border: 0; border-radius: 0; background: var(--bg); overflow: auto;
+}
+.chart-card:fullscreen .chart-layout { height: calc(100vh - 170px); }
+.chart-card:fullscreen #chart,.chart-card:fullscreen .level-ladder {
+  height: 100%;
+}
 
 .leyenda {
   display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px;
@@ -310,6 +327,7 @@ td.num { font-family: ui-monospace, monospace; }
 .layer-summary small { color: var(--muted); font-size: 9.5px; line-height: 1.35; }
 
 @media (max-width: 620px) {
+  main { padding-inline: 14px; }
   .price-block { width: 100%; flex-wrap: wrap; }
   .price-meta { flex: 1 1 100%; grid-template-columns: auto 1fr; gap: 10px; }
   .roles { grid-template-columns: 1fr; }
@@ -319,6 +337,7 @@ td.num { font-family: ui-monospace, monospace; }
   .chart-head .ayuda { grid-column: 2; grid-row: 1; }
   .chart-layout { grid-template-columns: 1fr; }
   .level-ladder { height: 390px; }
+  .chart-actions { align-self: start; }
   .layers-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 

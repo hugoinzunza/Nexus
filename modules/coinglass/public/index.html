@@ -6,7 +6,7 @@
   <link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
   <meta name="theme-color" content="#090b10">
   <title>CoinGlass · NexUX</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2">
   <link rel="stylesheet" href="/static/nexux-shell.css">
 </head>
 <body>
@@ -169,24 +169,34 @@
     <section class="view" id="view-orderbook">
       <div class="section-head">
         <div><p class="eyebrow">COINGLASS · RESEARCH</p><h2>Historial de muros ballena</h2></div>
-        <div class="segmented" id="book-zoom" role="group" aria-label="Zoom de precio">
-          <button data-zoom="0.5">±0,5%</button>
-          <button class="active" data-zoom="1.5">±1,5%</button>
-          <button data-zoom="4">±4%</button>
-          <button data-zoom="0">Todo</button>
+        <div class="book-tools">
+          <button class="icon-button" id="book-fullscreen" type="button"
+                  title="Ampliar libro de órdenes" aria-label="Ampliar libro de órdenes">⛶</button>
+          <div class="segmented" id="book-zoom" role="group" aria-label="Zoom de precio">
+            <button data-zoom="0.5">±0,5%</button>
+            <button class="active" data-zoom="1.5">±1,5%</button>
+            <button data-zoom="4">±4%</button>
+            <button data-zoom="0">Todo</button>
+          </div>
         </div>
       </div>
       <p class="model-copy" id="book-interval">Recolectando historial visual cada 5 min</p>
+      <p class="scope-note" id="book-coverage">
+        CoinGlass entrega muros grandes listados, no la profundidad completa del libro.
+      </p>
       <div class="lectura lectura-ancha">
         <details>
           <summary><span class="eyebrow">CÓMO SE LEE ESTE GRÁFICO</span><b>Precio en el tiempo sobre los muros del libro</b></summary>
           <div class="legend-box">
-            <p><b>Eje Y = precio · eje X = tiempo</b> (una columna por captura, cada
-              5 min). La <b>línea blanca</b> es el precio de BTC recorriendo esas
+            <p><b>Eje Y = precio · eje X = tiempo real</b>. Cada columna es una
+              captura; si el colector se interrumpe, el hueco conserva su duración
+              en vez de comprimirse. La <b>línea blanca</b> es el precio de BTC recorriendo esas
               capturas; el punto marca la última.</p>
             <p><b>Verde = muros de compra</b> (bids, debajo del precio suelen frenar
               caídas). <b>Rojo = muros de venta</b> (asks, arriba suelen frenar
-              subidas). La intensidad y el grosor son proporcionales al monto.</p>
+              subidas). La intensidad y el grosor comparan el monto dentro del
+              encuadre; el percentil 90 satura la escala para que una sola ballena
+              extrema no oculte el resto.</p>
             <p>Las <b>líneas punteadas etiquetadas</b> a la derecha son los muros más
               grandes del período, con su monto y precio. Los botones de arriba
               acercan el eje al precio de <b>ahora</b>.</p>
@@ -217,7 +227,7 @@
           </div>
         </details>
       </div>
-      <div class="chart-frame tall">
+      <div class="chart-frame tall orderbook-frame" id="orderbook-frame">
         <canvas id="orderbook-chart" aria-label="Historial visual de muros ballena BTC"></canvas>
         <div class="canvas-message" id="orderbook-message"></div>
       </div>
@@ -380,7 +390,7 @@
       </div>
     </section>
   </main>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=2" defer></script>
   <script src="/static/nexux-shell.js?v=7"></script>
 </body>
 </html>

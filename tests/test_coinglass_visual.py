@@ -971,6 +971,43 @@ def test_el_intervalo_del_libro_se_mide_no_se_cablea():
     assert "· cada 5 min ·" not in script, "el intervalo volvio a estar cableado"
 
 
+def test_el_historial_del_libro_respeta_el_tiempo_y_marca_huecos_reales():
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    bloque = script.split("function escalaTemporalLibro(")[1].split("\nfunction ")[0]
+    assert "Date.parse(s.captured_at)" in bloque
+    assert "tiempos[i] - tiempos[i - 1] > medianaMs * 2.5" in bloque
+    assert "anchoColumna" in bloque
+    dibujo = script.split("function drawOrderbook()")[1].split("\nfunction ")[0]
+    assert "sin captura ${hueco.minutos}m" in dibujo
+    assert "const X = temporal.X" in dibujo
+
+
+def test_la_intensidad_del_libro_no_depende_de_una_ballena_extrema():
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    dibujo = script.split("function drawOrderbook()")[1].split("\nfunction ")[0]
+    assert "percentil(murosVisibles.map((m) => m.usd), 0.9)" in dibujo
+    assert "Math.min(1, Math.sqrt(m.usd / escalaUsd))" in dibujo
+    assert "Math.max(...muros.map((m) => m.usd)" not in dibujo
+
+
+def test_el_grafico_declara_que_no_es_profundidad_completa():
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    assert 'id="book-coverage"' in html
+    assert "no la profundidad completa del libro" in html
+    assert "CoinGlass no entrega la profundidad completa en este plan" in script
+
+
+def test_el_libro_se_puede_ampliar_sin_cambiar_los_datos():
+    script = (ROOT / "modules/coinglass/public/app.js").read_text()
+    html = (ROOT / "modules/coinglass/public/index.html").read_text()
+    css = (ROOT / "modules/coinglass/public/styles.css").read_text()
+    assert 'id="book-fullscreen"' in html
+    assert 'id="orderbook-frame"' in html
+    assert "orderbookFrame.requestFullscreen()" in script
+    assert ".orderbook-frame:fullscreen" in css
+
+
 def test_la_brujula_usa_la_misma_convencion_de_color_que_el_resto():
     """Arriba = rojo (asks/resistencia), abajo = verde (bids/soporte), igual que el
     libro y el mapa visual. Estaba invertido solo en la brujula, asi que el mismo

@@ -420,6 +420,45 @@ function intervaloMedido(snapshots) {
   return `cada ~${minutos} min` + (huecos ? ` · ${huecos} hueco${huecos > 1 ? "s" : ""}` : "");
 }
 
+function percentil(valores, q) {
+  const ordenados = valores.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!ordenados.length) return null;
+  return ordenados[Math.floor((ordenados.length - 1) * q)];
+}
+
+// El historial es temporal, no una secuencia de categorías. Dibujarlo por índice
+// ocultaba una caída del colector: un salto de una hora ocupaba los mismos píxeles
+// que cinco minutos. Esta escala conserva el tiempo real y solo recurre al índice
+// cuando el payload no trae timestamps utilizables.
+function escalaTemporalLibro(snapshots, izquierda, derecha) {
+  const tiempos = snapshots.map((s) => Date.parse(s.captured_at));
+  const validos = tiempos.every(Number.isFinite) && tiempos.length > 1 &&
+    tiempos.every((t, i) => i === 0 || t > tiempos[i - 1]);
+  const saltos = validos ? tiempos.slice(1).map((t, i) => t - tiempos[i]) : [];
+  const medianaMs = percentil(saltos, 0.5);
+  const duracion = validos ? tiempos[tiempos.length - 1] - tiempos[0] : 0;
+  const rangoPx = derecha - izquierda;
+  const X = validos && duracion > 0
+    ? (i) => izquierda + (tiempos[i] - tiempos[0]) / duracion * rangoPx
+    : (i) => izquierda + i * rangoPx / Math.max(1, snapshots.length - 1);
+  const pasoPx = validos && medianaMs > 0
+    ? rangoPx * medianaMs / duracion
+    : rangoPx / Math.max(1, snapshots.length - 1);
+  const huecos = [];
+  if (validos && medianaMs > 0) {
+    for (let i = 1; i < tiempos.length; i++) {
+      if (tiempos[i] - tiempos[i - 1] > medianaMs * 2.5) {
+        huecos.push({ i, desde: tiempos[i - 1], hasta: tiempos[i],
+                      minutos: Math.round((tiempos[i] - tiempos[i - 1]) / 60000) });
+      }
+    }
+  }
+  return {
+    X, tiempos, medianaMs, huecos, usaTiempoReal: validos,
+    anchoColumna: Math.max(2, Math.min(18, pasoPx * 1.08)),
+  };
+}
+
 function drawOrderbook() {
   const canvas = $("orderbook-chart");
   const { ctx, width, height } = setupCanvas(canvas);
@@ -469,8 +508,8 @@ function drawOrderbook() {
   }
   const pad = (max - min) * 0.04 || 1;
   min -= pad; max += pad;
-  const maxUsd = Math.max(...muros.map((m) => m.usd), 1);
-  const X = (i) => L + i * (width - L - R) / Math.max(1, snapshots.length - 1);
+  const temporal = escalaTemporalLibro(snapshots, L, width - R);
+  const X = temporal.X;
   const Y = (p) => T + (max - p) / (max - min || 1) * (height - T - B);
 
   // --- eje Y: precios reales, no solo la linea del precio actual ---
@@ -486,14 +525,33 @@ function drawOrderbook() {
     ctx.fillText(fmt(p, 0), L - 8, y);
   }
 
-  // --- muros: cada captura una columna; area proporcional al monto ---
-  const ancho = Math.max(2, (width - L - R) / snapshots.length * 0.9);
+  // Los huecos reales del colector quedan vacíos y declarados. El ancho normal
+  // solapa apenas las capturas contiguas para no fabricar rendijas entre columnas.
+  for (const hueco of temporal.huecos) {
+    const x0 = X(hueco.i - 1) + temporal.anchoColumna / 2;
+    const x1 = X(hueco.i) - temporal.anchoColumna / 2;
+    ctx.fillStyle = "rgba(232,182,83,.055)";
+    ctx.fillRect(x0, T, Math.max(0, x1 - x0), height - T - B);
+    if (x1 - x0 > 42) {
+      ctx.fillStyle = "#b69a61";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.font = "9px ui-monospace, monospace";
+      ctx.fillText(`sin captura ${hueco.minutos}m`, (x0 + x1) / 2, T + 5);
+    }
+  }
+
+  // Escala local robusta: el p90 satura el color. El importe real no se altera y
+  // sigue en las etiquetas, pero una ballena de 78M ya no borra muros de 1–5M.
+  const murosVisibles = muros.filter((m) => m.p >= min && m.p <= max);
+  const escalaUsd = Math.max(percentil(murosVisibles.map((m) => m.usd), 0.9) || 1, 1);
+  const ancho = temporal.anchoColumna;
   for (const m of muros) {
     if (m.p < min || m.p > max) continue;      // fuera del encuadre
-    const rel = Math.sqrt(m.usd / maxUsd);
+    const rel = Math.min(1, Math.sqrt(m.usd / escalaUsd));
     ctx.fillStyle = m.lado === "bid"
-      ? `rgba(36,200,138,${(0.12 + rel * 0.5).toFixed(3)})`
-      : `rgba(239,99,112,${(0.12 + rel * 0.5).toFixed(3)})`;
+      ? `rgba(36,200,138,${(0.08 + rel * 0.62).toFixed(3)})`
+      : `rgba(239,99,112,${(0.08 + rel * 0.62).toFixed(3)})`;
     const alto = Math.max(3, rel * 11);
     ctx.fillRect(X(m.i) - ancho / 2, Y(m.p) - alto / 2, ancho, alto);
   }
@@ -619,6 +677,14 @@ function drawOrderbook() {
     // Se declara lo descartado: un conteo que esconde su propio filtro miente.
     (flujo.borde ? ` · ${flujo.borde} eventos descartados por rondar el umbral de ` +
                    `${compactUsd(flujo.piso)} con que CoinGlass filtra la lista` : "");
+  const conteos = snapshots.map((s) => (s.bids || []).length + (s.asks || []).length);
+  const medianaNiveles = percentil(conteos, 0.5);
+  $("book-coverage").textContent =
+    `${medianaNiveles ?? "—"} muros listados por captura (mediana) · intensidad ` +
+    `saturada en p90 ${compactUsd(escalaUsd)} · ` +
+    `${temporal.usaTiempoReal ? "eje de tiempo real" : "timestamps inválidos: eje por captura"}. ` +
+    "Los vacíos verticales significan “sin muro listado sobre el umbral”, no “sin órdenes”; " +
+    "CoinGlass no entrega la profundidad completa en este plan.";
 }
 
 function renderLargeOrders() {
@@ -1357,6 +1423,26 @@ document.querySelectorAll("[data-zoom]").forEach((button) => {
     drawOrderbook();
   });
 });
+
+const bookFullscreen = $("book-fullscreen");
+const orderbookFrame = $("orderbook-frame");
+if (bookFullscreen && orderbookFrame) {
+  bookFullscreen.addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement === orderbookFrame) await document.exitFullscreen();
+      else await orderbookFrame.requestFullscreen();
+    } catch (e) {
+      bookFullscreen.title = "El navegador no permitió ampliar";
+    }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    const activo = document.fullscreenElement === orderbookFrame;
+    bookFullscreen.textContent = activo ? "×" : "⛶";
+    bookFullscreen.title = activo ? "Salir de pantalla completa" : "Ampliar libro de órdenes";
+    bookFullscreen.setAttribute("aria-label", bookFullscreen.title);
+    requestAnimationFrame(drawOrderbook);
+  });
+}
 
 document.querySelectorAll("[data-liq-mode]").forEach((button) => {
   button.addEventListener("click", () => {

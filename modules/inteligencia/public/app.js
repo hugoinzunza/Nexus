@@ -988,6 +988,28 @@ function iniciar() {
       b.textContent = caja.hidden ? b.textContent.replace("ocultar", "qué") : "ocultar";
     });
   }
+  const fullscreen = $("chart-fullscreen");
+  const chartCard = $("chart-card");
+  if (fullscreen && chartCard) {
+    fullscreen.addEventListener("click", async () => {
+      try {
+        if (document.fullscreenElement === chartCard) await document.exitFullscreen();
+        else await chartCard.requestFullscreen();
+      } catch (e) {
+        fullscreen.title = "El navegador no permitió ampliar";
+      }
+    });
+    document.addEventListener("fullscreenchange", () => {
+      const activo = document.fullscreenElement === chartCard;
+      fullscreen.textContent = activo ? "×" : "⛶";
+      fullscreen.title = activo ? "Salir de pantalla completa" : "Ampliar gráfico";
+      fullscreen.setAttribute("aria-label", fullscreen.title);
+      requestAnimationFrame(() => {
+        if (state.chart) state.chart.applyOptions({ autoSize: true });
+        pintarNiveles();
+      });
+    });
+  }
   setInterval(cargar, 60_000);
   setInterval(() => actualizarContadorVela(), 1_000);
   // Latido del sello: nadie dispara un evento cuando los frames PARAN.

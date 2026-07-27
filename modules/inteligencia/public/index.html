@@ -6,7 +6,7 @@
   <link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
   <meta name="theme-color" content="#090b10">
   <title>Acción del precio · NexUX</title>
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=13">
   <link rel="stylesheet" href="/static/nexux-shell.css">
   <!-- TradingView Lightweight Charts (Apache-2.0), la misma que usa el módulo de
        trading, bundleada localmente. -->
@@ -54,9 +54,14 @@
     </p>
 
     <!-- Gráfico: velas + niveles del método superpuestos -->
-    <section class="card">
+    <section class="card chart-card" id="chart-card">
       <h2 class="chart-head">Gráfico <small id="g-sub"></small>
-        <button class="ayuda" data-ayuda="grafico">qué se ve</button></h2>
+        <span class="chart-actions">
+          <button class="icon-button" id="chart-fullscreen" type="button"
+                  title="Ampliar gráfico" aria-label="Ampliar gráfico">⛶</button>
+          <button class="ayuda" data-ayuda="grafico">qué se ve</button>
+        </span>
+      </h2>
       <div class="ayuda-txt" id="ayuda-grafico" hidden>
         Sobre las velas van los niveles del método, cada uno con su origen visible:
         <strong style="color:#e8b653">la rejilla anual</strong> anclada en la apertura
@@ -351,6 +356,6 @@
   </main>
 
   <script src="/static/nexux-shell.js?v=7"></script>
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>
