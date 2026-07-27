@@ -142,6 +142,47 @@ def apertura_semanal(velas: list[dict], ahora_ms: int) -> Optional[dict]:
             "fecha": lunes.strftime("%Y-%m-%d")}
 
 
+def pivotes_clasicos_diarios(velas_diarias_cerradas: list[dict]) -> Optional[dict]:
+    """Pivot Points Classic vigentes, calculados con el último día UTC cerrado.
+
+    No son los pivotes estructurales 5+1+5 de este módulo. Son cinco referencias
+    aritméticas intradía (P, R1, R2, S1 y S2) basadas únicamente en el OHLC de la
+    vela diaria anterior. Al exigir que el caller entregue velas cerradas, los
+    niveles no pueden moverse durante el día ni usar el high/low todavía en formación.
+    """
+    if not velas_diarias_cerradas:
+        return None
+    anterior = velas_diarias_cerradas[-1]
+    high = float(anterior["h"])
+    low = float(anterior["l"])
+    close = float(anterior["c"])
+    if low <= 0 or high < low:
+        return None
+    p = (high + low + close) / 3
+    niveles = [
+        {"nombre": "R2", "precio": p + (high - low), "lado": "resistencia"},
+        {"nombre": "R1", "precio": 2 * p - low, "lado": "resistencia"},
+        {"nombre": "P", "precio": p, "lado": "central"},
+        {"nombre": "S1", "precio": 2 * p - high, "lado": "soporte"},
+        {"nombre": "S2", "precio": p - (high - low), "lado": "soporte"},
+    ]
+    t_fuente = int(anterior["t"])
+    fecha = dt.datetime.fromtimestamp(t_fuente / 1000, dt.timezone.utc)
+    return {
+        "metodo": "classic",
+        "tf_calculo": "1d",
+        "zona_horaria": "UTC",
+        "fuente_t": t_fuente,
+        "fuente_fecha": fecha.strftime("%Y-%m-%d"),
+        "vigente_desde": t_fuente + TF_MS["1d"],
+        "ohlc_fuente": {"h": high, "l": low, "c": close},
+        "niveles": niveles,
+        "research_only": True,
+        "validated": False,
+        "nota": "Referencia calculada intradía; no es señal ni nivel validado.",
+    }
+
+
 def rejilla(ancla: float, precio: float, paso: float = PASO_RMP,
             k_max: int = K_MAX) -> list[dict]:
     """Niveles `ancla * (1 ± k*paso)`, con la distancia al precio de hoy.

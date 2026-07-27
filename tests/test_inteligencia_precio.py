@@ -118,6 +118,37 @@ def test_la_apertura_semanal_existe_desde_que_abre_la_primera_vela():
     assert P.apertura_semanal(abierta, ahora)["precio"] == 65_432.1
 
 
+def test_pivotes_clasicos_diarios_usan_solo_el_ultimo_dia_cerrado():
+    velas = velas_diarias(desde="2026-07-20", n=3, px0=100)
+    fuente = velas[-1]
+    pp = P.pivotes_clasicos_diarios(velas)
+    high, low, close = fuente["h"], fuente["l"], fuente["c"]
+    central = (high + low + close) / 3
+    niveles = {n["nombre"]: n["precio"] for n in pp["niveles"]}
+    assert niveles == {
+        "R2": central + high - low,
+        "R1": 2 * central - low,
+        "P": central,
+        "S1": 2 * central - high,
+        "S2": central - high + low,
+    }
+    assert pp["fuente_t"] == fuente["t"]
+    assert pp["vigente_desde"] == fuente["t"] + P.TF_MS["1d"]
+    assert pp["research_only"] is True and pp["validated"] is False
+
+
+def test_pivotes_clasicos_no_inventan_niveles_sin_dia_cerrado():
+    assert P.pivotes_clasicos_diarios([]) is None
+
+
+def test_agregar_un_dia_futuro_no_reescribe_pivotes_clasicos_pasados():
+    velas = velas_diarias(desde="2026-07-20", n=4, px0=100)
+    antes = P.pivotes_clasicos_diarios(velas[:3])
+    despues_reconstruido = P.pivotes_clasicos_diarios(velas[:3])
+    assert antes == despues_reconstruido
+    assert P.pivotes_clasicos_diarios(velas)["fuente_t"] != antes["fuente_t"]
+
+
 # --- causalidad ------------------------------------------------------
 
 
@@ -334,7 +365,24 @@ def test_cada_timeframe_del_horizonte_conserva_su_propio_mapa():
     capas_refs = corto["capas_referencias"]
     assert set(capas_refs) == {"estructura", "calculados", "rejilla", "liquidez"}
     assert capas_refs["calculados"]["total"] == len(capas) * (
-        len(P.RETROCESOS) + len(P.EXTENSIONES))
+        len(P.RETROCESOS) + len(P.EXTENSIONES)) + 5
+    pp_refs = [
+        r for lado in ("arriba", "abajo")
+        for r in capas_refs["calculados"][lado]
+        if r["familia"] == "pivot_classic"
+    ]
+    assert {r["tipo"] for r in pp_refs} == {
+        "PP diario P", "PP diario R1", "PP diario R2",
+        "PP diario S1", "PP diario S2",
+    }
+
+    largo = m._mapa_horizonte("BTCUSDT", "largo", "1d")
+    pp_largo = [
+        r for lado in ("arriba", "abajo")
+        for r in largo["capas_referencias"]["calculados"][lado]
+        if r["familia"] == "pivot_classic"
+    ]
+    assert pp_largo == [], "los PP diarios son una referencia intradia"
     assert "no predictiv" in capas_refs["calculados"]["evidence_status"]
     if corto["vacio_horizonte"].get("primer_obstaculo"):
         assert corto["vacio_horizonte"]["primer_obstaculo"]["familia"] == \
@@ -774,7 +822,7 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert 'id="ver-pivotes-linea" checked' in html
     assert 'id="ver-fractales"' in html
     assert "Precios calculados" in js
-    assert "app.js?v=15" in html and "styles.css?v=14" in html
+    assert "app.js?v=16" in html and "styles.css?v=14" in html
     assert "referencia visual opcional" in html and "sin poder predictivo" in html
     assert 'id="ver-fases" checked' in html
     assert '"fases": F.fases_para_grafico' in modulo
@@ -784,6 +832,22 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert "invalidación estructural no evaluada" in js
     assert '"execution_enabled": False' in modulo
     assert '"validated": False' in modulo
+    assert 'id="ver-pivotes-clasicos" checked' in html
+    assert '"pivotes_clasicos_diarios": pivotes_clasicos' in modulo
+    assert '"familia": "pivot_classic"' in modulo
+    assert '["15m", "1h", "4h"].includes(state.tf)' in js
+    assert '"#d4a5ff"' in js
+
+
+def test_pivotes_clasicos_son_research_y_no_entran_al_bot():
+    modulo = open(MODULE, encoding="utf-8").read()
+    precio = open(os.path.join(ROOT, "modules/inteligencia/precio.py"),
+                  encoding="utf-8").read()
+    bloque = precio.split("def pivotes_clasicos_diarios")[1].split("\ndef ")[0]
+    assert "modules.bot" not in modulo
+    assert "modules.bot" not in bloque
+    assert "create_order" not in modulo and "create_order" not in bloque
+    assert '"calculado_no_validado"' in modulo
 
 
 def test_viewport_desacopla_lineas_y_limita_etiquetas():

@@ -72,6 +72,9 @@
         dibujan en su extremo estructural y la etiqueta declara
         <em>conf +5</em>: recién estuvieron disponibles cinco velas después. El payload
         conserva por separado el instante del extremo y el de confirmación.
+        Los <strong style="color:#d4a5ff">PP clásicos diarios</strong> son otra
+        familia: referencias aritméticas del último OHLC diario UTC cerrado, no
+        máximos o mínimos estructurales.
       </div>
       <div class="chart-layout">
         <div class="chart-wrap"><div id="chart"></div></div>
@@ -98,6 +101,7 @@
         <span><i style="background:#43bdd7"></i> apertura semanal</span>
         <span><i style="background:#35c9c1"></i> cálculos del TF visible</span>
         <span><i style="background:#7698d9"></i> referentes superiores opcionales</span>
+        <span><i style="background:#d4a5ff"></i> PP clásicos diarios</span>
         <span><i style="background:#ef6370"></i> pivote alto confirmado</span>
         <span><i style="background:#24c88a"></i> pivote bajo confirmado</span>
         <span><i style="background:#24c88a"></i> fase I</span>
@@ -115,6 +119,10 @@
       <label class="toggle">
         <input type="checkbox" id="ver-pivotes-linea" checked> máximos y mínimos anteriores
         <small>hasta dos referentes confirmados por lado, solo del TF visible</small>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="ver-pivotes-clasicos" checked> PP clásicos diarios
+        <small>P, R1, R2, S1 y S2 del día UTC anterior; solo referencia intradía</small>
       </label>
       <label class="toggle">
         <input type="checkbox" id="ver-superiores"> referentes de temporalidades superiores
@@ -356,6 +364,6 @@
   </main>
 
   <script src="/static/nexux-shell.js?v=7"></script>
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

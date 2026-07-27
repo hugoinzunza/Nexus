@@ -386,6 +386,7 @@ function pintarNiveles() {
   const verPropios = $("ver-propios").checked;
   const verSuperiores = $("ver-superiores").checked;
   const verPivotes = $("ver-pivotes-linea").checked;
+  const verPivotesClasicos = $("ver-pivotes-clasicos").checked;
   const verRefugios = $("ver-refugios").checked;
 
   // El guard sigue el viewport real, no las 500 velas cargadas. El autoscale de la
@@ -454,6 +455,24 @@ function pintarNiveles() {
     if (d.apertura_anual) {
       linea(d.apertura_anual.precio, "#ffffff", `apertura ${d.anio}`, 0, 2,
             true, false);
+    }
+  }
+
+  // Pivot Points Classic: familia aritmética separada de los extremos estructurales.
+  // Se omite en diario/semanal porque su propósito es servir de mapa intradía.
+  const pp = d.pivotes_clasicos_diarios;
+  if (verPivotesClasicos && ["15m", "1h", "4h"].includes(state.tf) && pp) {
+    const niveles = pp.niveles || [];
+    const cercano = niveles.filter((n) => visible(n.precio))
+      .sort((a, b) => Math.abs(a.precio - pxActual) -
+                       Math.abs(b.precio - pxActual))[0];
+    const precioEtiquetado = cercano && reservarEtiqueta(cercano.precio)
+      ? cercano.precio : null;
+    for (const nivel of niveles) {
+      const titulo = `PP diario ${nivel.nombre} · ${pp.fuente_fecha}`;
+      linea(nivel.precio, "#d4a5ff", titulo, 2,
+            nivel.nombre === "P" ? 2 : 1, false,
+            nivel.precio === precioEtiquetado);
     }
   }
 
@@ -976,6 +995,7 @@ function iniciar() {
   $("ver-propios").addEventListener("change", pintarNiveles);
   $("ver-superiores").addEventListener("change", pintarNiveles);
   $("ver-pivotes-linea").addEventListener("change", pintarNiveles);
+  $("ver-pivotes-clasicos").addEventListener("change", pintarNiveles);
   $("ver-refugios").addEventListener("change", pintarNiveles);
   $("ver-fases").addEventListener("change", pintarFases);
   $("ver-fractales").addEventListener("change", () => {

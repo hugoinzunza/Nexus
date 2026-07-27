@@ -313,6 +313,7 @@ class InteligenciaModule(NexusModule):
         # cierre la primera 1h del lunes retrasaba el ancla semanal hasta las 01:00
         # UTC y dejaba la pantalla en `None` justo al comenzar una semana nueva.
         semanal = P.apertura_semanal(horarias, ahora_ms)
+        pivotes_clasicos = P.pivotes_clasicos_diarios(diarias_c)
         est_1h = P.estructura(horarias_c, PIV_CURSO, tf="1h")
         est_1d = P.estructura(diarias_c, PIV_CURSO, tf="1d")
 
@@ -389,6 +390,12 @@ class InteligenciaModule(NexusModule):
                     "extensiones": list(P.EXTENSIONES),
                     "ancla": "última pierna de pivotes estructurales confirmados",
                 },
+                "pivotes_clasicos_diarios": {
+                    "aplicado": bool(pivotes_clasicos),
+                    "niveles": ["P", "R1", "R2", "S1", "S2"],
+                    "ancla": "máximo, mínimo y cierre del último día UTC cerrado",
+                    "evidence_status": "calculado_no_validado",
+                },
                 "rlp_historico": {
                     "aplicado": False,
                     "ratios_documentados": list(P.RLP_RATIOS_DOCUMENTADOS),
@@ -401,6 +408,7 @@ class InteligenciaModule(NexusModule):
                              "del curso no está demostrado como especial, y una rejilla "
                              "sola siempre parece funcionar."),
             "apertura_semanal": semanal,
+            "pivotes_clasicos_diarios": pivotes_clasicos,
             "estructura_1h": est_1h,
             "estructura_1D": est_1d,
             "vacio_arriba": arriba,
@@ -492,6 +500,20 @@ class InteligenciaModule(NexusModule):
                     "selection_reason": "rejilla anual mecánica vigente",
                     "evidence_status": "calculado_refutado_como_predictor",
                 })
+        pivotes_clasicos = P.pivotes_clasicos_diarios(diarias)
+        if selected_tf in ("15m", "1h", "4h") and pivotes_clasicos:
+            for nivel in pivotes_clasicos["niveles"]:
+                referencias.append({
+                    "precio": nivel["precio"],
+                    "tipo": f"PP diario {nivel['nombre']}",
+                    "familia": "pivot_classic",
+                    "tf": "1D",
+                    "pivot_t": pivotes_clasicos["fuente_t"],
+                    "confirmed_at": pivotes_clasicos["vigente_desde"],
+                    "selection_reason": (
+                        "Pivot Points Classic del último OHLC diario UTC cerrado"),
+                    "evidence_status": "calculado_no_validado",
+                })
         for tf, capa in mapas_temporales.items():
             mapa_tf = capa["mapa"]
             if not mapa_tf:
@@ -516,7 +538,8 @@ class InteligenciaModule(NexusModule):
         refs_estructura = [r for r in referencias if r["familia"] == "estructura"]
         refs_calculados = [r for r in referencias
                            if r["familia"] in ("pierna_retroceso",
-                                               "pierna_extension")]
+                                               "pierna_extension",
+                                               "pivot_classic")]
         refs_rejilla = [r for r in referencias if r["familia"] == "rmp"]
         tendencias = {tf: est["tendencia"] for tf, est in estructuras.items()}
         alineacion = P.alineacion_temporal(
@@ -556,7 +579,10 @@ class InteligenciaModule(NexusModule):
                          "motivo": "no existe stop estructural principal detrás del precio"}
 
         def capa_referencias(nombre, filas, estatus):
-            arriba = sorted((r for r in filas if r["precio"] > precio),
+            # Una referencia exactamente al precio no puede desaparecer del
+            # inventario. Se asigna al bloque superior; el frontend recalcula su lado
+            # con la cotización viva y muestra distancia 0,00%.
+            arriba = sorted((r for r in filas if r["precio"] >= precio),
                             key=lambda r: r["precio"])
             abajo = sorted((r for r in filas if r["precio"] < precio),
                            key=lambda r: r["precio"], reverse=True)
