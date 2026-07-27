@@ -450,7 +450,7 @@ def test_el_resultado_que_refuta_la_rejilla_esta_en_la_pantalla():
     ahi.
     """
     html = open(INDEX, encoding="utf-8").read()
-    assert "no funciona" in html, "el titular tiene que decir el resultado"
+    assert "sin poder predictivo" in html, "la nota compacta tiene que decir el resultado"
     assert "23,86" in html and "24,00" in html, "faltan las dos tasas comparadas"
     assert "6.675" in html, "falta el tamano de la muestra"
     # el 11,3% incondicional es el numero que el curso nunca publica
@@ -774,7 +774,8 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert 'id="ver-pivotes-linea" checked' in html
     assert 'id="ver-fractales"' in html
     assert "Precios calculados" in js
-    assert "app.js?v=14" in html and "styles.css?v=11" in html
+    assert "app.js?v=14" in html and "styles.css?v=12" in html
+    assert "referencia visual opcional" in html and "sin poder predictivo" in html
     assert 'id="ver-fases" checked' in html
     assert '"fases": F.fases_para_grafico' in modulo
     assert "rejillas_historicas" in modulo and "refugios_promovidos" in modulo

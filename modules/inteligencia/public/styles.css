@@ -84,6 +84,15 @@ main { max-width: 1080px; margin: 0 auto; padding: 18px 16px 64px; }
   background: rgba(232, 182, 83, .08); border: 1px solid rgba(232, 182, 83, .25);
   color: #e8c98a; font-size: 12.5px; line-height: 1.5;
 }
+.grid-note {
+  display: flex; align-items: baseline; gap: 5px; width: fit-content;
+  max-width: 100%; margin-bottom: 12px; padding: 5px 8px;
+  border: 0; border-left: 2px solid rgba(232, 182, 83, .5);
+  border-radius: 0; background: transparent; color: var(--muted);
+  font-size: 10.5px; line-height: 1.4;
+}
+.grid-note strong { color: #c9b077; }
+.grid-note a { white-space: nowrap; }
 
 .card {
   background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
