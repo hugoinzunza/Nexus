@@ -112,3 +112,16 @@ tbody tr:hover { background: var(--panel); }
 .orders { margin-bottom: 8px; }
 .pill.buy, .pill.long { background: rgba(52,211,153,.15); color: var(--green); }
 .pill.sell, .pill.short { background: rgba(248,113,113,.15); color: var(--red); }
+
+/* Trades abiertos de la fase. Borde ambar y no verde: son PAPEL, y el verde en el
+   resto del panel significa dinero real. */
+.phase-table.abiertos { margin-top: 12px; border-top: 1px solid rgba(232,182,83,.28); padding-top: 10px; }
+.abiertos-head {
+  font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .04em; text-transform: uppercase; color: #b98a1f; margin-bottom: 6px;
+}
+.abiertos-head span { text-transform: none; letter-spacing: 0; font-weight: 400; opacity: .8; }
+.phase-table.abiertos td.num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; }
+/* El RR alto se marca pero NO se esconde ni se filtra: el hallazgo que lo cuestiona
+   no esta pre-registrado ni confirmado. Marcar sin actuar es lo honesto. */
+.phase-table.abiertos td.rr-alto { color: #e8b653; }

@@ -146,7 +146,60 @@ function phase1(data) {
       <div><span>Estado live</span><b>${data.live ? "REAL" : "DRY"}</b></div>
     </div>
     <div class="phase-note">Fill V2: cruce causal de la entrada central. Histórico V1 archivado: ${legacyClosed.length} cerrados, fuera de esta evaluación. Este bloque no abre/cierra trades y no autoriza live automaticamente.</div>
+    ${abiertosHtml(open)}
     ${pairRows ? `<div class="phase-table"><table><thead><tr><th>Par</th><th>N</th><th>WR</th><th>avgR</th><th>P&L</th></tr></thead><tbody>${pairRows}</tbody></table></div>` : ""}
+  </div>`;
+}
+
+// Los trades ABIERTOS de la Fase 1, no solo su cantidad.
+//
+// Antes `open` se usaba unicamente para el contador "Dry abiertos: 2": se sabia que
+// habia dos y no cuales. Estos son papel —el bot corre con `live=false` y el bloque
+// `#position` de mas abajo, que muestra posiciones REALES de Binance, esta vacio a
+// proposito—. Mezclar las dos cosas seria decir que hay exposicion donde no la hay.
+function abiertosHtml(abiertos) {
+  if (!abiertos.length) {
+    return `<p class="phase-note">Sin trades abiertos en la fase.</p>`;
+  }
+  const filas = abiertos.map((t) => {
+    const entry = Number(t.entry_price ?? t.setup_entry);
+    const sl = Number(t.sl), tp = Number(t.tp);
+    const largo = t.dir === "long";
+    // Cuanto queda vivo de la posicion. Si hubo parciales, `qty_open` baja y el
+    // numero de arriba dejaria de describir lo que hay expuesto.
+    const q = Number(t.qty || 0), qo = Number(t.qty_open ?? t.qty ?? 0);
+    const restante = q > 0 ? Math.round(qo / q * 100) : null;
+    const legs = (t.partials || []).map((p) => p.leg).join(", ");
+    const rGan = (t.partials || []).reduce((a, p) => a + Number(p.realized_r || 0), 0);
+    const horas = t.opened_at ? (Date.now() / 1000 - t.opened_at) / 3600 : null;
+    const tiempo = horas === null ? "—"
+      : horas < 48 ? `${fmt(horas, 0)} h` : `${fmt(horas / 24, 0)} d`;
+    // El RR se muestra tal cual y sin adornos: el estudio del 2026-07-26 encontro que
+    // DENTRO de rr>=5, mas RR predice PEOR resultado (Q2 rr~8 -> +0,815R y 21,1% de TP;
+    // Q5 rr>=21,2 -> +0,142R y 4,8%). No esta pre-registrado ni confirmado, asi que no
+    // se filtra por eso, pero esconder el numero seria peor.
+    const rrAlto = Number(t.rr) >= 15;
+    return `<tr>
+      <td>${pairLabel(t.pair || t.symbol)}</td>
+      <td class="${largo ? "pos" : "neg"}">${largo ? "long" : "short"}</td>
+      <td class="num">${fmt(entry, 4)}</td>
+      <td class="num neg">${fmt(sl, 4)}</td>
+      <td class="num pos">${fmt(tp, 4)}</td>
+      <td class="num${rrAlto ? " rr-alto" : ""}" title="${rrAlto
+        ? "RR alto: dentro de rr>=5, mas RR predijo PEOR resultado en el estudio del 26-jul (no confirmado)"
+        : ""}">${fmt(t.rr, 1)}</td>
+      <td class="num">${restante === null ? "—" : restante + "%"}</td>
+      <td>${legs ? `${legs} (${signed(rGan)})` : "—"}</td>
+      <td class="num">${fmt(t.risk_usd, 2)}</td>
+      <td class="num">${tiempo}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="phase-table abiertos">
+    <div class="abiertos-head">Abiertos ahora · <span>papel, no son posiciones reales</span></div>
+    <table><thead><tr>
+      <th>Par</th><th>Dir</th><th>Entrada</th><th>SL</th><th>TP</th><th>RR</th>
+      <th>Vivo</th><th>Parciales</th><th>Riesgo</th><th>Tiempo</th>
+    </tr></thead><tbody>${filas}</tbody></table>
   </div>`;
 }
 
