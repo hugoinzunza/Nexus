@@ -47,6 +47,15 @@ La siguiente prueba honesta es un estudio walk-forward con parámetros congelado
 costos por mercado y reporte separado por año, par y temporalidad. Hasta entonces,
 Bot2 es un visor y libro virtual de investigación.
 
+## Vigilancia
+
+La pantalla mantiene una lista causal de fases vigentes dentro de las 120 velas
+posteriores a la confirmación de la corrección. Expone el estado previo a la
+entrada, gatillo, distancia, SL, TP, RR estimado y panorama superior. “Lista para
+próxima apertura” significa que la última vela cerrada completó la condición; la
+apertura siguiente todavía no se conoce y no se inventa. La vigilancia desaparece
+si el origen se invalida o vence la ventana.
+
 ## Aislamiento
 
 `modules/bot2/` no importa el ejecutor, el cliente privado de Binance, credenciales

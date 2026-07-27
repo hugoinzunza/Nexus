@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#090b10">
   <title>Bot2 · Acción del precio · NexUX</title>
   <link rel="stylesheet" href="/static/nexux-shell.css">
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=3">
   <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -29,6 +29,17 @@
         <div class="legend"><span class="i">I impulso</span><span class="ii">II corrección</span><span class="iii">III candidata</span></div>
       </header>
       <div id="chart"></div>
+    </section>
+
+    <section class="panel watch-panel">
+      <header><div><h2>Entradas en vigilancia</h2>
+        <p>Fases vigentes calculadas con la última vela cerrada. No son órdenes ni señales.</p></div>
+        <span class="watch-count" id="watch-count">—</span>
+      </header>
+      <div class="table-wrap"><table><thead><tr>
+        <th>Estado</th><th>Lado</th><th>Gatillo</th><th>Distancia</th>
+        <th>SL estimado</th><th>TP proyectado</th><th>RR est.</th><th>Panorama</th>
+      </tr></thead><tbody id="watchlist"></tbody></table></div>
     </section>
 
     <section class="split">
@@ -55,7 +66,7 @@
       <p class="honesty">Esta primera traducción sirve para refutar o mejorar reglas. Una muestra pequeña, un resultado positivo o una fase bien dibujada no validan una estrategia.</p>
     </section>
   </main>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
   <script src="/static/nexux-shell.js?v=7"></script>
 </body>
 </html>

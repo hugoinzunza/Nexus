@@ -240,6 +240,130 @@ def _simulate(velas: list[dict], event: dict) -> dict:
             "result_r": unrealized - event["cost_r"]}
 
 
+def _watch_candidate(velas: list[dict], ciclo: dict, variant: str,
+                     points: dict, atrs: list[float | None],
+                     contexto: dict[str, list[dict]]) -> dict | None:
+    """Describe un ciclo vigente sin anticipar la próxima apertura."""
+    i = len(velas) - 1
+    if i <= ciclo["available_idx"] or i - ciclo["available_idx"] > MAX_WAIT_BARS:
+        return None
+    side = ciclo["side"]
+    long = side == "long"
+    a, b, c = ciclo["origin"], ciclo["impulse_end"], ciclo["correction_end"]
+    posteriores = velas[ciclo["available_idx"] + 1:i + 1]
+    invalidada = (any(float(v["l"]) <= float(a["price"]) for v in posteriores)
+                  if long else
+                  any(float(v["h"]) >= float(a["price"]) for v in posteriores))
+    if invalidada:
+        return None
+
+    decision_t = int(velas[i]["t"]) + P.TF_MS[ciclo["tf"]]
+    context_ok, tendencias, context_label = _context_ok(
+        contexto, side, decision_t)
+    base = {
+        "cycle_id": ciclo["id"], "side": side, "variant": variant,
+        "as_of": int(velas[i]["t"]), "available_at": ciclo["available_at"],
+        "phase": "III en vigilancia", "context": tendencias,
+        "context_label": context_label, "context_ok": context_ok,
+        "trigger": None, "distance_pct": None, "estimated_entry": None,
+        "stop": None, "target": None, "net_rr_estimate": None,
+        "eligible_next_open": False,
+    }
+
+    piv_lado = points["lows"] if long else points["highs"]
+    estructurales = [
+        p for p in piv_lado
+        if p["idx"] > c["idx"] and p["confirm_idx"] <= i
+        and (p["price"] > c["price"] if long else p["price"] < c["price"])
+    ]
+    if not estructurales:
+        return {**base, "status": (
+            "esperando mínimo creciente" if long
+            else "esperando máximo decreciente")}
+    ultimo = estructurales[-1]
+    refs = [
+        p for p in (points["highs"] if long else points["lows"])
+        if c["idx"] < p["idx"] < ultimo["idx"] and p["confirm_idx"] <= i
+    ]
+    if not refs:
+        return {**base, "status": "esperando pivote de referencia"}
+    ref = refs[-1]
+    if not (ref["price"] < b["price"] if long else ref["price"] > b["price"]):
+        return {**base, "status": "referencia fuera de la fase"}
+
+    recorrido = float(b["price"]) - float(a["price"])
+    fib = float(a["price"]) + 0.618 * recorrido
+    linea = _line_value(b, ref, i)
+    teacher_trigger = (max(fib, float(ref["price"]), linea) if long
+                       else min(fib, float(ref["price"]), linea))
+    trigger = float(ref["price"]) if variant == "structure_break" \
+        else teacher_trigger
+    close = float(velas[i]["c"])
+    bullish = close > float(velas[i]["o"])
+    crosses = close > trigger if long else close < trigger
+    color_ok = bullish if long else not bullish
+    current_pass = crosses and (variant == "structure_break" or color_ok)
+    previous_pass = False
+    if i > 0:
+        previous = velas[i - 1]
+        previous_line = _line_value(b, ref, i - 1)
+        previous_trigger = (max(fib, float(ref["price"]), previous_line)
+                            if long else
+                            min(fib, float(ref["price"]), previous_line))
+        previous_close = float(previous["c"])
+        previous_color = previous_close > float(previous["o"])
+        previous_pass = (
+            previous_close > previous_trigger and previous_color if long
+            else previous_close < previous_trigger and not previous_color)
+
+    if variant == "teacher_2close" and current_pass and not previous_pass:
+        status = "1 de 2 cierres"
+        ready = False
+    elif current_pass and (variant != "teacher_2close" or previous_pass):
+        status = "lista para próxima apertura"
+        ready = True
+    else:
+        status = "esperando cierre sobre gatillo" if long \
+            else "esperando cierre bajo gatillo"
+        ready = False
+
+    distance = (max(0.0, trigger - close) if long
+                else max(0.0, close - trigger))
+    atr = atrs[i]
+    if atr is None or atr <= 0:
+        return {**base, "status": "ATR no disponible", "trigger": trigger}
+    structural = min(float(c["price"]), float(ultimo["price"])) if long \
+        else max(float(c["price"]), float(ultimo["price"]))
+    stop = structural - ATR_BUFFER * atr if long else structural + ATR_BUFFER * atr
+    risk = close - stop if long else stop - close
+    projections = [
+        (float(a["price"]) + ratio * recorrido, ratio)
+        for ratio in (1.25, 1.50, 1.618, 2.00)
+    ]
+    projections = [(price, ratio) for price, ratio in projections
+                   if (price > close if long else price < close)]
+    target = min(projections, key=lambda x: abs(x[0] - close)) \
+        if projections else None
+    net_rr = None
+    if risk > 0 and target:
+        net_rr = abs(target[0] - close) / risk \
+            - close * ROUND_TRIP_COST_PCT / risk
+    eligible = bool(ready and context_ok and net_rr is not None
+                    and net_rr >= MIN_NET_RR)
+    if ready and not context_ok:
+        status = "gatillo listo · panorama opuesto"
+    elif ready and (net_rr is None or net_rr < MIN_NET_RR):
+        status = "gatillo listo · RR insuficiente"
+    return {
+        **base, "status": status, "trigger": trigger,
+        "distance_pct": distance / close * 100 if close else None,
+        "estimated_entry": close, "stop": stop,
+        "target": target[0] if target else None,
+        "target_type": f"proyección {target[1]:g}" if target else None,
+        "net_rr_estimate": net_rr, "eligible_next_open": eligible,
+    }
+
+
 def analyze(velas: list[dict], tf: str, variant: str) -> dict:
     if variant not in VARIANTS:
         raise ValueError("variante no habilitada")
@@ -252,16 +376,20 @@ def analyze(velas: list[dict], tf: str, variant: str) -> dict:
     candidatos = []
     eventos = []
     rejected = {}
+    resolved_cycle_ids = set()
     for ciclo in ciclos:
         resultado = _phase_event(velas, ciclo, variant, points, atrs)
         if not resultado["event"]:
             reason = resultado["reason"]
+            if reason == "fase invalidada":
+                resolved_cycle_ids.add(ciclo["id"])
             rejected[reason] = rejected.get(reason, 0) + 1
             candidatos.append({"cycle_id": ciclo["id"], "side": ciclo["side"],
                                "status": "rejected", "reason": reason,
                                "available_at": ciclo["available_at"]})
             continue
         event = resultado["event"]
+        resolved_cycle_ids.add(ciclo["id"])
         decision_t = int(velas[event["signal_idx"]]["t"]) + P.TF_MS[tf]
         ok_context, tendencias, context_label = _context_ok(
             contexto, event["side"], decision_t)
@@ -311,6 +439,18 @@ def analyze(velas: list[dict], tf: str, variant: str) -> dict:
         equity += result
         peak = max(peak, equity)
         max_dd = max(max_dd, peak - equity)
+    watchlist = []
+    for ciclo in ciclos[-16:]:
+        if ciclo["id"] in resolved_cycle_ids:
+            continue
+        watch = _watch_candidate(velas, ciclo, variant, points, atrs, contexto)
+        if watch:
+            watchlist.append(watch)
+    watchlist.sort(key=lambda w: (
+        not w["eligible_next_open"],
+        w["distance_pct"] if w["distance_pct"] is not None else 999.0,
+        -w["available_at"],
+    ))
     return {
         "research_only": True, "execution_enabled": False,
         "strategy_id": "crecetrader_basic_trend_v1",
@@ -335,6 +475,7 @@ def analyze(velas: list[dict], tf: str, variant: str) -> dict:
         },
         "rejected": rejected,
         "candidates": candidatos[-40:],
+        "watchlist": watchlist[:8],
         "trades": trades[-80:],
         "phases": F.fases_para_grafico(velas, tf, PIV, limit=12),
     }

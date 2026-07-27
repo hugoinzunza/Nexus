@@ -41,6 +41,10 @@ def test_motor_es_research_y_sin_ejecucion():
     assert result["research_only"] is True
     assert result["execution_enabled"] is False
     assert result["rules"]["min_net_rr"] == 2.0
+    assert isinstance(result["watchlist"], list)
+    for watch in result["watchlist"]:
+        assert watch["as_of"] == _candles(140)[-1]["t"]
+        assert "eligible_next_open" in watch
 
 
 def test_modulo_expone_btc_eth_y_variantes():
@@ -70,5 +74,6 @@ def test_vista_declara_research_y_menu_visible():
     shell = (ROOT / "static" / "nexux-shell.js").read_text()
     assert "RESEARCH ONLY" in html
     assert "sin órdenes reales" in html
+    assert "Entradas en vigilancia" in html
     assert "/m/bot2/" in shell
     assert '"bot2"' in (ROOT / "config" / "nexus.json").read_text()

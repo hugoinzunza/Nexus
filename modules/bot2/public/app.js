@@ -53,7 +53,7 @@ function drawPhases(phases) {
   });
 }
 
-function drawTrades(trades, visibleCandles) {
+function drawTrades(trades, visibleCandles, watchlist) {
   const first = visibleCandles.length ? Number(visibleCandles[0].t) : Infinity;
   const last = visibleCandles.length ? Number(visibleCandles.at(-1).t) : -Infinity;
   const visible = trades.filter(t => Number(t.entry_t) >= first && Number(t.entry_t) <= last);
@@ -65,13 +65,23 @@ function drawTrades(trades, visibleCandles) {
     if(t.exit_t) markers.push({time:unix(t.exit_t),position:t.side==="long"?"aboveBar":"belowBar",
       color:t.status==="win"?"#36c98e":"#ef6673",shape:"circle",text:`${t.status} ${fmt(t.result_r,1)}R`});
   });
+  const watched = (watchlist || [])[0];
+  if (watched && visibleCandles.length) {
+    markers.push({time:unix(visibleCandles.at(-1).t),
+      position:watched.side==="long"?"belowBar":"aboveBar",
+      color:"#e5b653",shape:"circle",text:`VIG · ${watched.side}`});
+  }
   if (tradeMarkers?.setMarkers) tradeMarkers.setMarkers(markers);
   else tradeMarkers = LightweightCharts.createSeriesMarkers(candles, markers);
   tradeLines.forEach(line => { try { candles.removePriceLine(line); } catch (_) {} });
   tradeLines = [];
-  const latest = visible.at(-1);
+  const latest = watched || visible.at(-1);
   if (!latest) return;
-  [["entry","#42c7d9","entrada"],["stop","#ef6673","SL"],["target","#36c98e","TP"]].forEach(([key,color,title])=>{
+  const levels = watched
+    ? [["trigger","#e5b653","VIG gatillo"],["stop","#ef6673","VIG SL"],["target","#36c98e","VIG TP"]]
+    : [["entry","#42c7d9","entrada"],["stop","#ef6673","SL"],["target","#36c98e","TP"]];
+  levels.forEach(([key,color,title])=>{
+    if (latest[key] == null) return;
     tradeLines.push(candles.createPriceLine({price:Number(latest[key]),color,lineWidth:1,lineStyle:2,title,axisLabelVisible:true}));
   });
 }
@@ -90,7 +100,7 @@ function render(data) {
   ].join("");
   candles.setData(data.candles.map(v=>({time:unix(v.t),open:+v.o,high:+v.h,low:+v.l,close:+v.c})));
   drawPhases(data.phases || []);
-  drawTrades(data.trades || [], data.candles || []);
+  drawTrades(data.trades || [], data.candles || [], data.watchlist || []);
   chart.timeScale().fitContent();
   $("chart-sub").textContent=`${data.symbol} · ${data.tf} · ${LABELS[data.variant]} · ${data.source}`;
   $("trades").innerHTML=(data.trades || []).slice().reverse().map(t=>`<tr>
@@ -98,6 +108,16 @@ function render(data) {
     <td class="${t.status}">${t.status}</td><td>${fmt(t.net_rr,2)}</td>
     <td>${fmt(t.result_r,2)}</td><td>${t.context_label.replaceAll("_"," ")}</td></tr>`).join("")
     || `<tr><td colspan="6">Ninguna operación supera todavía todas las reglas.</td></tr>`;
+  const watch = data.watchlist || [];
+  $("watch-count").textContent = `${watch.length} activa${watch.length === 1 ? "" : "s"}`;
+  $("watchlist").innerHTML = watch.map(w=>`<tr class="${w.eligible_next_open ? "ready" : ""}">
+    <td><span class="watch-state">${w.status}</span></td>
+    <td class="${w.side}">${w.side}</td><td>${fmt(w.trigger,2)}</td>
+    <td>${w.distance_pct==null?"—":fmt(w.distance_pct,2)+"%"}</td>
+    <td>${fmt(w.stop,2)}</td><td>${fmt(w.target,2)}</td>
+    <td>${fmt(w.net_rr_estimate,2)}</td>
+    <td>${w.context_label.replaceAll("_"," ")}</td></tr>`).join("")
+    || `<tr><td colspan="8">No hay una fase vigente dentro de la ventana de vigilancia.</td></tr>`;
   $("rejections").innerHTML=Object.entries(data.rejected || {}).sort((a,b)=>b[1]-a[1])
     .map(([k,v])=>`<div class="reject"><span>${k}</span><strong>${v}</strong></div>`).join("");
   $("entry-rule").textContent = data.variant === "teacher_2close" ? "dos cierres + apertura siguiente"
