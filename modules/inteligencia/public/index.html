@@ -76,15 +76,26 @@
         <span><i style="background:#b7a7e8"></i> cálculos anuales históricos</span>
         <span><i style="background:#f4f6f8"></i> refugio promovido</span>
         <span><i style="background:#43bdd7"></i> apertura semanal</span>
-        <span><i style="background:#35c9c1"></i> niveles del TF principal</span>
-        <span><i style="background:#7698d9"></i> niveles de panorama</span>
-        <span><i style="background:#d88ab0"></i> niveles de sincronismo</span>
+        <span><i style="background:#35c9c1"></i> cálculos del TF visible</span>
+        <span><i style="background:#7698d9"></i> referentes superiores opcionales</span>
         <span><i style="background:#ef6370"></i> pivote alto confirmado</span>
         <span><i style="background:#24c88a"></i> pivote bajo confirmado</span>
       </div>
       <label class="toggle">
-        <input type="checkbox" id="ver-mapa" checked> mostrar precios calculados multitemporales
-        <small>solo se dibujan los que caben en el encuadre; las tablas conservan todos</small>
+        <input type="checkbox" id="ver-propios" checked> cálculos de esta temporalidad
+        <small>la pierna y los precios pertenecen al mismo TF que las velas</small>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="ver-pivotes-linea" checked> máximos y mínimos anteriores
+        <small>hasta dos referentes confirmados por lado, solo del TF visible</small>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="ver-superiores"> referentes de temporalidades superiores
+        <small>opcional: el más cercano por lado y TF; nunca mezcla niveles inferiores</small>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="ver-refugios" checked> aperturas y refugios
+        <small>capa heredada: rejilla anual, apertura semanal y refugios promovidos</small>
       </label>
       <label class="toggle">
         <input type="checkbox" id="ver-fractales"> mostrar todos los fractales 5+1+5
@@ -115,20 +126,19 @@
       <div class="grid3" id="pierna-stats"></div>
       <div class="grid2">
         <div>
-          <h3>Zona de corrección · principal</h3>
+          <h3>Zona de corrección · TF visible</h3>
           <div class="scroll-x"><table id="tabla-retrocesos"></table></div>
         </div>
         <div>
-          <h3>Proyecciones · principal</h3>
+          <h3>Proyecciones · TF visible</h3>
           <div class="scroll-x"><table id="tabla-extensiones"></table></div>
         </div>
       </div>
       <div class="mapas-multitf">
-        <h3>Capas calculadas de las demás temporalidades</h3>
+        <h3>Cálculos de las demás temporalidades</h3>
         <p>
-          Cada bloque usa su propia última pierna confirmada. Los precios que se
-          repiten entre marcos se conservan para mostrar su procedencia; no cuentan
-          como votos ni como mayor probabilidad.
+          Se conservan aquí para análisis y comparación, pero no se dibujan juntos
+          por defecto. Cada bloque usa su propia última pierna confirmada.
         </p>
         <div class="grid2" id="mapas-temporales"></div>
       </div>
@@ -313,6 +323,6 @@
   </main>
 
   <script src="/static/nexux-shell.js?v=6"></script>
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

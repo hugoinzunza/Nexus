@@ -319,6 +319,44 @@ def test_cada_timeframe_del_horizonte_conserva_su_propio_mapa():
     }
 
 
+def test_el_mapa_visible_pertenece_al_tf_seleccionado():
+    """El selector y las velas no pueden decir 15m mientras las tablas conservan la
+    pierna principal de 1D. Ese desacople fue el origen de la mezcla visual."""
+    import time
+    m, _ = _modulo()
+    ahora = int(time.time() * 1000)
+
+    def serie(tf, n=180):
+        paso = P.TF_MS[tf]
+        t0 = (ahora // paso - n) * paso
+        patron = (100, 104, 109, 105, 101, 96, 91, 95, 100, 106, 111, 105)
+        return [
+            {"t": t0 + i * paso, "o": patron[i % len(patron)],
+             "h": patron[i % len(patron)] + 1,
+             "l": patron[i % len(patron)] - 1,
+             "c": patron[i % len(patron)], "v": 1}
+            for i in range(n)
+        ]
+
+    m._velas = lambda _symbol, tf, _tope: (serie(tf), "test", {})
+    mapa = m._mapa_horizonte("ETHUSDT", "largo", "15m")
+    assert mapa["selected_tf"] == "15m"
+    assert mapa["mapa"]["pierna"]["tf"] == "15m"
+    assert mapa["mapas_temporales"]["15m"]["rol"] == "seleccionado"
+
+
+def test_la_grafica_separa_tf_propio_pivotes_y_contexto_superior():
+    js = open(APP_JS, encoding="utf-8").read()
+    html = open(INDEX, encoding="utf-8").read()
+    assert 'const propia = capas[state.tf]' in js
+    assert 'orden.indexOf(capa.tf) <= rangoActual' in js
+    assert 'slice(0, 2)' in js
+    assert 'id="ver-propios" checked' in html
+    assert 'id="ver-pivotes-linea" checked' in html
+    assert 'id="ver-superiores"' in html
+    assert 'precios calculados multitemporales' not in html
+
+
 def test_la_tendencia_dice_indefinida_en_vez_de_inventar():
     """Con menos de dos pivotes por lado no hay como hablar de creciente. Forzar una
     lectura ahi es exactamente la discrecionalidad que el curso no resuelve."""
@@ -691,10 +729,11 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert "alineacion-stats" in html and "vacio_horizonte" in modulo
     assert "mapas-temporales" in html and "mapas_temporales" in modulo
     assert "mostrando ${filas.length} de ${total}" in js
-    assert 'id="ver-mapa" checked' in html
+    assert 'id="ver-propios" checked' in html
+    assert 'id="ver-pivotes-linea" checked' in html
     assert 'id="ver-fractales"' in html
     assert "Precios calculados" in js
-    assert "app.js?v=9" in html and "styles.css?v=8" in html
+    assert "app.js?v=10" in html and "styles.css?v=8" in html
     assert "rejillas_historicas" in modulo and "refugios_promovidos" in modulo
     assert '"refugios_promovidos": []' in modulo
     assert "state.marcas.setMarkers" in js

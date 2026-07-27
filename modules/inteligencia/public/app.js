@@ -200,6 +200,9 @@ function pintarVelas() {
                                              minMove: Math.pow(10, -prec) } });
   state.series.setData(state.velas.map((v) => ({
     time: Math.floor(v.t / 1000), open: v.o, high: v.h, low: v.l, close: v.c })));
+  // Cambiar de par o TF no debe conservar el rango lógico del gráfico anterior.
+  // En móvil ese rango heredado podía dejar las velas de ETH fuera de la ventana.
+  try { state.chart.timeScale().fitContent(); } catch (e) { /* bundle sin soporte */ }
 }
 
 function limpiarLineas() {
@@ -213,7 +216,10 @@ function pintarNiveles() {
   const d = state.data;
   const verPlacebo = $("ver-placebo").checked;
   const verHistoricas = $("ver-historicas").checked;
-  const verMapa = $("ver-mapa").checked;
+  const verPropios = $("ver-propios").checked;
+  const verSuperiores = $("ver-superiores").checked;
+  const verPivotes = $("ver-pivotes-linea").checked;
+  const verRefugios = $("ver-refugios").checked;
 
   // Solo los niveles que caen en el rango de precio VISIBLE de las velas cargadas.
   // Sin este recorte, la rejilla anual llega hasta +150% y aplasta el eje: es el mismo
@@ -236,9 +242,11 @@ function pintarNiveles() {
       axisLabelVisible: etiqueta, title: etiqueta ? titulo : "" }));
   };
 
-  for (const f of d.rejilla || []) {
-    linea(f.precio, "#e8b653", `${f.pct_del_ancla > 0 ? "+" : ""}${f.pct_del_ancla}%`,
-          0, f.k % 5 === 0 ? 2 : 1);
+  if (verRefugios) {
+    for (const f of d.rejilla || []) {
+      linea(f.precio, "#e8b653", `${f.pct_del_ancla > 0 ? "+" : ""}${f.pct_del_ancla}%`,
+            0, f.k % 5 === 0 ? 2 : 1);
+    }
   }
   if (verPlacebo) {
     for (const [paso, filas] of Object.entries(d.rejilla_placebo || {})) {
@@ -246,7 +254,7 @@ function pintarNiveles() {
       for (const f of filas) linea(f.precio, "rgba(91,98,114,.75)", `${pct}%`, 2);
     }
   }
-  if (verHistoricas) {
+  if (verRefugios && verHistoricas) {
     for (const historia of d.rejillas_historicas || []) {
       linea(historia.ancla.precio, "#b7a7e8", `apertura ${historia.anio}`, 2, 2, false);
       const cercanosHistoria = [...(historia.niveles || [])]
@@ -261,51 +269,75 @@ function pintarNiveles() {
       }
     }
   }
-  for (const refugio of d.refugios_promovidos || []) {
-    linea(refugio.precio, "#f4f6f8", `refugio ${refugio.nombre || ""}`.trim(),
-          0, 3, false);
+  if (verRefugios) {
+    for (const refugio of d.refugios_promovidos || []) {
+      linea(refugio.precio, "#f4f6f8", `refugio ${refugio.nombre || ""}`.trim(),
+            0, 3, false);
+    }
+    if (d.apertura_semanal) {
+      linea(d.apertura_semanal.precio, "#43bdd7", "apertura semanal", 1, 2);
+    }
+    if (d.apertura_anual) {
+      linea(d.apertura_anual.precio, "#ffffff", `apertura ${d.anio}`, 0, 2);
+    }
   }
-  if (d.apertura_semanal) {
-    linea(d.apertura_semanal.precio, "#43bdd7", "apertura semanal", 1, 2);
+
+  const nivelesCapa = (capa) => {
+    if (!capa || !capa.mapa) return [];
+    return [
+      ...(capa.mapa.retrocesos || []).map((nivel) => ({ capa, nivel, familia: "C" })),
+      ...(capa.mapa.extensiones || []).map((nivel) => ({ capa, nivel, familia: "P" })),
+    ];
+  };
+  const capas = state.mapa ? state.mapa.mapas_temporales || {} : {};
+  const propia = capas[state.tf];
+  if (verPropios && propia) {
+    for (const c of nivelesCapa(propia)) {
+      linea(c.nivel.precio, "#35c9c1",
+            `${String(state.tf).toUpperCase()} ${c.familia}${fmt(c.nivel.ratio * 100, 1)}%`,
+            0, 2, false);
+    }
   }
-  if (d.apertura_anual) {
-    linea(d.apertura_anual.precio, "#ffffff", `apertura ${d.anio}`, 0, 2);
-  }
-  if (verMapa && state.mapa) {
-    const colores = { principal: "#35c9c1", panorama: "#7698d9",
-                      sincronismo: "#d88ab0" };
-    const estilos = { principal: 0, panorama: 2, sincronismo: 1 };
-    const candidatos = [];
-    for (const capa of Object.values(state.mapa.mapas_temporales || {})) {
-      if (!capa.mapa) continue;
-      for (const nivel of capa.mapa.retrocesos || []) {
-        candidatos.push({ capa, nivel, familia: "C" });
-      }
-      for (const nivel of capa.mapa.extensiones || []) {
-        candidatos.push({ capa, nivel, familia: "P" });
+
+  // El profesor consulta contexto superior, pero no mezcla niveles inferiores sobre
+  // un gráfico mayor. La capa es opcional y conserva solo el nivel más cercano de
+  // cada lado por TF para que el contexto no tape la estructura propia.
+  if (verSuperiores) {
+    const orden = ["15m", "1h", "4h", "1d", "1w"];
+    const rangoActual = orden.indexOf(state.tf);
+    for (const capa of Object.values(capas)) {
+      if (orden.indexOf(capa.tf) <= rangoActual) continue;
+      const niveles = nivelesCapa(capa);
+      const arriba = niveles.filter((x) => x.nivel.precio > d.precio)
+        .sort((a, b) => a.nivel.precio - b.nivel.precio)[0];
+      const abajo = niveles.filter((x) => x.nivel.precio < d.precio)
+        .sort((a, b) => b.nivel.precio - a.nivel.precio)[0];
+      for (const c of [arriba, abajo].filter(Boolean)) {
+        linea(c.nivel.precio, "#7698d9",
+              `${String(c.capa.tf).toUpperCase()} ref ${c.familia}` +
+                `${fmt(c.nivel.ratio * 100, 1)}%`,
+              2, 1, false);
       }
     }
-    // Todas las líneas permanecen. Para las etiquetas se usa una separación mínima
-    // sobre el rango visible; de otro modo 30-40 precios se pisan en el eje y dejan
-    // de ser legibles. La tabla inferior conserva el detalle completo.
-    const prioridad = { principal: 0, sincronismo: 1, panorama: 2 };
-    const umbralEtiqueta = Math.max((max - min) * 0.025, d.precio * 0.001);
-    const elegidas = [];
-    for (const c of candidatos.filter((x) => visible(x.nivel.precio))
-      .sort((a, b) =>
-        Math.abs(a.nivel.precio - d.precio) - Math.abs(b.nivel.precio - d.precio) ||
-        (prioridad[a.capa.rol] ?? 3) - (prioridad[b.capa.rol] ?? 3))) {
-      if (elegidas.length >= 10) break;
-      if (elegidas.every((x) => Math.abs(x - c.nivel.precio) >= umbralEtiqueta)) {
-        elegidas.push(c.nivel.precio);
-      }
-    }
-    for (const c of candidatos) {
-      linea(c.nivel.precio, colores[c.capa.rol] || "#9aa4b5",
-            `${String(c.capa.tf).toUpperCase()} ${c.familia}` +
-              `${fmt(c.nivel.ratio * 100, 1)}%`,
-            estilos[c.capa.rol] ?? 2, c.capa.rol === "principal" ? 2 : 1, false,
-            elegidas.includes(c.nivel.precio));
+  }
+
+  // Referentes estructurales del TF visible: como máximo dos por lado. No se llaman
+  // resistencias ni soportes porque el curso no define objetivamente su estado tras
+  // una ruptura; la etiqueta solo declara qué extremo confirmado los originó.
+  if (verPivotes && state.estructura) {
+    const pivotes = [
+      ...(state.estructura.highs || []).map((p) => ({ ...p, lado: "máx." })),
+      ...(state.estructura.lows || []).map((p) => ({ ...p, lado: "mín." })),
+    ];
+    const pxGrafico = state.velas.length
+      ? Number(state.velas[state.velas.length - 1].c) : Number(d.precio);
+    const arriba = pivotes.filter((p) => p.price > pxGrafico)
+      .sort((a, b) => a.price - b.price).slice(0, 2);
+    const abajo = pivotes.filter((p) => p.price < pxGrafico)
+      .sort((a, b) => b.price - a.price).slice(0, 2);
+    for (const p of [...arriba, ...abajo]) {
+      linea(p.price, p.lado === "máx." ? "#ef6370" : "#24c88a",
+            `${String(state.tf).toUpperCase()} ${p.lado} previo`, 2, 1, false);
     }
   }
 
@@ -481,7 +513,8 @@ function pintarMapa() {
   const d = state.mapa;
   if (!d) return;
   const p = d.perfil || {};
-  $("mapa-sub").textContent = `${p.label || state.horizonte} · ${d.symbol}`;
+  $("mapa-sub").textContent = `${String(d.selected_tf || state.tf).toUpperCase()} visible · ` +
+    `${p.label || state.horizonte} · ${d.symbol}`;
   $("roles").innerHTML = [
     ["Panorama", (p.panorama || []).map((x) => x.toUpperCase()).join(" + ")],
     ["Principal", String(p.principal || "—").toUpperCase()],
@@ -543,7 +576,7 @@ function pintarMapa() {
     tablaMapa("tabla-retrocesos", m.retrocesos);
     tablaMapa("tabla-extensiones", m.extensiones);
   }
-  mapasTemporales(d, p.principal);
+  mapasTemporales(d, d.selected_tf || state.tf);
   const refs = d.referencias_cercanas || {};
   referencias("refs-arriba", "Referencias confirmadas arriba",
               refs.arriba, refs.total_arriba);
@@ -597,7 +630,8 @@ async function cargar() {
     const [st, vl, mp] = await Promise.all([
       fetch(`${API}/state?${q}`).then((r) => r.json()),
       fetch(`${API}/velas?${q}&tf=${state.tf}`).then((r) => r.json()),
-      fetch(`${API}/mapa?${q}&horizonte=${state.horizonte}`).then((r) => r.json()),
+      fetch(`${API}/mapa?${q}&horizonte=${state.horizonte}&tf=${state.tf}`)
+        .then((r) => r.json()),
     ]);
     if (seq !== state.loadSeq) return;
     if (st.error || vl.error || mp.error) {
@@ -672,7 +706,10 @@ function iniciar() {
   }
   $("ver-placebo").addEventListener("change", pintarNiveles);
   $("ver-historicas").addEventListener("change", pintarNiveles);
-  $("ver-mapa").addEventListener("change", pintarNiveles);
+  $("ver-propios").addEventListener("change", pintarNiveles);
+  $("ver-superiores").addEventListener("change", pintarNiveles);
+  $("ver-pivotes-linea").addEventListener("change", pintarNiveles);
+  $("ver-refugios").addEventListener("change", pintarNiveles);
   $("ver-fractales").addEventListener("change", () => {
     if (state.estructura) pintarPivotes(state.estructura);
   });

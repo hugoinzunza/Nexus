@@ -270,7 +270,10 @@ class InteligenciaModule(NexusModule):
                 horizonte = query.get("horizonte") or "medio"
                 if horizonte not in HORIZONTES:
                     return self._json(400, {"error": "horizonte no habilitado"})
-                return self._json(200, self._mapa_horizonte(symbol, horizonte))
+                tf = query.get("tf") or HORIZONTES[horizonte]["principal"]
+                if tf not in self.TFS:
+                    return self._json(400, {"error": "temporalidad no habilitada"})
+                return self._json(200, self._mapa_horizonte(symbol, horizonte, tf))
             return self._json(200, self._estado(symbol))
         except Exception as exc:  # noqa: BLE001
             # Un fallo de red no puede tumbar la vista entera: se reporta como dato.
@@ -392,11 +395,16 @@ class InteligenciaModule(NexusModule):
                            "solo para dar escala al ratio. No es el SL de ningún plan."),
         }
 
-    def _mapa_horizonte(self, symbol: str, horizonte: str) -> dict:
+    def _mapa_horizonte(self, symbol: str, horizonte: str,
+                        selected_tf: str | None = None) -> dict:
         perfil = HORIZONTES[horizonte]
+        selected_tf = selected_tf or perfil["principal"]
+        if selected_tf not in self.TFS:
+            raise ValueError("temporalidad no habilitada")
         ahora_ms = int(time.time() * 1000)
         requeridas = list(dict.fromkeys(
-            perfil["panorama"] + [perfil["principal"], perfil["sincronismo"]]))
+            perfil["panorama"] +
+            [perfil["principal"], perfil["sincronismo"], selected_tf]))
         series = {}
         fuentes = {}
         for tf in requeridas:
@@ -415,13 +423,14 @@ class InteligenciaModule(NexusModule):
             tf: P.piernas_confirmadas(series[tf]["closed"], tf, PIV_CURSO)
             for tf in requeridas
         }
-        piernas = piernas_por_tf[principal_tf]
+        piernas = piernas_por_tf[selected_tf]
         seleccionada = piernas[-1] if piernas else None
         mapa = P.mapa_precios(seleccionada, precio) if seleccionada else None
         roles_tf = {
             tf: ("principal" if tf == principal_tf
                  else "sincronismo" if tf == perfil["sincronismo"]
-                 else "panorama")
+                 else "panorama" if tf in perfil["panorama"]
+                 else "seleccionado")
             for tf in requeridas
         }
         mapas_temporales = {}
@@ -530,6 +539,7 @@ class InteligenciaModule(NexusModule):
             "validated": False,
             "symbol": symbol,
             "horizonte": horizonte,
+            "selected_tf": selected_tf,
             "perfil": perfil,
             "as_of": ahora_ms,
             "precio": precio,
