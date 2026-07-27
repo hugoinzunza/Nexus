@@ -326,6 +326,15 @@ td.num { font-family: ui-monospace, monospace; }
 .layer-summary strong { margin: 3px 0; font: 600 15px ui-monospace,monospace; }
 .layer-summary small { color: var(--muted); font-size: 9.5px; line-height: 1.35; }
 
+/* El breakpoint considera el menú lateral de 236px. En un desktop de 1280px el
+   contenido real mide solo 1044px: mantener una escalera de 238px al costado
+   dejaba el gráfico en 720px aunque la página fuera "desktop". La escalera baja
+   antes de que eso ocurra; en monitores anchos conserva la disposición lateral. */
+@media (max-width: 1500px) and (min-width: 621px) {
+  .chart-layout { grid-template-columns: minmax(0, 1fr); }
+  .level-ladder { height: 330px; }
+}
+
 @media (max-width: 620px) {
   main { padding-inline: 14px; }
   .price-block { width: 100%; flex-wrap: wrap; }

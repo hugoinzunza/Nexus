@@ -159,7 +159,7 @@ def chrome():
     opciones.add_argument("--no-sandbox")
     opciones.add_argument("--disable-dev-shm-usage")
     opciones.add_argument("--disable-gpu")
-    opciones.add_argument("--window-size=1920,1080")
+    opciones.add_argument("--window-size=1280,900")
     navegador = webdriver.Chrome(options=opciones)
     try:
         yield navegador
@@ -186,8 +186,9 @@ def _encuadre(driver, tf: str) -> tuple[int, str]:
 def test_viewport_real_carga_recarga_y_cambia_tf(servidor_nexux, chrome):
     chrome.get(f"{servidor_nexux}/m/inteligencia/")
     _encuadre(chrome, "4h")
-    assert chrome.find_element(By.ID, "chart").size["width"] > 1100
+    assert chrome.find_element(By.ID, "chart").size["width"] > 930
     assert chrome.find_element(By.ID, "chart").size["height"] >= 500
+    assert chrome.find_element(By.CSS_SELECTOR, ".level-ladder").size["width"] > 930
     assert chrome.find_element(By.ID, "chart-fullscreen").get_attribute(
         "aria-label"
     ) == "Ampliar gráfico"
