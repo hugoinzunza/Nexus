@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
+  <meta name="theme-color" content="#090b10">
+  <title>Bot2 · Acción del precio · NexUX</title>
+  <link rel="stylesheet" href="/static/nexux-shell.css">
+  <link rel="stylesheet" href="styles.css?v=2">
+  <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <main>
+    <header class="head">
+      <div><p>LABORATORIO CAUSAL</p><h1>Bot2 · Acción del precio</h1></div>
+      <div class="controls">
+        <select id="symbol" aria-label="Par"></select>
+        <select id="tf" aria-label="Temporalidad"></select>
+        <select id="variant" aria-label="Regla de entrada"></select>
+      </div>
+    </header>
+    <p class="warning"><strong>RESEARCH ONLY</strong> · simulación histórica · sin señal · sin credenciales · sin órdenes reales</p>
+
+    <section class="metrics" id="metrics"></section>
+
+    <section class="panel chart-panel">
+      <header><div><h2>Fases y operaciones virtuales</h2><p id="chart-sub">Cargando datos</p></div>
+        <div class="legend"><span class="i">I impulso</span><span class="ii">II corrección</span><span class="iii">III candidata</span></div>
+      </header>
+      <div id="chart"></div>
+    </section>
+
+    <section class="split">
+      <article class="panel">
+        <header><div><h2>Libro virtual</h2><p>Entrada en la apertura siguiente; resolución SL primero.</p></div></header>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Lado</th><th>Estado</th><th>RR</th><th>R</th><th>Contexto</th></tr></thead><tbody id="trades"></tbody></table></div>
+      </article>
+      <article class="panel">
+        <header><div><h2>Qué está descartando</h2><p>Los rechazos también son resultado.</p></div></header>
+        <div id="rejections" class="rejects"></div>
+      </article>
+    </section>
+
+    <section class="panel rules">
+      <header><div><h2>Contrato medible</h2><p>No cambia según el resultado.</p></div></header>
+      <div class="rule-grid">
+        <div><strong>Fase I</strong><span>impulso entre pivotes 5+1+5 confirmados</span></div>
+        <div><strong>Fase II</strong><span>corrección causal entre 38,2% y 61,8%</span></div>
+        <div><strong>Entrada</strong><span id="entry-rule">dos cierres + apertura siguiente</span></div>
+        <div><strong>SL</strong><span>extremo estructural + 0,10 ATR</span></div>
+        <div><strong>TP</strong><span>primera proyección de fase alcanzable</span></div>
+        <div><strong>Gate</strong><span>RR neto ≥2; panorama opuesto bloquea</span></div>
+      </div>
+      <p class="honesty">Esta primera traducción sirve para refutar o mejorar reglas. Una muestra pequeña, un resultado positivo o una fase bien dibujada no validan una estrategia.</p>
+    </section>
+  </main>
+  <script src="app.js?v=2"></script>
+  <script src="/static/nexux-shell.js?v=7"></script>
+</body>
+</html>

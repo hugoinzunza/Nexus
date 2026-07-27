@@ -733,7 +733,9 @@ def test_la_vista_expone_horizontes_y_mapa_sin_habilitar_ejecucion():
     assert 'id="ver-pivotes-linea" checked' in html
     assert 'id="ver-fractales"' in html
     assert "Precios calculados" in js
-    assert "app.js?v=10" in html and "styles.css?v=8" in html
+    assert "app.js?v=11" in html and "styles.css?v=8" in html
+    assert 'id="ver-fases" checked' in html
+    assert '"fases": F.fases_para_grafico' in modulo
     assert "rejillas_historicas" in modulo and "refugios_promovidos" in modulo
     assert '"refugios_promovidos": []' in modulo
     assert "state.marcas.setMarkers" in js

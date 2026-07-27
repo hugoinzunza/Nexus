@@ -26,6 +26,7 @@ import time
 from core.module_base import NexusModule
 from core import klines_push
 from modules.journal import binance_client as bc
+from . import fases as F
 from . import precio as P
 
 ROOT_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -265,7 +266,9 @@ class InteligenciaModule(NexusModule):
                                         "as_of": ahora_ms,
                                         "velas_cerradas": len(cerradas),
                                         "vela_abierta": len(velas) > len(cerradas),
-                                        "estructura": P.estructura(cerradas, PIV_CURSO)})
+                                        "estructura": P.estructura(cerradas, PIV_CURSO),
+                                        "fases": F.fases_para_grafico(
+                                            cerradas, tf, PIV_CURSO, limit=3)})
             if subpath == "mapa":
                 horizonte = query.get("horizonte") or "medio"
                 if horizonte not in HORIZONTES:

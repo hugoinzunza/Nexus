@@ -14,7 +14,7 @@ const API = "/m/inteligencia/api";
 
 const state = { symbol: null, tf: "4h", horizonte: "medio", data: null, mapa: null,
                 velas: [], chart: null, series: null, lineas: [], marcas: null,
-                estructura: null, loadSeq: 0 };
+                estructura: null, fases: [], faseSeries: [], loadSeq: 0 };
 const TF_PRINCIPAL = { corto: "1h", medio: "4h", largo: "1d" };
 const LABEL_ALINEACION = {
   alineado: "alineado",
@@ -208,6 +208,39 @@ function pintarVelas() {
 function limpiarLineas() {
   for (const l of state.lineas) { try { state.series.removePriceLine(l); } catch (e) { /* ya removida */ } }
   state.lineas = [];
+}
+
+function pintarFases() {
+  for (const serie of state.faseSeries) {
+    try { state.chart.removeSeries(serie); } catch (e) { /* ya removida */ }
+  }
+  state.faseSeries = [];
+  if (!$("ver-fases").checked || !window.LightweightCharts) return;
+  const LC = window.LightweightCharts;
+  const colores = { I: "#24c88a", II: "#e8b653", "III?": "#9e8cff", III: "#9e8cff" };
+  for (const fase of state.fases || []) {
+    const segmentos = [...(fase.segments || [])];
+    if (fase.phase_iii) segmentos.push(fase.phase_iii);
+    for (const seg of segmentos) {
+      const serie = state.chart.addSeries(LC.LineSeries, {
+        color: colores[seg.label] || "#9e8cff", lineWidth: 3,
+        lineStyle: seg.candidate ? 2 : 0,
+        priceLineVisible: false, lastValueVisible: false,
+      });
+      serie.setData([
+        { time: Math.floor(seg.start_t / 1000), value: Number(seg.start_price) },
+        { time: Math.floor(seg.end_t / 1000), value: Number(seg.end_price) },
+      ]);
+      if (LC.createSeriesMarkers) {
+        LC.createSeriesMarkers(serie, [{
+          time: Math.floor(seg.end_t / 1000),
+          position: fase.side === "long" ? "belowBar" : "aboveBar",
+          color: colores[seg.label] || "#9e8cff", shape: "circle", text: seg.label,
+        }]);
+      }
+      state.faseSeries.push(serie);
+    }
+  }
 }
 
 function pintarNiveles() {
@@ -642,8 +675,10 @@ async function cargar() {
     state.mapa = mp;
     state.velas = vl.velas || [];
     state.estructura = vl.estructura || null;
+    state.fases = vl.fases || [];
     pintarVelas();
     pintarNiveles();
+    pintarFases();
     if (state.estructura) pintarPivotes(state.estructura);
     pintarPaneles();
     if (vl.stream_vivo) vivo.conectar(vl.stream_vivo); else vivo.cerrar();
@@ -710,6 +745,7 @@ function iniciar() {
   $("ver-superiores").addEventListener("change", pintarNiveles);
   $("ver-pivotes-linea").addEventListener("change", pintarNiveles);
   $("ver-refugios").addEventListener("change", pintarNiveles);
+  $("ver-fases").addEventListener("change", pintarFases);
   $("ver-fractales").addEventListener("change", () => {
     if (state.estructura) pintarPivotes(state.estructura);
   });
