@@ -496,15 +496,11 @@ function drawOrderbook() {
     min = Math.min(min, Math.min(...precios));
     max = Math.max(max, Math.max(...precios));
   } else {
-    const pmin = Math.min(...precios), pmax = Math.max(...precios);
-    const centro = (pmin + pmax) / 2;
-    const radio = Math.max((pmax - pmin) / 2 * 1.6, centro * 0.02);
-    min = centro - radio; max = centro + radio;
-    const cerca = muros.filter((m) => m.p >= min && m.p <= max);
-    if (cerca.length) {
-      min = Math.min(min, Math.min(...cerca.map((m) => m.p)));
-      max = Math.max(max, Math.max(...cerca.map((m) => m.p)));
-    }
+    // "Todo" tiene que significar TODO. Antes seguia usando un radio alrededor
+    // del recorrido del precio y ocultaba precisamente los muros lejanos que el
+    // usuario esperaba encontrar al pulsarlo.
+    min = Math.min(...precios, ...muros.map((m) => m.p));
+    max = Math.max(...precios, ...muros.map((m) => m.p));
   }
   const pad = (max - min) * 0.04 || 1;
   min -= pad; max += pad;
@@ -544,6 +540,14 @@ function drawOrderbook() {
   // Escala local robusta: el p90 satura el color. El importe real no se altera y
   // sigue en las etiquetas, pero una ballena de 78M ya no borra muros de 1–5M.
   const murosVisibles = muros.filter((m) => m.p >= min && m.p <= max);
+  const ultima = snapshots[snapshots.length - 1];
+  const murosAhora = [
+    ...(ultima.bids || []).map(([p, usd]) => ({ p, usd, lado: "bid" })),
+    ...(ultima.asks || []).map(([p, usd]) => ({ p, usd, lado: "ask" })),
+  ].filter((m) => Number.isFinite(m.p) && Number.isFinite(m.usd));
+  const visiblesAhora = murosAhora.filter((m) => m.p >= min && m.p <= max);
+  const fueraArriba = murosAhora.filter((m) => m.p > max).length;
+  const fueraAbajo = murosAhora.filter((m) => m.p < min).length;
   const escalaUsd = Math.max(percentil(murosVisibles.map((m) => m.usd), 0.9) || 1, 1);
   const ancho = temporal.anchoColumna;
   for (const m of muros) {
@@ -554,6 +558,24 @@ function drawOrderbook() {
       : `rgba(239,99,112,${(0.08 + rel * 0.62).toFixed(3)})`;
     const alto = Math.max(3, rel * 11);
     ctx.fillRect(X(m.i) - ancho / 2, Y(m.p) - alto / 2, ancho, alto);
+  }
+
+  // Un periodo sin rectangulos puede ser una captura valida cuyos muros quedaron
+  // fuera del zoom. Se declara dentro del grafico para no confundirlo con una
+  // caida del colector, que se pinta aparte como "sin captura".
+  ctx.font = "700 10px ui-monospace, monospace";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "top";
+  if (fueraArriba) {
+    ctx.fillStyle = "#ef6370";
+    ctx.fillText(`↑ ${fueraArriba} muro${fueraArriba === 1 ? "" : "s"} fuera del zoom`,
+                 width - R - 10, T + 5);
+  }
+  if (fueraAbajo) {
+    ctx.fillStyle = "#24c88a";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`↓ ${fueraAbajo} muro${fueraAbajo === 1 ? "" : "s"} fuera del zoom`,
+                 width - R - 10, height - B - 5);
   }
 
   // --- FLUJO: que muros nacen, se comen o se retiran ---
@@ -679,8 +701,12 @@ function drawOrderbook() {
                    `${compactUsd(flujo.piso)} con que CoinGlass filtra la lista` : "");
   const conteos = snapshots.map((s) => (s.bids || []).length + (s.asks || []).length);
   const medianaNiveles = percentil(conteos, 0.5);
+  const alcance = `${visiblesAhora.length} de ${murosAhora.length} muros actuales visibles` +
+    (fueraArriba || fueraAbajo
+      ? ` · fuera del zoom: ${fueraArriba} arriba, ${fueraAbajo} abajo`
+      : " · rango completo");
   $("book-coverage").textContent =
-    `${medianaNiveles ?? "—"} muros listados por captura (mediana) · intensidad ` +
+    `${alcance} · ${medianaNiveles ?? "—"} listados por captura (mediana) · intensidad ` +
     `saturada en p90 ${compactUsd(escalaUsd)} · ` +
     `${temporal.usaTiempoReal ? "eje de tiempo real" : "timestamps inválidos: eje por captura"}. ` +
     "Los vacíos verticales significan “sin muro listado sobre el umbral”, no “sin órdenes”; " +
@@ -1319,14 +1345,19 @@ function renderAhora() {
   // modo de falla exacto que ese dato venía a evitar.
   const edad = Number(visual?.age_seconds);
   const archivo = state.visual_book_archive || {};
+  const archivoLocal = state.visual_snapshot?.local_book_archive || {};
   const partes = [];
-  if (archivo.existe && archivo.ultima_escritura) {
+  if (archivoLocal.configured && archivoLocal.ok) {
+    partes.push(`archivo VPS activo · ${fmt(Number(archivoLocal.bytes || 0) / 1e6, 1)} MB`);
+  } else if (archivoLocal.configured && !archivoLocal.ok) {
+    partes.push("ARCHIVO VPS CON ERROR");
+  } else if (archivo.existe && archivo.ultima_escritura) {
     const min = Math.round((Date.now() - Date.parse(archivo.ultima_escritura)) / 60000);
-    partes.push(`archivo ${fmt(archivo.bytes / 1e6, 1)} MB` +
+    partes.push(`archivo web ${fmt(archivo.bytes / 1e6, 1)} MB` +
                 (Number.isFinite(min) ? `, última escritura hace ${min} min` : ""));
     if (archivo.lleno) partes.push("ARCHIVO LLENO: dejó de guardar");
   } else if (archivo.existe === false) {
-    partes.push("archivo histórico aún vacío");
+    partes.push("archivo web pendiente: conserva 7 días en ventana antes de archivar");
   }
   // La cobertura va junto a la frescura porque son la misma pregunta: cuánto de lo
   // que se ve es dato y cuánto es no-medición. Medido: la lista trae SIEMPRE 41

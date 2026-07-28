@@ -686,18 +686,24 @@ def test_brujula_mide_alcance_y_no_afirma_direccion():
     assert "sin validar" in script
 
 
-def test_el_encuadre_del_libro_se_ancla_al_precio_no_a_los_muros():
+def test_el_zoom_del_libro_se_ancla_al_precio_y_todo_abre_el_rango():
     """REGRESIÓN: al reescribir el gráfico se perdió el filtro de distancia y dos
     muros lejanos (120k y 125k con BTC en 64k) estiraban el eje Y de 57k a 130k,
-    aplastando toda la acción del precio en una banda de píxeles ilegible.
+    aplastando toda la acción del precio en una banda de píxeles ilegible. Los zoom
+    acotados lo impiden; "Todo" es la excepción explícita elegida por el usuario.
     """
     script = (ROOT / "modules/coinglass/public/app.js").read_text()
     bloque = script.split("function drawOrderbook()")[1].split("\nfunction ")[0]
 
-    # el rango sale del precio, no del min/max de todos los muros
-    assert "const pmin = Math.min(...precios)" in bloque
-    assert "muros.map((m) => m.p).concat(precios)" not in bloque, \
-        "el eje no puede tomar su rango de los muros lejanos"
+    # En los tres zoom, el rango sale del precio actual y su recorrido.
+    assert "if (bookZoom > 0)" in bloque
+    assert "ahora * (1 - bookZoom / 100)" in bloque
+    assert "min = Math.min(min, Math.min(...precios))" in bloque
+
+    # Solo "Todo" (bookZoom=0) incorpora deliberadamente todos los muros.
+    rama_todo = bloque.split("} else {", 1)[1].split("\n  }", 1)[0]
+    assert "Math.min(...precios, ...muros.map((m) => m.p))" in rama_todo
+    assert "Math.max(...precios, ...muros.map((m) => m.p))" in rama_todo
 
     # los muros fuera del encuadre no se dibujan ni se etiquetan
     assert "if (m.p < min || m.p > max) continue;" in bloque
@@ -771,6 +777,14 @@ def test_el_libro_tiene_zoom_al_precio_de_ahora():
     assert "ahora * (1 - bookZoom / 100)" in script
     # y el recorrido del precio nunca queda fuera del marco
     assert "min = Math.min(min, Math.min(...precios))" in script
+    # "Todo" incluye todos los muros, no otro radio disfrazado de rango completo
+    assert "Math.min(...precios, ...muros.map((m) => m.p))" in script
+    assert "Math.max(...precios, ...muros.map((m) => m.p))" in script
+    assert "const radio =" not in script.split("function drawOrderbook()")[1].split(
+        "\nfunction ")[0]
+    # El encuadre declara cuantos niveles actuales quedaron fuera.
+    assert "muros actuales visibles" in script
+    assert "fuera del zoom" in script
 
 
 def test_lo_que_se_cae_de_la_ventana_se_archiva_en_vez_de_perderse(tmp_path):
@@ -873,6 +887,43 @@ def test_el_colector_guarda_copia_local_append_only(tmp_path):
     assert [64_750, 1_630_000] in fila["asks"]
     assert [63_750, 1_800_000] in fila["bids"]
     assert len(fila["bids"]) == 2 and len(fila["asks"]) == 2
+
+
+def test_la_web_recibe_salud_del_archivo_local_sin_su_contenido(tmp_path):
+    from modules.coinglass.visual import normalize_visual_snapshot
+    from modules.coinglass.visual_collector import (
+        archivar_local,
+        estado_archivo_local,
+    )
+
+    destino = tmp_path / "archivo.jsonl"
+    snap = snapshot()
+    assert archivar_local(snap, destino) is None
+    snap["local_book_archive"] = estado_archivo_local(destino)
+
+    clean = normalize_visual_snapshot(snap, now=NOW)
+    estado = clean["local_book_archive"]
+    assert estado["configured"] is True and estado["ok"] is True
+    assert estado["bytes"] == destino.stat().st_size > 0
+    assert "updated_at" in estado
+    assert "rows" not in estado and "contenido" not in estado
+
+
+def test_un_error_del_archivo_local_se_declara_sin_romper_ingesta(tmp_path):
+    from modules.coinglass.visual import normalize_visual_snapshot
+    from modules.coinglass.visual_collector import estado_archivo_local
+
+    snap = snapshot()
+    snap["local_book_archive"] = estado_archivo_local(
+        tmp_path / "inexistente.jsonl", "disco no disponible"
+    )
+    clean = normalize_visual_snapshot(snap, now=NOW)
+    assert clean["local_book_archive"] == {
+        "configured": True,
+        "ok": False,
+        "bytes": 0,
+        "error": "disco no disponible",
+    }
 
 
 def test_la_copia_local_nunca_puede_costar_un_ciclo_de_captura(tmp_path):
@@ -1025,7 +1076,10 @@ def test_la_ui_muestra_la_salud_del_archivo_historico():
     script = (ROOT / "modules/coinglass/public/app.js").read_text()
     html = (ROOT / "modules/coinglass/public/index.html").read_text()
     assert "state.visual_book_archive" in script
+    assert "state.visual_snapshot?.local_book_archive" in script
+    assert "archivo VPS activo" in script
     assert "ultima_escritura" in script and "ARCHIVO LLENO" in script
+    assert "archivo histórico aún vacío" not in script
     assert 'id="ahora-fresco"' in html
 
 

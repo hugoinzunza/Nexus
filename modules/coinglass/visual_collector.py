@@ -23,7 +23,7 @@ HEATMAP_URL = "https://www.coinglass.com/es/pro/futures/LiquidationHeatMapNew"
 DEPTH_URL = "https://www.coinglass.com/es/pro/depth-delta"
 LARGE_ORDERBOOK_URL = "https://www.coinglass.com/large-orderbook-statistics"
 DEFAULT_PROFILE = Path.home() / ".config/nexux/coinglass-visual-profile"
-COLLECTOR_VERSION = "0.2.1"
+COLLECTOR_VERSION = "0.2.2"
 DEFAULT_COLLECTION_ATTEMPTS = 2
 MONEY_RE = re.compile(r"([-+]?\$?\s*[\d.,]+)\s*([KMB])?", re.IGNORECASE)
 BINANCE_PRICE_URL = "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT"
@@ -704,6 +704,29 @@ def archivar_local(snapshot: dict[str, Any], destino: Path) -> str | None:
         return str(exc)
 
 
+def estado_archivo_local(destino: Path, error: str | None = None) -> dict[str, Any]:
+    """Metadatos mínimos para que la web sepa si la copia del VPS está viva."""
+    estado: dict[str, Any] = {
+        "configured": True,
+        "ok": error is None,
+        "bytes": 0,
+    }
+    if error:
+        estado["error"] = error[:200]
+        return estado
+    try:
+        stat = destino.stat()
+        estado.update({
+            "bytes": stat.st_size,
+            "updated_at": datetime.fromtimestamp(
+                stat.st_mtime, timezone.utc
+            ).isoformat(),
+        })
+    except OSError as exc:
+        estado.update({"ok": False, "error": str(exc)[:200]})
+    return estado
+
+
 def publish(snapshot: dict[str, Any], remote_url: str, token: str) -> None:
     request = urllib.request.Request(
         remote_url.rstrip("/") + "/m/coinglass/api/visual-ingest",
@@ -763,6 +786,9 @@ async def run(args: argparse.Namespace) -> None:
         aviso_archivo = None
         if args.archivo_local:
             aviso_archivo = archivar_local(snapshot, args.archivo_local)
+            snapshot["local_book_archive"] = estado_archivo_local(
+                args.archivo_local, aviso_archivo
+            )
         if args.remote_url:
             if not args.token:
                 raise RuntimeError("NEXUS_INGEST_TOKEN requerido para publicar")

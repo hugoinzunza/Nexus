@@ -164,7 +164,23 @@ def normalize_visual_snapshot(
     if not isinstance(urls, list) or not urls:
         raise VisualSnapshotError("provenance.urls requerido")
 
-    return {
+    local_archive = snapshot.get("local_book_archive")
+    clean_local_archive = None
+    if isinstance(local_archive, dict) and local_archive.get("configured") is True:
+        archive_bytes = _float(local_archive.get("bytes"))
+        clean_local_archive = {
+            "configured": True,
+            "ok": local_archive.get("ok") is True,
+            "bytes": max(0, round(archive_bytes or 0)),
+        }
+        updated_at = local_archive.get("updated_at")
+        if isinstance(updated_at, str):
+            clean_local_archive["updated_at"] = updated_at[:80]
+        error = local_archive.get("error")
+        if isinstance(error, str) and error:
+            clean_local_archive["error"] = error[:200]
+
+    clean = {
         "research_only": True,
         "execution_enabled": False,
         "mode": "research",
@@ -205,6 +221,9 @@ def normalize_visual_snapshot(
             "collector_version": str(provenance.get("collector_version") or "unknown")[:80],
         },
     }
+    if clean_local_archive is not None:
+        clean["local_book_archive"] = clean_local_archive
+    return clean
 
 
 def _weighted_side(
