@@ -55,7 +55,9 @@
           "binance": "DOGEUSDT",
           "market": "futures"
         }
-      ]
+      ],
+      "claude_grader_enabled": false,
+      "_claude_grader_nota": "Graduador sombra con Opus. APAGADO: 254 setups graduados no muestran discriminacion positiva (keep=True avgR +0,258 vs keep=False +0,506; CI95 por bloques [-0,546,+0,039] cruza cero). Ninguna decision lee claude_grade. Era el grueso del gasto Opus."
     },
     "journal": {
       "enabled": true

@@ -2,9 +2,25 @@
 
 Al crearse un setup, le pedimos a Claude una NOTA DE CALIDAD (0-100) + si lo
 tomaría, a ciegas (solo contexto pre-entrada, cero look-ahead). Se guarda en el
-setup y NO afecta ninguna decisión. A los ~50 trades limpios se valida si la nota
-discrimina ganadores de perdedores (ver research/claude_filter_test.py y la
-memoria del plan).
+setup y NO afecta ninguna decisión.
+
+APAGADO POR DEFECTO desde el 2026-07-27, y esta es la razón. La validación que
+motivó el modo sombra YA SE HIZO, con 254 setups graduados y con resultado:
+
+    keep=True  : n=158  avgR +0,258  WR 59%
+    keep=False : n= 96  avgR +0,506  WR 72%
+    diferencia : -0,249 R   CI95 por bloques diarios [-0,546, +0,039]  CRUZA CERO
+
+Y las notas no son monótonas: 38 -> +1,06R, 68 -> -0,11R, 88 -> +1,83R.
+
+La lectura correcta NO es "keep=False es mejor" —el intervalo cruza cero— sino que
+NO HAY EVIDENCIA de discriminación positiva, con la estimación puntual invertida.
+No autoriza usarlo, ni normal ni al revés.
+
+Se apaga por costo: era el grueso del gasto Opus (~US$12 en julio) para producir
+metadata que ninguna decisión lee. El código queda porque una evidencia nueva
+podría justificar retomarlo; lo que no queda es encendido por el solo hecho de que
+exista una API key.
 
 Diseño defensivo:
   - El SDK `anthropic` se importa PEREZOSAMENTE dentro de grade(): si no está
@@ -16,11 +32,13 @@ Diseño defensivo:
 """
 from __future__ import annotations
 
+import json
 import os
 from typing import Optional
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ENV = os.path.join(ROOT, "deploy", "collector.env")
+CONFIG = os.path.join(ROOT, "config", "nexus.json")
 MODEL = "claude-opus-4-8"
 
 _client = None          # cache del cliente anthropic
@@ -69,9 +87,32 @@ def _resolve_key() -> Optional[str]:
     return None
 
 
+def habilitado() -> bool:
+    """`trading.claude_grader_enabled` de la config. FALSO si falta.
+
+    Opt-in explícito y versionado, en vez del opt-in por presencia de key que había
+    antes. Esa era la falla que hizo el gasto invisible: la key vive en el entorno de
+    Railway, así que el graduador se encendía solo ahí sin que nada en el repo lo
+    dijera, y el `bot.live=false` no lo apagaba porque nunca lo miró.
+    """
+    try:
+        with open(CONFIG, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return bool(((data.get("modules") or {}).get("trading") or {})
+                    .get("claude_grader_enabled", False))
+    except Exception:  # noqa: BLE001 - sin config legible se queda APAGADO
+        return False
+
+
 def available() -> bool:
-    """True solo si hay key Y el SDK anthropic es importable. Se resuelve una vez."""
+    """True solo si está HABILITADO en config, hay key y el SDK es importable.
+
+    La bandera se mira PRIMERO y en cada llamada: si se consultara después del caché
+    de `_checked`, encenderla o apagarla exigiría reiniciar el proceso.
+    """
     global _checked, _enabled, _client
+    if not habilitado():
+        return False
     if _checked:
         return _enabled
     _checked = True

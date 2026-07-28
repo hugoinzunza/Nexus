@@ -641,7 +641,12 @@ class TradingModule(NexusModule):
                         self._setups.mark_cdc(name, plan, time.time())
                     # MODO SOMBRA: Claude gradúa el setup recién creado (no interviene
                     # la decisión; solo registra una nota para validar a los ~50 trades).
-                    if created and claude_grader.available():
+                    # Doble defensa a proposito: `available()` ya mira la bandera,
+                    # pero repetirla aca deja el gate VISIBLE en el sitio donde se
+                    # gasta. El costo era invisible justamente porque la unica
+                    # condicion vivia dentro de un helper llamado "available".
+                    if (created and claude_grader.habilitado()
+                            and claude_grader.available()):
                         self._grade_in_background(created)
             except Exception as exc:  # noqa: BLE001
                 self.context.log(f"setups: no se pudo registrar {name} {tf}: {exc}")
