@@ -151,6 +151,8 @@ class TradingModule(NexusModule):
         self._last_binance_px = {}   # último precio Binance bueno por símbolo (anti-429)
         self._last_binance_px_ts = {}  # timestamp de ese precio (para no gatillar SL con precio viejo)
         self._BOT_PX_MAX_STALE = 45.0  # s: sobre esto, el precio Binance se considera viejo
+        self._px_breaker = {}          # sym → {fallos, desde, causa}
+        self._px_aviso_ts = {}         # sym → ultimo aviso, para no inundar el log
 
     # --- Ciclo de vida -------------------------------------------------
     def start(self) -> None:
@@ -259,22 +261,32 @@ class TradingModule(NexusModule):
                 # opera), no Crypto.com → evita cierres/aperturas por divergencia de feed.
                 bsym = inst.get("binance")
                 if bsym and bsym in self._bot_price_syms:
-                    try:
-                        last = binance.last_price(bsym)
-                        self._last_binance_px[bsym] = last
-                        self._last_binance_px_ts[bsym] = time.time()
-                    except Exception:  # noqa: BLE001
-                        # Binance no respondió (p.ej. 429). CRÍTICO (C2 auditoría): usar el
-                        # último precio Binance SOLO si es FRESCO. Si está viejo, el SL por
-                        # software gatilla con el precio EN VIVO de Crypto.com (muy cercano)
-                        # en vez de uno congelado que nunca dispararía mientras la posición
-                        # real se desangra.
-                        age = time.time() - self._last_binance_px_ts.get(bsym, 0)
-                        if bsym in self._last_binance_px and age < self._BOT_PX_MAX_STALE:
-                            last = self._last_binance_px[bsym]
-                        else:
-                            self.context.log(f"bot: ⚠️ precio Binance de {bsym} viejo "
-                                             f"({age:.0f}s) → gatillo SL con precio Crypto.com en vivo")
+                    if self._binance_px_abierto(bsym):
+                        try:
+                            last = binance.last_price(bsym)
+                            self._last_binance_px[bsym] = last
+                            self._last_binance_px_ts[bsym] = time.time()
+                            self._binance_px_ok(bsym)
+                        except Exception as exc:  # noqa: BLE001
+                            self._binance_px_fallo(bsym, exc)
+                    # CRÍTICO (C2 auditoría): usar el último precio Binance SOLO si es
+                    # FRESCO. Si está viejo o no existe, el SL por software gatilla con
+                    # el precio EN VIVO de Crypto.com (muy cercano) en vez de uno
+                    # congelado que nunca dispararía mientras la posición se desangra.
+                    #
+                    # `None` y no `0` como default: con el epoch, un símbolo que NUNCA
+                    # tuvo precio reportaba una edad de 56 años y el mensaje decía
+                    # "precio viejo (1785200766s)", que no es viejo — es inexistente.
+                    visto = self._last_binance_px_ts.get(bsym)
+                    age = None if visto is None else time.time() - visto
+                    if (bsym in self._last_binance_px and age is not None
+                            and age < self._BOT_PX_MAX_STALE):
+                        last = self._last_binance_px[bsym]
+                    else:
+                        motivo = "sin precio Binance todavía" if age is None \
+                            else f"precio Binance viejo ({age:.0f}s)"
+                        self._avisar_px(bsym, f"bot: ⚠️ {bsym}: {motivo} "
+                                              "→ gatillo SL con precio Crypto.com en vivo")
                     if st.get("ticker"):
                         st["ticker"]["last"] = last
                 # RISK-OFF: vela anormal (guardia de volatilidad) O evento de alto impacto
@@ -607,6 +619,65 @@ class TradingModule(NexusModule):
             push.notificar(title=title, body=body, url="/m/trading/", tag=tag)
         except Exception as exc:  # noqa: BLE001
             self.context.log(f"riskoff alerta: {exc}")
+
+
+    # --- Cortacircuitos del precio Binance ------------------------------
+    #
+    # POR QUE EXISTE: el poller corre cada 2 s sobre los 5 pares del bot y pedia el
+    # precio SIEMPRE, aunque fallara siempre. En Railway `fapi.binance.com` responde
+    # HTTP 451 (geo-bloqueo del datacenter), asi que eran ~216.000 peticiones diarias
+    # a un endpoint que estructuralmente nos rechaza, mas un aviso por ciclo con una
+    # edad de 56 anos por el default `0` del epoch.
+    #
+    # Es la cuarta vez que aparece esta familia en el proyecto: una rafaga
+    # autoinfligida contra algo que no puede responder.
+    #
+    # EN EL VPS NO CAMBIA NADA: alli las llamadas funcionan, el contador se resetea en
+    # cada exito y el cortacircuitos no llega a abrirse nunca.
+    _PX_FALLOS_PARA_ABRIR = 3
+    _PX_ESPERA_ABIERTO = 60.0   # s; el mismo orden que _BOT_PX_MAX_STALE (45 s)
+
+    def _binance_px_abierto(self, sym: str) -> bool:
+        """False mientras el cortacircuitos esta abierto para ese simbolo."""
+        estado = self._px_breaker.get(sym)
+        if not estado or estado["fallos"] < self._PX_FALLOS_PARA_ABRIR:
+            return True
+        if time.time() - estado["desde"] >= self._PX_ESPERA_ABIERTO:
+            # Se reintenta SIEMPRE pasada la espera: un bloqueo permanente y una caida
+            # transitoria se ven igual desde aca, y cerrar para siempre convertiria un
+            # 429 de un minuto en una degradacion indefinida.
+            estado["fallos"] = self._PX_FALLOS_PARA_ABRIR - 1
+            return True
+        return False
+
+    def _binance_px_ok(self, sym: str) -> None:
+        estado = self._px_breaker.get(sym)
+        if estado and estado["fallos"]:
+            self.context.log(f"bot: precio Binance de {sym} recuperado")
+        self._px_breaker[sym] = {"fallos": 0, "desde": 0.0, "causa": None}
+
+    def _binance_px_fallo(self, sym: str, exc: Exception) -> None:
+        estado = self._px_breaker.setdefault(
+            sym, {"fallos": 0, "desde": 0.0, "causa": None})
+        estado["fallos"] += 1
+        estado["causa"] = f"{type(exc).__name__}: {str(exc)[:60]}"
+        if estado["fallos"] == self._PX_FALLOS_PARA_ABRIR:
+            estado["desde"] = time.time()
+            self.context.log(
+                f"bot: precio Binance de {sym} falla {estado['fallos']}x "
+                f"({estado['causa']}) → pauso {self._PX_ESPERA_ABIERTO:.0f}s")
+
+    def _avisar_px(self, sym: str, mensaje: str) -> None:
+        """Un aviso por simbolo cada 10 min, no uno por ciclo.
+
+        A 2 s por ciclo y 5 pares, el mensaje original salia ~216.000 veces al dia y
+        enterraba cualquier otra linea del log.
+        """
+        ahora = time.time()
+        if ahora - self._px_aviso_ts.get(sym, 0.0) < 600:
+            return
+        self._px_aviso_ts[sym] = ahora
+        self.context.log(mensaje)
 
     def _record_setups(self, name: str, last: float) -> None:
         """Para cada TF de planeación, si el indicador genera un PLAN válido (tpsl),
