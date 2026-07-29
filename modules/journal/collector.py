@@ -119,10 +119,21 @@ def _load_income(now, lookback_days, income_path=INCOME_PATH):
         except Exception:  # noqa: BLE001
             cached = {"rows": [], "last_time": 0}
     lookback_start = now - lookback_days * 86_400_000
-    since = max(int(cached.get("last_time", 0)) + 1, lookback_start)
-    if not cached["rows"] or cached["rows"][0]["time"] > lookback_start:
+    # De dónde tenemos cobertura REAL, que no es lo mismo que dónde empieza la fila más
+    # vieja. Antes se infería con `cached["rows"][0]["time"] > lookback_start`, o sea
+    # "si mi fila más vieja es más nueva que la ventana, me faltan datos". Pero la
+    # subcuenta nació en junio de 2026: nunca va a existir income de hace 365 días, así
+    # que la condición no se cumplía JAMÁS y se re-leía el año entero cada 90 segundos.
+    # Con `futures_income` en peso 30 y ~53 páginas por corrida, eso son ~1590 de peso
+    # por corrida: medido, la IP vivía en 1620 de 2400 y el watchdog quedaba ciego el
+    # 8% de los ciclos por -1003. Ausencia de datos no es ausencia de cobertura.
+    cubierto = cached.get("covered_from")
+    if cubierto is None or int(cubierto) > lookback_start:
         since = lookback_start
         cached = {"rows": [], "last_time": 0}
+        cubierto = lookback_start
+    else:
+        since = max(int(cached.get("last_time", 0)) + 1, lookback_start)
     new_rows = bc.futures_income(since, now)
     seen = {(r.get("tranId"), r.get("time"), r.get("incomeType")) for r in cached["rows"]}
     for r in new_rows:
@@ -133,6 +144,10 @@ def _load_income(now, lookback_days, income_path=INCOME_PATH):
     cached["rows"].sort(key=lambda x: int(x["time"]))
     cached["rows"] = [r for r in cached["rows"] if int(r["time"]) >= lookback_start]
     cached["last_time"] = cached["rows"][-1]["time"] if cached["rows"] else now
+    # La cobertura es hasta dónde PREGUNTAMOS, y solo puede ir hacia atrás. Como
+    # `lookback_start` avanza con el reloj, una vez que cubierto <= lookback_start la
+    # condición se mantiene sola y no se vuelve a pedir el histórico completo.
+    cached["covered_from"] = int(min(int(cubierto), int(cached.get("covered_from") or cubierto)))
     with open(income_path, "w", encoding="utf-8") as fh:
         json.dump(cached, fh)
     return cached["rows"]

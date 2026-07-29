@@ -837,3 +837,43 @@ def test_el_watchdog_cierra_shorts_por_arriba():
                               "position_side": "SHORT"}])
     assert wd.ciclo(cli=cli, abiertos=corto, cfg=_CFG_WD, log=lambda _m: None) == 1
     assert cli.ordenes[0]["side"] == "BUY", "un short se cierra comprando"
+
+
+def test_el_watchdog_reintenta_ante_cuota_de_IP():
+    """-1003 es la cuota de la IP, transitoria y ajena: el watchdog pide 4 veces por
+    minuto. Lo único que sostiene el -1R no puede quedar ciego porque otro proceso se
+    pasó de cuota."""
+    wd = _wd()
+
+    class _CliCuota(_CliWd):
+        def __init__(self, fallos, **kw):
+            super().__init__(**kw)
+            self.fallos = fallos
+            self.lecturas = 0
+
+        def positions(self):
+            self.lecturas += 1
+            if self.fallos > 0:
+                self.fallos -= 1
+                from modules.trading.binance_account import BinanceError
+                raise BinanceError('{"code":-1003,"msg":"Too many requests"}')
+            return self._pos
+
+    import time as _t
+    orig, _t.sleep = _t.sleep, lambda _s: None
+    try:
+        cli = _CliCuota(fallos=2, precio=0.185)
+        assert wd.ciclo(cli=cli, abiertos=list(_TRADE_WD), cfg=_CFG_WD,
+                        log=lambda _m: None) == 1, "debe cerrar tras reintentar"
+        assert cli.lecturas == 3
+        # pero un error que NO es de cuota no se reintenta: se aborta y no se toca nada
+        class _CliOtro(_CliWd):
+            def positions(self):
+                from modules.trading.binance_account import BinanceError
+                raise BinanceError('{"code":-2015,"msg":"Invalid API-key"}')
+        c2 = _CliOtro(precio=0.185)
+        assert wd.ciclo(cli=c2, abiertos=list(_TRADE_WD), cfg=_CFG_WD,
+                        log=lambda _m: None) == 0
+        assert c2.ordenes == []
+    finally:
+        _t.sleep = orig

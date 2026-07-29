@@ -169,12 +169,27 @@ def ciclo(dry: bool = False, log=print, cli=None, abiertos=None, cfg=None) -> in
     # día que hay dinero en juego — y ahí no es donde uno quiere descubrir que la llave
     # no tiene permisos o que el endpoint cambió. Con el bot en dry esto no cierra nada
     # y aun así prueba todo el camino de lectura.
-    try:
-        reales = {p["symbol"]: p for p in cli.positions() if abs(float(p.get("qty") or 0)) > 0}
-    except BinanceError as exc:
-        # Sin lectura confiable no se cierra nada. Actuar a ciegas es peor que no estar.
-        log(f"watchdog: no se pudieron leer posiciones ({exc}); no se toca nada")
-        _registrar({"ts": time.time(), "accion": "lectura_fallida", "error": str(exc)[-200:]})
+    # -1003 (cuota de la IP) es TRANSITORIO y no es culpa nuestra: el watchdog pide 4
+    # veces por minuto. Medido en el VPS, la IP vivía en 1620 de 2400 por el colector,
+    # y esto dejaba al watchdog ciego el 8% de los ciclos. La causa de fondo ya está
+    # arreglada, pero lo único que sostiene el -1R no puede depender de que nadie más
+    # se pase de cuota: ante -1003 se reintenta en vez de saltarse el ciclo.
+    reales = None
+    for intento in range(3):
+        try:
+            reales = {p["symbol"]: p for p in cli.positions()
+                      if abs(float(p.get("qty") or 0)) > 0}
+            break
+        except BinanceError as exc:
+            if "-1003" in str(exc) and intento < 2:
+                time.sleep(2.0 * (intento + 1))
+                continue
+            # Sin lectura confiable no se cierra nada: actuar a ciegas es peor que no estar.
+            log(f"watchdog: no se pudieron leer posiciones ({exc}); no se toca nada")
+            _registrar({"ts": time.time(), "accion": "lectura_fallida",
+                        "error": str(exc)[-200:], "intentos": intento + 1})
+            return 0
+    if reales is None:
         return 0
     _latido(len(abiertos), len(reales))
     if not abiertos:
