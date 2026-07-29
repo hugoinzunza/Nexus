@@ -88,6 +88,7 @@
         }
       ],
       "max_entry_slippage_pct": 0.3,
+      "fundamental_guard_enabled": true,
       "max_daily_loss_pct": 5.0,
       "fee_rate": 0.0005,
       "quality_filter": true,

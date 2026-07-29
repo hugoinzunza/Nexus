@@ -62,6 +62,11 @@ class BotSync:
         ex = self.executor
         cli = ex.client()
         account, positions, orders = {}, [], []
+        try:
+            from modules.trading import news
+            fundamental = news.fundamental_status()
+        except Exception:  # noqa: BLE001
+            fundamental = {"active": None, "next": None, "blocks_new_entries": False}
         if cli:
             try:
                 b = cli.balance_usdt()
@@ -116,6 +121,7 @@ class BotSync:
             "summary": ex.store.summary(),
             "trades": sorted(ex.store.all(), key=lambda t: t.get("opened_at", 0), reverse=True),
             "watching": self._watching(),
+            "fundamental": fundamental,
         }
         if self.testnet_executor:
             snapshot["testnet"] = self._testnet_snapshot()

@@ -76,6 +76,40 @@ def upcoming(max_keep=12):
     return out[:max_keep]
 
 
+def event_window_minutes(event):
+    """Ventana de bloqueo según el tipo de evento.
+
+    FOMC tiene dos hitos separados: comunicado/tasa y conferencia. Una ventana
+    genérica corta puede quedar abierta justo entre ambos o terminar mientras
+    sigue hablando el presidente de la Fed.
+    """
+    title = str((event or {}).get("title") or "").lower()
+    if any(term in title for term in (
+            "federal funds rate", "fomc statement", "interest rate decision")):
+        return 45, 120
+    if any(term in title for term in (
+            "fomc press conference", "fed chair", "fomc member")):
+        return 30, 90
+    if any(term in title for term in (
+            "non-farm", "nonfarm", "cpi", "pce price", "advance gdp")):
+        return 20, 30
+    return 20, 15
+
+
+def _enrich_window(event, now):
+    before_min, after_min = event_window_minutes(event)
+    start = event["ts"] - before_min * 60
+    end = event["ts"] + after_min * 60
+    return dict(
+        event,
+        in_min=round((event["ts"] - now) / 60),
+        window_before_min=before_min,
+        window_after_min=after_min,
+        active_from=int(start),
+        active_until=int(end),
+    )
+
+
 def week_key_events(max_keep=8):
     """Fechas clave de la SEMANA para el panel del Home: alto impacto de economías
     mayores (no solo USD), recientes (últimas 24 h) + próximos, en orden cronológico.
@@ -92,11 +126,46 @@ def week_key_events(max_keep=8):
     return [dict(e, in_min=round((e["ts"] - now) / 60)) for e in window][:max_keep]
 
 
-def danger_window(before_min=20, after_min=10):
+def danger_window(before_min=None, after_min=None, now=None):
     """Devuelve el evento de alto impacto si AHORA estamos en su ventana de peligro
-    (desde `before_min` antes hasta `after_min` después), o None."""
-    now = time.time()
+    o None. Por defecto usa ventanas específicas; los argumentos conservan la API
+    anterior para pruebas o consumidores que necesiten una ventana uniforme."""
+    now = time.time() if now is None else float(now)
+    active = []
     for e in all_events():
-        if (e["ts"] - before_min * 60) <= now <= (e["ts"] + after_min * 60):
-            return e
-    return None
+        if before_min is None or after_min is None:
+            enriched = _enrich_window(e, now)
+        else:
+            enriched = dict(
+                e,
+                in_min=round((e["ts"] - now) / 60),
+                window_before_min=before_min,
+                window_after_min=after_min,
+                active_from=int(e["ts"] - before_min * 60),
+                active_until=int(e["ts"] + after_min * 60),
+            )
+        if enriched["active_from"] <= now <= enriched["active_until"]:
+            active.append(enriched)
+    if not active:
+        return None
+    # Si hay eventos solapados (tasa + comunicado + conferencia), muestra el hito
+    # más reciente y conserva el final más lejano de todo el episodio.
+    selected = max(active, key=lambda e: e["ts"])
+    selected["active_until"] = max(e["active_until"] for e in active)
+    selected["episode_titles"] = list(dict.fromkeys(e["title"] for e in active))
+    return selected
+
+
+def fundamental_status(now=None):
+    """Estado compacto para paneles y ejecutores; no modifica posiciones abiertas."""
+    now = time.time() if now is None else float(now)
+    active = danger_window(now=now)
+    future = [
+        _enrich_window(e, now) for e in all_events()
+        if e["ts"] > now
+    ]
+    return {
+        "active": active,
+        "next": future[0] if future else None,
+        "blocks_new_entries": bool(active),
+    }

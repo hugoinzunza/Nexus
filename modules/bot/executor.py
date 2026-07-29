@@ -29,6 +29,7 @@ un trade al 2% ocupaba el 70% de la cuenta y la puerta de margen rechazaba 7 de 
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import os
@@ -153,6 +154,9 @@ DEFAULTS = {
     # este % (en contra), NO abre (el libro real mostró fills hasta +1.6% peores que el
     # plan). 0 = apagado.
     "max_entry_slippage_pct": 0.0,
+    # Pausa solo APERTURAS durante fundamentales de alto impacto. Las reducciones,
+    # cierres y stops de posiciones existentes continúan funcionando.
+    "fundamental_guard_enabled": True,
     "max_daily_loss_pct": 5.0,     # -5% del base congela el bot por el día
     "fee_rate": 0.0005,            # taker estimado para comisiones del libro
     "one_position_at_a_time": True,
@@ -321,6 +325,25 @@ class BotExecutor:
         if os.path.exists(self.kill_file):
             self.log(f"bot: KILL-SWITCH activo → no abre {symbol}")
             return
+        if self.cfg.get("fundamental_guard_enabled", False):
+            try:
+                from modules.trading import news
+                fundamental = news.danger_window()
+            except Exception as exc:  # noqa: BLE001
+                # El calendario es una defensa contextual, no debe inutilizar la
+                # ejecución si su feed externo falla. Se conserva el último feed
+                # bueno en news.py y aquí se registra cualquier fallo restante.
+                self.log(f"bot: calendario fundamental no disponible: {exc}")
+                fundamental = None
+            if fundamental:
+                until = datetime.datetime.fromtimestamp(
+                    fundamental["active_until"]
+                ).astimezone().strftime("%H:%M")
+                self.log(
+                    f"bot: ALERTA FUNDAMENTAL {fundamental['title']} → "
+                    f"no abre {symbol} hasta {until}"
+                )
+                return
         open_trades = [x for x in self.store.all() if x["status"] == "abierta"]
         max_pos = int(self.cfg.get("max_positions", 1))
         # Solo cuentan para el límite las posiciones AÚN EN RIESGO (sin TP1 tomado). Las

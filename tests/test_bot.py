@@ -153,6 +153,41 @@ def test_bot_quality_filter_allows_a_and_blocks_b():
     assert not ex._quality_allowed({"source": "indicador"}, b)
 
 
+def test_fundamental_guard_bloquea_solo_apertura(monkeypatch):
+    from modules.trading import news
+
+    class EmptyStore:
+        @staticmethod
+        def has_trade(_setup_id):
+            return False
+
+    logs = []
+    ex = BotExecutor(store=EmptyStore(), log=logs.append, config={
+        "enabled": True,
+        "live": False,
+        "pairs": ["BTCUSDT"],
+        "entry_profiles": None,
+        "quality_filter": False,
+        "fundamental_guard_enabled": True,
+    }, client=object())
+    monkeypatch.setattr(news, "danger_window", lambda: {
+        "title": "FOMC Press Conference",
+        "active_until": 1_800_000_000,
+    })
+
+    # Se detiene antes de consultar el store o dimensionar/enviar una orden.
+    ex._open({
+        "key": "btc:fomc",
+        "pair": "BTC_USDT",
+        "dir": "long",
+        "entry": 100.0,
+        "sl": 99.0,
+    }, 100.0)
+
+    assert any("ALERTA FUNDAMENTAL" in line for line in logs)
+    assert any("no abre BTCUSDT" in line for line in logs)
+
+
 def test_quality_require_disc_false_ignores_disc_ok_completamente():
     """require_disc=False debe IGNORAR disc_ok, incluso disc_ok=False (Fase 1).
 

@@ -68,6 +68,22 @@ function watchdog(data) {
   el.textContent = warns.length ? "Watchdog: " + warns.join(" · ") : "";
 }
 
+function fundamental(data) {
+  const el = $("fundamental-banner");
+  if (!el) return;
+  const status = data.fundamental || {};
+  const event = status.active;
+  el.hidden = !event;
+  if (!event) {
+    el.textContent = "";
+    return;
+  }
+  const until = new Date(Number(event.active_until) * 1000).toLocaleTimeString(
+    "es-CL", { hour: "2-digit", minute: "2-digit" });
+  const titles = (event.episode_titles || [event.title]).join(" + ");
+  el.innerHTML = `<strong>Alerta fundamental</strong> · ${titles} · nuevas entradas pausadas hasta ${until}. <span>Las posiciones abiertas mantienen SL, parciales y cierres.</span>`;
+}
+
 function cards(data) {
   const a = data.account || {}, s = data.summary || {};
   const byMode = s.by_mode || {};
@@ -412,7 +428,7 @@ async function load() {
     const r = await fetch("/m/bot/api/state", { cache: "no-store" });
     if (r.status === 401) { location.href = "/login"; return; }
     const data = await r.json();
-    header(data); watchdog(data); cards(data); testnet(data); phase1(data); position(data); watching(data); orders(data); trades(data);
+    header(data); fundamental(data); watchdog(data); cards(data); testnet(data); phase1(data); position(data); watching(data); orders(data); trades(data);
     // Los precios se piden DESPUES del primer pintado para no retrasar la pantalla, y
     // la seccion se repinta cuando llegan. Sin esto la tabla mostraria "—" para
     // siempre en la primera carga.

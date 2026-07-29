@@ -100,6 +100,10 @@ tbody tr:hover { background: var(--panel); }
 .age { font-size: 11px; color: var(--muted); }
 .kill-banner { background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.4);
   color: var(--red); padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+.fundamental-banner { background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.5);
+  color: #fde68a; padding: 12px 14px; border-radius: 12px; font-size: 14px; margin-bottom: 16px; }
+.fundamental-banner strong { color: #fbbf24; text-transform: uppercase; letter-spacing: .03em; }
+.fundamental-banner span { color: var(--muted); }
 .watchdog-banner { background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.45);
   color: #fde68a; padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 600; margin-bottom: 16px; }
 .controls { display: flex; gap: 10px; margin-bottom: 24px; }
