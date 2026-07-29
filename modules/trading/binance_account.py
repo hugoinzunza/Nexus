@@ -55,13 +55,15 @@ class BinanceFutures:
     """
 
     def __init__(self, api_key: str | None = None, api_secret: str | None = None,
-                 base_url: str = FAPI):
+                 base_url: str | None = None):
         # SOLO llaves de trading dedicadas (BINANCE_TRADE_*). NUNCA cae a las del
         # colector/cuenta principal (BINANCE_API_*): eso violaría la regla de la
         # subcuenta aislada (CLAUDE.md). Mejor fallar que operar la cuenta equivocada.
         self.api_key = (api_key or os.environ.get("BINANCE_TRADE_API_KEY") or "").strip()
         self.api_secret = (api_secret or os.environ.get("BINANCE_TRADE_API_SECRET") or "").strip()
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (
+            base_url or os.environ.get("BINANCE_FAPI_BASE_URL") or FAPI
+        ).rstrip("/")
         self._filters_cache: dict = {}
         # Desfase con el reloj de Binance, en ms. Se mide solo, y se vuelve a medir
         # cuando el propio Binance rechaza la firma por -1021. Sin esto, un reloj
@@ -380,6 +382,11 @@ class BinanceFutures:
 
     @staticmethod
     def _norm_algo(r: dict) -> dict:
+        close_raw = r.get("closePosition")
+        close_position = (
+            close_raw if isinstance(close_raw, bool)
+            else str(close_raw or "").lower() == "true"
+        )
         return {
             "algo_id": r.get("algoId"),
             "client_algo_id": r.get("clientAlgoId"),
@@ -389,7 +396,7 @@ class BinanceFutures:
             "type": r.get("orderType") or r.get("type"),
             "trigger_price": float(r.get("triggerPrice") or 0),
             "qty": float(r.get("quantity") or 0),
-            "close_position": bool(r.get("closePosition")),
+            "close_position": close_position,
             "status": r.get("algoStatus"),
         }
 
