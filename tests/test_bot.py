@@ -593,3 +593,76 @@ def test_exchange_con_menos_cantidad_ajusta_el_libro(tmp_path):
     t = store.all()[0]
     assert t["status"] == "abierta"
     assert abs(t["qty_open"] - 0.4) < 1e-9, "el libro debe quedar en lo que el exchange tiene"
+
+
+# --- filtros de símbolo -----------------------------------------------------
+
+class _CliInfo:
+    """Reproduce el comportamiento REAL del endpoint: ignora `symbol` y devuelve todo."""
+
+    def __init__(self):
+        self._filters_cache = {}
+        self.descargas = 0
+
+    def _request(self, _m, _p, _params=None, signed=False):
+        self.descargas += 1
+        return {"symbols": [
+            {"symbol": "BTCUSDT", "quantityPrecision": 3, "pricePrecision": 2,
+             "filters": [{"filterType": "LOT_SIZE", "stepSize": "0.001", "minQty": "0.001"},
+                         {"filterType": "MIN_NOTIONAL", "notional": "50"}]},
+            {"symbol": "ADAUSDT", "quantityPrecision": 0, "pricePrecision": 5,
+             "filters": [{"filterType": "LOT_SIZE", "stepSize": "1", "minQty": "1"},
+                         {"filterType": "MIN_NOTIONAL", "notional": "5"}]},
+        ]}
+
+
+def _cliente_con_info():
+    from modules.trading.binance_account import BinanceFutures
+    cli = _CliInfo()
+    cli.symbol_filters = BinanceFutures.symbol_filters.__get__(cli)
+    cli.round_qty = BinanceFutures.round_qty.__get__(cli)
+    return cli
+
+
+def test_los_filtros_son_del_simbolo_pedido_no_del_primero():
+    """/fapi/v1/exchangeInfo IGNORA el parámetro `symbol` y devuelve los 848 símbolos.
+    Tomar syms[0] daba SIEMPRE BTCUSDT, así que todos los pares heredaban su precisión.
+    ADA se opera en unidades enteras: el bot habría mandado 7287.292 y Binance lo
+    rechaza con -1111. Nunca se vio porque los 27 trades live fueron ETH y BTC, que sí
+    comparten la precisión de BTC; V2 opera ADA, XRP y SOL.
+    """
+    cli = _cliente_con_info()
+    ada = cli.symbol_filters("ADAUSDT")
+    assert ada["qty_step"] == 1.0, "ADA se opera en unidades enteras"
+    assert ada["qty_precision"] == 0
+    assert ada["price_precision"] == 5, "con la de BTC (2) el SL queda 0.8% corrido"
+    assert ada["min_notional"] == 5.0
+    btc = cli.symbol_filters("BTCUSDT")
+    assert btc["qty_step"] == 0.001 and btc["price_precision"] == 2
+    assert ada != btc, "dos símbolos no pueden tener los mismos filtros por accidente"
+
+
+def test_round_qty_respeta_el_step_del_simbolo():
+    cli = _cliente_con_info()
+    assert cli.round_qty("ADAUSDT", 7287.292) == 7287.0
+    assert cli.round_qty("BTCUSDT", 0.0195) == 0.019
+
+
+def test_un_simbolo_ausente_falla_en_vez_de_heredar_otra_precision():
+    """Mejor fallar que dimensionar con la precisión de otro símbolo."""
+    from modules.trading.binance_account import BinanceError
+    cli = _cliente_con_info()
+    try:
+        cli.symbol_filters("DOGEUSDT")
+    except BinanceError:
+        pass
+    else:
+        raise AssertionError("un símbolo desconocido no puede devolver filtros ajenos")
+
+
+def test_los_filtros_se_cachean_todos_de_una():
+    """La respuesta trae los 848 igual: descargarla por par era pagarla cinco veces."""
+    cli = _cliente_con_info()
+    cli.symbol_filters("ADAUSDT")
+    cli.symbol_filters("BTCUSDT")
+    assert cli.descargas == 1

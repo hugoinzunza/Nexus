@@ -188,26 +188,43 @@ class BinanceFutures:
 
     def symbol_filters(self, symbol: str) -> dict:
         """Filtros del símbolo (cacheados): step de cantidad, mínimos y precisión.
-        Necesario para redondear la qty a un valor que Binance acepte."""
+        Necesario para redondear la qty a un valor que Binance acepte.
+
+        OJO CON `syms[0]`: /fapi/v1/exchangeInfo IGNORA el parámetro `symbol` y
+        devuelve los 848 símbolos igual. Tomar el primero devolvía SIEMPRE BTCUSDT,
+        así que todos los pares heredaban la precisión de BTC. ADA se opera en
+        unidades enteras (stepSize 1, quantityPrecision 0) y el bot habría mandado
+        369.803 → -1111 en cada orden. Nunca se vio porque los 27 trades live fueron
+        ETH y BTC, que sí comparten la precisión de BTC; V2 opera ADA, XRP y SOL.
+
+        Hay que BUSCAR el símbolo en la lista. Y como la respuesta trae todo, se
+        cachean todos de una: 848 símbolos por par era pagar la misma descarga cinco
+        veces para quedarse con el dato equivocado.
+        """
         if symbol in self._filters_cache:
             return self._filters_cache[symbol]
         info = self._request("GET", "/fapi/v1/exchangeInfo", {"symbol": symbol})
         syms = info.get("symbols") or []
-        if not syms:
-            raise BinanceError(f"sin exchangeInfo para {symbol}")
-        s = syms[0]
-        f = {"qty_step": 0.0, "min_qty": 0.0, "min_notional": 0.0,
-             "qty_precision": int(s.get("quantityPrecision", 3)),
-             "price_precision": int(s.get("pricePrecision", 2))}
-        for flt in s.get("filters", []):
-            t = flt.get("filterType")
-            if t == "LOT_SIZE":
-                f["qty_step"] = float(flt.get("stepSize", 0) or 0)
-                f["min_qty"] = float(flt.get("minQty", 0) or 0)
-            elif t == "MIN_NOTIONAL":
-                f["min_notional"] = float(flt.get("notional", 0) or 0)
-        self._filters_cache[symbol] = f
-        return f
+        encontrado = None
+        for s in syms:
+            f = {"qty_step": 0.0, "min_qty": 0.0, "min_notional": 0.0,
+                 "qty_precision": int(s.get("quantityPrecision", 3)),
+                 "price_precision": int(s.get("pricePrecision", 2))}
+            for flt in s.get("filters", []):
+                t = flt.get("filterType")
+                if t == "LOT_SIZE":
+                    f["qty_step"] = float(flt.get("stepSize", 0) or 0)
+                    f["min_qty"] = float(flt.get("minQty", 0) or 0)
+                elif t == "MIN_NOTIONAL":
+                    f["min_notional"] = float(flt.get("notional", 0) or 0)
+            self._filters_cache[s.get("symbol")] = f
+            if s.get("symbol") == symbol:
+                encontrado = f
+        if encontrado is None:
+            # Mejor fallar que dimensionar con la precisión de otro símbolo.
+            self._filters_cache.pop(symbol, None)
+            raise BinanceError(f"{symbol} no está en exchangeInfo ({len(syms)} símbolos)")
+        return encontrado
 
     def round_qty(self, symbol: str, qty: float) -> float:
         """Redondea la cantidad HACIA ABAJO al step del símbolo."""
@@ -259,6 +276,12 @@ class BinanceFutures:
             p["positionSide"] = position_side
             if qty is not None:
                 p["quantity"] = qty
+            else:
+                # En HEDGE sin qty faltaba esto y la orden salía sin `quantity` NI
+                # `closePosition`: Binance la rechazaba con -1102 antes de mirar
+                # permisos. Un stop que se cae en la validación de parámetros se ve
+                # igual que un stop prohibido, y por eso el bot nunca supo cuál era.
+                p["closePosition"] = "true"
         elif qty is not None:
             p["quantity"] = qty
             p["reduceOnly"] = "true"
