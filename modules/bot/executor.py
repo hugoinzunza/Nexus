@@ -15,9 +15,17 @@ SEGURIDAD — esto mueve dinero real, así que:
     una posición a la vez (regla de colisión BTC/ETH), tope de pérdida diaria, tope de
     notional por orden, leverage acotado, solo pares de la whitelist.
 
-Sizing = reflejo del diario: riesgo fijo (base_equity × risk_pct) por trade, notional =
-riesgo / SL%, leverage derivado = risk_pct / SL%. La base es FIJA (1.000), no el balance
-real de la cuenta.
+Sizing = reflejo del diario: riesgo fijo (base × risk_pct) por trade, notional =
+riesgo / SL%, leverage derivado = risk_pct / SL%.
+
+La BASE es el balance REAL de la subcuenta, leído del exchange (`_equity_base`). Hasta
+2026-07-28 eran tres números distintos: 450 para el sizing, 1000 para los porcentajes,
+y 897.61 de saldo real. El panel mostraba 0.9% donde se arriesgaba 2%, y el tope diario
+del 15% era el 33% de la cuenta. Un número inventado no protege nada.
+
+OJO con el leverage: NO cambia el riesgo por trade (ese lo fija la distancia al SL).
+Solo cambia cuánto margen queda inmovilizado, y con ello cuántas posiciones caben. A 5x
+un trade al 2% ocupaba el 70% de la cuenta y la puerta de margen rechazaba 7 de 19.
 """
 from __future__ import annotations
 
@@ -32,10 +40,26 @@ KILL_FILE = os.path.join(DATA_DIR, "bot_kill")
 TRADE_ENV = os.path.join(ROOT, "deploy", "trade.env")
 CONFIG_PATH = os.path.join(ROOT, "config", "nexus.json")
 
+
+class BinanceOrdenAmbigua(RuntimeError):
+    """No se pudo determinar si una orden se ejecutó.
+
+    Es distinta de "falló": ante esto NADIE debe tocar el store. Se deja el trade
+    como está y se reintenta en el próximo ciclo, cuando `get_order` pueda contestar.
+    Asumir cualquiera de los dos lados es lo que desincroniza el libro del exchange.
+    """
+
+
 DEFAULTS = {
     "enabled": True,
     "live": False,                 # arranca en dry-run; flip manual a real
-    "base_equity": 1000.0,         # base FIJA del sizing (no el balance real)
+    "base_equity": 1000.0,         # respaldo si no se puede leer el balance real
+    "base_equity_auto": True,      # leer el capital del exchange (fuente única)
+    # Tope de margen AGREGADO, como fracción del capital. Distinto de max_positions:
+    # ese cuenta posiciones EN RIESGO y deja fuera a las que ya tomaron parcial, que
+    # siguen ocupando margen completo igual. Sin este tope se observaron 4 posiciones
+    # simultáneas pidiendo 1.294,85 USDT sobre una cuenta de 897,61.
+    "max_margin_pct": 0.80,
     "risk_pct": 0.02,              # 2% de riesgo por trade (reflejo del diario)
     "pairs": ["BTCUSDT", "ETHUSDT"],
     "max_leverage": 20,
@@ -221,6 +245,12 @@ class BotExecutor:
         # Solo cuentan para el límite las posiciones AÚN EN RIESGO (sin TP1 tomado). Las
         # que ya tomaron parcial (SL en break-even / trailing) no ocupan cupo: su riesgo
         # es ~0, así que el bot puede abrir otra en paralelo.
+        #
+        # CUIDADO: eso vale para el RIESGO, no para el MARGEN. Una posición en
+        # break-even sigue inmovilizando margen completo en el exchange; riesgo ~0 no
+        # implica margen ~0. En dry el margen es gratis y la contradicción no se ve: se
+        # llegó a 4 posiciones simultáneas pidiendo 1.294,85 USDT sobre 897,61. El
+        # presupuesto de margen de más abajo es la otra mitad de este límite.
         at_risk = [x for x in open_trades if not x.get("partials")]
         if len(at_risk) >= max_pos:
             self.log(f"bot: {symbol} saltado ({len(at_risk)}/{max_pos} posiciones EN RIESGO; "
@@ -260,7 +290,7 @@ class BotExecutor:
         sl_frac = abs(px - sl) / px
         if sl_frac <= 0:
             return
-        base = float(self.cfg["base_equity"])
+        base = self._equity_base()
         risk_pct = float(self.cfg["risk_pct"])
         risk_usd = base * risk_pct
         max_lev = int(self.cfg.get("max_leverage", 20))
@@ -317,7 +347,21 @@ class BotExecutor:
         actual_notional = px * qty
         margin_used = actual_notional / leverage if leverage else actual_notional
         risk_usd_est = actual_notional * sl_frac
-        cap_ref = float(self.cfg.get("capital") or self.cfg.get("base_equity") or 0)
+        # Presupuesto de MARGEN agregado. Cuenta TODAS las posiciones abiertas, también
+        # las que ya tomaron parcial: siguen ocupando margen aunque su riesgo sea ~0.
+        # Se evalúa en dry igual que en live, para que el dry-run vea las mismas
+        # restricciones que el live y las dos muestras sean comparables.
+        margin_pct = float(self.cfg.get("max_margin_pct") or 0)
+        if margin_pct:
+            ocupado = sum(float(x.get("margin_used") or 0) for x in open_trades)
+            tope = base * margin_pct
+            if ocupado + margin_used > tope:
+                self.log(f"bot: {symbol} saltado (margen agregado {ocupado + margin_used:.0f} "
+                         f"> tope {tope:.0f} = {margin_pct*100:.0f}% de {base:.0f}; "
+                         f"{len(open_trades)} posiciones ocupan {ocupado:.0f})")
+                return
+        cap_ref = base   # misma referencia que el sizing: el porcentaje mostrado
+                         # tiene que ser el que de verdad se arriesga
         risk_pct_account = (risk_usd_est / cap_ref * 100.0) if cap_ref > 0 else None
         fee_est_roundtrip = actual_notional * float(self.cfg.get("fee_rate", 0.0005)) * 2.0
 
@@ -334,9 +378,33 @@ class BotExecutor:
                 pass
             cli.set_leverage(symbol, leverage)
             pos_side = ("LONG" if t["dir"] == "long" else "SHORT") if self.hedge else None
-            resp = cli.market_order(symbol, side, qty, client_id=self._cid(sid, "o"),
-                                    position_side=pos_side)
-            entry_price = float(resp.get("avgPrice") or 0) or px
+            try:
+                resp = self._ordenar(cli, symbol, side, qty, self._cid(sid, "o"),
+                                     position_side=pos_side)
+            except BinanceOrdenAmbigua as exc:
+                # NO registramos el trade: podría no existir. Pero tampoco lo damos por
+                # no abierto, porque podría existir SIN registro y sin nadie gestionando
+                # su stop. La reconciliación bidireccional lo levanta en el próximo ciclo.
+                self.log(f"bot: ⚠️ apertura AMBIGUA en {symbol} ({exc}); "
+                         f"queda para reconciliar, no se abre otra")
+                self._marcar_ambigua(sid, symbol, t["dir"], qty, leverage)
+                return
+            if not resp:
+                self.log(f"bot: apertura de {symbol} no se ejecutó; no se registra")
+                return
+            entry_price = float(resp.get("avg_price") or 0) or px
+            # Un fill parcial cambia el tamaño real, y con él el riesgo y el margen.
+            # Registrar la qty pedida en vez de la ejecutada dejaría al libro creyendo
+            # que arriesga más de lo que arriesga, y al -1R apuntando al lugar errado.
+            ejecutada = float(resp.get("executed_qty") or 0)
+            if ejecutada > 0 and abs(ejecutada - qty) > 1e-12:
+                self.log(f"bot: fill parcial en {symbol}: pedido {qty} ejecutado {ejecutada}")
+                qty = ejecutada
+                actual_notional = entry_price * qty
+                margin_used = actual_notional / leverage if leverage else actual_notional
+                risk_usd_est = actual_notional * sl_frac
+                risk_pct_account = (risk_usd_est / cap_ref * 100.0) if cap_ref > 0 else None
+                fee_est_roundtrip = actual_notional * float(self.cfg.get("fee_rate", 0.0005)) * 2.0
             # NOTA: esta subcuenta NO admite STOP_MARKET por API (-4120 "use Algo Order
             # API"). El SL lo gestiona el BOT: cuando el diario detecta que el precio tocó
             # el SL (track→"closed"), el ejecutor cierra a mercado. Mientras el VPS esté
@@ -364,6 +432,120 @@ class BotExecutor:
         self.log(f"bot[{mode}]: ABRE {side} {symbol} qty={qty} @~{entry_price:.2f} "
                  f"lev={leverage}x notional≈{px*qty:.0f} SL={sl} calidad={quality['grade']}")
 
+    # Cada cuánto se re-lee el balance real. No hace falta más: el sizing tolera de
+    # sobra que la base tenga unos minutos, y así una caída de la API no deja al bot
+    # pidiendo el balance en cada ciclo.
+    _EQUITY_TTL_S = 300.0
+
+    def _equity_base(self) -> float:
+        """Capital de referencia para sizing, riesgo mostrado y tope diario.
+
+        FUENTE ÚNICA. Antes había tres números distintos —`base_equity` 450 para el
+        sizing, `capital` 1000 para los porcentajes, y 897.61 de saldo real— así que
+        el panel mostraba 0.9% donde se arriesgaba 2%, y el tope diario del 15% era en
+        realidad 33% de la cuenta. Un número inventado no protege nada.
+
+        Se lee del exchange y se cachea. Si no se puede leer, cae al valor del config,
+        que es lo último que sí supimos.
+        """
+        config = float(self.cfg.get("base_equity") or 0)
+        if not self.cfg.get("base_equity_auto", True):
+            return config
+        ahora = time.time()
+        cache = getattr(self, "_equity_cache", None)
+        if cache and ahora - cache[0] < self._EQUITY_TTL_S:
+            return cache[1]
+        try:
+            cli = self.client()
+            saldo = float(cli.balance_usdt().get("balance") or 0)
+        except Exception:  # noqa: BLE001
+            saldo = 0.0
+        # Un saldo de 0 no es "cuenta vacía", casi siempre es una lectura fallida.
+        # Dimensionar contra 0 sería peor que usar el último valor conocido.
+        valor = saldo if saldo > 0 else config
+        self._equity_cache = (ahora, valor)
+        return valor
+
+    def _marcar_ambigua(self, sid: str, symbol: str, direccion: str, qty: float,
+                        leverage: int) -> None:
+        """Deja constancia de una apertura que pudo quedar viva sin registro.
+
+        Es el único rastro que queda de una posición que quizá existe en Binance y no
+        en el libro. La reconciliación lo lee para saber que un huérfano en ese símbolo
+        es NUESTRO y hay que adoptarlo, en vez de tratarlo como ajeno y dejarlo sin stop.
+        """
+        ruta = os.path.join(DATA_DIR, "bot_ambiguas.json")
+        try:
+            with open(ruta, encoding="utf-8") as fh:
+                datos = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            datos = {}
+        datos[sid] = {"symbol": symbol, "dir": direccion, "qty": qty,
+                      "leverage": leverage, "ts": time.time()}
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            tmp = ruta + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(datos, fh, indent=1)
+            os.replace(tmp, ruta)
+        except OSError as exc:
+            self.log(f"bot: no se pudo registrar la apertura ambigua {sid}: {exc}")
+
+    def _ordenar(self, cli, symbol: str, side: str, qty: float, client_id: str,
+                 reduce_only: bool = False, position_side: str | None = None,
+                 intentos: int = 3) -> dict | None:
+        """Manda una orden a mercado y devuelve lo que REALMENTE pasó.
+
+          dict → se ejecutó (total o parcialmente); trae executed_qty y avg_price
+          None → con certeza NO se ejecutó; el llamador puede dejar todo como está
+          raise → no se pudo determinar; el llamador NO debe asumir nada
+
+        Por qué existe: un POST que falla no dice si falló al ir o al volver. La orden
+        pudo ejecutarse y perderse la respuesta. Reintentar con el mismo id devuelve
+        "duplicate", que es indistinguible de un fallo real si uno solo mira el error.
+        Como el client_id lo generamos nosotros, se lo preguntamos a Binance y el caso
+        ambiguo se vuelve un hecho. Esto es lo que ya nos costó plata: un cierre que
+        había entrado se contabilizó como fallido y el libro quedó abierto.
+        """
+        ultimo: Exception | None = None
+        for intento in range(intentos):
+            try:
+                resp = cli.market_order(symbol, side, qty, client_id=client_id,
+                                        reduce_only=reduce_only,
+                                        position_side=position_side)
+                return {"status": resp.get("status") or "FILLED",
+                        "executed_qty": float(resp.get("executedQty") or qty),
+                        "avg_price": float(resp.get("avgPrice") or 0)}
+            except Exception as exc:  # noqa: BLE001
+                ultimo = exc
+                try:
+                    real = cli.get_order(symbol, client_id)
+                except Exception:  # noqa: BLE001
+                    real = "?"  # no pudimos preguntar: sigue ambiguo
+                if real == "?":
+                    pass
+                elif real is None:
+                    # Binance nunca la recibió → el id sigue libre, se puede reintentar
+                    if intento >= intentos - 1:
+                        self.log(f"bot: orden {client_id} nunca llegó a Binance "
+                                 f"tras {intentos} intentos ({str(exc)[-60:]})")
+                        return None
+                elif float(real.get("executed_qty") or 0) > 0:
+                    self.log(f"bot: orden {client_id} SÍ se había ejecutado "
+                             f"({real['status']} qty={real['executed_qty']}) pese al "
+                             f"error: {str(exc)[-60:]}")
+                    return real
+                else:
+                    # Existe pero sin ejecutar. El id está quemado: reintentarlo solo
+                    # devolvería "duplicate". Se corta y se informa el estado real.
+                    self.log(f"bot: orden {client_id} existe sin ejecutar "
+                             f"({real.get('status')}); no se reintenta")
+                    return None
+                if intento < intentos - 1:
+                    time.sleep(1.5 * (intento + 1))
+        raise BinanceOrdenAmbigua(
+            f"no se pudo determinar el estado de {client_id} en {symbol}: {ultimo}")
+
     def _reduce(self, t: dict, ref_price: float) -> None:
         sid = self._setup_id(t)
         trade = self._find_open(sid)
@@ -389,8 +571,26 @@ class BotExecutor:
         if trade["mode"] == "live":
             side = "SELL" if trade["dir"] == "long" else "BUY"
             pos_side = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
-            cli.market_order(symbol, side, qty, reduce_only=True, position_side=pos_side,
-                             client_id=self._cid(sid, "p" + str(len(trade["partials"]) + 1)))
+            try:
+                resp = self._ordenar(cli, symbol, side, qty,
+                                     self._cid(sid, "p" + str(len(trade["partials"]) + 1)),
+                                     reduce_only=True, position_side=pos_side)
+            except BinanceOrdenAmbigua as exc:
+                # No sabemos si el exchange quedó reducido. Registrar el parcial dejaría
+                # el libro creyendo que le queda menos de lo que le queda (o al revés).
+                # Se reintenta en el próximo ciclo, cuando se pueda preguntar.
+                self.log(f"bot: ⚠️ parcial AMBIGUO en {symbol} ({exc}); no se registra, "
+                         f"se reintenta")
+                return
+            if not resp:
+                self.log(f"bot: parcial de {symbol} no se ejecutó; no se registra")
+                return
+            ejecutada = float(resp.get("executed_qty") or 0)
+            if ejecutada > 0 and abs(ejecutada - qty) > 1e-12:
+                self.log(f"bot: parcial parcialmente lleno en {symbol}: "
+                         f"pedido {qty} ejecutado {ejecutada}")
+                qty = ejecutada
+            px = float(resp.get("avg_price") or 0) or px
         fee = px * qty * trade.get("fee_rate", 0.0005)
         if not self.store.add_partial(sid, leg, qty, round(px, 8),
                                       realized_r=t.get("realized_r"), fee_usd=round(fee, 4)):
@@ -426,26 +626,34 @@ class BotExecutor:
             if qty > 0:
                 side = "SELL" if trade["dir"] == "long" else "BUY"
                 pos_side = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
-                last_exc = None
-                for intento in range(3):   # reintenta ante fallos transitorios (timeout, -1021)
-                    try:
-                        cli.market_order(symbol, side, cli.round_qty(symbol, qty),
-                                         reduce_only=True, position_side=pos_side,
-                                         client_id=self._cid(sid, "c"))
-                        last_exc = None
-                        break
-                    except Exception as exc:  # noqa: BLE001
-                        last_exc = exc
-                        if intento < 2:
-                            time.sleep(1.5 * (intento + 1))
-                if last_exc is not None:
+                try:
+                    resp = self._ordenar(cli, symbol, side, cli.round_qty(symbol, qty),
+                                         self._cid(sid, "c"), reduce_only=True,
+                                         position_side=pos_side)
+                except BinanceOrdenAmbigua as exc:
                     # CRÍTICO (C1 auditoría): NO marcar cerrado ni cancelar el stop de
-                    # respaldo si el cierre falló → la posición sigue viva. Antes se
-                    # contabilizaba cerrada y se retiraba el stop → quedaba sin protección.
-                    # Se deja el trade ABIERTO para reintentar en el próximo cruce/reconcile.
-                    self.log(f"bot: ❌ FALLÓ cerrar {symbol} tras 3 intentos ({last_exc}); "
-                             f"trade sigue ABIERTO y con su stop; se reintentará")
+                    # respaldo si no sabemos si el cierre salió → la posición podría
+                    # seguir viva. Se deja ABIERTO para reintentar en el próximo cruce.
+                    self.log(f"bot: ❌ cierre AMBIGUO en {symbol} ({exc}); trade sigue "
+                             f"ABIERTO y con su stop; se reintentará")
                     return
+                if not resp:
+                    # Antes esto se confundía con el caso ambiguo: un "duplicate client
+                    # order id" (que significa que el cierre SÍ había entrado) se leía
+                    # como fallo y el libro quedaba abierto contra un exchange plano.
+                    self.log(f"bot: cierre de {symbol} no se ejecutó; sigue abierto")
+                    return
+                ejecutada = float(resp.get("executed_qty") or 0)
+                if ejecutada > 0 and abs(ejecutada - qty) > 1e-9:
+                    self.log(f"bot: cierre parcialmente lleno en {symbol}: "
+                             f"pedido {qty} ejecutado {ejecutada}; queda abierto el resto")
+                    self.store.add_partial(sid, "CIERRE-PARCIAL", ejecutada,
+                                           round(float(resp.get("avg_price") or px), 8),
+                                           fee_usd=round(float(resp.get("avg_price") or px)
+                                                         * ejecutada
+                                                         * trade.get("fee_rate", 0.0005), 4))
+                    return
+                px = float(resp.get("avg_price") or 0) or px
             try:
                 cli.cancel_all_orders(symbol)  # cierre OK → recién ahora retira el stop de respaldo
             except Exception:  # noqa: BLE001
@@ -529,6 +737,7 @@ class BotExecutor:
         now = time.time()
         day_start = now - (now % 86400)  # 00:00 UTC de hoy
         pnl = self.store.realized_pnl_since(day_start)
-        # El tope diario es sobre el CAPITAL TOTAL (no la base de sizing por trade).
-        cap_ref = float(self.cfg.get("capital") or self.cfg.get("base_equity") or 1000)
-        return pnl <= -(cap_ref * max_pct / 100.0)
+        # Sobre el capital REAL. Antes se medía contra `capital: 1000`, que no existía:
+        # el 15% eran 150 USD, o sea el 17% de una cuenta de 898 y el 33% de una de 450.
+        # Un freno calibrado contra un número inventado no frena donde uno cree.
+        return pnl <= -(self._equity_base() * max_pct / 100.0)

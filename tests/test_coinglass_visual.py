@@ -1596,10 +1596,20 @@ def test_la_ventana_de_firma_tolera_la_rafaga_del_colector():
     assert "rafaga" in fuente or "ráfaga" in fuente, \
         "la causa real -la rafaga autoinfligida- debe quedar escrita"
 
-    # y la ruta de ejecucion queda intacta: si alguien la cambia, que sea a propósito
+    # La ruta de EJECUCION sí se cambió, y a propósito (2026-07-28). Este candado pedia
+    # una decision explicita y la hubo: en el libro real, 8 de 11 stops se pasaron del
+    # -1R (peor -4.17R, -37.54 USD). Un -1021 en el camino de cierre no es una lectura
+    # perdida, es una posicion que sigue viva. Ahi 5 s no es tolerancia, es fragilidad.
+    #
+    # Se subio a 10 s Y se corrige el desfase del reloj (`sync_clock`, reintento
+    # automatico ante -1021), que ataca la causa en vez del sintoma. El colector sigue
+    # aparte: su rafaga es otro problema y se mide solo.
     ejecucion = (ROOT / "modules/trading/binance_account.py").read_text()
-    assert "RECV_WINDOW = 5000" in ejecucion, \
+    assert "RECV_WINDOW = 10_000" in ejecucion, \
         "cambio la ventana en la ruta de ORDENES: eso necesita decision explicita"
+    assert "_clock_offset_ms" in ejecucion, \
+        "ampliar la ventana sin corregir el reloj es curar el sintoma"
+    assert "def sync_clock" in ejecucion
 
 
 def js_sin_comentarios():

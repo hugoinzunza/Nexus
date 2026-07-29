@@ -3,8 +3,11 @@
 A diferencia de `binance.py` (klines públicas, sin clave), este módulo firma las
 peticiones con HMAC-SHA256 para leer/operar la cuenta real.
 
-LECTURA: server_time, balance_usdt, positions, mark_price, symbol_filters.
+LECTURA: server_time, balance_usdt, positions, mark_price, symbol_filters, get_order.
 EJECUCIÓN: set_leverage, market_order, stop_market, cancel_all_orders.
+
+`get_order` es lectura pero pertenece al camino de ejecución: es lo que permite
+saber si una orden que "falló" en realidad se ejecutó. Ver su docstring.
 
 ⚠️ Este cliente solo provee la CAPACIDAD de operar; la decisión de mandar o no
 una orden (y todos los guardrails: idempotencia, kill-switch, límites, dry-run)
@@ -34,7 +37,11 @@ import urllib.request
 
 FAPI = "https://fapi.binance.com"
 TIMEOUT = 15
-RECV_WINDOW = 5000  # ms de tolerancia para la firma (evita -1021 por reloj)
+# Tolerancia de la firma. 5000 era demasiado justo en el camino de ORDEN: un reloj
+# corrido o una latencia mala convertían un cierre en un -1021, y un cierre que no
+# sale deja una posición viva. Se sube a 10s y además se corrige el desfase (ver
+# `_clock_offset_ms`), que ataca la causa en vez del síntoma.
+RECV_WINDOW = 10_000
 
 
 class BinanceError(RuntimeError):
@@ -56,6 +63,10 @@ class BinanceFutures:
         self.api_secret = (api_secret or os.environ.get("BINANCE_TRADE_API_SECRET") or "").strip()
         self.base_url = base_url.rstrip("/")
         self._filters_cache: dict = {}
+        # Desfase con el reloj de Binance, en ms. Se mide solo, y se vuelve a medir
+        # cuando el propio Binance rechaza la firma por -1021. Sin esto, un reloj
+        # corrido deja al bot sin poder cerrar una posición abierta.
+        self._clock_offset_ms = 0
         if not self.api_key or not self.api_secret:
             raise BinanceError(
                 "Faltan credenciales de TRADING: define BINANCE_TRADE_API_KEY/SECRET "
@@ -71,13 +82,13 @@ class BinanceFutures:
         return f"{query}&signature={sig}"
 
     def _request(self, method: str, path: str, params: dict | None = None,
-                 signed: bool = False) -> object:
+                 signed: bool = False, _reintento_reloj: bool = False) -> object:
         params = dict(params or {})
         headers = {"User-Agent": "Nexus-bot/1.0"}
         url = f"{self.base_url}{path}"
         data = None
         if signed:
-            params["timestamp"] = int(time.time() * 1000)
+            params["timestamp"] = int(time.time() * 1000) + self._clock_offset_ms
             params.setdefault("recvWindow", RECV_WINDOW)
             headers["X-MBX-APIKEY"] = self.api_key
             query = self._sign(params)
@@ -95,9 +106,26 @@ class BinanceFutures:
                 return json.load(resp)
         except urllib.error.HTTPError as exc:
             body = exc.read().decode(errors="replace")
+            # -1021: la firma llegó fuera de ventana. Es el reloj, no la petición:
+            # se remide el desfase y se reintenta UNA vez. Sin esto, un reloj corrido
+            # bloquea el camino de orden entero hasta que alguien lo note a mano.
+            if "-1021" in body and signed and not _reintento_reloj:
+                try:
+                    self.sync_clock()
+                except BinanceError:
+                    pass
+                else:
+                    return self._request(method, path, params, signed,
+                                         _reintento_reloj=True)
             raise BinanceError(f"HTTP {exc.code} en {method} {path}: {body}") from exc
         except (urllib.error.URLError, TimeoutError) as exc:
             raise BinanceError(f"Sin respuesta de Binance en {path}: {exc}") from exc
+
+    def sync_clock(self) -> int:
+        """Mide el desfase con el reloj de Binance y lo aplica a las firmas siguientes."""
+        local = int(time.time() * 1000)
+        self._clock_offset_ms = self.server_time() - local
+        return self._clock_offset_ms
 
     # ---- lecturas (Fase 1) ---------------------------------------------
 
@@ -239,6 +267,35 @@ class BinanceFutures:
         if client_id:
             p["newClientOrderId"] = client_id
         return self._request("POST", "/fapi/v1/order", p, signed=True)
+
+    def get_order(self, symbol: str, client_id: str) -> dict | None:
+        """Estado REAL de una orden, por el clientOrderId que nosotros generamos.
+
+        Devuelve None si Binance nunca la recibió (-2013).
+
+        ES EL ÁRBITRO DE LAS ÓRDENES AMBIGUAS. Cuando un POST falla no sabemos si
+        falló al ir o al volver: la orden pudo ejecutarse igual y perderse la
+        respuesta. Un reintento con el mismo id rebota como "duplicate", que se ve
+        idéntico a un fallo real. La única fuente de verdad es preguntarle a Binance
+        por el id; el código de error no alcanza para distinguir los dos casos.
+        """
+        try:
+            r = self._request("GET", "/fapi/v1/order",
+                              {"symbol": symbol, "origClientOrderId": client_id},
+                              signed=True)
+        except BinanceError as exc:
+            if "-2013" in str(exc):  # "Order does not exist" → nunca llegó
+                return None
+            raise
+        return {
+            "status": r.get("status"),  # NEW/PARTIALLY_FILLED/FILLED/CANCELED/EXPIRED
+            "executed_qty": float(r.get("executedQty") or 0),
+            "orig_qty": float(r.get("origQty") or 0),
+            "avg_price": float(r.get("avgPrice") or 0),
+            "side": r.get("side"),
+            "position_side": r.get("positionSide"),
+            "client_id": r.get("clientOrderId"),
+        }
 
     def cancel_all_orders(self, symbol: str) -> dict:
         return self._request("DELETE", "/fapi/v1/allOpenOrders",

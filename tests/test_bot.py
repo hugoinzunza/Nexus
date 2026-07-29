@@ -362,3 +362,160 @@ def test_summary_splits_pnl_by_mode(tmp_path):
     assert s["by_mode"]["live"]["pnl_usd"] < 0
     # el total sigue existiendo para la UI vieja
     assert "pnl_usd" in s
+
+
+# --- órdenes ambiguas -------------------------------------------------------
+#
+# El libro real de junio-julio cerró en -129.03 USD con 27 trades live. El test
+# pareado contra el Diario (mismo setup como control) dio -0.5545R por setup,
+# IC95 [-0.961,-0.148]. Parte de esa brecha es esto: una orden que falla al VOLVER
+# se ejecutó igual, y reintentarla con el mismo client_id rebota como "duplicate",
+# que es indistinguible de un fallo real si uno solo mira el error.
+
+class _CliFalso:
+    """Cliente Binance mínimo con fallos programables."""
+
+    def __init__(self, fallos=0, orden_real=None, get_order_rompe=False):
+        self.fallos = fallos                # cuántos POST fallan antes de andar
+        self.orden_real = orden_real        # qué contesta get_order tras el fallo
+        self.get_order_rompe = get_order_rompe
+        self.enviadas = 0
+        self.consultas = 0
+
+    def market_order(self, symbol, side, qty, client_id=None, reduce_only=False,
+                     position_side=None):
+        self.enviadas += 1
+        if self.fallos > 0:
+            self.fallos -= 1
+            raise RuntimeError("HTTP 400: {'code':-4164,'msg':'duplicate client order id'}")
+        return {"status": "FILLED", "executedQty": qty, "avgPrice": 100.0}
+
+    def get_order(self, symbol, client_id):
+        self.consultas += 1
+        if self.get_order_rompe:
+            raise RuntimeError("sin respuesta de Binance")
+        return self.orden_real
+
+
+def _ex():
+    return BotExecutor(store=None, log=lambda _m: None, config={})
+
+
+def test_orden_que_fallo_al_volver_se_reconoce_como_ejecutada(monkeypatch):
+    """El POST falla pero Binance ya la tenía FILLED → NO es un fallo."""
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    cli = _CliFalso(fallos=3, orden_real={
+        "status": "FILLED", "executed_qty": 2.0, "avg_price": 101.5,
+        "orig_qty": 2.0, "side": "SELL", "position_side": "LONG", "client_id": "x",
+    })
+    resp = _ex()._ordenar(cli, "BTCUSDT", "SELL", 2.0, "x")
+    assert resp is not None, "un cierre ya ejecutado no puede leerse como fallo"
+    assert resp["executed_qty"] == 2.0
+    assert resp["avg_price"] == 101.5
+    assert cli.enviadas == 1, "no debe reintentar algo que ya se ejecutó"
+
+
+def test_orden_que_nunca_llego_se_reintenta_con_el_mismo_id(monkeypatch):
+    """get_order devuelve None (-2013) → el id sigue libre, se puede reintentar."""
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    cli = _CliFalso(fallos=2, orden_real=None)
+    resp = _ex()._ordenar(cli, "BTCUSDT", "BUY", 1.0, "y")
+    assert resp is not None and resp["executed_qty"] == 1.0
+    assert cli.enviadas == 3, "debe reintentar mientras Binance diga que no la tiene"
+
+
+def test_orden_indeterminable_no_permite_asumir_nada(monkeypatch):
+    """Si no se puede preguntar, se levanta: NADIE debe tocar el store a ciegas."""
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    from modules.bot.executor import BinanceOrdenAmbigua
+    cli = _CliFalso(fallos=99, get_order_rompe=True)
+    try:
+        _ex()._ordenar(cli, "BTCUSDT", "SELL", 1.0, "z")
+    except BinanceOrdenAmbigua:
+        pass
+    else:
+        raise AssertionError("un estado desconocido no puede devolver un resultado")
+
+
+def test_orden_existente_sin_ejecutar_no_se_reintenta(monkeypatch):
+    """CANCELED/EXPIRED: el id está quemado, reintentarlo solo daría 'duplicate'."""
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    cli = _CliFalso(fallos=99, orden_real={
+        "status": "CANCELED", "executed_qty": 0.0, "avg_price": 0.0,
+        "orig_qty": 1.0, "side": "BUY", "position_side": None, "client_id": "w",
+    })
+    assert _ex()._ordenar(cli, "BTCUSDT", "BUY", 1.0, "w") is None
+    assert cli.enviadas == 1
+
+
+def test_fill_parcial_devuelve_la_cantidad_real(monkeypatch):
+    """Registrar la qty pedida en vez de la ejecutada deja el -1R apuntando mal."""
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    cli = _CliFalso(fallos=1, orden_real={
+        "status": "PARTIALLY_FILLED", "executed_qty": 0.4, "avg_price": 99.0,
+        "orig_qty": 1.0, "side": "BUY", "position_side": None, "client_id": "p",
+    })
+    resp = _ex()._ordenar(cli, "BTCUSDT", "BUY", 1.0, "p")
+    assert resp["executed_qty"] == 0.4
+
+
+# --- presupuesto de margen --------------------------------------------------
+
+class _StoreFalso:
+    def __init__(self, abiertas): self._a = abiertas
+    def all(self): return self._a
+
+
+def test_las_posiciones_en_trailing_ocupan_margen_aunque_no_ocupen_cupo():
+    """`max_positions` cuenta solo posiciones EN RIESGO, y eso es correcto para el
+    riesgo: tras TP1 el SL está en break-even. Pero el margen sigue inmovilizado.
+    Tratar "riesgo ~0" como "margen ~0" dejó entrar 4 posiciones simultáneas pidiendo
+    1.294,85 USDT sobre una cuenta de 897,61. En dry no se ve: no hay exchange que diga
+    que no.
+    """
+    ex = BotExecutor(store=None, log=lambda _m: None,
+                     config={"base_equity": 900.0, "base_equity_auto": False,
+                             "max_margin_pct": 0.80, "max_positions": 2})
+    # dos en trailing (con parcial tomado) ocupando 700 de margen
+    trailing = [{"status": "abierta", "margin_used": 350.0, "partials": [{"leg": "TP1"}]},
+                {"status": "abierta", "margin_used": 350.0, "partials": [{"leg": "TP1"}]}]
+    # no ocupan cupo de riesgo...
+    assert len([x for x in trailing if not x.get("partials")]) == 0
+    # ...pero sí de margen: 700 ya está sobre el tope de 720 para cualquier orden nueva
+    ocupado = sum(x["margin_used"] for x in trailing)
+    tope = ex._equity_base() * 0.80
+    assert ocupado == 700.0 and tope == 720.0
+    assert ocupado + 100.0 > tope, "una orden nueva de 100 de margen ya no debe caber"
+
+
+def test_equity_base_no_dimensiona_contra_cero_si_falla_la_lectura():
+    """Un saldo 0 casi siempre es una lectura fallida, no una cuenta vacía.
+    Dimensionar contra 0 sería peor que usar el último valor conocido."""
+    ex = BotExecutor(store=None, log=lambda _m: None,
+                     config={"base_equity": 897.61, "base_equity_auto": True})
+    ex.client = lambda: None          # sin cliente → la lectura falla
+    assert ex._equity_base() == 897.61
+
+
+def test_equity_base_usa_el_saldo_real_del_exchange():
+    """Fuente única: el mismo número para sizing, porcentaje mostrado y tope diario."""
+    class _Cli:
+        def balance_usdt(self): return {"balance": 1234.5, "available": 1000.0}
+    ex = BotExecutor(store=None, log=lambda _m: None,
+                     config={"base_equity": 897.61, "base_equity_auto": True})
+    ex.client = lambda: _Cli()
+    assert ex._equity_base() == 1234.5
+
+
+def test_el_config_no_tiene_dos_capitales():
+    """Hubo 450 para el sizing, 1000 para los porcentajes y 897.61 de saldo real.
+    El panel mostraba 0.9% donde se arriesgaba 2%, y el tope diario del 15% era el 33%
+    de la cuenta. Que no vuelvan a ser dos números."""
+    import json as _json
+    from pathlib import Path
+    cfg = _json.loads((Path(__file__).resolve().parents[1] / "config/nexus.json").read_text())
+    bot = cfg["modules"]["bot"]
+    assert "capital" not in bot, "volvió un segundo capital que no existe en la cuenta"
+    assert bot.get("base_equity_auto") is True
+    assert bot["max_leverage"] >= bot["fixed_leverage"], \
+        "max_leverage por debajo del fijo lo recorta en silencio"
