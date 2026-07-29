@@ -519,3 +519,77 @@ def test_el_config_no_tiene_dos_capitales():
     assert bot.get("base_equity_auto") is True
     assert bot["max_leverage"] >= bot["fixed_leverage"], \
         "max_leverage por debajo del fijo lo recorta en silencio"
+
+
+# --- reconciliación bidireccional -------------------------------------------
+
+class _CliRec:
+    def __init__(self, posiciones, orden_cierre=None, marca=100.0):
+        self._pos = posiciones
+        self._orden = orden_cierre
+        self._marca = marca
+    def positions(self): return self._pos
+    def mark_price(self, _s): return self._marca
+    def get_order(self, _s, _cid): return self._orden
+
+
+class _ExFalso:
+    def __init__(self, store, cli):
+        self.store = store; self._cli = cli
+        self.cfg = {"pairs": ["BTCUSDT"]}
+        self.live = True; self.hedge = False
+    def client(self): return self._cli
+    @staticmethod
+    def _cid(sid, suffix): return f"nx{sid}{suffix}"
+
+
+def _abierta_live(store, sid="s:1", qty=1.0):
+    r = _trade_rec(); r["setup_id"] = sid; r["mode"] = "live"; r["qty"] = qty
+    store.open_trade(r)
+
+
+def test_trade_abierto_en_el_libro_sin_posicion_real_se_cierra(tmp_path):
+    """La secuela del P0 del cierre: el cierre SÍ había entrado, se leyó como fallo y
+    el libro quedó abierto contra un exchange plano. reconcile() solo recorría
+    cli.positions(), así que este caso era invisible y nunca se reparaba."""
+    store = BotStore(path=str(tmp_path / "b.json"))
+    _abierta_live(store)
+    cli = _CliRec(posiciones=[], orden_cierre={"status": "FILLED", "executed_qty": 1.0,
+                                               "avg_price": 123.0})
+    BotSync(_ExFalso(store, cli), lambda _m: None)._reconciliar_fantasmas(cli, hedge=False)
+    t = store.all()[0]
+    assert t["status"] == "cerrada"
+    assert t["exit_price"] == 123.0, "debe usar el precio REAL del cierre ejecutado"
+
+
+def test_sin_lectura_confiable_no_se_declara_nada_fantasma(tmp_path):
+    """Una caída de la API borraría del libro posiciones perfectamente vivas."""
+    store = BotStore(path=str(tmp_path / "b.json"))
+    _abierta_live(store)
+
+    class _Roto(_CliRec):
+        def positions(self): raise RuntimeError("sin respuesta")
+
+    cli = _Roto(posiciones=[])
+    BotSync(_ExFalso(store, cli), lambda _m: None)._reconciliar_fantasmas(cli, hedge=False)
+    assert store.all()[0]["status"] == "abierta", "no se toca el libro sin datos"
+
+
+def test_posicion_viva_no_se_toca(tmp_path):
+    store = BotStore(path=str(tmp_path / "b.json"))
+    _abierta_live(store)
+    cli = _CliRec(posiciones=[{"symbol": "BTCUSDT", "side": "LONG", "qty": 1.0}])
+    BotSync(_ExFalso(store, cli), lambda _m: None)._reconciliar_fantasmas(cli, hedge=False)
+    assert store.all()[0]["status"] == "abierta"
+
+
+def test_exchange_con_menos_cantidad_ajusta_el_libro(tmp_path):
+    """Un parcial que salió en el exchange y no se registró: el libro cree que le
+    queda más de lo que le queda, y el -1R apunta al lugar errado."""
+    store = BotStore(path=str(tmp_path / "b.json"))
+    _abierta_live(store, qty=1.0)
+    cli = _CliRec(posiciones=[{"symbol": "BTCUSDT", "side": "LONG", "qty": 0.4}])
+    BotSync(_ExFalso(store, cli), lambda _m: None)._reconciliar_fantasmas(cli, hedge=False)
+    t = store.all()[0]
+    assert t["status"] == "abierta"
+    assert abs(t["qty_open"] - 0.4) < 1e-9, "el libro debe quedar en lo que el exchange tiene"

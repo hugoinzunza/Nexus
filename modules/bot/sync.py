@@ -206,6 +206,72 @@ class BotSync:
                     break
             self.log(f"bot: 🔧 reconciliación cerró huérfana {sym} {pdir} (sin setup abierto)")
 
+        self._reconciliar_fantasmas(cli, hedge)
+
+    def _reconciliar_fantasmas(self, cli, hedge: bool) -> None:
+        """El sentido inverso: trades ABIERTOS en el libro que ya no existen en Binance.
+
+        `reconcile` recorre `cli.positions()`, así que solo ve lo que el exchange tiene.
+        Un trade del libro sin posición real era invisible, y esa es exactamente la
+        secuela del P0 del cierre: un cierre que SÍ había entrado se contabilizaba como
+        fallido y el libro quedaba abierto contra un exchange plano. El bot seguía
+        "gestionando" una posición que no existía y el P&L quedaba mal.
+
+        Cerrar un registro del libro no manda ninguna orden: es contabilidad. Por eso
+        no lo tapa `auto_close_orphans`, que existe para no liquidar posiciones VIVAS.
+        """
+        try:
+            reales = cli.positions()
+        except Exception as exc:  # noqa: BLE001
+            # Sin lectura confiable no se declara nada fantasma: una caída de la API
+            # borraría del libro posiciones que están perfectamente vivas.
+            self.log(f"bot: reconciliación inversa saltada (no se pudo leer posiciones: {exc})")
+            return
+        vivas = {}
+        for p in reales:
+            qty = abs(float(p.get("qty") or 0))
+            if qty <= 0:
+                continue
+            pdir = "long" if p["side"] == "LONG" else "short"
+            vivas[(p["symbol"], pdir) if hedge else p["symbol"]] = qty
+
+        for t in list(self.executor.store.all()):
+            if t.get("status") != "abierta" or t.get("mode") != "live":
+                continue
+            clave = (t["symbol"], t["dir"]) if hedge else t["symbol"]
+            real_qty = vivas.get(clave, 0.0)
+            libro_qty = float(t.get("qty_open") or 0)
+            if real_qty > 0:
+                # Existe, pero ¿del mismo tamaño? Si el exchange tiene menos, un
+                # parcial salió y no se registró.
+                if libro_qty > 0 and real_qty < libro_qty * 0.98:
+                    self.log(f"bot: ⚠️ {t['symbol']} el exchange tiene {real_qty} y el "
+                             f"libro {libro_qty}; se ajusta el libro a lo real")
+                    self.executor.store.add_partial(
+                        t["setup_id"], "AJUSTE-RECONCILIACION",
+                        round(libro_qty - real_qty, 8),
+                        round(cli.mark_price(t["symbol"]), 8), fee_usd=0.0)
+                continue
+
+            # No hay posición. ¿Se ejecutó nuestra orden de cierre?
+            precio = None
+            try:
+                orden = cli.get_order(t["symbol"], self.executor._cid(t["setup_id"], "c"))
+            except Exception:  # noqa: BLE001
+                orden = None
+            if orden and float(orden.get("executed_qty") or 0) > 0:
+                precio = float(orden.get("avg_price") or 0) or None
+                self.log(f"bot: 🔧 {t['symbol']} el cierre SÍ se había ejecutado "
+                         f"@ {precio}; el libro decía abierto")
+            if precio is None:
+                precio = cli.mark_price(t["symbol"])
+                self.log(f"bot: 🔧 {t['symbol']} abierto en el libro y sin posición real; "
+                         f"se cierra a marca {precio}")
+            self.executor.store.close_trade(
+                t["setup_id"], round(precio, 8), result_r=None,
+                fee_usd=round(precio * libro_qty * t.get("fee_rate", 0.0005), 4))
+            # confirm_pnls reemplaza después este P&L estimado por el real de Binance.
+
     def confirm_pnls(self) -> None:
         """Reemplaza el P&L estimado de las operaciones cerradas por el REAL de Binance
         (income: realized pnl + comisiones). Honestidad: el libro reporta lo de verdad."""
