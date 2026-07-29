@@ -78,9 +78,25 @@ market_order pelado. Duplicar esto es cómo se desincronizan.
             resp = cli.market_order(symbol, side, qty, client_id=client_id,
                                     reduce_only=reduce_only,
                                     position_side=position_side)
+            executed = float(resp.get("executedQty") or qty)
+            avg_price = float(resp.get("avgPrice") or 0)
+            # Binance Demo devolvió RESULT+FILLED con avgPrice=0 en dos aperturas.
+            # El fill real sí estaba asentado y get_order lo mostraba correctamente.
+            # Guardar el mark como fallback deformó entrada, R y break-even.
+            if avg_price <= 0 and executed > 0:
+                quote = float(resp.get("cumQuote") or 0)
+                if quote > 0:
+                    avg_price = quote / executed
+                else:
+                    try:
+                        real = cli.get_order(symbol, client_id)
+                    except Exception:  # noqa: BLE001
+                        real = None
+                    if real and float(real.get("executed_qty") or 0) > 0:
+                        executed = float(real["executed_qty"])
+                        avg_price = float(real.get("avg_price") or 0)
             return {"status": resp.get("status") or "FILLED",
-                    "executed_qty": float(resp.get("executedQty") or qty),
-                    "avg_price": float(resp.get("avgPrice") or 0)}
+                    "executed_qty": executed, "avg_price": avg_price}
         except Exception as exc:  # noqa: BLE001
             ultimo = exc
             try:
@@ -433,6 +449,7 @@ class BotExecutor:
         mode = "live" if self.live else "dry"
         entry_price = px
         sin_stop = False
+        risk_drift_pct = 0.0
         if mode == "live":
             margin_needed = margin_used
             try:
@@ -466,11 +483,27 @@ class BotExecutor:
             if ejecutada > 0 and abs(ejecutada - qty) > 1e-12:
                 self.log(f"bot: fill parcial en {symbol}: pedido {qty} ejecutado {ejecutada}")
                 qty = ejecutada
-                actual_notional = entry_price * qty
-                margin_used = actual_notional / leverage if leverage else actual_notional
-                risk_usd_est = actual_notional * sl_frac
-                risk_pct_account = (risk_usd_est / cap_ref * 100.0) if cap_ref > 0 else None
-                fee_est_roundtrip = actual_notional * float(self.cfg.get("fee_rate", 0.0005)) * 2.0
+            # El riesgo se recalcula SIEMPRE con el fill. Antes solo ocurría cuando
+            # cambiaba la qty: BTC y ADA Testnet conservaron el mark previo como base
+            # y el libro subestimó el riesgo real 12-23%.
+            actual_notional = entry_price * qty
+            margin_used = actual_notional / leverage if leverage else actual_notional
+            sl_frac = abs(entry_price - sl) / entry_price
+            risk_usd_est = abs(entry_price - sl) * qty
+            risk_pct_account = (
+                risk_usd_est / cap_ref * 100.0 if cap_ref > 0 else None
+            )
+            fee_est_roundtrip = (
+                actual_notional * float(self.cfg.get("fee_rate", 0.0005)) * 2.0
+            )
+            risk_drift_pct = (
+                (risk_usd_est / risk_usd - 1.0) * 100.0 if risk_usd > 0 else 0.0
+            )
+            if risk_drift_pct > 10.0:
+                self.log(
+                    f"bot: ⚠️ riesgo post-fill {risk_usd_est:.2f} USD es "
+                    f"{risk_drift_pct:+.1f}% vs objetivo {risk_usd:.2f}"
+                )
             # STOP NATIVO. Binance movió las condicionales a /fapi/v1/algoOrder el
             # 2025-12-09; el -4120 del endpoint viejo apuntaba justo acá. Es la defensa
             # primaria del -1R: lo hace cumplir el exchange, no el polling del bot.
@@ -517,11 +550,13 @@ class BotExecutor:
             "setup_entry": float(t.get("entry") or px),
             "sl": sl, "tp": t.get("tp"), "risk_usd": round(risk_usd, 2),
             "risk_usd_est": round(risk_usd_est, 2),
+            "risk_drift_pct": round(risk_drift_pct, 2),
             "risk_pct_account": round(risk_pct_account, 2) if risk_pct_account is not None else None,
             "margin_used": round(margin_used, 2),
             "notional": round(actual_notional, 2), "fee_rate": float(self.cfg.get("fee_rate", 0.0005)),
             "fee_est_roundtrip": round(fee_est_roundtrip, 4),
-            "entry_fee_usd": round(entry_fee, 4), "ts": t.get("ts_created", time.time()),
+            "entry_fee_usd": round(entry_fee, 4), "ts": time.time(),
+            "setup_created_at": t.get("ts_created"),
             "quality": quality["grade"], "quality_reason": quality["reason"],
             "poi_tf": quality["poi_tf"], "rr": quality["rr"], "disc_ok": quality["disc_ok"],
             "sl_pct": round(sl_frac * 100, 3),
@@ -795,13 +830,10 @@ class BotExecutor:
                                                          * trade.get("fee_rate", 0.0005), 4))
                     return
                 px = float(resp.get("avg_price") or 0) or px
-            try:
-                # Cierre OK → recién ahora se retira el stop. Por `clientAlgoId` y no con
-                # cancel_all_orders(symbol): en HEDGE eso cancelaría también el stop del
-                # lado opuesto, dejando viva una posición ajena a este cierre y sin red.
-                cli.cancel_algo_order(client_algo_id=self._aid(sid))
-            except Exception:  # noqa: BLE001
-                pass
+            # Cierre OK → recién ahora se retiran TODAS las generaciones del stop.
+            # Tras TP1 el activo es p.ej. `...g2`; cancelar solo el id base dejó ese
+            # stop vivo hasta que intentó dispararse contra una posición ya plana.
+            self._cancel_native_stops(cli, symbol, sid)
         fee = px * qty * trade.get("fee_rate", 0.0005)
         closed = self.store.close_trade(sid, round(px, 8), result_r=t.get("result_r"),
                                         fee_usd=round(fee, 4))
@@ -828,6 +860,31 @@ class BotExecutor:
             if x["setup_id"] == sid and x["status"] == "abierta":
                 return x
         return None
+
+    def _cancel_native_stops(self, cli, symbol: str, sid: str) -> None:
+        """Cancela solo los stops de este trade, incluidas sus generaciones."""
+        base = self._aid(sid)
+        found = False
+        try:
+            for order in cli.algo_open_orders(symbol):
+                client_id = order.get("client_algo_id") or ""
+                if client_id == base or client_id.startswith(base + "g"):
+                    cli.cancel_algo_order(
+                        algo_id=order.get("algo_id"),
+                        client_algo_id=None if order.get("algo_id") else client_id,
+                    )
+                    found = True
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"bot: no se pudieron listar stops de {symbol} al cerrar: {exc}")
+        if found:
+            return
+        # Respaldo si el listado falla o llega atrasado. Los ids son deterministas,
+        # así que consultar/cancelar generaciones inexistentes no toca otros trades.
+        for gen in [0, *range(1, 10)]:
+            try:
+                cli.cancel_algo_order(client_algo_id=self._aid(sid, gen))
+            except Exception:  # noqa: BLE001
+                pass
 
     def _quality(self, t: dict) -> dict:
         poi_tf = t.get("poi_tf")

@@ -89,6 +89,7 @@ class BotStore:
                 "qty": rec["qty"],
                 "qty_open": rec["qty"],          # cantidad aún abierta (baja con parciales)
                 "entry_price": rec["entry_price"],
+                "setup_created_at": rec.get("setup_created_at"),
                 "setup_entry": rec.get("setup_entry"),  # entry del setup (para TP1/TP2)
                 "sl": rec.get("sl"),
                 "tp": rec.get("tp"),
@@ -100,6 +101,7 @@ class BotStore:
                 "sl_pct": rec.get("sl_pct"),
                 "risk_usd": rec.get("risk_usd"),
                 "risk_usd_est": rec.get("risk_usd_est"),
+                "risk_drift_pct": rec.get("risk_drift_pct"),
                 "risk_pct_account": rec.get("risk_pct_account"),
                 "margin_used": rec.get("margin_used"),
                 "fee_est_roundtrip": rec.get("fee_est_roundtrip"),
@@ -114,6 +116,7 @@ class BotStore:
                 "result_r": None,
                 "pnl_usd": None,
                 "note": rec.get("note", ""),
+                "sin_stop_nativo": bool(rec.get("sin_stop_nativo", False)),
             }
             self._trades.append(t)
             self._save()
