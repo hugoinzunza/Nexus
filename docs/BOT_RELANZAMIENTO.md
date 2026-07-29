@@ -4,6 +4,21 @@
 reales. La Fase 1 V2 empieza con un modelo de fill causal y conserva la Fase 1 V1
 como archivo separado.
 
+## Cierre Fase 1 V2 (2026-07-28)
+
+Fase cerrada por decisión explícita con el bot real aún apagado:
+
+- 20 trades dry cerrados, 75% WR, +91,81 USD simulados y +0,3851R neto promedio.
+- Cero posiciones reales durante el cierre; `live:false`.
+- El trade 20 (`ADAUSDT short`) ya había tomado 50% en TP1. El remanente se cerró
+  manualmente al mark de Binance (`0,1649`) para congelar la muestra: +1,8235R
+  bruto y +29,2337 USD netos en ese trade.
+- El cierre se conserva etiquetado como manual de fin de fase; no se presenta como
+  TP completo ni como salida automática.
+- El dry-run quedó detenido con `data/bot_kill`.
+- La siguiente etapa es Binance Demo/Testnet con ejecución virtual aislada. No
+  autoriza por sí sola el regreso de la cuenta real a `live:true`.
+
 ## Rollover Fase 1 V1 -> V2 (2026-07-18)
 
 La primera muestra dry cerró con 16 trades, 37.5% WR, -0.305R neto promedio,

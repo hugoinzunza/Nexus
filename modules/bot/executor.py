@@ -211,11 +211,14 @@ def _trade_creds() -> tuple[str, str]:
 
 
 class BotExecutor:
-    def __init__(self, store, log, config: dict | None = None):
+    def __init__(self, store, log, config: dict | None = None, client=None,
+                 data_dir: str | None = None, kill_file: str | None = None):
         self.store = store
         self.log = log
         self.cfg = config or load_config()
-        self._client = None
+        self.data_dir = data_dir or DATA_DIR
+        self.kill_file = kill_file or KILL_FILE
+        self._client = client
         self._client_err = None
 
     # --- estado --------------------------------------------------------
@@ -299,7 +302,7 @@ class BotExecutor:
             self.log(f"bot: {symbol} saltado por calidad {quality['grade']} "
                      f"(tf={quality['poi_tf']}, rr={quality['rr']}, disc={quality['disc_ok']})")
             return
-        if os.path.exists(KILL_FILE):
+        if os.path.exists(self.kill_file):
             self.log(f"bot: KILL-SWITCH activo → no abre {symbol}")
             return
         open_trades = [x for x in self.store.all() if x["status"] == "abierta"]
@@ -640,7 +643,7 @@ class BotExecutor:
         en el libro. La reconciliación lo lee para saber que un huérfano en ese símbolo
         es NUESTRO y hay que adoptarlo, en vez de tratarlo como ajeno y dejarlo sin stop.
         """
-        ruta = os.path.join(DATA_DIR, "bot_ambiguas.json")
+        ruta = os.path.join(self.data_dir, "bot_ambiguas.json")
         try:
             with open(ruta, encoding="utf-8") as fh:
                 datos = json.load(fh)
@@ -651,7 +654,7 @@ class BotExecutor:
         datos[sid] = {"symbol": symbol, "dir": direccion, "qty": qty,
                       "leverage": leverage, "sl": sl, "ts": time.time()}
         try:
-            os.makedirs(DATA_DIR, exist_ok=True)
+            os.makedirs(self.data_dir, exist_ok=True)
             tmp = ruta + ".tmp"
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump(datos, fh, indent=1)

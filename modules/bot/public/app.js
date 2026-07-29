@@ -91,6 +91,39 @@ function cards(data) {
     `<div class="card"><div class="k">${c.k}</div><div class="v ${c.cls || ""}">${c.v}</div></div>`).join("");
 }
 
+function testnet(data) {
+  const el = $("testnet");
+  if (!el) return;
+  const t = data.testnet;
+  if (!t) {
+    el.innerHTML = `<p class="muted">Testnet no está conectado en este proceso.</p>`;
+    return;
+  }
+  const a = t.account || {};
+  const s = t.summary || {};
+  const positions = t.positions || [];
+  const recent = (t.trades || []).slice(0, 5);
+  const state = t.kill ? "Detenido" : t.active && t.live_virtual ? "Operando virtual" : "Inerte";
+  const rows = recent.map((trade) => `<tr>
+    <td>${dt(trade.opened_at)}</td>
+    <td>${pairLabel(trade.pair || trade.symbol)}</td>
+    <td><span class="pill ${trade.dir}">${trade.dir === "long" ? "LONG" : "SHORT"}</span></td>
+    <td>${trade.status}</td>
+    <td class="${Number(trade.pnl_usd || 0) >= 0 ? "pos" : "neg"}">${trade.pnl_usd == null ? "—" : signed(trade.pnl_usd)}</td>
+  </tr>`).join("");
+  el.innerHTML = `<div class="testnet-head">
+      <div><strong>Binance Demo</strong><span>Órdenes reales contra saldo virtual</span></div>
+      <span class="testnet-state ${t.kill ? "stopped" : "running"}">${state}</span>
+    </div>
+    <div class="testnet-grid">
+      <div><span>Balance virtual</span><b>${a.balance == null ? "—" : fmt(a.balance)} USDT</b></div>
+      <div><span>Posiciones abiertas</span><b>${positions.length}</b></div>
+      <div><span>P&L virtual</span><b class="${Number(s.pnl_usd || 0) >= 0 ? "pos" : "neg"}">${signed(Number(s.pnl_usd || 0))}</b></div>
+      <div><span>Operaciones</span><b>${s.total || 0}</b></div>
+    </div>
+    ${rows ? `<div class="phase-table"><table><thead><tr><th>Fecha</th><th>Par</th><th>Dir</th><th>Estado</th><th>P&L virtual</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="phase-note">Esperando la próxima activación válida del Diario.</p>`}`;
+}
+
 function phase1(data) {
   const el = $("phase1");
   if (!el) return;
@@ -379,7 +412,7 @@ async function load() {
     const r = await fetch("/m/bot/api/state", { cache: "no-store" });
     if (r.status === 401) { location.href = "/login"; return; }
     const data = await r.json();
-    header(data); watchdog(data); cards(data); phase1(data); position(data); watching(data); orders(data); trades(data);
+    header(data); watchdog(data); cards(data); testnet(data); phase1(data); position(data); watching(data); orders(data); trades(data);
     // Los precios se piden DESPUES del primer pintado para no retrasar la pantalla, y
     // la seccion se repinta cuando llegan. Sin esto la tabla mostraria "—" para
     // siempre en la primera carga.

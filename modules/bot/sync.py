@@ -40,9 +40,10 @@ def _from_env_or_file(name: str) -> str:
 
 
 class BotSync:
-    def __init__(self, executor, log):
+    def __init__(self, executor, log, testnet_executor=None):
         self.executor = executor
         self.log = log
+        self.testnet_executor = testnet_executor
 
     # --- destino -------------------------------------------------------
     @staticmethod
@@ -107,13 +108,41 @@ class BotSync:
                         p["tp"] = tr.get("tp")
             except Exception:  # noqa: BLE001
                 pass
-        return {
+        snapshot = {
             "ts": int(time.time() * 1000),
-            "live": ex.live, "active": ex.active, "kill": os.path.exists(KILL_FILE),
+            "live": ex.live, "active": ex.active,
+            "kill": os.path.exists(getattr(ex, "kill_file", KILL_FILE)),
             "account": account, "positions": positions, "open_orders": orders,
             "summary": ex.store.summary(),
             "trades": sorted(ex.store.all(), key=lambda t: t.get("opened_at", 0), reverse=True),
             "watching": self._watching(),
+        }
+        if self.testnet_executor:
+            snapshot["testnet"] = self._testnet_snapshot()
+        return snapshot
+
+    def _testnet_snapshot(self) -> dict:
+        ex = self.testnet_executor
+        cli = ex.client()
+        account, positions = {}, []
+        try:
+            account = cli.balance_usdt() if cli else {}
+        except Exception as exc:  # noqa: BLE001
+            account = {"error": str(exc)}
+        try:
+            positions = cli.positions() if cli else []
+        except Exception:  # noqa: BLE001
+            pass
+        return {
+            "active": ex.active,
+            "live_virtual": ex.live,
+            "kill": os.path.exists(ex.kill_file),
+            "account": account,
+            "positions": positions,
+            "summary": ex.store.summary(),
+            "trades": sorted(
+                ex.store.all(), key=lambda t: t.get("opened_at", 0), reverse=True
+            )[:50],
         }
 
     def _watching(self) -> list:
@@ -222,7 +251,9 @@ class BotSync:
         normal y la ve `reconcile`, que decide según `auto_close_orphans`. Si la posición
         NO existe, la apertura efectivamente no ocurrió y el rastro se descarta.
         """
-        ruta = os.path.join(DATA_DIR, "bot_ambiguas.json")
+        ruta = os.path.join(
+            getattr(self.executor, "data_dir", DATA_DIR), "bot_ambiguas.json"
+        )
         try:
             with open(ruta, encoding="utf-8") as fh:
                 pendientes = json.load(fh)
@@ -429,11 +460,11 @@ class BotSync:
     def apply_command(self, c: dict) -> None:
         action = (c or {}).get("action")
         if action == "kill":
-            open(KILL_FILE, "w").close()
+            open(getattr(self.executor, "kill_file", KILL_FILE), "w").close()
             self.log("bot-sync: 🛑 KILL-SWITCH activado desde la web")
         elif action == "resume":
             try:
-                os.remove(KILL_FILE)
+                os.remove(getattr(self.executor, "kill_file", KILL_FILE))
             except FileNotFoundError:
                 pass
             self.log("bot-sync: ▶️ bot reanudado desde la web")

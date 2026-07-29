@@ -140,6 +140,8 @@ class TradingModule(NexusModule):
         self._thread = None
         self._bot_executor = None   # bot espejo (NexUX BOT); inerte si no hay llaves
         self._bot_sync = None       # empuja estado a Railway + trae comandos
+        self._testnet_executor = None
+        self._testnet_sync = None   # solo reconciliación; jamás empuja ni recibe comandos
         self._bot_sync_every = 4    # cada 4 ticks (~8s con poll 2s)
         # Símbolos Binance que el bot opera: para ellos el gatillo de TP/SL usa el
         # precio de BINANCE (donde se ejecuta), no Crypto.com, para que no diverjan.
@@ -157,7 +159,9 @@ class TradingModule(NexusModule):
     # --- Ciclo de vida -------------------------------------------------
     def start(self) -> None:
         self._bot_executor = self._make_bot_executor()
+        self._testnet_executor = self._make_testnet_executor()
         self._bot_sync = self._make_bot_sync()
+        self._testnet_sync = self._make_testnet_sync()
         self._thread = threading.Thread(target=self._poll_loop, name="trading-poller", daemon=True)
         self._thread.start()
         self.context.log(f"trading: poller iniciado ({len(self.instruments)} instrumentos, cada {self.poll_interval}s)")
@@ -185,10 +189,99 @@ class TradingModule(NexusModule):
             return None
         try:
             from modules.bot.sync import BotSync
-            return BotSync(self._bot_executor, self.context.log)
+            return BotSync(
+                self._bot_executor,
+                self.context.log,
+                testnet_executor=self._testnet_executor,
+            )
         except Exception as exc:  # noqa: BLE001
             self.context.log(f"bot: sync no disponible ({exc})")
             return None
+
+    @staticmethod
+    def _env_file(path: str) -> dict:
+        values = {}
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for raw in fh:
+                    line = raw.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    values[key.strip()] = value.strip()
+        except OSError:
+            return {}
+        return values
+
+    def _make_testnet_executor(self):
+        """Ejecutor Binance Demo que comparte EVENTOS, no estado, con el bot normal."""
+        if os.environ.get("NEXUS_TESTNET_WORKER") != "1":
+            return None
+        try:
+            from modules.bot.bot_store import BotStore
+            from modules.bot.executor import BotExecutor, load_config
+            from modules.trading.binance_account import BinanceFutures
+
+            env_path = os.path.join(_ROOT_REPO, "deploy", "testnet.env")
+            values = self._env_file(env_path)
+            base_url = values.get("BINANCE_FAPI_BASE_URL", "").rstrip("/")
+            if values.get("NEXUS_TESTNET") != "1" or base_url != "https://demo-fapi.binance.com":
+                raise RuntimeError("testnet.env no apunta al endpoint Demo oficial")
+            cli = BinanceFutures(
+                api_key=values.get("BINANCE_TRADE_API_KEY"),
+                api_secret=values.get("BINANCE_TRADE_API_SECRET"),
+                base_url=base_url,
+            )
+            if not cli.position_mode():
+                raise RuntimeError("la cuenta Demo no está en modo HEDGE")
+
+            data_dir = os.path.join(_DATA_DIR, "testnet")
+            os.makedirs(data_dir, exist_ok=True)
+            cfg = load_config()
+            cfg.update({
+                "enabled": True,
+                "live": True,
+                "hedge": True,
+                # 0,2% de 5.000 Demo ≈ 10 USDT: cercano al riesgo probado en dry.
+                "risk_pct": 0.002,
+                "max_risk_pct": 0.004,
+                "max_daily_loss_pct": 2.0,
+                "base_equity_auto": True,
+            })
+            ex = BotExecutor(
+                BotStore(path=os.path.join(data_dir, "bot_trades.json")),
+                lambda msg: self.context.log(f"testnet: {msg}"),
+                config=cfg,
+                client=cli,
+                data_dir=data_dir,
+                kill_file=os.path.join(data_dir, "bot_kill"),
+            )
+            self.context.log(
+                "testnet: ACTIVO · live virtual · libro y kill-switch aislados"
+            )
+            return ex
+        except Exception as exc:  # noqa: BLE001
+            self.context.log(f"testnet: INERTE por seguridad ({exc})")
+            return None
+
+    def _make_testnet_sync(self):
+        if not self._testnet_executor:
+            return None
+        try:
+            from modules.bot.sync import BotSync
+            return BotSync(
+                self._testnet_executor,
+                lambda msg: self.context.log(f"testnet: {msg}"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.context.log(f"testnet: reconciliación no disponible ({exc})")
+            return None
+
+    def _dispatch_bot_transitions(self, label: str, transitions: list,
+                                  ref_price: float) -> None:
+        for executor in (self._bot_executor, self._testnet_executor):
+            if executor:
+                executor.on_transitions(label, transitions, ref_price)
 
     # --- Poller --------------------------------------------------------
     def _poll_loop(self) -> None:
@@ -330,8 +423,9 @@ class TradingModule(NexusModule):
                         self._alert_transitions(inst.get("label", name), transitions)
                         # Bot espejo: refleja en Binance real las mismas transiciones
                         # (abre/parcial/cierra). Inerte si no hay llaves de subcuenta.
-                        if self._bot_executor:
-                            self._bot_executor.on_transitions(inst.get("label", name), transitions, last)
+                        self._dispatch_bot_transitions(
+                            inst.get("label", name), transitions, last
+                        )
                 except Exception as exc:  # noqa: BLE001
                     self.context.log(f"setups: no se pudo seguir {name}: {exc}")
 
@@ -349,6 +443,12 @@ class TradingModule(NexusModule):
                     self._bot_sync.push_and_pull()
                 except Exception as exc:  # noqa: BLE001
                     self.context.log(f"bot-sync: {exc}")
+            if self._testnet_sync and tick % self._bot_sync_every == 0:
+                try:
+                    self._testnet_sync.reconcile()
+                    self._testnet_sync.confirm_pnls()
+                except Exception as exc:  # noqa: BLE001
+                    self.context.log(f"testnet: reconciliación falló ({exc})")
 
             tick += 1
             self._stop.wait(self.poll_interval)
@@ -692,8 +792,8 @@ class TradingModule(NexusModule):
                     created = self._setups.record(plan, name, tf, last, time.time())
                     # Si NACE ya activo (precio en zona al detectarlo) no hay transición
                     # pendiente→activo que el bot escuche → disparamos su apertura a mano.
-                    if created and created.get("status") == "activo" and self._bot_executor:
-                        self._bot_executor.on_transitions(name, [{
+                    if created and created.get("status") == "activo":
+                        self._dispatch_bot_transitions(name, [{
                             "type": "activated", "pair": created["pair"], "dir": created["dir"],
                             "key": created["key"], "ts_created": created["ts_created"],
                             "entry": created.get("entry"), "sl": created.get("sl"),
@@ -1132,9 +1232,9 @@ class TradingModule(NexusModule):
         # Si nació ACTIVO (precio en zona / enter_now), disparar la apertura del bot
         # ya mismo (mismo proceso → libro consistente).
         created = res.get("setup")
-        if created and created.get("status") == "activo" and self._bot_executor:
+        if created and created.get("status") == "activo":
             try:
-                self._bot_executor.on_transitions(pair, [{
+                self._dispatch_bot_transitions(pair, [{
                     "type": "activated", "pair": created["pair"], "dir": created["dir"],
                     "key": created["key"], "ts_created": created["ts_created"],
                     "entry": created.get("entry"), "sl": created.get("sl"),
