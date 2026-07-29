@@ -717,13 +717,28 @@ def test_la_tolerancia_deja_actuar_al_bot_en_el_caso_normal():
     assert wd._excedido(largo, 100 - 2 * 4.17) > wd.TOLERANCIA_R
 
 
-def test_el_watchdog_arranca_apagado():
-    """Un proceso que cierra posiciones no se enciende solo."""
+def test_nunca_live_sin_watchdog():
+    """La combinación prohibida: dinero real sin nada que haga cumplir el -1R.
+
+    El test original fijaba "el watchdog arranca apagado", pensando que un proceso que
+    cierra posiciones no debe encenderse solo. Pero encenderlo ANTES del live es
+    justamente lo correcto —con el bot en dry no cierra nada y ejercita el camino de
+    lectura—, así que ese test bloqueaba lo bueno y no protegía de lo malo.
+
+    Lo peligroso es al revés: live=true con el watchdog apagado. Sin stop nativo
+    (-4120 en las dos variantes), ahí el -1R no lo sostiene nadie, y eso ya costó
+    -129.03 USD con 8 de 11 stops pasados.
+    """
     import json as _json
     from pathlib import Path
     cfg = _json.loads((Path(__file__).resolve().parents[1] / "config/nexus.json").read_text())
-    wd = ((cfg["modules"]["bot"]).get("watchdog") or {})
-    assert wd.get("enabled") is False, "el watchdog no puede quedar encendido por defecto"
+    bot = cfg["modules"]["bot"]
+    wd = bot.get("watchdog") or {}
+    if bot.get("live"):
+        assert wd.get("enabled") is True, \
+            "live=true sin watchdog: el -1R no lo sostiene nadie"
+        assert float(wd.get("tolerancia_r", 1)) <= 0.30, \
+            "una tolerancia alta deja pasar justo los stops que hay que atrapar"
 
 
 class _CliWd:

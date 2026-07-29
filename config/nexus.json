@@ -102,8 +102,8 @@
       "base_equity_auto": true,
       "max_margin_pct": 0.8,
       "watchdog": {
-        "_nota": "Hace cumplir el -1R. La subcuenta rechaza STOP_MARKET con -4120 en las dos variantes (verificado 2026-07-29), asi que no hay stop nativo. Corre como servicio APARTE para sobrevivir a que el bot se cuelgue.",
-        "enabled": false,
+        "_nota": "Hace cumplir el -1R. La subcuenta rechaza STOP_MARKET con -4120 en las dos variantes (verificado 2026-07-29), asi que no hay stop nativo. Corre como servicio APARTE para sobrevivir a que el bot se cuelgue. Se enciende antes del live: con el bot en dry no cierra nada pero ejercita todo el camino de lectura, para no estrenarlo el mismo dia que hay plata en juego.",
+        "enabled": true,
         "tolerancia_r": 0.15,
         "hedge": true
       }

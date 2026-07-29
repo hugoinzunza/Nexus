@@ -97,6 +97,33 @@ def _excedido(trade: dict, precio: float) -> float | None:
     return exceso / riesgo if exceso > 0 else None
 
 
+def _latido(vigilados: int, posiciones: int) -> None:
+    """Deja constancia de que el ciclo COMPLETÓ la lectura, aunque no hiciera nada.
+
+    Sirve para poder mirar el archivo y saber si el watchdog está vivo y leyendo, en
+    vez de suponerlo. Un watchdog que no reporta y uno que no tiene nada que hacer se
+    ven idénticos desde afuera.
+    """
+    try:
+        with open(ESTADO, encoding="utf-8") as fh:
+            datos = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        datos = {"eventos": []}
+    datos["ultimo_ciclo"] = time.time()
+    datos["ultimo_ciclo_iso"] = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+    datos["vigilados"] = vigilados
+    datos["posiciones_reales"] = posiciones
+    datos["ciclos"] = int(datos.get("ciclos") or 0) + 1
+    try:
+        os.makedirs(os.path.dirname(ESTADO), exist_ok=True)
+        tmp = ESTADO + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(datos, fh, indent=1)
+        os.replace(tmp, ESTADO)
+    except OSError:
+        pass
+
+
 def _registrar(evento: dict) -> None:
     try:
         with open(ESTADO, encoding="utf-8") as fh:
@@ -137,13 +164,20 @@ def ciclo(dry: bool = False, log=print, cli=None, abiertos=None, cfg=None) -> in
             return 0
 
     abiertos = _trades_abiertos() if abiertos is None else abiertos
-    if not abiertos:
-        return 0
+    # La lectura se hace SIEMPRE, aunque no haya nada que vigilar. Si solo se ejercitara
+    # con posiciones vivas, la primera vez que el watchdog tocara la API sería el mismo
+    # día que hay dinero en juego — y ahí no es donde uno quiere descubrir que la llave
+    # no tiene permisos o que el endpoint cambió. Con el bot en dry esto no cierra nada
+    # y aun así prueba todo el camino de lectura.
     try:
         reales = {p["symbol"]: p for p in cli.positions() if abs(float(p.get("qty") or 0)) > 0}
     except BinanceError as exc:
         # Sin lectura confiable no se cierra nada. Actuar a ciegas es peor que no estar.
         log(f"watchdog: no se pudieron leer posiciones ({exc}); no se toca nada")
+        _registrar({"ts": time.time(), "accion": "lectura_fallida", "error": str(exc)[-200:]})
+        return 0
+    _latido(len(abiertos), len(reales))
+    if not abiertos:
         return 0
 
     cerradas = 0
