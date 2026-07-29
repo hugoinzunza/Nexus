@@ -429,6 +429,7 @@ class BotExecutor:
 
         mode = "live" if self.live else "dry"
         entry_price = px
+        sin_stop = False
         if mode == "live":
             margin_needed = margin_used
             try:
@@ -477,18 +478,31 @@ class BotExecutor:
             # cómo se pierden 4.17R: el watchdog es respaldo, no sustituto.
             if not self._proteger(cli, symbol, t["dir"], sl, qty, sid, pos_side):
                 self.log(f"bot: ⚠️ {symbol} abierto SIN stop confirmado → CIERRA YA")
+                cerrada = False
                 try:
-                    self._ordenar(cli, symbol,
-                                  "SELL" if t["dir"] == "long" else "BUY", qty,
-                                  self._cid(sid, "panic"), reduce_only=not pos_side,
-                                  position_side=pos_side)
-                    self.log(f"bot: {symbol} cerrado por falta de stop; no se registra")
+                    resp_c = self._ordenar(cli, symbol,
+                                           "SELL" if t["dir"] == "long" else "BUY", qty,
+                                           self._cid(sid, "panic"),
+                                           reduce_only=not pos_side,
+                                           position_side=pos_side)
+                    cerrada = bool(resp_c)
                 except BinanceOrdenAmbigua as exc:
-                    # Lo peor de los dos mundos: puede haber posición viva sin stop y sin
-                    # registro. Se deja rastro para que la reconciliación la adopte.
                     self.log(f"bot: ⛔ {symbol} sin stop y cierre AMBIGUO ({exc})")
-                    self._marcar_ambigua(sid, symbol, t["dir"], qty, leverage)
-                return
+                if cerrada:
+                    self.log(f"bot: {symbol} cerrado por falta de stop; no se registra")
+                    return
+                # El cierre de emergencia NO salió (o no se sabe). La posición puede estar
+                # viva. Dejarla fuera del libro sería lo peor posible: sin stop del
+                # exchange, sin gestión del bot y sin que el watchdog la vea, porque el
+                # watchdog lee el LIBRO. Antes se caía justo acá y se daba por cerrada.
+                #
+                # Así que se REGISTRA igual, marcada. No es el estado que queríamos, pero
+                # es un estado gestionado: el watchdog la cubre y el próximo ciclo
+                # reintenta el stop nativo.
+                self.log(f"bot: ⛔ {symbol} no se pudo cerrar; se REGISTRA sin stop "
+                         f"nativo para que el watchdog lo cubra. Revisar a mano.")
+                self._marcar_ambigua(sid, symbol, t["dir"], qty, leverage, sl=sl)
+                sin_stop = True
 
         entry_fee = entry_price * qty * float(self.cfg.get("fee_rate", 0.0005))
         self.store.open_trade({
@@ -508,27 +522,36 @@ class BotExecutor:
             "quality": quality["grade"], "quality_reason": quality["reason"],
             "poi_tf": quality["poi_tf"], "rr": quality["rr"], "disc_ok": quality["disc_ok"],
             "sl_pct": round(sl_frac * 100, 3),
+            # True = la posición quedó SIN stop del exchange. Solo la cubre el
+            # watchdog. Se reintenta el stop en el próximo ciclo.
+            "sin_stop_nativo": sin_stop,
         })
         self.log(f"bot[{mode}]: ABRE {side} {symbol} qty={qty} @~{entry_price:.2f} "
                  f"lev={leverage}x notional≈{px*qty:.0f} SL={sl} calidad={quality['grade']}")
 
     @staticmethod
-    def _aid(sid: str) -> str:
+    def _aid(sid: str, gen: int = 0) -> str:
         """clientAlgoId del stop nativo. DETERMINISTA y distinto del newClientOrderId
         de las órdenes MARKET: son espacios de id separados y confundirlos deja stops
-        huérfanos o cancela lo que no era."""
-        return "sl" + hashlib.md5(sid.encode()).hexdigest()[:16]
+        huérfanos o cancela lo que no era.
+
+        `gen` numera los reemplazos. Tras un parcial hay que poner el stop nuevo ANTES
+        de retirar el viejo, y para eso los dos tienen que poder coexistir un instante.
+        """
+        base = "sl" + hashlib.md5(sid.encode()).hexdigest()[:16]
+        return base if not gen else f"{base}g{gen}"
 
     def _proteger(self, cli, symbol: str, direccion: str, sl: float, qty: float,
-                  sid: str, pos_side: str | None) -> bool:
-        """Coloca el stop nativo y CONFIRMA que quedó vivo. True solo si está puesto.
+                  sid: str, pos_side: str | None, gen: int = 0) -> bool:
+        """Coloca el stop nativo y CONFIRMA que quedó vivo Y CORRECTO.
 
-        No basta con que el POST no haya lanzado: se vuelve a preguntar por
-        `algoOpenOrders`. Un stop que creemos puesto y no está es peor que ninguno,
-        porque nadie va a ir a mirar.
+        No basta con que el POST no haya lanzado, ni con encontrar el id: se comparan
+        lado, positionSide, cantidad y triggerPrice. Un stop que existe pero cubre el
+        lado equivocado, la mitad de la posición o un precio distinto es peor que
+        ninguno, porque se ve como protección y nadie va a ir a mirar.
         """
         lado = "SELL" if direccion == "long" else "BUY"
-        aid = self._aid(sid)
+        aid = self._aid(sid, gen)
         try:
             cli.algo_stop_market(symbol, lado, sl, qty=qty, position_side=pos_side,
                                  client_algo_id=aid)
@@ -541,9 +564,31 @@ class BotExecutor:
             self.log(f"bot: no se pudo confirmar el stop de {symbol}: {str(exc)[-120:]}")
             return False
         for o in vivos:
-            if o.get("client_algo_id") == aid and o.get("status") in (None, "NEW"):
-                self.log(f"bot: ✅ stop nativo confirmado en {symbol} @ {o['trigger_price']}")
-                return True
+            if o.get("client_algo_id") != aid:
+                continue
+            if o.get("status") not in (None, "NEW"):
+                self.log(f"bot: stop {aid} en estado {o.get('status')}, no protege")
+                return False
+            if o.get("side") != lado:
+                self.log(f"bot: ⛔ stop de {symbol} con lado {o.get('side')}, esperado {lado}")
+                return False
+            if pos_side and o.get("position_side") not in (None, pos_side):
+                self.log(f"bot: ⛔ stop de {symbol} en positionSide {o.get('position_side')}, "
+                         f"esperado {pos_side}")
+                return False
+            if not o.get("close_position"):
+                cubre = float(o.get("qty") or 0)
+                if cubre < qty * 0.99:
+                    self.log(f"bot: ⛔ stop de {symbol} cubre {cubre} de {qty}: "
+                             f"el resto queda descubierto")
+                    return False
+            disparo = float(o.get("trigger_price") or 0)
+            if disparo and abs(disparo - sl) > max(abs(sl) * 0.002, 1e-9):
+                self.log(f"bot: ⛔ stop de {symbol} dispara en {disparo}, esperado {sl}")
+                return False
+            self.log(f"bot: ✅ stop nativo confirmado en {symbol} @ {disparo or sl} "
+                     f"por {qty}")
+            return True
         return False
 
     # Cada cuánto se re-lee el balance real. No hace falta más: el sizing tolera de
@@ -581,7 +626,7 @@ class BotExecutor:
         return valor
 
     def _marcar_ambigua(self, sid: str, symbol: str, direccion: str, qty: float,
-                        leverage: int) -> None:
+                        leverage: int, sl: float | None = None) -> None:
         """Deja constancia de una apertura que pudo quedar viva sin registro.
 
         Es el único rastro que queda de una posición que quizá existe en Binance y no
@@ -594,8 +639,10 @@ class BotExecutor:
                 datos = json.load(fh)
         except (OSError, json.JSONDecodeError):
             datos = {}
+        # El SL viaja con el rastro: sin él, quien adopte la posición no puede
+        # ponerle stop y la adopción no sirve de nada.
         datos[sid] = {"symbol": symbol, "dir": direccion, "qty": qty,
-                      "leverage": leverage, "ts": time.time()}
+                      "leverage": leverage, "sl": sl, "ts": time.time()}
         try:
             os.makedirs(DATA_DIR, exist_ok=True)
             tmp = ruta + ".tmp"
@@ -672,22 +719,30 @@ class BotExecutor:
             upd = self._find_open(sid)
             rem = (upd or {}).get("qty_open", 0.0)
             nivel = trade["entry_price"] if t.get("be") else trade.get("sl")
-            try:
-                cli.cancel_algo_order(client_algo_id=self._aid(sid))
-            except Exception:  # noqa: BLE001
-                pass  # puede haberse disparado o no existir; lo resuelve el re-alta
             if rem > 0 and nivel:
                 be_pos = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
+                # ORDEN IMPORTANTE: primero se pone el stop NUEVO, y solo si queda
+                # confirmado se retira el viejo. Al revés —cancelar y después poner— un
+                # fallo del reemplazo dejaba la posición sin stop del exchange, que es
+                # justo lo que el fail-closed dice que no puede pasar. Por eso `_aid`
+                # numera generaciones: los dos tienen que poder coexistir un instante.
+                gen = len(trade.get("partials", [])) + 1
                 if self._proteger(cli, symbol, trade["dir"], float(nivel),
-                                  cli.round_qty(symbol, rem), sid, be_pos):
+                                  cli.round_qty(symbol, rem), sid, be_pos, gen=gen):
                     self.log(f"bot: stop nativo re-puesto en {symbol} @ {nivel} "
                              f"por {rem} (tras {t.get('leg')})")
+                    for viejo in range(gen):
+                        try:
+                            cli.cancel_algo_order(client_algo_id=self._aid(sid, viejo))
+                        except Exception:  # noqa: BLE001
+                            pass  # ya disparado, ya cancelado, o nunca existió
                 else:
-                    # No se cierra la posición acá: ya tomó parcial y su riesgo es menor.
-                    # Pero queda sin stop del exchange, así que el watchdog pasa a ser la
-                    # única red y eso tiene que verse en el log, no pasar callado.
-                    self.log(f"bot: ⚠️ {symbol} quedó SIN stop nativo tras el parcial; "
-                             f"solo lo cubre el watchdog")
+                    # El reemplazo no quedó: se CONSERVA el viejo. Cubre más cantidad de
+                    # la que hay, que en un stop es el lado seguro —cierra lo que
+                    # encuentre— y es infinitamente mejor que quedarse sin ninguno.
+                    self.log(f"bot: ⚠️ no se pudo re-poner el stop de {symbol} tras el "
+                             f"parcial; se CONSERVA el anterior (cubre {trade.get('qty')} "
+                             f"de {rem} reales)")
 
     def _close(self, t: dict, ref_price: float) -> None:
         sid = self._setup_id(t)

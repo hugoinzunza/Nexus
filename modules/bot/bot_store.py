@@ -143,6 +143,33 @@ class BotStore:
             self._save()
             return True
 
+    def ajustar_qty(self, setup_id: str, qty_real: float) -> bool:
+        """Alinea el libro con la cantidad REAL del exchange.
+
+        Existe para un caso concreto: un PARTIALLY_FILLED que terminó de llenarse
+        después de que registramos la parte ejecutada. El exchange queda con MÁS de lo
+        que el libro cree, y el stop nativo cubre la cantidad vieja — o sea que hay
+        exposición sin stop. La reconciliación amplía el stop y llama acá.
+
+        No es lo mismo que `add_partial`: eso REDUCE y registra una salida. Esto
+        corrige un dato que estaba mal, sin inventar un evento que no ocurrió.
+        """
+        with self._lock:
+            t = self.get_open(setup_id)
+            if not t:
+                return False
+            qty_real = round(float(qty_real or 0.0), 8)
+            if qty_real <= 0:
+                return False
+            cerrado = round(float(t.get("qty") or 0.0) - float(t.get("qty_open") or 0.0), 8)
+            t["qty"] = round(qty_real + max(0.0, cerrado), 8)
+            t["qty_open"] = qty_real
+            t.setdefault("ajustes", []).append(
+                {"qty_open": qty_real, "ts": int(time.time()),
+                 "motivo": "reconciliación: el exchange tenía más que el libro"})
+            self._save()
+            return True
+
     def close_trade(self, setup_id: str, exit_price: float, result_r=None,
                     fee_usd: float = 0.0) -> dict | None:
         """Cierra la operación: calcula P&L con los parciales + el remanente."""

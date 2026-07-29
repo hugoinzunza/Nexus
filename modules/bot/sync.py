@@ -231,19 +231,46 @@ class BotSync:
         if not pendientes:
             return
         try:
-            reales = {(p["symbol"], "long" if p["side"] == "LONG" else "short")
+            reales = {(p["symbol"], "long" if p["side"] == "LONG" else "short"): p
                       for p in cli.positions() if abs(float(p.get("qty") or 0)) > 0}
         except Exception as exc:  # noqa: BLE001
             self.log(f"bot: no se pudo revisar aperturas ambiguas ({exc})")
             return
+        ex = self.executor
         quedan = {}
         for sid, info in (pendientes or {}).items():
-            if (info.get("symbol"), info.get("dir")) in reales:
-                self.log(f"bot: ⛔ apertura AMBIGUA de {info.get('symbol')} "
-                         f"{info.get('dir')} SÍ existe en Binance y no está en el libro. "
-                         f"Sin stop del bot. Revisar a mano.")
-            else:
+            clave = (info.get("symbol"), info.get("dir"))
+            pos = reales.get(clave)
+            if not pos:
                 self.log(f"bot: apertura ambigua {sid} no llegó a existir; se descarta")
+                continue
+            # EXISTE. Avisar y borrar el rastro sería lo peor: se pierde la única pista
+            # de una posición viva, fuera del libro y sin stop. Hay que ADOPTARLA: darle
+            # registro para que el bot y el watchdog la gestionen, y ponerle stop.
+            qty = abs(float(pos.get("qty") or 0))
+            sl = info.get("sl")
+            entrada = float(pos.get("entry") or 0) or None
+            if not (qty > 0 and sl and entrada):
+                self.log(f"bot: ⛔ {clave} existe pero falta dato para adoptarla "
+                         f"(qty={qty} sl={sl} entrada={entrada}). Revisar a mano.")
+                quedan[sid] = info      # se CONSERVA el rastro: sigue sin resolverse
+                continue
+            pos_side = pos.get("position_side") if hedge else None
+            protegida = ex._proteger(cli, info["symbol"], info["dir"], float(sl),
+                                     qty, sid, pos_side)
+            ex.store.open_trade({
+                "setup_id": sid, "symbol": info["symbol"],
+                "pair": info["symbol"].replace("USDT", "_USDT"),
+                "dir": info["dir"], "mode": "live", "source": "adoptada",
+                "leverage": info.get("leverage"), "qty": qty,
+                "entry_price": entrada, "sl": float(sl),
+                "risk_usd_est": round(abs(entrada - float(sl)) * qty, 2),
+                "fee_rate": ex.cfg.get("fee_rate", 0.0005),
+                "sin_stop_nativo": not protegida,
+                "note": "adoptada por reconciliación tras apertura ambigua",
+            })
+            self.log(f"bot: 🔧 ADOPTADA {info['symbol']} {info['dir']} qty={qty} "
+                     f"SL={sl} (stop nativo: {'sí' if protegida else 'NO, solo watchdog'})")
         try:
             tmp = ruta + ".tmp"
             with open(tmp, "w", encoding="utf-8") as fh:
@@ -299,12 +326,32 @@ class BotSync:
                 elif libro_qty > 0 and real_qty > libro_qty * 1.02:
                     # El exchange tiene MÁS. Suele ser un PARTIALLY_FILLED que terminó de
                     # llenarse después de que registramos la parte ejecutada. Es el más
-                    # peligroso de los dos: hay exposición real que el libro no conoce, y
-                    # el stop nativo se puso por la cantidad vieja, así que el sobrante
-                    # está DESCUBIERTO. No se ajusta en silencio; se avisa fuerte.
-                    self.log(f"bot: ⛔ {t['symbol']} el exchange tiene {real_qty} y el "
-                             f"libro {libro_qty}: hay {real_qty - libro_qty} SIN cubrir "
-                             f"por el stop. Revisar a mano.")
+                    # peligroso de los dos: el stop nativo se puso por la cantidad VIEJA,
+                    # así que el sobrante está DESCUBIERTO.
+                    #
+                    # Avisar no basta: mientras nadie mire, esa exposición no tiene stop.
+                    # Se AMPLÍA el stop a la cantidad real y se ajusta el libro. Si no se
+                    # puede ampliar, ahí sí solo queda gritar.
+                    descubierto = real_qty - libro_qty
+                    self.log(f"bot: ⛔ {t['symbol']} exchange {real_qty} vs libro "
+                             f"{libro_qty}: {descubierto} SIN cubrir por el stop")
+                    ex = self.executor
+                    pos_side = ("LONG" if t["dir"] == "long" else "SHORT") if hedge else None
+                    gen = len(t.get("partials", [])) + 90   # rango propio, no pisa parciales
+                    if t.get("sl") and ex._proteger(cli, t["symbol"], t["dir"],
+                                                    float(t["sl"]), real_qty,
+                                                    t["setup_id"], pos_side, gen=gen):
+                        self.log(f"bot: 🔧 stop de {t['symbol']} ampliado a {real_qty}")
+                        for viejo_gen in range(gen):
+                            try:
+                                cli.cancel_algo_order(
+                                    client_algo_id=ex._aid(t["setup_id"], viejo_gen))
+                            except Exception:  # noqa: BLE001
+                                pass
+                        ex.store.ajustar_qty(t["setup_id"], real_qty)
+                    else:
+                        self.log(f"bot: ⛔ NO se pudo cubrir {descubierto} de "
+                                 f"{t['symbol']}. Revisar a mano YA.")
                 continue
 
             # No hay posición. ¿Se ejecutó nuestra orden de cierre?

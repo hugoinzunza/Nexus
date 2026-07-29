@@ -1013,3 +1013,86 @@ def test_el_watchdog_no_manda_ordenes_crudas():
     código que cierra posiciones SOLO— seguía llamando a market_order pelado."""
     llamadas = _llamadas("deploy/bot_watchdog.py")
     assert "market_order" not in llamadas
+
+
+# --- los cuatro P0 del fail-closed (auditoría de Codex, 2026-07-29) ----------
+
+def test_si_el_cierre_de_emergencia_no_sale_la_posicion_se_REGISTRA():
+    """Antes: si el stop no se confirmaba se intentaba cerrar, y si ese cierre devolvía
+    None se daba por cerrada y se hacía `return` sin registrar nada. La posición podía
+    quedar viva, sin stop del exchange, sin gestión del bot y sin que el watchdog la
+    viera — porque el watchdog lee el LIBRO. Es el peor estado posible."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/bot/executor.py").read_text()
+    i = src.index("abierto SIN stop confirmado")
+    bloque = src[i:i + 1800]
+    assert "cerrada = bool(resp_c)" in bloque, "no se mira si el cierre realmente salió"
+    assert "sin_stop = True" in bloque, "debe registrarse marcada, no descartarse"
+    assert '"sin_stop_nativo": sin_stop' in src
+
+
+def test_el_stop_nuevo_se_pone_antes_de_retirar_el_viejo():
+    """Cancelar primero y poner después dejaba la posición sin stop si el reemplazo
+    fallaba, que contradice el fail-closed. Por eso `_aid` numera generaciones."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/bot/executor.py").read_text()
+    i = src.index("ORDEN IMPORTANTE")
+    bloque = src[i:i + 1400]
+    proteger = bloque.index("_proteger(")
+    cancelar = bloque.index("cancel_algo_order")
+    assert proteger < cancelar, "sigue cancelando antes de confirmar el reemplazo"
+    ex = BotExecutor(store=None, log=lambda _m: None, config={})
+    assert ex._aid("s:1", 0) != ex._aid("s:1", 1), "las generaciones deben poder coexistir"
+
+
+def test_proteger_verifica_lado_cantidad_y_precio_no_solo_el_id():
+    """Un stop que existe pero cubre el lado equivocado, la mitad de la posición o un
+    precio distinto es peor que ninguno: se ve como protección."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/bot/executor.py").read_text()
+    i = src.index("def _proteger")
+    j = src.index("_EQUITY_TTL_S")
+    cuerpo = src[i:j]
+    for señal in ('o.get("side") != lado', "position_side", "cubre < qty", "trigger_price"):
+        assert señal in cuerpo, f"_proteger no verifica {señal}"
+
+
+def test_ajustar_qty_corrige_sin_inventar_una_salida(tmp_path):
+    """El exchange tenía MÁS que el libro (un parcial que terminó de llenarse). Eso se
+    corrige, no se registra como si hubiera salido algo."""
+    store = BotStore(path=str(tmp_path / "b.json"))
+    r = _trade_rec(); r["setup_id"] = "s:aj"; r["qty"] = 1.0
+    store.open_trade(r)
+    assert store.ajustar_qty("s:aj", 1.6)
+    t = store.all()[0]
+    assert t["qty_open"] == 1.6
+    assert t["partials"] == [], "no puede inventar un parcial que no ocurrió"
+    assert t["ajustes"][0]["qty_open"] == 1.6
+    # y tras un parcial real, el ajuste respeta lo ya cerrado
+    store.add_partial("s:aj", "TP1", 0.6, 110.0)
+    assert store.all()[0]["qty_open"] == 1.0
+    store.ajustar_qty("s:aj", 1.2)
+    t = store.all()[0]
+    assert t["qty_open"] == 1.2 and t["qty"] == 1.8
+
+
+def test_adoptar_ambiguas_adopta_en_vez_de_borrar_la_evidencia():
+    """Solo avisaba y después vaciaba el archivo, incluso con la posición viva: se
+    perdía la única pista de una posición fuera del libro y sin stop."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/bot/sync.py").read_text()
+    i = src.index("def _adoptar_ambiguas")
+    cuerpo = src[i:i + 3000]
+    assert "open_trade(" in cuerpo, "no crea el trade"
+    assert "_proteger(" in cuerpo, "no le pone stop"
+    assert "quedan[sid] = info" in cuerpo, "borra el rastro aunque no se resuelva"
+
+
+def test_real_mayor_que_libro_amplia_el_stop():
+    """Detectarlo y solo loguear deja la exposición sin stop mientras nadie mire."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/bot/sync.py").read_text()
+    i = src.index("real_qty > libro_qty * 1.02")
+    bloque = src[i:i + 2400]
+    assert "_proteger(" in bloque, "no amplía el stop a la cantidad real"
+    assert "ajustar_qty(" in bloque, "no corrige el libro"
