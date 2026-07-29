@@ -1096,3 +1096,26 @@ def test_real_mayor_que_libro_amplia_el_stop():
     bloque = src[i:i + 2400]
     assert "_proteger(" in bloque, "no amplía el stop a la cantidad real"
     assert "ajustar_qty(" in bloque, "no corrige el libro"
+
+
+def test_el_path_de_los_algo_orders_es_el_que_responde_no_el_de_la_doc():
+    """La documentación de Binance dice `/fapi/v1/algoOpenOrders` y ese path devuelve
+    404. El real es `/fapi/v1/openAlgoOrders`, verificado contra la API el 2026-07-29.
+
+    Es la TERCERA vez en este trabajo que la doc no coincide con lo que responde
+    Binance —antes fueron los filtros de exchangeInfo y el propio -4120— y las tres
+    solo se vieron llamando. Este test fija el path medido, no el documentado."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/trading/binance_account.py").read_text()
+    assert '"/fapi/v1/openAlgoOrders"' in src
+    assert '"/fapi/v1/algoOpenOrders"' not in src, "volvió el path que da 404"
+
+
+def test_proteger_pregunta_por_el_id_exacto():
+    """Listar y buscar es más frágil y más caro que preguntar por el clientAlgoId."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/bot/executor.py").read_text()
+    i = src.index("def _proteger")
+    cuerpo = src[i:i + 2600]
+    assert "get_algo_order(aid)" in cuerpo
+    assert "algo_open_orders" in cuerpo, "debe quedar el listado como respaldo"

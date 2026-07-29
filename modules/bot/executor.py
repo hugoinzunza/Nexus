@@ -558,11 +558,18 @@ class BotExecutor:
         except Exception as exc:  # noqa: BLE001
             self.log(f"bot: no se pudo poner el stop nativo en {symbol}: {str(exc)[-120:]}")
             # Puede haber entrado igual y perderse la respuesta: lo dice la confirmación.
+        # Se pregunta por el id EXACTO. Listar y buscar era más frágil y más caro; y
+        # el path de listado que da la documentación (`algoOpenOrders`) ni siquiera
+        # existe: devuelve 404. El real es `openAlgoOrders`, que queda de respaldo.
         try:
-            vivos = cli.algo_open_orders(symbol)
-        except Exception as exc:  # noqa: BLE001
-            self.log(f"bot: no se pudo confirmar el stop de {symbol}: {str(exc)[-120:]}")
-            return False
+            o = cli.get_algo_order(aid)
+            vivos = [o] if o else []
+        except Exception:  # noqa: BLE001
+            try:
+                vivos = cli.algo_open_orders(symbol)
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"bot: no se pudo confirmar el stop de {symbol}: {str(exc)[-120:]}")
+                return False
         for o in vivos:
             if o.get("client_algo_id") != aid:
                 continue

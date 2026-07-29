@@ -361,28 +361,51 @@ class BinanceFutures:
             p["clientAlgoId"] = client_algo_id
         return self._request("POST", "/fapi/v1/algoOrder", p, signed=True)
 
+    def get_algo_order(self, client_algo_id: str) -> dict | None:
+        """UN stop condicional por su clientAlgoId. None si no existe.
+
+        Es la forma precisa de confirmar que una posición quedó protegida: pregunta
+        por el id exacto en vez de listar y buscar.
+        """
+        try:
+            r = self._request("GET", "/fapi/v1/algoOrder",
+                              {"clientAlgoId": client_algo_id}, signed=True)
+        except BinanceError as exc:
+            if "-2013" in str(exc) or "not exist" in str(exc).lower():
+                return None
+            raise
+        if isinstance(r, list):
+            r = r[0] if r else None
+        return self._norm_algo(r) if r else None
+
+    @staticmethod
+    def _norm_algo(r: dict) -> dict:
+        return {
+            "algo_id": r.get("algoId"),
+            "client_algo_id": r.get("clientAlgoId"),
+            "symbol": r.get("symbol"),
+            "side": r.get("side"),
+            "position_side": r.get("positionSide"),
+            "type": r.get("orderType") or r.get("type"),
+            "trigger_price": float(r.get("triggerPrice") or 0),
+            "qty": float(r.get("quantity") or 0),
+            "close_position": bool(r.get("closePosition")),
+            "status": r.get("algoStatus"),
+        }
+
     def algo_open_orders(self, symbol: str) -> list[dict]:
-        """Stops condicionales VIVOS del símbolo. Es con lo que se confirma que la
-        posición quedó protegida: no basta con que el POST no haya fallado."""
-        rows = self._request("GET", "/fapi/v1/algoOpenOrders", {"symbol": symbol},
+        """Stops condicionales VIVOS del símbolo.
+
+        OJO CON EL PATH: la documentación dice `/fapi/v1/algoOpenOrders` y ese path
+        devuelve 404. El real es `/fapi/v1/openAlgoOrders` — verificado contra la API
+        el 2026-07-29. Ya van tres veces en este trabajo que la doc no coincide con lo
+        que responde Binance; no dar por buena una ruta sin llamarla.
+        """
+        rows = self._request("GET", "/fapi/v1/openAlgoOrders", {"symbol": symbol},
                              signed=True)
         if isinstance(rows, dict):
             rows = rows.get("orders") or rows.get("algoOrders") or []
-        out = []
-        for r in rows or []:
-            out.append({
-                "algo_id": r.get("algoId"),
-                "client_algo_id": r.get("clientAlgoId"),
-                "symbol": r.get("symbol"),
-                "side": r.get("side"),
-                "position_side": r.get("positionSide"),
-                "type": r.get("orderType") or r.get("type"),
-                "trigger_price": float(r.get("triggerPrice") or 0),
-                "qty": float(r.get("quantity") or 0),
-                "close_position": bool(r.get("closePosition")),
-                "status": r.get("algoStatus"),
-            })
-        return out
+        return [self._norm_algo(r) for r in (rows or [])]
 
     def cancel_algo_order(self, algo_id=None, client_algo_id: str | None = None) -> dict:
         """Cancela UN stop condicional. Deliberadamente sin variante `cancel_all`:
