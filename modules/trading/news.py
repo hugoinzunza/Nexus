@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import time
 import urllib.request
 
 _FEED = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
 _RAW_CACHE = {"ts": 0.0, "raw": None}   # feed crudo cacheado (se filtra por llamada)
 _CACHE_TTL = 1800  # 30 min
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_CACHE_FILE = os.path.join(_ROOT, "data", "news_calendar_cache.json")
 
 # Economías mayores: para el panel "Fechas clave" del Home (no solo USD).
 _MAJORS = ("USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "NZD")
@@ -36,16 +39,44 @@ def _fetch():
         return json.loads(r.read().decode("utf-8"))
 
 
+def _load_disk_cache():
+    try:
+        with open(_CACHE_FILE, encoding="utf-8") as fh:
+            payload = json.load(fh)
+        raw = payload.get("raw")
+        return raw if isinstance(raw, list) else None
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def _save_disk_cache(raw):
+    """Persiste el último calendario bueno para sobrevivir deploys y rate limits."""
+    try:
+        os.makedirs(os.path.dirname(_CACHE_FILE), exist_ok=True)
+        tmp = _CACHE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump({"saved_at": int(time.time()), "raw": raw}, fh)
+        os.replace(tmp, _CACHE_FILE)
+    except OSError:
+        pass
+
+
 def _raw():
     """Feed crudo cacheado 30 min (se filtra por llamada). Ante error, el último bueno."""
     now = time.time()
+    if _RAW_CACHE["raw"] is None:
+        _RAW_CACHE["raw"] = _load_disk_cache()
     if now - _RAW_CACHE["ts"] < _CACHE_TTL and _RAW_CACHE["raw"] is not None:
         return _RAW_CACHE["raw"]
     try:
         raw = _fetch()
     except Exception:  # noqa: BLE001
+        # Backoff también en error: sin esto un 429 provoca otro request en cada
+        # tick del poller y prolonga indefinidamente el rate limit.
+        _RAW_CACHE["ts"] = now
         return _RAW_CACHE["raw"] or []
     _RAW_CACHE.update(ts=now, raw=raw)
+    _save_disk_cache(raw)
     return raw
 
 

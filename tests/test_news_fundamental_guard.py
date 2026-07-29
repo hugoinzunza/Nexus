@@ -70,3 +70,29 @@ def test_status_declara_que_solo_bloquea_entradas(monkeypatch):
 
     assert status["blocks_new_entries"] is True
     assert status["active"]["title"] == "Federal Funds Rate"
+
+
+def test_cache_persistente_sobrevive_reinicio_y_429(monkeypatch, tmp_path):
+    cache_file = tmp_path / "calendar.json"
+    raw = [{
+        "title": "FOMC Press Conference",
+        "country": "USD",
+        "impact": "High",
+        "date": "2026-07-29T14:30:00-04:00",
+    }]
+    monkeypatch.setattr(news, "_CACHE_FILE", str(cache_file))
+    monkeypatch.setattr(news, "_fetch", lambda: raw)
+    news._RAW_CACHE.update(ts=0.0, raw=None)
+
+    assert news._raw() == raw
+    assert cache_file.exists()
+
+    # Simula otro proceso tras un deploy: memoria vacía y proveedor en 429.
+    news._RAW_CACHE.update(ts=0.0, raw=None)
+
+    def rate_limited():
+        raise RuntimeError("429")
+
+    monkeypatch.setattr(news, "_fetch", rate_limited)
+    assert news._raw() == raw
+    assert news._RAW_CACHE["ts"] > 0
