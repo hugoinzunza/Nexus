@@ -1,0 +1,26 @@
+[Unit]
+# Hace cumplir el -1R. Servicio APARTE de nexus.service a propósito: si el bot se
+# cuelga, se queda sin feed o muere, este tiene que seguir en pie. Por eso no lleva
+# Requires= ni After= de nexus.service — no depende de él para nada.
+Description=NexUX bot watchdog (hace cumplir el SL; la subcuenta no admite STOP_MARKET)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=hugo
+WorkingDirectory=/home/hugo/Nexus
+EnvironmentFile=/home/hugo/Nexus/deploy/trade.env
+ExecStart=/home/hugo/Nexus/.venv/bin/python /home/hugo/Nexus/deploy/bot_watchdog.py --loop
+Restart=always
+RestartSec=5
+# Latido real (Type=notify + sd_notify en el bucle). Con Type=simple systemd
+# ignora WatchdogSec y un proceso COLGADO se ve sano: el peor estado posible
+# para lo único que sostiene el -1R. Solo late si el ciclo TERMINA.
+WatchdogSec=120
+NotifyAccess=main
+StandardOutput=append:/home/hugo/Nexus/data/watchdog.log
+StandardError=append:/home/hugo/Nexus/data/watchdog.log
+
+[Install]
+WantedBy=multi-user.target

@@ -100,7 +100,13 @@
       "quality_require_disc": false,
       "one_position_at_a_time": false,
       "base_equity_auto": true,
-      "max_margin_pct": 0.8
+      "max_margin_pct": 0.8,
+      "watchdog": {
+        "_nota": "Hace cumplir el -1R. La subcuenta rechaza STOP_MARKET con -4120 en las dos variantes (verificado 2026-07-29), asi que no hay stop nativo. Corre como servicio APARTE para sobrevivir a que el bot se cuelgue.",
+        "enabled": false,
+        "tolerancia_r": 0.15,
+        "hedge": true
+      }
     },
     "coinsignals": {
       "enabled": true,

@@ -666,3 +666,159 @@ def test_los_filtros_se_cachean_todos_de_una():
     cli.symbol_filters("ADAUSDT")
     cli.symbol_filters("BTCUSDT")
     assert cli.descargas == 1
+
+
+# --- watchdog del stop ------------------------------------------------------
+#
+# La subcuenta rechaza STOP_MARKET con -4120 en las DOS variantes (verificado contra
+# la API el 2026-07-29). Sin stop nativo, el -1R lo sostiene el polling del bot, y el
+# libro real mostró 8 de 11 stops pasados, peor -4.17R.
+
+def _wd():
+    import importlib.util, pathlib
+    ruta = pathlib.Path(__file__).resolve().parents[1] / "deploy/bot_watchdog.py"
+    spec = importlib.util.spec_from_file_location("bot_watchdog", ruta)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_excedido_mide_cuanto_se_paso_del_sl_en_R():
+    wd = _wd()
+    # long: entrada 100, SL 98 → riesgo 2. A 97 se pasó 1 punto = 0.5R más allá.
+    largo = {"entry_price": 100.0, "sl": 98.0, "dir": "long"}
+    assert wd._excedido(largo, 97.0) == 0.5
+    assert wd._excedido(largo, 98.0) is None, "justo en el SL todavía no se pasó"
+    assert wd._excedido(largo, 99.0) is None, "antes del SL no es asunto del watchdog"
+    # short: entrada 100, SL 102 → a 103 se pasó 0.5R
+    corto = {"entry_price": 100.0, "sl": 102.0, "dir": "short"}
+    assert wd._excedido(corto, 103.0) == 0.5
+    assert wd._excedido(corto, 101.0) is None
+
+
+def test_excedido_no_divide_por_cero_ni_revienta_con_datos_malos():
+    wd = _wd()
+    assert wd._excedido({"entry_price": 100.0, "sl": 100.0, "dir": "long"}, 99.0) is None
+    assert wd._excedido({"dir": "long"}, 99.0) is None
+    assert wd._excedido({"entry_price": "x", "sl": 1, "dir": "long"}, 99.0) is None
+
+
+def test_la_tolerancia_deja_actuar_al_bot_en_el_caso_normal():
+    """Los stops que el bot cierra bien no debe tocarlos: si el watchdog compite en
+    el caso normal, se convierte él mismo en una fuente de cierres equivocados.
+    De los 8 stops pasados, 6 lo hicieron por más de 0.13R."""
+    wd = _wd()
+    largo = {"entry_price": 100.0, "sl": 98.0, "dir": "long"}
+    # -1.05R: el bot todavía tiene la palabra
+    assert wd._excedido(largo, 97.9) < wd.TOLERANCIA_R
+    # -1.30R: ya se pasó de largo, entra el watchdog
+    assert wd._excedido(largo, 97.4) > wd.TOLERANCIA_R
+    # el peor caso real (-4.17R) queda muy por encima
+    assert wd._excedido(largo, 100 - 2 * 4.17) > wd.TOLERANCIA_R
+
+
+def test_el_watchdog_arranca_apagado():
+    """Un proceso que cierra posiciones no se enciende solo."""
+    import json as _json
+    from pathlib import Path
+    cfg = _json.loads((Path(__file__).resolve().parents[1] / "config/nexus.json").read_text())
+    wd = ((cfg["modules"]["bot"]).get("watchdog") or {})
+    assert wd.get("enabled") is False, "el watchdog no puede quedar encendido por defecto"
+
+
+class _CliWd:
+    """Cliente falso: posiciones y precio programables, órdenes registradas."""
+
+    def __init__(self, precio, posiciones=None, rompe_posiciones=False,
+                 rompe_precio=False):
+        self.precio = precio
+        self._pos = posiciones if posiciones is not None else [
+            {"symbol": "ADAUSDT", "side": "LONG", "qty": 100.0, "position_side": "LONG"}]
+        self.rompe_posiciones = rompe_posiciones
+        self.rompe_precio = rompe_precio
+        self.ordenes = []
+
+    def positions(self):
+        if self.rompe_posiciones:
+            from modules.trading.binance_account import BinanceError
+            raise BinanceError("sin respuesta")
+        return self._pos
+
+    def mark_price(self, _s):
+        if self.rompe_precio:
+            from modules.trading.binance_account import BinanceError
+            raise BinanceError("sin precio")
+        return self.precio
+
+    def round_qty(self, _s, q): return q
+
+    def market_order(self, symbol, side, qty, **kw):
+        self.ordenes.append({"symbol": symbol, "side": side, "qty": qty, **kw})
+        return {"status": "FILLED", "executedQty": qty, "avgPrice": self.precio}
+
+
+_TRADE_WD = [{"setup_id": "s:wd", "symbol": "ADAUSDT", "dir": "long", "mode": "live",
+              "status": "abierta", "entry_price": 0.20, "sl": 0.19,
+              "qty": 100.0, "qty_open": 100.0, "fee_rate": 0.0005}]
+_CFG_WD = {"enabled": True, "tolerancia_r": 0.15, "hedge": True}
+
+
+def test_el_watchdog_cierra_cuando_el_stop_se_paso():
+    """El caso que ya cobró: 8 de 11 stops se pasaron del -1R, peor -4.17R."""
+    wd = _wd()
+    cli = _CliWd(precio=0.185)   # SL 0.19, riesgo 0.01 → se pasó 0.5R = -1.5R
+    n = wd.ciclo(cli=cli, abiertos=list(_TRADE_WD), cfg=_CFG_WD, log=lambda _m: None)
+    assert n == 1 and len(cli.ordenes) == 1
+    o = cli.ordenes[0]
+    assert o["symbol"] == "ADAUSDT" and o["side"] == "SELL", "un long se cierra vendiendo"
+    assert o["qty"] == 100.0
+
+
+def test_el_watchdog_no_compite_con_el_bot_dentro_de_la_tolerancia():
+    wd = _wd()
+    cli = _CliWd(precio=0.1895)  # se pasó solo 0.05R → el bot todavía manda
+    assert wd.ciclo(cli=cli, abiertos=list(_TRADE_WD), cfg=_CFG_WD,
+                    log=lambda _m: None) == 0
+    assert cli.ordenes == []
+
+
+def test_el_watchdog_no_toca_nada_antes_del_sl():
+    wd = _wd()
+    cli = _CliWd(precio=0.195)
+    assert wd.ciclo(cli=cli, abiertos=list(_TRADE_WD), cfg=_CFG_WD,
+                    log=lambda _m: None) == 0
+
+
+def test_sin_lecturas_confiables_el_watchdog_no_actua():
+    """Un watchdog que actúa a ciegas es peor que no tenerlo."""
+    wd = _wd()
+    for kw in ({"rompe_posiciones": True}, {"rompe_precio": True}):
+        cli = _CliWd(precio=0.185, **kw)
+        assert wd.ciclo(cli=cli, abiertos=list(_TRADE_WD), cfg=_CFG_WD,
+                        log=lambda _m: None) == 0
+        assert cli.ordenes == []
+
+
+def test_el_watchdog_ignora_lo_que_ya_no_existe_en_binance():
+    wd = _wd()
+    cli = _CliWd(precio=0.185, posiciones=[])
+    assert wd.ciclo(cli=cli, abiertos=list(_TRADE_WD), cfg=_CFG_WD,
+                    log=lambda _m: None) == 0
+
+
+def test_apagado_no_hace_nada_aunque_el_stop_este_pasado():
+    wd = _wd()
+    cli = _CliWd(precio=0.10)   # -10R
+    assert wd.ciclo(cli=cli, abiertos=list(_TRADE_WD),
+                    cfg={"enabled": False}, log=lambda _m: None) == 0
+    assert cli.ordenes == []
+
+
+def test_el_watchdog_cierra_shorts_por_arriba():
+    wd = _wd()
+    corto = [{**_TRADE_WD[0], "dir": "short", "entry_price": 0.20, "sl": 0.21}]
+    cli = _CliWd(precio=0.215,
+                 posiciones=[{"symbol": "ADAUSDT", "side": "SHORT", "qty": 100.0,
+                              "position_side": "SHORT"}])
+    assert wd.ciclo(cli=cli, abiertos=corto, cfg=_CFG_WD, log=lambda _m: None) == 1
+    assert cli.ordenes[0]["side"] == "BUY", "un short se cierra comprando"

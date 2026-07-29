@@ -62,6 +62,14 @@ def main() -> int:
 
     px = cli.mark_price(SIMBOLO)
     filtros = cli.symbol_filters(SIMBOLO)
+    # exchangeInfo ignora `symbol` y devuelve los 848: si el cliente de esta máquina
+    # todavía toma syms[0], estos filtros son los de BTC y la prueba vuelve a caerse
+    # en validación de parámetros sin decirnos nada de permisos.
+    if filtros["qty_step"] == 0.001 and SIMBOLO != "BTCUSDT":
+        print(f"\nAVISO: los filtros de {SIMBOLO} son sospechosamente los de BTCUSDT "
+              f"({filtros}).")
+        print("Este cliente todavía tiene el bug de syms[0]; despliega el fix antes.")
+        return 3
     # Cantidad mínima válida: por debajo del minNotional Binance rechaza por parámetros
     # y volveríamos a no saber nada de permisos.
     qty = cli.round_qty(SIMBOLO, max(float(filtros.get("min_qty") or 0),
