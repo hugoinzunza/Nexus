@@ -17,7 +17,7 @@ import time
 import urllib.error
 import urllib.request
 
-from .executor import KILL_FILE, TRADE_ENV  # noqa: F401  (rutas compartidas)
+from .executor import DATA_DIR, KILL_FILE, TRADE_ENV  # noqa: F401  (rutas compartidas)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 COLLECTOR_ENV = os.path.join(ROOT, "deploy", "collector.env")
@@ -207,6 +207,50 @@ class BotSync:
             self.log(f"bot: 🔧 reconciliación cerró huérfana {sym} {pdir} (sin setup abierto)")
 
         self._reconciliar_fantasmas(cli, hedge)
+        self._adoptar_ambiguas(cli, hedge)
+
+    def _adoptar_ambiguas(self, cli, hedge: bool) -> None:
+        """Posiciones que quizá se abrieron y quedaron sin registro.
+
+        Cuando una apertura queda ambigua, el executor deja constancia en
+        `data/bot_ambiguas.json`. Ese archivo se escribía y NADIE lo leía, así que el
+        rastro no servía de nada: una posición real, viva, fuera del libro y sin stop —
+        el peor estado posible, y encima invisible.
+
+        Acá se cierra el círculo. Si hay una posición real que calza con una apertura
+        ambigua, se avisa fuerte y se retira del archivo: a partir de ahí es una huérfana
+        normal y la ve `reconcile`, que decide según `auto_close_orphans`. Si la posición
+        NO existe, la apertura efectivamente no ocurrió y el rastro se descarta.
+        """
+        ruta = os.path.join(DATA_DIR, "bot_ambiguas.json")
+        try:
+            with open(ruta, encoding="utf-8") as fh:
+                pendientes = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return
+        if not pendientes:
+            return
+        try:
+            reales = {(p["symbol"], "long" if p["side"] == "LONG" else "short")
+                      for p in cli.positions() if abs(float(p.get("qty") or 0)) > 0}
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"bot: no se pudo revisar aperturas ambiguas ({exc})")
+            return
+        quedan = {}
+        for sid, info in (pendientes or {}).items():
+            if (info.get("symbol"), info.get("dir")) in reales:
+                self.log(f"bot: ⛔ apertura AMBIGUA de {info.get('symbol')} "
+                         f"{info.get('dir')} SÍ existe en Binance y no está en el libro. "
+                         f"Sin stop del bot. Revisar a mano.")
+            else:
+                self.log(f"bot: apertura ambigua {sid} no llegó a existir; se descarta")
+        try:
+            tmp = ruta + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(quedan, fh, indent=1)
+            os.replace(tmp, ruta)
+        except OSError:
+            pass
 
     def _reconciliar_fantasmas(self, cli, hedge: bool) -> None:
         """El sentido inverso: trades ABIERTOS en el libro que ya no existen en Binance.
@@ -242,15 +286,25 @@ class BotSync:
             real_qty = vivas.get(clave, 0.0)
             libro_qty = float(t.get("qty_open") or 0)
             if real_qty > 0:
-                # Existe, pero ¿del mismo tamaño? Si el exchange tiene menos, un
-                # parcial salió y no se registró.
+                # ¿Del mismo tamaño? Los dos sentidos importan y por motivos distintos.
                 if libro_qty > 0 and real_qty < libro_qty * 0.98:
+                    # El exchange tiene MENOS: salió un parcial que no se registró. El
+                    # libro cree que le queda más de lo que le queda.
                     self.log(f"bot: ⚠️ {t['symbol']} el exchange tiene {real_qty} y el "
                              f"libro {libro_qty}; se ajusta el libro a lo real")
                     self.executor.store.add_partial(
                         t["setup_id"], "AJUSTE-RECONCILIACION",
                         round(libro_qty - real_qty, 8),
                         round(cli.mark_price(t["symbol"]), 8), fee_usd=0.0)
+                elif libro_qty > 0 and real_qty > libro_qty * 1.02:
+                    # El exchange tiene MÁS. Suele ser un PARTIALLY_FILLED que terminó de
+                    # llenarse después de que registramos la parte ejecutada. Es el más
+                    # peligroso de los dos: hay exposición real que el libro no conoce, y
+                    # el stop nativo se puso por la cantidad vieja, así que el sobrante
+                    # está DESCUBIERTO. No se ajusta en silencio; se avisa fuerte.
+                    self.log(f"bot: ⛔ {t['symbol']} el exchange tiene {real_qty} y el "
+                             f"libro {libro_qty}: hay {real_qty - libro_qty} SIN cubrir "
+                             f"por el stop. Revisar a mano.")
                 continue
 
             # No hay posición. ¿Se ejecutó nuestra orden de cierre?

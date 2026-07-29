@@ -1,20 +1,23 @@
 """Watchdog del stop — hace cumplir el -1R cuando el bot no llega.
 
-POR QUÉ EXISTE
---------------
-La subcuenta rechaza STOP_MARKET por API con -4120 (verificado el 2026-07-29 en las
-dos variantes, `quantity` y `closePosition`, con parámetros válidos). El mensaje sugiere
-la Algo Order API, pero esos endpoints son TWAP y VP: algoritmos de ejecución, no stops.
-No hay stop nativo disponible.
+POR QUÉ EXISTE — Y QUÉ NO ES
+----------------------------
+ES LA SEGUNDA LÍNEA DE DEFENSA, NO LA PRIMERA. La primera es el stop NATIVO que el
+executor coloca en Binance vía `/fapi/v1/algoOrder` al abrir cada posición.
 
-Así que el SL lo gestiona el bot a ritmo de polling, y cuando el precio corre, el bot
-llega tarde. Medido en el libro real de junio-julio: de 11 setups donde el Diario marcó
-stop limpio (-1.00R), **8 se pasaron**, con un promedio de -1.305R y un peor caso de
--4.17R (-37.54 USD). El -1R no era un piso, era una intención.
+Corrección de una versión anterior de este archivo, que decía "no hay stop nativo
+disponible": era FALSO. Binance movió las condicionales fuera de /fapi/v1/order el
+2025-12-09 y el -4120 apuntaba justo al endpoint nuevo; se leyó el mensaje correcto y se
+sacó la conclusión contraria. El stop nativo existe y estuvo disponible todo el tiempo.
 
-Este proceso es la red. Corre APARTE del bot —su propio servicio, su propio cliente— para
-que siga en pie aunque el bot se cuelgue, se caiga o se quede sin feed. No depende de un
-heartbeat: mira el precio contra el SL, que es cierto esté el bot vivo o muerto.
+Este proceso cubre lo que el stop nativo no puede: que el stop no se haya llegado a
+colocar, que lo cancelen por error, o que la posición quede fuera del libro. Medido en el
+libro real de junio-julio, cuando NO había stop nativo: de 11 setups donde el Diario marcó
+stop limpio (-1.00R), 8 se pasaron; promedio -1.305R, peor -4.17R (-37.54 USD).
+
+Corre APARTE del bot —su propio servicio, su propio cliente— para seguir en pie aunque el
+bot se cuelgue, se caiga o se quede sin feed. No depende de un heartbeat: mira el precio
+contra el SL, que es cierto esté el bot vivo o muerto.
 
 QUÉ HACE Y QUÉ NO
 -----------------
@@ -34,6 +37,7 @@ pasaba a -4.17R se habría cortado bastante antes.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -48,13 +52,15 @@ ESTADO = os.path.join(ROOT, "data", "bot_watchdog.json")
 INTERVALO_S = 15.0
 
 # Cuánto se deja pasar del SL antes de intervenir, en fracción de la distancia
-# entrada→SL (o sea, en R). 0.15 = se actúa al -1.15R.
+# entrada→SL (o sea, en R). 0.25 = se actúa al -1.25R.
 #
-# No es un número arbitrario: de los 8 stops que se pasaron, 6 lo hicieron por más de
-# 0.13R, y los tres grandes (-1.76, -2.09, -3.17) por mucho más. Un umbral más apretado
-# haría al watchdog competir con el bot en el caso normal, que es justo lo que no
-# queremos: la mayoría de los stops los cierra bien el bot.
-TOLERANCIA_R = 0.15
+# Empezó en 0.15, calibrado con que 6 de los 8 stops pasados lo hicieron por más de
+# 0.13R. Eso era ajustar el umbral a la MISMA muestra que motivó construir esto, o sea
+# circular. Y el rol cambió: con stop nativo puesto por el exchange, este proceso es
+# emergencia, no ejecutor. Un umbral holgado es lo correcto para una emergencia — el
+# costo de no disparar cuando el stop nativo sí funcionó es cero, y el de disparar de
+# más es cerrar una posición que no correspondía.
+TOLERANCIA_R = 0.25
 
 
 def _cfg() -> dict:
@@ -90,10 +96,21 @@ def _excedido(trade: dict, precio: float) -> float | None:
     riesgo = abs(entrada - sl)
     if riesgo <= 0:
         return None
-    if trade.get("dir") == "long":
+    # El SL tiene que estar del lado que corresponde: por DEBAJO de la entrada en un
+    # long, por ENCIMA en un short. Un registro con el SL invertido —o con dir mal
+    # escrito— haría que `exceso` salga positivo con el precio a favor, y el watchdog
+    # cerraría una posición ganadora. Ante un dato incoherente, no se toca nada.
+    direccion = trade.get("dir")
+    if direccion == "long":
+        if sl >= entrada:
+            return None
         exceso = sl - precio
-    else:
+    elif direccion == "short":
+        if sl <= entrada:
+            return None
         exceso = precio - sl
+    else:
+        return None
     return exceso / riesgo if exceso > 0 else None
 
 
@@ -155,6 +172,7 @@ def ciclo(dry: bool = False, log=print, cli=None, abiertos=None, cfg=None) -> in
         return 0
     tolerancia = float(cfg.get("tolerancia_r", TOLERANCIA_R))
 
+    from modules.bot.executor import BinanceOrdenAmbigua, ordenar_resuelto
     from modules.trading.binance_account import BinanceError, BinanceFutures
     if cli is None:
         try:
@@ -177,8 +195,11 @@ def ciclo(dry: bool = False, log=print, cli=None, abiertos=None, cfg=None) -> in
     reales = None
     for intento in range(3):
         try:
-            reales = {p["symbol"]: p for p in cli.positions()
-                      if abs(float(p.get("qty") or 0)) > 0}
+            # Clave (símbolo, lado). Indexar solo por símbolo perdía la distinción en
+            # HEDGE —que es el modo de esta subcuenta—: con BTC long y short abiertos a
+            # la vez, uno pisaba al otro y el watchdog podía cerrar el lado equivocado.
+            reales = {(p["symbol"], "long" if p["side"] == "LONG" else "short"): p
+                      for p in cli.positions() if abs(float(p.get("qty") or 0)) > 0}
             break
         except BinanceError as exc:
             if "-1003" in str(exc) and intento < 2:
@@ -198,7 +219,7 @@ def ciclo(dry: bool = False, log=print, cli=None, abiertos=None, cfg=None) -> in
     cerradas = 0
     for t in abiertos:
         symbol = t.get("symbol")
-        pos = reales.get(symbol)
+        pos = reales.get((symbol, t.get("dir")))
         if not pos:
             continue  # el bot ya cerró, o la reconciliación lo verá
         try:
@@ -216,17 +237,33 @@ def ciclo(dry: bool = False, log=print, cli=None, abiertos=None, cfg=None) -> in
         if dry:
             cerradas += 1
             continue
-        qty = float(t.get("qty_open") or pos.get("qty") or 0)
+        # La cantidad la manda BINANCE, no el libro. Si el libro está desincronizado
+        # —que es justo el escenario en que el watchdog hace falta— cerrar por qty_open
+        # deja un resto abierto o intenta cerrar de más.
+        qty = abs(float(pos.get("qty") or 0))
+        if qty <= 0:
+            continue
         side = "SELL" if t.get("dir") == "long" else "BUY"
         pos_side = pos.get("position_side") if cfg.get("hedge", True) else None
+        # id DETERMINISTA por trade: un timestamp generaba un id nuevo en cada ciclo, así
+        # que un timeout podía terminar en dos órdenes de cierre. Y es newClientOrderId,
+        # espacio distinto del clientAlgoId de los stops: confundirlos cancela lo que no era.
+        cid = "wd" + hashlib.md5(str(t.get("setup_id")).encode()).hexdigest()[:16]
         try:
-            cli.market_order(symbol, side, cli.round_qty(symbol, qty),
-                             reduce_only=not pos_side, position_side=pos_side,
-                             client_id=f"nxwd{int(time.time())}"[:36])
-        except BinanceError as exc:
-            log(f"watchdog: FALLÓ cerrar {symbol}: {exc}")
-            _registrar({"ts": time.time(), "symbol": symbol, "accion": "fallo",
+            resp = ordenar_resuelto(cli, symbol, side, cli.round_qty(symbol, qty), cid,
+                                    reduce_only=not pos_side, position_side=pos_side,
+                                    log=log)
+        except BinanceOrdenAmbigua as exc:
+            # No sabemos si cerró. NO se reintenta con otro id ni se da por hecho:
+            # el próximo ciclo vuelve a mirar la posición real, que es la verdad.
+            log(f"watchdog: cierre AMBIGUO en {symbol} ({exc}); se revisa el próximo ciclo")
+            _registrar({"ts": time.time(), "symbol": symbol, "accion": "ambiguo",
                         "error": str(exc)[-200:], "r": r_actual})
+            continue
+        if not resp:
+            log(f"watchdog: el cierre de {symbol} no se ejecutó")
+            _registrar({"ts": time.time(), "symbol": symbol, "accion": "no_ejecutada",
+                        "r": r_actual})
             continue
         cerradas += 1
         _registrar({"ts": time.time(), "symbol": symbol, "accion": "cerrada",

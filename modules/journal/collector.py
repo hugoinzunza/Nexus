@@ -148,8 +148,13 @@ def _load_income(now, lookback_days, income_path=INCOME_PATH):
     # `lookback_start` avanza con el reloj, una vez que cubierto <= lookback_start la
     # condición se mantiene sola y no se vuelve a pedir el histórico completo.
     cached["covered_from"] = int(min(int(cubierto), int(cached.get("covered_from") or cubierto)))
-    with open(income_path, "w", encoding="utf-8") as fh:
+    # Atómico: un archivo truncado a media escritura hace que `covered_from` se pierda
+    # y la próxima corrida se vuelva a traer el año entero — la ráfaga que acabamos de
+    # eliminar. Escribir en sitio es cómo vuelve sola.
+    tmp = income_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(cached, fh)
+    os.replace(tmp, income_path)
     return cached["rows"]
 
 

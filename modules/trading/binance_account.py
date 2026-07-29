@@ -253,7 +253,12 @@ class BinanceFutures:
                      position_side: str | None = None) -> dict:
         """Orden a mercado. side: 'BUY'|'SELL'. En HEDGE pasar position_side ('LONG'|
         'SHORT') y NO reduceOnly (el par side+positionSide define abrir/cerrar)."""
-        p = {"symbol": symbol, "side": side, "type": "MARKET", "quantity": qty}
+        # newOrderRespType=RESULT es OBLIGATORIO acá. El default de Binance es ACK, que
+        # contesta antes de saber el fill: executedQty="0" y avgPrice="0". Con ACK el bot
+        # no puede distinguir un fill total de uno parcial, ni conocer el precio real de
+        # entrada — y todo el manejo de parciales que hay aguas abajo queda ciego.
+        p = {"symbol": symbol, "side": side, "type": "MARKET", "quantity": qty,
+             "newOrderRespType": "RESULT"}
         if position_side:
             p["positionSide"] = position_side
         elif reduce_only:
@@ -320,7 +325,76 @@ class BinanceFutures:
             "client_id": r.get("clientOrderId"),
         }
 
+    # ---- stop NATIVO (Algo Order API) -----------------------------------
+    #
+    # Binance migró las órdenes condicionales fuera de /fapi/v1/order el 2025-12-09.
+    # Mandar STOP_MARKET al endpoint viejo devuelve -4120 apuntando acá. Es EL arreglo
+    # del -1R: lo hace cumplir Binance, sin depender del VPS ni del polling del bot.
+    # En el libro real, 8 de 11 stops se pasaron del -1R (peor -4.17R).
+    #
+    # Diferencias con el endpoint viejo, todas fáciles de equivocar:
+    #   `triggerPrice`, no `stopPrice`   ·   `clientAlgoId`, no `newClientOrderId`
+    #   `reduceOnly` NO se admite en HEDGE   ·   `quantity` y `closePosition` se excluyen
+    # Peso 0 contra el límite de IP.
+
+    def algo_stop_market(self, symbol: str, side: str, trigger_price: float,
+                         qty: float | None = None, close_position: bool = False,
+                         position_side: str | None = None,
+                         client_algo_id: str | None = None) -> dict:
+        """Stop condicional nativo. `side` es el lado de la ORDEN (opuesto a la posición)."""
+        f = self.symbol_filters(symbol)
+        p = {"algoType": "CONDITIONAL", "symbol": symbol, "side": side,
+             "type": "STOP_MARKET",
+             "triggerPrice": round(trigger_price, f["price_precision"]),
+             "workingType": "MARK_PRICE", "newOrderRespType": "RESULT"}
+        if position_side:
+            p["positionSide"] = position_side
+        if close_position:
+            p["closePosition"] = "true"
+        elif qty is not None:
+            p["quantity"] = qty
+            if not position_side:  # reduceOnly es inválido en HEDGE
+                p["reduceOnly"] = "true"
+        else:
+            raise BinanceError("algo_stop_market necesita qty o close_position")
+        if client_algo_id:
+            p["clientAlgoId"] = client_algo_id
+        return self._request("POST", "/fapi/v1/algoOrder", p, signed=True)
+
+    def algo_open_orders(self, symbol: str) -> list[dict]:
+        """Stops condicionales VIVOS del símbolo. Es con lo que se confirma que la
+        posición quedó protegida: no basta con que el POST no haya fallado."""
+        rows = self._request("GET", "/fapi/v1/algoOpenOrders", {"symbol": symbol},
+                             signed=True)
+        if isinstance(rows, dict):
+            rows = rows.get("orders") or rows.get("algoOrders") or []
+        out = []
+        for r in rows or []:
+            out.append({
+                "algo_id": r.get("algoId"),
+                "client_algo_id": r.get("clientAlgoId"),
+                "symbol": r.get("symbol"),
+                "side": r.get("side"),
+                "position_side": r.get("positionSide"),
+                "type": r.get("orderType") or r.get("type"),
+                "trigger_price": float(r.get("triggerPrice") or 0),
+                "qty": float(r.get("quantity") or 0),
+                "close_position": bool(r.get("closePosition")),
+                "status": r.get("algoStatus"),
+            })
+        return out
+
+    def cancel_algo_order(self, algo_id=None, client_algo_id: str | None = None) -> dict:
+        """Cancela UN stop condicional. Deliberadamente sin variante `cancel_all`:
+        en HEDGE, barrer todo el símbolo se lleva por delante el stop del lado opuesto."""
+        if not algo_id and not client_algo_id:
+            raise BinanceError("cancel_algo_order necesita algo_id o client_algo_id")
+        p = {"algoId": algo_id} if algo_id else {"clientAlgoId": client_algo_id}
+        return self._request("DELETE", "/fapi/v1/algoOrder", p, signed=True)
+
     def cancel_all_orders(self, symbol: str) -> dict:
+        """OJO EN HEDGE: barre TODO el símbolo, incluido el stop del lado opuesto.
+        Para cancelar el stop de una posición usar `cancel_algo_order`."""
         return self._request("DELETE", "/fapi/v1/allOpenOrders",
                              {"symbol": symbol}, signed=True)
 

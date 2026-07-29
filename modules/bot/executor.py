@@ -50,6 +50,68 @@ class BinanceOrdenAmbigua(RuntimeError):
     """
 
 
+def ordenar_resuelto(cli, symbol: str, side: str, qty: float, client_id: str,
+                 reduce_only: bool = False, position_side: str | None = None,
+                 intentos: int = 3, log=print) -> dict | None:
+    """Manda una orden a mercado y devuelve lo que REALMENTE pasó.
+
+Está a nivel de MÓDULO, no de BotExecutor, porque el watchdog necesita
+exactamente lo mismo y corre en otro proceso. La primera versión vivía solo
+en el executor: se construyó la solución a las órdenes ambiguas y el
+watchdog —el código que cierra posiciones SOLO— siguió llamando a
+market_order pelado. Duplicar esto es cómo se desincronizan.
+
+      dict → se ejecutó (total o parcialmente); trae executed_qty y avg_price
+      None → con certeza NO se ejecutó; el llamador puede dejar todo como está
+      raise → no se pudo determinar; el llamador NO debe asumir nada
+
+    Por qué existe: un POST que falla no dice si falló al ir o al volver. La orden
+    pudo ejecutarse y perderse la respuesta. Reintentar con el mismo id devuelve
+    "duplicate", que es indistinguible de un fallo real si uno solo mira el error.
+    Como el client_id lo generamos nosotros, se lo preguntamos a Binance y el caso
+    ambiguo se vuelve un hecho. Esto es lo que ya nos costó plata: un cierre que
+    había entrado se contabilizó como fallido y el libro quedó abierto.
+    """
+    ultimo: Exception | None = None
+    for intento in range(intentos):
+        try:
+            resp = cli.market_order(symbol, side, qty, client_id=client_id,
+                                    reduce_only=reduce_only,
+                                    position_side=position_side)
+            return {"status": resp.get("status") or "FILLED",
+                    "executed_qty": float(resp.get("executedQty") or qty),
+                    "avg_price": float(resp.get("avgPrice") or 0)}
+        except Exception as exc:  # noqa: BLE001
+            ultimo = exc
+            try:
+                real = cli.get_order(symbol, client_id)
+            except Exception:  # noqa: BLE001
+                real = "?"  # no pudimos preguntar: sigue ambiguo
+            if real == "?":
+                pass
+            elif real is None:
+                # Binance nunca la recibió → el id sigue libre, se puede reintentar
+                if intento >= intentos - 1:
+                    log(f"bot: orden {client_id} nunca llegó a Binance "
+                             f"tras {intentos} intentos ({str(exc)[-60:]})")
+                    return None
+            elif float(real.get("executed_qty") or 0) > 0:
+                log(f"bot: orden {client_id} SÍ se había ejecutado "
+                         f"({real['status']} qty={real['executed_qty']}) pese al "
+                         f"error: {str(exc)[-60:]}")
+                return real
+            else:
+                # Existe pero sin ejecutar. El id está quemado: reintentarlo solo
+                # devolvería "duplicate". Se corta y se informa el estado real.
+                log(f"bot: orden {client_id} existe sin ejecutar "
+                         f"({real.get('status')}); no se reintenta")
+                return None
+            if intento < intentos - 1:
+                time.sleep(1.5 * (intento + 1))
+    raise BinanceOrdenAmbigua(
+        f"no se pudo determinar el estado de {client_id} en {symbol}: {ultimo}")
+
+
 DEFAULTS = {
     "enabled": True,
     "live": False,                 # arranca en dry-run; flip manual a real
@@ -405,10 +467,28 @@ class BotExecutor:
                 risk_usd_est = actual_notional * sl_frac
                 risk_pct_account = (risk_usd_est / cap_ref * 100.0) if cap_ref > 0 else None
                 fee_est_roundtrip = actual_notional * float(self.cfg.get("fee_rate", 0.0005)) * 2.0
-            # NOTA: esta subcuenta NO admite STOP_MARKET por API (-4120 "use Algo Order
-            # API"). El SL lo gestiona el BOT: cuando el diario detecta que el precio tocó
-            # el SL (track→"closed"), el ejecutor cierra a mercado. Mientras el VPS esté
-            # arriba (systemd Restart=always) la posición queda protegida.
+            # STOP NATIVO. Binance movió las condicionales a /fapi/v1/algoOrder el
+            # 2025-12-09; el -4120 del endpoint viejo apuntaba justo acá. Es la defensa
+            # primaria del -1R: lo hace cumplir el exchange, no el polling del bot.
+            #
+            # FAIL-CLOSED: si la posición se abrió y el stop NO queda confirmado, se
+            # cierra de inmediato. Una posición a 10x sin stop es peor que no haber
+            # entrado, y dejarla "cubierta por el watchdog" en silencio es exactamente
+            # cómo se pierden 4.17R: el watchdog es respaldo, no sustituto.
+            if not self._proteger(cli, symbol, t["dir"], sl, qty, sid, pos_side):
+                self.log(f"bot: ⚠️ {symbol} abierto SIN stop confirmado → CIERRA YA")
+                try:
+                    self._ordenar(cli, symbol,
+                                  "SELL" if t["dir"] == "long" else "BUY", qty,
+                                  self._cid(sid, "panic"), reduce_only=not pos_side,
+                                  position_side=pos_side)
+                    self.log(f"bot: {symbol} cerrado por falta de stop; no se registra")
+                except BinanceOrdenAmbigua as exc:
+                    # Lo peor de los dos mundos: puede haber posición viva sin stop y sin
+                    # registro. Se deja rastro para que la reconciliación la adopte.
+                    self.log(f"bot: ⛔ {symbol} sin stop y cierre AMBIGUO ({exc})")
+                    self._marcar_ambigua(sid, symbol, t["dir"], qty, leverage)
+                return
 
         entry_fee = entry_price * qty * float(self.cfg.get("fee_rate", 0.0005))
         self.store.open_trade({
@@ -431,6 +511,40 @@ class BotExecutor:
         })
         self.log(f"bot[{mode}]: ABRE {side} {symbol} qty={qty} @~{entry_price:.2f} "
                  f"lev={leverage}x notional≈{px*qty:.0f} SL={sl} calidad={quality['grade']}")
+
+    @staticmethod
+    def _aid(sid: str) -> str:
+        """clientAlgoId del stop nativo. DETERMINISTA y distinto del newClientOrderId
+        de las órdenes MARKET: son espacios de id separados y confundirlos deja stops
+        huérfanos o cancela lo que no era."""
+        return "sl" + hashlib.md5(sid.encode()).hexdigest()[:16]
+
+    def _proteger(self, cli, symbol: str, direccion: str, sl: float, qty: float,
+                  sid: str, pos_side: str | None) -> bool:
+        """Coloca el stop nativo y CONFIRMA que quedó vivo. True solo si está puesto.
+
+        No basta con que el POST no haya lanzado: se vuelve a preguntar por
+        `algoOpenOrders`. Un stop que creemos puesto y no está es peor que ninguno,
+        porque nadie va a ir a mirar.
+        """
+        lado = "SELL" if direccion == "long" else "BUY"
+        aid = self._aid(sid)
+        try:
+            cli.algo_stop_market(symbol, lado, sl, qty=qty, position_side=pos_side,
+                                 client_algo_id=aid)
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"bot: no se pudo poner el stop nativo en {symbol}: {str(exc)[-120:]}")
+            # Puede haber entrado igual y perderse la respuesta: lo dice la confirmación.
+        try:
+            vivos = cli.algo_open_orders(symbol)
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"bot: no se pudo confirmar el stop de {symbol}: {str(exc)[-120:]}")
+            return False
+        for o in vivos:
+            if o.get("client_algo_id") == aid and o.get("status") in (None, "NEW"):
+                self.log(f"bot: ✅ stop nativo confirmado en {symbol} @ {o['trigger_price']}")
+                return True
+        return False
 
     # Cada cuánto se re-lee el balance real. No hace falta más: el sizing tolera de
     # sobra que la base tenga unos minutos, y así una caída de la API no deja al bot
@@ -494,57 +608,11 @@ class BotExecutor:
     def _ordenar(self, cli, symbol: str, side: str, qty: float, client_id: str,
                  reduce_only: bool = False, position_side: str | None = None,
                  intentos: int = 3) -> dict | None:
-        """Manda una orden a mercado y devuelve lo que REALMENTE pasó.
-
-          dict → se ejecutó (total o parcialmente); trae executed_qty y avg_price
-          None → con certeza NO se ejecutó; el llamador puede dejar todo como está
-          raise → no se pudo determinar; el llamador NO debe asumir nada
-
-        Por qué existe: un POST que falla no dice si falló al ir o al volver. La orden
-        pudo ejecutarse y perderse la respuesta. Reintentar con el mismo id devuelve
-        "duplicate", que es indistinguible de un fallo real si uno solo mira el error.
-        Como el client_id lo generamos nosotros, se lo preguntamos a Binance y el caso
-        ambiguo se vuelve un hecho. Esto es lo que ya nos costó plata: un cierre que
-        había entrado se contabilizó como fallido y el libro quedó abierto.
-        """
-        ultimo: Exception | None = None
-        for intento in range(intentos):
-            try:
-                resp = cli.market_order(symbol, side, qty, client_id=client_id,
-                                        reduce_only=reduce_only,
-                                        position_side=position_side)
-                return {"status": resp.get("status") or "FILLED",
-                        "executed_qty": float(resp.get("executedQty") or qty),
-                        "avg_price": float(resp.get("avgPrice") or 0)}
-            except Exception as exc:  # noqa: BLE001
-                ultimo = exc
-                try:
-                    real = cli.get_order(symbol, client_id)
-                except Exception:  # noqa: BLE001
-                    real = "?"  # no pudimos preguntar: sigue ambiguo
-                if real == "?":
-                    pass
-                elif real is None:
-                    # Binance nunca la recibió → el id sigue libre, se puede reintentar
-                    if intento >= intentos - 1:
-                        self.log(f"bot: orden {client_id} nunca llegó a Binance "
-                                 f"tras {intentos} intentos ({str(exc)[-60:]})")
-                        return None
-                elif float(real.get("executed_qty") or 0) > 0:
-                    self.log(f"bot: orden {client_id} SÍ se había ejecutado "
-                             f"({real['status']} qty={real['executed_qty']}) pese al "
-                             f"error: {str(exc)[-60:]}")
-                    return real
-                else:
-                    # Existe pero sin ejecutar. El id está quemado: reintentarlo solo
-                    # devolvería "duplicate". Se corta y se informa el estado real.
-                    self.log(f"bot: orden {client_id} existe sin ejecutar "
-                             f"({real.get('status')}); no se reintenta")
-                    return None
-                if intento < intentos - 1:
-                    time.sleep(1.5 * (intento + 1))
-        raise BinanceOrdenAmbigua(
-            f"no se pudo determinar el estado de {client_id} en {symbol}: {ultimo}")
+        """Ver `ordenar_resuelto`. Envoltorio para que el executor use su log."""
+        return ordenar_resuelto(cli, symbol, side, qty, client_id,
+                                reduce_only=reduce_only,
+                                position_side=position_side,
+                                intentos=intentos, log=self.log)
 
     def _reduce(self, t: dict, ref_price: float) -> None:
         sid = self._setup_id(t)
@@ -596,22 +664,30 @@ class BotExecutor:
                                       realized_r=t.get("realized_r"), fee_usd=round(fee, 4)):
             return
         self.log(f"bot[{trade['mode']}]: PARCIAL {t.get('leg')} {symbol} qty={qty} @~{px:.2f}")
-        # Cuando el diario mueve el SL a BREAK-EVEN (tras TP1), intentamos poner un stop
-        # NATIVO a la entrada con el remanente. Best-effort: si la subcuenta no admite
-        # stops por API (-4120), no pasa nada y el bot sigue gestionando el cierre.
-        if t.get("be") and trade["mode"] == "live":
+        # El parcial redujo la posición, así que el stop nativo quedó cubriendo MÁS de lo
+        # que hay. Se reemplaza por uno del tamaño correcto —y a break-even si el diario
+        # lo movió—. Se cancela por `clientAlgoId`, NO con cancel_all_orders: en HEDGE eso
+        # se lleva por delante el stop del lado opuesto del mismo símbolo.
+        if trade["mode"] == "live":
             upd = self._find_open(sid)
             rem = (upd or {}).get("qty_open", 0.0)
-            if rem > 0:
-                be_side = "SELL" if trade["dir"] == "long" else "BUY"
+            nivel = trade["entry_price"] if t.get("be") else trade.get("sl")
+            try:
+                cli.cancel_algo_order(client_algo_id=self._aid(sid))
+            except Exception:  # noqa: BLE001
+                pass  # puede haberse disparado o no existir; lo resuelve el re-alta
+            if rem > 0 and nivel:
                 be_pos = ("LONG" if trade["dir"] == "long" else "SHORT") if self.hedge else None
-                try:
-                    cli.stop_market(symbol, be_side, trade["entry_price"],
-                                    qty=cli.round_qty(symbol, rem), client_id=self._cid(sid, "be"),
-                                    position_side=be_pos)
-                    self.log(f"bot: ✅ stop nativo a break-even en {symbol} @ {trade['entry_price']}")
-                except Exception as exc:  # noqa: BLE001
-                    self.log(f"bot: stop BE nativo no disponible en {symbol} ({str(exc)[-40:]}); lo gestiona el bot")
+                if self._proteger(cli, symbol, trade["dir"], float(nivel),
+                                  cli.round_qty(symbol, rem), sid, be_pos):
+                    self.log(f"bot: stop nativo re-puesto en {symbol} @ {nivel} "
+                             f"por {rem} (tras {t.get('leg')})")
+                else:
+                    # No se cierra la posición acá: ya tomó parcial y su riesgo es menor.
+                    # Pero queda sin stop del exchange, así que el watchdog pasa a ser la
+                    # única red y eso tiene que verse en el log, no pasar callado.
+                    self.log(f"bot: ⚠️ {symbol} quedó SIN stop nativo tras el parcial; "
+                             f"solo lo cubre el watchdog")
 
     def _close(self, t: dict, ref_price: float) -> None:
         sid = self._setup_id(t)
@@ -655,7 +731,10 @@ class BotExecutor:
                     return
                 px = float(resp.get("avg_price") or 0) or px
             try:
-                cli.cancel_all_orders(symbol)  # cierre OK → recién ahora retira el stop de respaldo
+                # Cierre OK → recién ahora se retira el stop. Por `clientAlgoId` y no con
+                # cancel_all_orders(symbol): en HEDGE eso cancelaría también el stop del
+                # lado opuesto, dejando viva una posición ajena a este cierre y sin red.
+                cli.cancel_algo_order(client_algo_id=self._aid(sid))
             except Exception:  # noqa: BLE001
                 pass
         fee = px * qty * trade.get("fee_rate", 0.0005)

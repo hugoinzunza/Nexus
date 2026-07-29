@@ -877,3 +877,139 @@ def test_el_watchdog_reintenta_ante_cuota_de_IP():
         assert c2.ordenes == []
     finally:
         _t.sleep = orig
+
+
+# --- stop nativo + watchdog corregido ---------------------------------------
+#
+# Binance movió las condicionales a /fapi/v1/algoOrder el 2025-12-09. La versión previa
+# de este trabajo concluyó "no hay stop nativo" leyendo el -4120 del endpoint viejo, que
+# literalmente apuntaba al nuevo. El stop nativo estuvo disponible todo el tiempo.
+
+def test_el_watchdog_distingue_long_de_short_en_el_mismo_simbolo():
+    """La cuenta es HEDGE. Indexar por símbolo hacía que un lado pisara al otro y el
+    watchdog podía cerrar el lado equivocado."""
+    wd = _wd()
+    # BTC long sano (SL 98, precio 99) y BTC short pasado (SL 102, precio 103.5)
+    abiertos = [
+        {"setup_id": "s:l", "symbol": "BTCUSDT", "dir": "long", "mode": "live",
+         "status": "abierta", "entry_price": 100.0, "sl": 98.0, "qty_open": 1.0},
+        {"setup_id": "s:s", "symbol": "BTCUSDT", "dir": "short", "mode": "live",
+         "status": "abierta", "entry_price": 100.0, "sl": 102.0, "qty_open": 2.0},
+    ]
+    cli = _CliWd(precio=103.5, posiciones=[
+        {"symbol": "BTCUSDT", "side": "LONG", "qty": 1.0, "position_side": "LONG"},
+        {"symbol": "BTCUSDT", "side": "SHORT", "qty": 2.0, "position_side": "SHORT"},
+    ])
+    assert wd.ciclo(cli=cli, abiertos=abiertos, cfg=_CFG_WD, log=lambda _m: None) == 1
+    o = cli.ordenes[0]
+    assert o["position_side"] == "SHORT", "cerró el lado equivocado"
+    assert o["side"] == "BUY"
+    assert o["qty"] == 2.0
+
+
+def test_el_watchdog_usa_la_cantidad_de_binance_no_la_del_libro():
+    """Si el libro está desincronizado —que es justo cuando el watchdog hace falta—
+    cerrar por qty_open deja un resto abierto o intenta cerrar de más."""
+    wd = _wd()
+    t = [{**_TRADE_WD[0], "qty_open": 100.0}]
+    cli = _CliWd(precio=0.18, posiciones=[
+        {"symbol": "ADAUSDT", "side": "LONG", "qty": 37.0, "position_side": "LONG"}])
+    wd.ciclo(cli=cli, abiertos=t, cfg=_CFG_WD, log=lambda _m: None)
+    assert cli.ordenes[0]["qty"] == 37.0, "debe cerrar lo que Binance dice que hay"
+
+
+def test_el_watchdog_usa_un_id_determinista():
+    """Un id con timestamp generaba uno nuevo cada ciclo: un timeout podía terminar en
+    dos órdenes de cierre."""
+    wd = _wd()
+    ids = []
+    for _ in range(2):
+        cli = _CliWd(precio=0.18)
+        wd.ciclo(cli=cli, abiertos=list(_TRADE_WD), cfg=_CFG_WD, log=lambda _m: None)
+        ids.append(cli.ordenes[0]["client_id"])
+    assert ids[0] == ids[1], "el mismo trade debe reintentar con el mismo id"
+    assert not ids[0].startswith("sl"), "no puede chocar con el espacio de clientAlgoId"
+
+
+def test_un_sl_del_lado_equivocado_no_dispara_al_watchdog():
+    """Un registro con el SL invertido haría que el exceso salga positivo con el precio
+    A FAVOR, y el watchdog cerraría una posición ganadora."""
+    wd = _wd()
+    # long con SL POR ENCIMA de la entrada: incoherente
+    malo = {"entry_price": 100.0, "sl": 102.0, "dir": "long"}
+    assert wd._excedido(malo, 101.0) is None
+    # short con SL POR DEBAJO: incoherente
+    malo2 = {"entry_price": 100.0, "sl": 98.0, "dir": "short"}
+    assert wd._excedido(malo2, 99.0) is None
+    # dir desconocido
+    assert wd._excedido({"entry_price": 100.0, "sl": 98.0, "dir": "?"}, 97.0) is None
+
+
+def test_el_watchdog_es_respaldo_no_ejecutor():
+    """Con stop nativo puesto por el exchange, este proceso es emergencia. La tolerancia
+    de 0.15R estaba ajustada a la misma muestra que motivó construirlo: circular."""
+    wd = _wd()
+    assert wd.TOLERANCIA_R >= 0.25, "un ejecutor primario disfrazado de emergencia"
+
+
+def test_market_order_pide_RESULT():
+    """El default de Binance es ACK: contesta antes de saber el fill, con executedQty=0
+    y avgPrice=0. Con ACK el bot no distingue un fill total de uno parcial."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/trading/binance_account.py").read_text()
+    i = src.index("def market_order")
+    assert '"newOrderRespType": "RESULT"' in src[i:i + 1200]
+
+
+def test_el_stop_nativo_usa_los_nombres_del_endpoint_nuevo():
+    """triggerPrice (no stopPrice), clientAlgoId (no newClientOrderId), y reduceOnly
+    NO se admite en HEDGE. Equivocar cualquiera devuelve un error de parámetros que se
+    ve igual que un stop prohibido — que es exactamente cómo se concluyó mal la primera vez."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/trading/binance_account.py").read_text()
+    i = src.index("def algo_stop_market")
+    j = src.index("def algo_open_orders")
+    cuerpo = src[i:j]
+    assert '"/fapi/v1/algoOrder"' in cuerpo
+    assert '"algoType": "CONDITIONAL"' in cuerpo
+    assert '"triggerPrice"' in cuerpo and '"stopPrice"' not in cuerpo
+    assert "clientAlgoId" in cuerpo
+    assert "if not position_side" in cuerpo, "reduceOnly es inválido en HEDGE"
+
+
+def test_los_ids_de_stop_y_de_orden_no_se_pisan():
+    """clientAlgoId y newClientOrderId son espacios distintos: confundirlos cancela lo
+    que no era o deja stops huérfanos."""
+    ex = BotExecutor(store=None, log=lambda _m: None, config={})
+    sid = "algo:123"
+    assert ex._aid(sid) != ex._cid(sid, "o")
+    assert ex._aid(sid) != ex._cid(sid, "c")
+    assert ex._aid(sid) == ex._aid(sid), "el id del stop debe ser determinista"
+
+
+def _llamadas(ruta):
+    """Nombres de método efectivamente LLAMADOS en un archivo.
+
+    Con AST y no con `in src`: los comentarios que explican por qué NO se usa algo
+    hacían saltar la aserción. Ya van varias veces en este repo.
+    """
+    import ast
+    from pathlib import Path
+    arbol = ast.parse((Path(__file__).resolve().parents[1] / ruta).read_text())
+    return {n.func.attr for n in ast.walk(arbol)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+
+
+def test_no_se_cancela_todo_el_simbolo_al_cerrar():
+    """cancel_all_orders(symbol) en HEDGE se lleva el stop del lado opuesto."""
+    llamadas = _llamadas("modules/bot/executor.py")
+    assert "cancel_all_orders" not in llamadas, \
+        "volvió un barrido por símbolo; usar cancel_algo_order(client_algo_id=...)"
+    assert "cancel_algo_order" in llamadas
+
+
+def test_el_watchdog_no_manda_ordenes_crudas():
+    """Se construyó `ordenar_resuelto` para las órdenes ambiguas y el watchdog —el
+    código que cierra posiciones SOLO— seguía llamando a market_order pelado."""
+    llamadas = _llamadas("deploy/bot_watchdog.py")
+    assert "market_order" not in llamadas

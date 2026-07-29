@@ -88,7 +88,7 @@
         }
       ],
       "max_entry_slippage_pct": 0.3,
-      "max_daily_loss_pct": 8.0,
+      "max_daily_loss_pct": 5.0,
       "fee_rate": 0.0005,
       "quality_filter": true,
       "quality_min_rr": 5.0,
@@ -102,9 +102,9 @@
       "base_equity_auto": true,
       "max_margin_pct": 0.8,
       "watchdog": {
-        "_nota": "Hace cumplir el -1R. La subcuenta rechaza STOP_MARKET con -4120 en las dos variantes (verificado 2026-07-29), asi que no hay stop nativo. Corre como servicio APARTE para sobrevivir a que el bot se cuelgue. Se enciende antes del live: con el bot en dry no cierra nada pero ejercita todo el camino de lectura, para no estrenarlo el mismo dia que hay plata en juego.",
+        "_nota": "SEGUNDA linea de defensa. La primera es el stop NATIVO que el executor pone via /fapi/v1/algoOrder al abrir (fail-closed: si no se confirma, se cierra la posicion). Este proceso cubre lo que el nativo no puede: que no se haya llegado a colocar, que lo cancelen, o que la posicion quede fuera del libro.",
         "enabled": true,
-        "tolerancia_r": 0.15,
+        "tolerancia_r": 0.25,
         "hedge": true
       }
     },
