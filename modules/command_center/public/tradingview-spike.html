@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="/static/icons/nexux-favicon-v5.ico">
+  <title>TradingView Adapter Spike</title>
+  <style>
+    body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: #111; color: #eee; }
+    main { padding: 16px; }
+    header { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+    h1 { margin: 0; font-size: 18px; }
+    #chart-target { height: 520px; border: 1px solid #444; }
+    pre { overflow: auto; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>TradingView Adapter Spike</h1>
+      <output id="status">detached</output>
+    </header>
+    <div id="chart-target"></div>
+    <pre id="metrics"></pre>
+  </main>
+  <script type="module">
+    import { TradingViewWidgetAdapter } from "./tradingview-spike.js";
+
+    const adapter = new TradingViewWidgetAdapter();
+    const target = document.querySelector("#chart-target");
+    const status = document.querySelector("#status");
+    const metrics = document.querySelector("#metrics");
+    const render = () => {
+      status.textContent = adapter.health().lifecycle;
+      metrics.textContent = JSON.stringify(adapter.stats(), null, 2);
+    };
+    window.__nexuxTradingViewSpike = { adapter, target, render };
+    render();
+
+    if (new URLSearchParams(location.search).get("autorun") === "1") {
+      adapter.mount(target, {
+        targetRef: "spike:chart",
+        symbol: "BTCUSDT",
+        interval: "1h",
+        themeRef: "dark",
+      }).then(render).catch((error) => {
+        render();
+        metrics.textContent += `\n${error.code || error.name}: ${error.message}`;
+      });
+    }
+  </script>
+</body>
+</html>
