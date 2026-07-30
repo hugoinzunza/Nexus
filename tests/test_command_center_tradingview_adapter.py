@@ -261,3 +261,20 @@ def test_adapter_python_no_importa_ui_browser_bot_o_dominio():
         for name in imports
         for prefix in forbidden
     )
+
+
+def test_cierre_formal_documenta_frontera_y_no_autoriza_factory():
+    root = Path(__file__).parents[1]
+    closure = (
+        root / "docs" / "TRADINGVIEW_ADAPTER_SPIKE.md"
+    ).read_text(encoding="utf-8")
+    required = (
+        "APROBADO Y CERRADO",
+        "NO AUTORIZADA EN ESTE DOCUMENTO",
+        "`capabilities()` devuelve un conjunto vacio",
+        "Widget publico frente a Advanced Charts",
+        "Criterios para autorizar una factory productiva",
+        "Criterios para evaluar una migracion a Advanced Charts",
+        "Linea B visual continua bloqueada",
+    )
+    assert all(statement in closure for statement in required)

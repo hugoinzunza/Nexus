@@ -67,6 +67,42 @@ la Fase -1B ni autorizar mockups.
 
 ---
 
+## VAL-0009 — TradingView Adapter Spike
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Entorno | Fixture autenticado local |
+| Proveedor | TradingView Advanced Real-Time Chart Widget |
+| Metodo | Montaje real + harness contractual + suite completa |
+
+### Resultado
+
+- `BINANCE:BTCUSDT.P` en 1h alcanzo estado `ready`.
+- Latencia observada de montaje: 898 ms.
+- Un timeout transitorio produjo `degraded` con codigo estable.
+- El adaptador declaro cero capacidades mutables.
+- El Wire ABI v1 y su fingerprint permanecieron intactos.
+- El catalogo productivo permanecio sin factory.
+- La suite cerro con 699 pruebas aprobadas.
+
+### Evidencia
+
+- Commit: `b0e8d6d`.
+- Cierre tecnico: `docs/TRADINGVIEW_ADAPTER_SPIKE.md`.
+- Implementacion: `modules/command_center/tradingview_adapter.py`.
+- Fixture: `modules/command_center/public/tradingview-spike.html`.
+
+### Conclusion
+
+**APROBADO.** La infraestructura de Linea A integro un proveedor externo real
+sin cambios estructurales. El resultado no autoriza factory productiva ni
+decisiones de Linea B.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario
