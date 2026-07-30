@@ -95,6 +95,8 @@ class EventSubscription(Protocol):
 
 
 class EventBroker(Protocol):
+    limits: BusLimits
+
     async def register_publisher(
         self, source: str, topics: Iterable[str]
     ) -> PublisherHandle: ...

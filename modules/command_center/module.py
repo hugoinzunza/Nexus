@@ -15,6 +15,7 @@ from .contracts import (
     error_document,
 )
 from .event_bus import InMemoryEventBus
+from .gateway import CommandCenterGateway
 from .snapshot import (
     ConfiguredModulesProjection,
     IdentityError,
@@ -35,6 +36,13 @@ class CommandCenterModule(NexusModule):
         self._composer = SnapshotComposer(
             [SessionProjection(), ConfiguredModulesProjection(load_config)],
             on_provider_error=self._provider_error,
+        )
+        self.gateway = CommandCenterGateway(
+            self.event_bus,
+            self._composer,
+            on_error=lambda code: self.context.log(
+                f"command-center: gateway {code}"
+            ),
         )
 
     def _provider_error(self, topic: str, exc: Exception) -> None:
@@ -110,8 +118,12 @@ class CommandCenterModule(NexusModule):
             "contract_version": CONTRACT_VERSION,
             "contract_status": "frozen",
             "event_bus": self.event_bus.stats(),
+            "gateway": self.gateway.stats(),
             "surface": "headless",
         }
+
+    async def websocket(self, peer, user_loader) -> None:
+        await self.gateway.handle(peer, user_loader)
 
 
 def get_module(context):

@@ -143,7 +143,7 @@
     },
     "command_center": {
       "enabled": true,
-      "_nota": "Linea A headless: Wire ABI v1 congelado, snapshot oficial y EventBus en proceso. Gateway WebSocket pendiente; sin interfaz ni decisiones visuales."
+      "_nota": "Linea A headless: Wire ABI v1 congelado, snapshot, EventBus y Gateway WebSocket autenticado. Clientes visuales pendientes; sin decisiones de UX."
     }
   }
 }

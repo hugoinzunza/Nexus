@@ -23,7 +23,7 @@ import os
 import posixpath
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
@@ -435,6 +435,18 @@ def _gate(slug: str, request: Request):
 
 
 # --- Módulos -------------------------------------------------------------
+@app.websocket("/m/command-center/ws")
+async def command_center_websocket(websocket: WebSocket):
+    module = hub.modules_by_slug.get("command-center")
+    if module is None or not hasattr(module, "websocket"):
+        await websocket.close(code=1011, reason="command center unavailable")
+        return
+    await module.websocket(
+        websocket,
+        lambda: auth.current_user(websocket),
+    )
+
+
 @app.get("/m/{slug}/api/{subpath:path}")
 def module_api(slug: str, subpath: str, request: Request):
     module = hub.modules_by_slug.get(slug)
