@@ -14,8 +14,10 @@ from .contracts import (
     CONTRACT_VERSION,
     error_document,
 )
+from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
 from .event_bus import InMemoryEventBus
 from .gateway import CommandCenterGateway
+from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION
 from .snapshot import (
     ConfiguredModulesProjection,
     IdentityError,
@@ -119,6 +121,16 @@ class CommandCenterModule(NexusModule):
             "contract_status": "frozen",
             "event_bus": self.event_bus.stats(),
             "gateway": self.gateway.stats(),
+            "interfaces": {
+                "chart_provider": {
+                    "version": CHART_PROVIDER_INTERFACE_VERSION,
+                    "status": "contract-only",
+                },
+                "media_controller": {
+                    "version": MEDIA_CONTROLLER_INTERFACE_VERSION,
+                    "status": "contract-only",
+                },
+            },
             "surface": "headless",
         }
 
