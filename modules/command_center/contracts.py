@@ -48,8 +48,10 @@ _SEMANTIC_NAME_RE = re.compile(_DEFS["semanticName"]["pattern"])
 _UUID_RE = re.compile(_DEFS["uuid"]["pattern"])
 _MAX_INT = _DEFS["timestamp"]["maximum"]
 
-# Provisional hasta que la segunda Contract Freeze Review lo apruebe.
-CONTRACT_V1_FINGERPRINT = "__PENDING_FREEZE__"
+# ABI v1 congelado el 2026-07-30. Todo cambio del Wire ABI exige una nueva version.
+CONTRACT_V1_FINGERPRINT = (
+    "b0a8a7efa623a1aae4b681c3cfc42790d36a6a14fbc689688026c523f2e49b46"
+)
 
 
 class ContractViolation(ValueError):
@@ -70,14 +72,18 @@ def _fingerprint() -> str:
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
 
 
-def candidate_fingerprint() -> str:
-    """Fingerprint candidato; no lo declara estable."""
+def schema_fingerprint() -> str:
+    """Calcula el fingerprint del schema normativo publicado."""
     return _fingerprint()
 
 
-def assert_contract_candidate() -> None:
-    if CONTRACT_V1_FINGERPRINT != "__PENDING_FREEZE__":
-        raise RuntimeError("el ABI candidato fue marcado estable antes del freeze")
+def assert_contract_frozen() -> None:
+    actual = schema_fingerprint()
+    if actual != CONTRACT_V1_FINGERPRINT:
+        raise RuntimeError(
+            "el schema del Wire ABI v1 congelado fue modificado; "
+            "publique una nueva version contractual"
+        )
 
 
 def _required_dict(value: Any, name: str) -> dict[str, Any]:
@@ -295,8 +301,8 @@ def validate_snapshot(snapshot: Any) -> dict[str, Any]:
     _require_fields(data, _DEFS["snapshot"]["required"], "snapshot")
     if data["contract"] != SNAPSHOT_CONTRACT or data["v"] != CONTRACT_VERSION:
         raise ContractViolation("contrato de snapshot no soportado")
-    if data["contract_fingerprint"] != candidate_fingerprint():
-        raise ContractViolation("fingerprint candidato no coincide")
+    if data["contract_fingerprint"] != CONTRACT_V1_FINGERPRINT:
+        raise ContractViolation("fingerprint del contrato no coincide")
     _validate_pattern(data["snapshot_id"], "snapshot_id", _UUID_RE)
     subject = _validate_pattern(data["subject"], "subject", _SUBJECT_RE)
     generated = _required_int(data["generated_at"], "generated_at")
@@ -418,4 +424,4 @@ def replay(
     return ReplayState(subject=subject, topics=topics, cursors=cursors)
 
 
-assert_contract_candidate()
+assert_contract_frozen()

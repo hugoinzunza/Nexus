@@ -13,10 +13,10 @@ from modules.command_center.contracts import (
     CONTRACT_V1_FINGERPRINT,
     CONTRACT_V1_SPEC,
     ContractViolation,
-    assert_contract_candidate,
-    candidate_fingerprint,
+    assert_contract_frozen,
     error_document,
     replay,
+    schema_fingerprint,
     validate_envelope,
     validate_error,
     validate_snapshot,
@@ -70,13 +70,15 @@ def _event_from(base, **changes):
     return event
 
 
-def test_schema_es_autosuficiente_y_fingerprint_sigue_candidato():
-    assert CONTRACT_V1_FINGERPRINT == "__PENDING_FREEZE__"
-    assert_contract_candidate()
+def test_schema_es_autosuficiente_y_fingerprint_esta_congelado():
+    assert CONTRACT_V1_FINGERPRINT == (
+        "b0a8a7efa623a1aae4b681c3cfc42790d36a6a14fbc689688026c523f2e49b46"
+    )
+    assert_contract_frozen()
     assert CONTRACT_V1_SPEC["$schema"].endswith("draft/2020-12/schema")
     assert "$defs" in CONTRACT_V1_SPEC
     assert "x-nexux" in CONTRACT_V1_SPEC
-    assert len(candidate_fingerprint()) == 64
+    assert schema_fingerprint() == CONTRACT_V1_FINGERPRINT
     assert CONTRACT_V1_SPEC["x-nexux"]["time"]["unit"] == "unix_ms"
     assert CONTRACT_V1_SPEC["x-nexux"]["limits"]["max_topics"] == 128
     assert (
@@ -86,20 +88,34 @@ def test_schema_es_autosuficiente_y_fingerprint_sigue_candidato():
     Draft202012Validator.check_schema(CONTRACT_V1_SPEC)
 
 
-def test_toda_regla_normativa_cambia_el_fingerprint_candidato():
+def test_toda_regla_normativa_cambia_el_fingerprint_congelado():
     changed = copy.deepcopy(CONTRACT_V1_SPEC)
     changed["x-nexux"]["limits"]["max_topics"] = 129
     canonical = json.dumps(
         changed, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     )
-    assert hashlib.sha256(canonical.encode("ascii")).hexdigest() != candidate_fingerprint()
+    assert (
+        hashlib.sha256(canonical.encode("ascii")).hexdigest()
+        != CONTRACT_V1_FINGERPRINT
+    )
+
+
+def test_guard_del_freeze_rechaza_mutacion_del_schema(monkeypatch):
+    changed = copy.deepcopy(CONTRACT_V1_SPEC)
+    changed["x-nexux"]["limits"]["max_topics"] = 129
+    monkeypatch.setattr(
+        "modules.command_center.contracts.CONTRACT_V1_SPEC",
+        changed,
+    )
+    with pytest.raises(RuntimeError, match="nueva version contractual"):
+        assert_contract_frozen()
 
 
 def test_snapshot_oficial_es_valido_y_no_filtra_email():
     snapshot = _composer().compose(_user())
     assert validate_snapshot(snapshot) is snapshot
     Draft202012Validator(CONTRACT_V1_SPEC).validate(snapshot)
-    assert snapshot["contract_fingerprint"] == candidate_fingerprint()
+    assert snapshot["contract_fingerprint"] == CONTRACT_V1_FINGERPRINT
     assert snapshot["snapshot_id"] == SNAPSHOT_ID
     assert snapshot["subject"] == "user:7"
     assert set(snapshot["topics"]) == {"system.session", "system.modules"}
@@ -496,8 +512,8 @@ def test_endpoint_exige_sesion_y_subject_siempre_sale_del_servidor(monkeypatch):
     assert response.json()["subject"] == "user:42"
     contract = client.get("/m/command-center/api/contract/v1")
     assert contract.status_code == 200
-    assert contract.json()["status"] == "candidate"
-    assert contract.json()["candidate_fingerprint"] == candidate_fingerprint()
+    assert contract.json()["status"] == "frozen"
+    assert contract.json()["fingerprint"] == CONTRACT_V1_FINGERPRINT
     assert contract.json()["schema"]["$schema"].endswith("draft/2020-12/schema")
 
 

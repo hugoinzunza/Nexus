@@ -9,9 +9,9 @@ from core.hub import load_config
 from core.module_base import NexusModule
 
 from .contracts import (
+    CONTRACT_V1_FINGERPRINT,
     CONTRACT_V1_SPEC,
     CONTRACT_VERSION,
-    candidate_fingerprint,
     error_document,
 )
 from .snapshot import (
@@ -61,9 +61,9 @@ class CommandCenterModule(NexusModule):
             return self._json(
                 200,
                 {
-                    "status": "candidate",
+                    "status": "frozen",
                     "v": CONTRACT_VERSION,
-                    "candidate_fingerprint": candidate_fingerprint(),
+                    "fingerprint": CONTRACT_V1_FINGERPRINT,
                     "schema": copy.deepcopy(CONTRACT_V1_SPEC),
                 },
             )
@@ -106,7 +106,7 @@ class CommandCenterModule(NexusModule):
             "slug": self.slug,
             "status": "ok",
             "contract_version": CONTRACT_VERSION,
-            "contract_status": "candidate",
+            "contract_status": "frozen",
             "surface": "headless",
         }
 

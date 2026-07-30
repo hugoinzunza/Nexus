@@ -8,10 +8,10 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Protocol
 
 from .contracts import (
+    CONTRACT_V1_FINGERPRINT,
     CONTRACT_VERSION,
     EVENT_CONTRACT,
     SNAPSHOT_CONTRACT,
-    candidate_fingerprint,
     validate_source_name,
     validate_topic_name,
     validate_envelope,
@@ -274,7 +274,7 @@ class SnapshotComposer:
         snapshot = {
             "contract": SNAPSHOT_CONTRACT,
             "v": CONTRACT_VERSION,
-            "contract_fingerprint": candidate_fingerprint(),
+            "contract_fingerprint": CONTRACT_V1_FINGERPRINT,
             "snapshot_id": self._id_factory(),
             "subject": actor.subject,
             "generated_at": generated_at,
