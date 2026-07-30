@@ -1,0 +1,105 @@
+# NEXUX Command Center — Validation Log
+
+- **Estado:** Activo
+- **Inicio:** 2026-07-30
+- **Propósito:** conservar evidencia objetiva de las validaciones del producto
+
+## Reglas del registro
+
+- Este documento registra resultados; no define requisitos ni arquitectura.
+- Cada validación identifica fecha, entorno, método, evidencia y conclusión.
+- Una medición fallida o inconclusa se conserva y se etiqueta como tal.
+- Las capturas y datos crudos se referencian mediante rutas o commits; no se
+  sustituyen por una interpretación.
+- Una conclusión indica explícitamente si aprueba, rechaza o deja pendiente un
+  gate.
+- Las correcciones se validan en una entrada nueva. No se reescribe el resultado
+  histórico.
+
+## Estados
+
+- **APROBADO:** satisface el criterio predefinido.
+- **RECHAZADO:** no satisface el criterio predefinido.
+- **PENDIENTE:** faltan hardware, datos o mediciones.
+- **INCONCLUSO:** la prueba se ejecutó, pero no permite una conclusión.
+
+---
+
+## VAL-0001 — Inventario inicial de pantallas
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Equipo | Mac mini con Apple M4 |
+| Entorno | macOS, escritorio de desarrollo |
+| Método | `system_profiler SPDisplaysDataType` |
+
+### Resultado
+
+| Pantalla | Detección |
+|---|---|
+| Principal | TCL 34R83Q |
+| Resolución | 3440 × 1440 |
+| Escala informada | UI 3440 × 1440 |
+| Frecuencia | 170 Hz |
+| Monitor secundario | No detectado |
+
+### Observaciones
+
+- La pantalla principal estaba conectada, activa y configurada como principal.
+- No fue posible verificar modelo, resolución, escala, frecuencia ni viewport del
+  monitor secundario.
+- Los valores objetivo de 14 pulgadas, 1920 × 1080 y 30° continúan siendo
+  hipótesis hasta la medición física.
+
+### Evidencia
+
+- Salida local de `system_profiler` observada durante la Fase -1A.
+- Especificación resultante:
+  `docs/VIEWPORT_SPECIFICATION.md`.
+
+### Conclusión
+
+**PENDIENTE.** La evidencia confirma el entorno principal, pero no permite cerrar
+la Fase -1B ni autorizar mockups.
+
+---
+
+## Próximas validaciones
+
+### VAL-0002 — Viewport secundario
+
+Registrar hardware, resolución nativa, escalado efectivo, frecuencia,
+`window.innerWidth`, `window.innerHeight`, `devicePixelRatio` y viewport útil.
+
+### VAL-0003 — Ergonomía
+
+Registrar distancia de observación, diferencia vertical, ángulo de mirada,
+inclinación, reflejos y postura.
+
+### VAL-0004 — Legibilidad
+
+Comparar textos de 12, 14, 16 y 20 px desde la posición real, incluyendo números
+tabulares. Registrar errores, esfuerzo percibido y tamaño operacional aprobado.
+
+### VAL-0005 — Contraste y brillo
+
+Verificar ratios, estados semánticos y comodidad en condiciones diurnas y
+nocturnas.
+
+### VAL-0006 — Densidad perceptual
+
+Determinar cuánta información puede reconocerse sin búsqueda visual sostenida ni
+cambio de postura.
+
+### VAL-0007 — Regla neutral de los dos segundos
+
+Medir reconocimiento de estado, modo y anomalía con una pantalla neutral. Registrar
+participantes, intentos, tiempos, errores y acciones correctivas.
+
+### VAL-0008 — Regla de los dos segundos en el producto
+
+Ejecutar después de la Fase -1B sobre el primer mockup estático con contenido
+realista.
