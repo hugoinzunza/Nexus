@@ -167,6 +167,10 @@ def validate_source_name(value: Any) -> str:
     return _validate_pattern(value, "source", _SOURCE_RE)
 
 
+def validate_subject_name(value: Any) -> str:
+    return _validate_pattern(value, "subject", _SUBJECT_RE)
+
+
 def _validate_degradation(value: Any, availability: str) -> None:
     if availability == "available":
         if value is not None:

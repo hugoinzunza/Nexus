@@ -14,6 +14,7 @@ from .contracts import (
     CONTRACT_VERSION,
     error_document,
 )
+from .event_bus import InMemoryEventBus
 from .snapshot import (
     ConfiguredModulesProjection,
     IdentityError,
@@ -30,6 +31,7 @@ class CommandCenterModule(NexusModule):
 
     def __init__(self, context):
         super().__init__(context)
+        self.event_bus = InMemoryEventBus()
         self._composer = SnapshotComposer(
             [SessionProjection(), ConfiguredModulesProjection(load_config)],
             on_provider_error=self._provider_error,
@@ -107,6 +109,7 @@ class CommandCenterModule(NexusModule):
             "status": "ok",
             "contract_version": CONTRACT_VERSION,
             "contract_status": "frozen",
+            "event_bus": self.event_bus.stats(),
             "surface": "headless",
         }
 
