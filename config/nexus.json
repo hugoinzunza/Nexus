@@ -140,6 +140,10 @@
         "1d"
       ],
       "_nota": "Laboratorio Bot2 de Accion del precio. Solo simulacion causal; no importa ejecutor, credenciales ni ordenes."
+    },
+    "command_center": {
+      "enabled": true,
+      "_nota": "Linea A headless: contrato v1 y snapshot oficial. Sin interfaz, layout ni decisiones visuales."
     }
   }
 }
