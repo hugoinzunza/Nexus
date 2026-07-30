@@ -1,12 +1,13 @@
 # RFC: NEXUX Command Center
 
-- **Estado:** Aceptado; Fase 0 condicionada al gate físico de la Fase -1B
-- **Versión:** 1.2.1
+- **Estado:** Aceptado; Línea A autorizada y Línea B condicionada a la Fase -1B
+- **Versión:** 1.2.2
 - **Fecha:** 2026-07-30
 - **Autoría:** Codex, a partir del Product Vision Document, el repositorio actual
   y la revisión de arquitectura posterior
-- **Decisión:** autoriza la arquitectura; no autoriza interfaces, mockups ni
-  despliegue de producción antes de completar la Fase -1B
+- **Decisión:** autoriza infraestructura headless verificable; no autoriza
+  decisiones visuales, mockups ni despliegue de producción antes de completar la
+  Fase -1B
 - **Documento rector de producto:** `docs/PRODUCT_CHARTER.md`
 - **Especificación física:** `docs/VIEWPORT_SPECIFICATION.md`
 
@@ -311,28 +312,20 @@ No se ejecutará código descargado ni se instalarán paquetes desde la UI. “I
 en V1 significa habilitar un módulo visual registrado. Un marketplace o runtime externo
 queda fuera hasta definir sandbox, firma, permisos y actualizaciones.
 
-### D8. Sistema de diseño antes del frontend
+### D8. Sistema de diseño en dos capas
 
-La Fase 0 producirá un sistema de diseño específico y pequeño. No será una biblioteca
-abstracta construida por anticipado, sino el contrato visual del instrumento:
+La capa headless puede construirse antes de la validación física. Define semántica,
+estados, eventos, roles, navegación por teclado, atributos de accesibilidad,
+contratos de interacción, errores, carga y desconexión. No fija apariencia ni
+dimensiones.
 
-- grid y zonas persistentes;
-- escala de espaciado;
-- tipografía y números tabulares;
-- colores y contraste;
-- iconografía;
-- estados normal, warning, critical, stale, offline y unknown;
-- primitivas de panel, rail, métrica, alerta y control;
-- tamaños mínimos legibles en el monitor físico;
-- transiciones y `prefers-reduced-motion`;
-- reglas de densidad, truncamiento y prioridad;
-- tokens compartidos con el shell NexUX.
+La capa visual debe esperar la Fase -1B. Define grid, espaciado, tipografía,
+colores, iconografía, tamaños, densidad, contraste, jerarquía y composición. La
+Component Library estilizada no se considera aprobada hasta validarse en el
+monitor real y con contenido extremo.
 
-No se diseñará un sistema de tarjetas decorativas. Los componentes existen para
-expresar estado y jerarquía, y no se anidan paneles dentro de paneles.
-
-El sistema se valida en el monitor real y con contenido extremo antes de implementar
-la composición definitiva.
+Los estados normal, warning, critical, stale, offline y unknown sí pueden
+formalizarse en la capa headless. Su representación visual queda diferida.
 
 ### D9. Frontend aislado, tipado y liviano
 
@@ -705,51 +698,83 @@ La Fase -1 se gobierna exclusivamente mediante
 - **Fase -1B:** mide el hardware conectado, valida legibilidad, contraste,
   densidad y reconocimiento.
 
-La Fase 0 no puede iniciar trabajo de interfaz ni mockups hasta completar el gate
-físico de la Fase -1B.
+La validación física y la infraestructura avanzan como líneas paralelas:
+
+- **Línea A — Infraestructura headless:** puede producir comportamiento
+  verificable, contratos, eventos, seguridad, adaptadores, reconexión, degradación
+  y pruebas.
+- **Línea B — Experiencia visual:** permanece bloqueada hasta completar la Fase
+  -1B.
+
+La Línea A no puede aprobar apariencia, layout, dimensiones, tipografía, densidad,
+jerarquía, paleta ni composición. Fixtures, adaptadores falsos y estados simulados
+sirven para probar comportamiento, no UX.
 
 ### Fase 0 — Spikes y contratos
 
-Entregables:
+Entregables headless autorizados:
 
 - prueba del TradingView Widget detrás de auth;
 - tabla de capacidades y símbolos;
 - contrato y fallback de `ChartProvider`;
-- prueba Apple Music y Spotify;
+- contrato de `MediaController` y pruebas Apple Music/Spotify;
+- spike del agente macOS con WSS saliente, autenticación y allowlist;
 - esquema de eventos versionado;
 - esquema de widget manifest;
-- sistema de diseño mínimo: tokens, grid, estados y primitivas;
-- baseline de CPU/RAM en el viewport secundario validado;
-- wireframe de tres modos.
+- estados y primitivas headless sin estilo definitivo.
 
-Gate:
+Entregables visuales bloqueados:
+
+- tokens visuales, grid, tipografía, espaciado y densidad;
+- baseline de CPU/RAM en el viewport secundario validado;
+- wireframes y mockups.
+
+Infrastructure Gate:
+
+- contratos versionados y eventos tipados;
+- snapshot consistente;
+- reconexión y degradación predecibles;
+- aislamiento multiusuario y autorización probados;
+- compatibilidad de versiones;
+- ausencia de dependencias visuales no validadas;
+- TradingView cumple las condiciones técnicas y contractuales del spike.
+
+Experience Gate:
 
 - `VIEWPORT_SPECIFICATION.md` validado con el monitor secundario real;
-- no avanzar si TradingView no cumple la experiencia mínima o sus condiciones no
-  son compatibles.
-- aprobar el sistema de diseño en el hardware físico antes de implementar widgets.
+- legibilidad, contraste, densidad y Regla de los Dos Segundos aprobados;
+- capa visual y Component Library aprobadas en el hardware físico.
 
 ### Fase 1 — Fundaciones read-only
 
-Entregables:
+Entregables headless autorizados:
 
 - módulo nativo;
-- shell del Command Center;
 - snapshot composer;
-- registro estático de widgets;
-- estado general;
+- registro estático de módulos;
 - EventBus en proceso;
 - gateway WebSocket autenticado;
 - suscripción por topics;
-- secuencias, heartbeat, backoff y resync;
+- secuencias, heartbeat, backoff y resync.
+
+Entregables visuales bloqueados:
+
+- shell visual del Command Center;
+- representación visual del estado general;
 - layout fijo para el viewport secundario validado y el ultrawide.
 
-Gate:
+Infrastructure Gate:
 
 - reconexión, pérdida de eventos y aislamiento multiusuario probados;
-- estado normal, stale, offline y unknown distinguibles;
+- estados normal, stale, offline y unknown distinguibles en los contratos;
 - cero importaciones del ejecutor;
-- p95 fuente -> pintura dentro del SLO para estado general.
+- p95 fuente -> gateway dentro del SLO de infraestructura.
+
+Experience Gate:
+
+- p95 gateway -> pintura dentro del SLO visual;
+- shell y estados comprensibles en el hardware objetivo;
+- ninguna dimensión o composición aprobada antes de la Fase -1B.
 
 ### Fase 2 — Mercado, gráfico y Bot
 
