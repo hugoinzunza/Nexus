@@ -1,6 +1,7 @@
 # RFC: NEXUX Command Center
 
-- **Estado:** Aceptado; Línea A autorizada y Línea B condicionada a la Fase -1B
+- **Estado:** Aceptado; Línea A arquitectónicamente completa y Línea B
+  condicionada a la Fase -1B
 - **Versión:** 1.2.2
 - **Fecha:** 2026-07-30
 - **Autoría:** Codex, a partir del Product Vision Document, el repositorio actual
@@ -10,6 +11,22 @@
   Fase -1B
 - **Documento rector de producto:** `docs/PRODUCT_CHARTER.md`
 - **Especificación física:** `docs/VIEWPORT_SPECIFICATION.md`
+
+## Estado de implementación
+
+Al 2026-07-30, Línea A completó y validó:
+
+- Wire ABI v1 congelado;
+- snapshot reconstruible;
+- EventBus;
+- Gateway WebSocket;
+- interfaces y componentes headless;
+- registro estático y harness de conformidad;
+- primer adaptador real mediante el TradingView Adapter Spike.
+
+Este estado no activa factories productivas ni autoriza decisiones de Línea B.
+Los adaptadores adicionales requieren autorización específica y deben conservar
+las mismas fronteras contractuales.
 
 ## 1. Resumen ejecutivo
 

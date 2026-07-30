@@ -103,6 +103,42 @@ decisiones de Linea B.
 
 ---
 
+## VAL-0010 — Cierre arquitectónico de Línea A
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Alcance | Infraestructura base del Command Center |
+| Método | Revisión arquitectónica posterior al cierre del primer adaptador real |
+
+### Resultado
+
+- Protocolo congelado y fingerprint preservado.
+- Snapshot, EventBus, Gateway y runtime validados.
+- Registro estático y harness validados.
+- TradingView Adapter Spike cerrado formalmente.
+- Suite completa con 700 pruebas aprobadas.
+- Cero factories productivas activas.
+- Sin cambios en `main`, Railway ni producción.
+
+### Evidencia
+
+- Freeze contractual: `docs/COMPATIBILITY.md`.
+- Cierre del adaptador: `docs/TRADINGVIEW_ADAPTER_SPIKE.md`.
+- Commit de cierre: `4e5eb3a`.
+- Estado arquitectónico: `docs/RFC_COMMAND_CENTER.md`.
+
+### Conclusión
+
+**APROBADO.** Línea A queda arquitectónicamente completa. La plataforma puede
+evolucionar mediante adaptadores adicionales sin rediseñar su infraestructura
+fundamental. Línea B y las factories productivas no autorizadas permanecen
+bloqueadas.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

@@ -278,3 +278,17 @@ def test_cierre_formal_documenta_frontera_y_no_autoriza_factory():
         "Linea B visual continua bloqueada",
     )
     assert all(statement in closure for statement in required)
+
+
+def test_estado_documental_cierra_linea_a_sin_abrir_linea_b():
+    root = Path(__file__).parents[1]
+    rfc = (root / "docs" / "RFC_COMMAND_CENTER.md").read_text(
+        encoding="utf-8"
+    )
+    log = (root / "docs" / "VALIDATION_LOG.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Línea A arquitectónicamente completa" in rfc
+    assert "no activa factories productivas" in rfc
+    assert "VAL-0010 — Cierre arquitectónico de Línea A" in log
+    assert "Línea B y las factories productivas no autorizadas permanecen" in log
