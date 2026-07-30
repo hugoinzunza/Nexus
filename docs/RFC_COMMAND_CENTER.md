@@ -1,12 +1,14 @@
 # RFC: NEXUX Command Center
 
-- **Estado:** Aceptado para Fase 0
-- **Versión:** 1.2
+- **Estado:** Aceptado; Fase 0 condicionada al gate físico de la Fase -1B
+- **Versión:** 1.2.1
 - **Fecha:** 2026-07-30
 - **Autoría:** Codex, a partir del Product Vision Document, el repositorio actual
   y la revisión de arquitectura posterior
-- **Decisión:** autoriza diseño y spikes de Fase 0; no autoriza despliegue de producción
+- **Decisión:** autoriza la arquitectura; no autoriza interfaces, mockups ni
+  despliegue de producción antes de completar la Fase -1B
 - **Documento rector de producto:** `docs/PRODUCT_CHARTER.md`
+- **Especificación física:** `docs/VIEWPORT_SPECIFICATION.md`
 
 ## 1. Resumen ejecutivo
 
@@ -61,7 +63,7 @@ normalizada**, con una jerarquía visual única y semántica común para respond
 - Distinguir explícitamente real, virtual, dry-run, shadow y research.
 - Distinguir dato actual, atrasado, caído y desconocido.
 - Mantener navegación directa a las superficies detalladas existentes.
-- Permitir layouts adecuados a 1920x1080 y ultrawide.
+- Permitir layouts adecuados al viewport secundario validado y al ultrawide.
 - Habilitar futuras integraciones sin acoplarlas al bot.
 
 ### 3.2 Objetivos técnicos
@@ -442,48 +444,15 @@ El Command Center no tendrá acceso directo a `BotExecutor`.
 +--------------------+
 ```
 
-## 9. Composición visual recomendada
+## 9. Composición visual diferida
 
-### 9.0 Principio de instrumento
+El RFC no fija layout, porcentajes, tamaños ni posiciones. Esas decisiones se
+tomarán en `DESIGN_SYSTEM.md` después de validar
+`VIEWPORT_SPECIFICATION.md`.
 
-Ningún componente existe porque “se ve bien”. Cada elemento debe:
-
-1. responder una pregunta;
-2. expresar un estado o cambio;
-3. permitir una decisión o navegación;
-4. desaparecer, compactarse o degradarse si no aporta contexto.
-
-La belleza buscada proviene de jerarquía, ritmo, precisión y ausencia de ruido.
-
-### 9.1 Layout 1920x1080
-
-- **Barra global superior:** hora, conectividad, mercado, bot, alertas críticas.
-- **Área central dominante (aprox. 65-70%):** TradingView.
-- **Rail derecho:** riesgo, calendario, contexto de mercado y bot.
-- **Franja inferior:** media, IA e infraestructura, en modo compacto.
-- **Overlay de alertas:** solo warning/critical; nunca una lista permanente.
-
-No se usarán secciones flotantes ni tarjetas anidadas. El gráfico será un plano
-principal continuo. Los módulos secundarios se expresarán como bandas/paneles
-densos, con borde máximo de 8 px.
-
-### 9.2 Jerarquía de información
-
-1. Excepción crítica.
-2. Estado del bot y exposición.
-3. Mercado y evento inmediato.
-4. Gráfico.
-5. Contexto secundario.
-6. Controles locales.
-
-Una métrica que no cambió no debe competir visualmente con una alerta nueva.
-
-### 9.3 Modos
-
-- **Focus:** gráfico + bot + alertas.
-- **Operations:** gráfico + mercado + infraestructura.
-- **Ambient:** hora, estado, música, alertas; baja densidad.
-- **Edit:** mover, ocultar y redimensionar dentro de restricciones.
+La Fase 0 podrá explorar los modos Focus, Operations, Ambient y Edit como
+hipótesis. Ninguno queda aprobado antes de probar su legibilidad, densidad y Regla
+de los Dos Segundos en el hardware físico.
 
 ## 10. TradingView
 
@@ -726,11 +695,23 @@ La salud debe separar:
 
 ## 19. Plan por fases
 
+### Fase -1 — Entorno físico
+
+La Fase -1 se gobierna exclusivamente mediante
+`docs/VIEWPORT_SPECIFICATION.md`:
+
+- **Fase -1A:** define objetivos y restricciones ergonómicas sin inventar
+  propiedades del monitor.
+- **Fase -1B:** mide el hardware conectado, valida legibilidad, contraste,
+  densidad y reconocimiento.
+
+La Fase 0 no puede iniciar trabajo de interfaz ni mockups hasta completar el gate
+físico de la Fase -1B.
+
 ### Fase 0 — Spikes y contratos
 
 Entregables:
 
-- medición del viewport efectivo, distancia y legibilidad en el monitor de 14";
 - prueba del TradingView Widget detrás de auth;
 - tabla de capacidades y símbolos;
 - contrato y fallback de `ChartProvider`;
@@ -738,11 +719,12 @@ Entregables:
 - esquema de eventos versionado;
 - esquema de widget manifest;
 - sistema de diseño mínimo: tokens, grid, estados y primitivas;
-- baseline de CPU/RAM en 1920x1080;
+- baseline de CPU/RAM en el viewport secundario validado;
 - wireframe de tres modos.
 
 Gate:
 
+- `VIEWPORT_SPECIFICATION.md` validado con el monitor secundario real;
 - no avanzar si TradingView no cumple la experiencia mínima o sus condiciones no
   son compatibles.
 - aprobar el sistema de diseño en el hardware físico antes de implementar widgets.
@@ -760,7 +742,7 @@ Entregables:
 - gateway WebSocket autenticado;
 - suscripción por topics;
 - secuencias, heartbeat, backoff y resync;
-- layout fijo 1920x1080 y ultrawide.
+- layout fijo para el viewport secundario validado y el ultrawide.
 
 Gate:
 
@@ -847,7 +829,8 @@ model, testnet, idempotencia, confirmación y auditoría.
 - Tenant-isolation tests para snapshot y WebSocket.
 - Reconexión, orden, duplicados y huecos de secuencia.
 - Fuente stale, caída total y reloj desfasado.
-- Visual regression en 1920x1080, 3440x1440 y 14" 1080p.
+- Visual regression en el viewport secundario validado y 3440x1440; 1920x1080 se
+  agrega solo si la medición física confirma ese modo.
 - Texto, contraste, teclado y reduced-motion.
 - Canvas/iframe visible y no vacío.
 - Long-run de 8 horas para memoria, CPU y reconexiones.
