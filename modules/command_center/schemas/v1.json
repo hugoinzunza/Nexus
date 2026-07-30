@@ -1,0 +1,492 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexux.cl/contracts/command-center/v1",
+  "title": "NEXUX Command Center ABI v1",
+  "description": "Contrato headless para snapshot, envelopes y errores.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/snapshot"
+    },
+    {
+      "$ref": "#/$defs/envelope"
+    },
+    {
+      "$ref": "#/$defs/error"
+    }
+  ],
+  "$defs": {
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807,
+      "description": "Unix timestamp en milisegundos UTC."
+    },
+    "topic": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*:[a-z][a-z0-9._-]*$"
+    },
+    "subject": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^user:([1-9][0-9]*|local)$"
+    },
+    "semanticName": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "degradation": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "category",
+            "code",
+            "retryable",
+            "since"
+          ],
+          "properties": {
+            "category": {
+              "enum": [
+                "provider-failure",
+                "source-unavailable",
+                "permission-denied",
+                "unsupported",
+                "invalid-data",
+                "unknown"
+              ]
+            },
+            "code": {
+              "$ref": "#/$defs/semanticName"
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "since": {
+              "$ref": "#/$defs/timestamp"
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "projectionState": {
+      "type": "object",
+      "required": [
+        "health",
+        "freshness",
+        "mode",
+        "severity",
+        "source",
+        "as_of",
+        "availability",
+        "degradation"
+      ],
+      "properties": {
+        "health": {
+          "enum": [
+            "healthy",
+            "degraded",
+            "failed",
+            "unknown"
+          ]
+        },
+        "freshness": {
+          "enum": [
+            "live",
+            "current",
+            "stale",
+            "expired"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "live",
+            "testnet",
+            "dry",
+            "shadow",
+            "research",
+            "disabled",
+            "not_applicable"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "normal",
+            "info",
+            "warning",
+            "critical",
+            "unknown"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "as_of": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "availability": {
+          "enum": [
+            "available",
+            "degraded",
+            "unavailable"
+          ]
+        },
+        "degradation": {
+          "$ref": "#/$defs/degradation"
+        }
+      },
+      "additionalProperties": true
+    },
+    "projectionPayload": {
+      "type": "object",
+      "required": [
+        "state",
+        "data"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/projectionState"
+        },
+        "data": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "envelope": {
+      "type": "object",
+      "required": [
+        "contract",
+        "v",
+        "topic",
+        "kind",
+        "subject",
+        "seq",
+        "observed_at",
+        "received_at",
+        "stale_at",
+        "expires_at",
+        "severity",
+        "source",
+        "payload"
+      ],
+      "properties": {
+        "contract": {
+          "const": "nexux.command-center.event"
+        },
+        "v": {
+          "const": 1
+        },
+        "topic": {
+          "$ref": "#/$defs/topic"
+        },
+        "kind": {
+          "enum": [
+            "snapshot",
+            "patch",
+            "event"
+          ]
+        },
+        "event_type": {
+          "$ref": "#/$defs/semanticName"
+        },
+        "event_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "subject": {
+          "$ref": "#/$defs/subject"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "observed_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "received_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "stale_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "severity": {
+          "$ref": "#/$defs/projectionState/properties/severity"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "snapshot"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/projectionPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "event"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event_type",
+              "event_version"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "event_type"
+                  ]
+                },
+                {
+                  "required": [
+                    "event_version"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "contract",
+        "v",
+        "contract_fingerprint",
+        "snapshot_id",
+        "subject",
+        "generated_at",
+        "topics",
+        "cursors"
+      ],
+      "properties": {
+        "contract": {
+          "const": "nexux.command-center.snapshot"
+        },
+        "v": {
+          "const": 1
+        },
+        "contract_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "snapshot_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "subject": {
+          "$ref": "#/$defs/subject"
+        },
+        "generated_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "topics": {
+          "type": "object",
+          "maxProperties": 128,
+          "propertyNames": {
+            "$ref": "#/$defs/topic"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/envelope"
+          }
+        },
+        "cursors": {
+          "type": "object",
+          "maxProperties": 128,
+          "propertyNames": {
+            "$ref": "#/$defs/topic"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "contract",
+        "v",
+        "code",
+        "message",
+        "status",
+        "retryable",
+        "request_id"
+      ],
+      "properties": {
+        "contract": {
+          "const": "nexux.command-center.error"
+        },
+        "v": {
+          "const": 1
+        },
+        "code": {
+          "$ref": "#/$defs/semanticName"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "request_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "x-nexux": {
+    "compatibility": {
+      "wire_policy": "immutable-after-freeze",
+      "payload_policy": "additive fields allowed inside domain data, details and event payloads",
+      "unknown_wire_fields": "must be ignored and are non-normative",
+      "fingerprint": {
+        "hash": "sha256",
+        "serialization": "UTF-8 JSON with object keys sorted lexicographically, separators ',' and ':', and non-ASCII escaped"
+      },
+      "new_wire_semantics_require": "new-major-contract-version",
+      "domain_event_evolution": "increment event_version"
+    },
+    "naming": {
+      "topic": "lowercase dot-separated segments; hyphen allowed inside a segment",
+      "event_type": "lowercase dot-separated segments; hyphen allowed inside a segment",
+      "source": "provider:instance in lowercase",
+      "subject": "user:<positive-integer> or user:local"
+    },
+    "time": {
+      "unit": "unix_ms",
+      "timezone": "UTC",
+      "allowed_future_clock_skew_ms": 30000,
+      "freshness_at_receipt": "payload.state.freshness describes received_at",
+      "client_rule": "now>=expires_at => expired; else now>=stale_at => stale; else serialized freshness",
+      "ordering": "observed_at<=stale_at<=expires_at and observed_at<=received_at+clock_skew"
+    },
+    "sequence": {
+      "scope": "per subject and topic",
+      "duplicates": "seq<=cursor ignored",
+      "gap": "seq>cursor+1 requires a new snapshot",
+      "new_topic": "must begin with kind=snapshot"
+    },
+    "patch": {
+      "standard": "RFC7396 JSON Merge Patch",
+      "result": "must validate as projectionPayload"
+    },
+    "event": {
+      "identity": "event_type plus event_version",
+      "state_effect": "ephemeral; advances cursor without mutating the read model"
+    },
+    "snapshot_consistency": {
+      "topics_equal_cursor_keys": true,
+      "topic_key_equals_envelope_topic": true,
+      "subject_equals_envelope_subject": true,
+      "initial_kind": "snapshot",
+      "cursor_equals_envelope_seq": true,
+      "envelope_received_at_equals_generated_at": true
+    },
+    "projection_consistency": {
+      "envelope_severity_equals_state_severity": true,
+      "envelope_source_equals_state_source": true,
+      "envelope_observed_at_equals_state_as_of": true
+    },
+    "degradation": {
+      "available": "degradation must be null",
+      "degraded_or_unavailable": "degradation object is required",
+      "internal_details": "must not be exposed to clients"
+    },
+    "availability_consistency": {
+      "healthy": "available",
+      "degraded": "degraded",
+      "failed": "unavailable",
+      "unknown": "degraded or unavailable"
+    },
+    "provider": {
+      "actor_context": [
+        "subject",
+        "uid",
+        "role",
+        "synthetic"
+      ],
+      "authorization": "allowed_roles is mandatory and checked before read",
+      "binding": "returned topic/source must equal declared topic/source",
+      "failure": "publish unavailable projection without internal details"
+    },
+    "limits": {
+      "max_topics": 128,
+      "max_snapshot_bytes": 524288,
+      "max_envelope_bytes": 65536,
+      "max_patch_payload_bytes": 16384,
+      "max_event_payload_bytes": 16384,
+      "max_projection_bytes": 65536,
+      "max_error_bytes": 16384,
+      "max_json_depth": 16,
+      "max_object_keys": 256,
+      "max_array_items": 2048,
+      "max_string_bytes": 16384
+    }
+  }
+}

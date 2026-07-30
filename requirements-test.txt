@@ -1,2 +1,3 @@
 # Dependencias exclusivas de CI/pruebas. No se instalan en Railway ni en el VPS.
 selenium>=4.34,<5
+jsonschema>=4.23,<5

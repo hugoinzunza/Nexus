@@ -1,8 +1,4 @@
-"""Contrato v1 congelado para snapshots y eventos del Command Center.
-
-La compatibilidad dentro de v1 es aditiva: pueden aparecer campos opcionales,
-pero no se eliminan campos requeridos ni cambian sus tipos o semántica.
-"""
+"""Validador y semántica del ABI v1 del NEXUX Command Center."""
 
 from __future__ import annotations
 
@@ -10,113 +6,58 @@ import copy
 import hashlib
 import json
 import re
+import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 CONTRACT_VERSION = 1
 SNAPSHOT_CONTRACT = "nexux.command-center.snapshot"
 EVENT_CONTRACT = "nexux.command-center.event"
+ERROR_CONTRACT = "nexux.command-center.error"
 
-HEALTH_VALUES = frozenset({"healthy", "degraded", "failed", "unknown"})
-FRESHNESS_VALUES = frozenset({"live", "current", "stale", "expired"})
-MODE_VALUES = frozenset(
-    {"live", "testnet", "dry", "shadow", "research", "disabled"}
+_SCHEMA_PATH = Path(__file__).with_name("schemas") / "v1.json"
+with _SCHEMA_PATH.open(encoding="utf-8") as _fh:
+    CONTRACT_V1_SPEC = json.load(_fh)
+
+_DEFS = CONTRACT_V1_SPEC["$defs"]
+_META = CONTRACT_V1_SPEC["x-nexux"]
+LIMITS = _META["limits"]
+CLOCK_SKEW_MS = _META["time"]["allowed_future_clock_skew_ms"]
+
+HEALTH_VALUES = frozenset(_DEFS["projectionState"]["properties"]["health"]["enum"])
+FRESHNESS_VALUES = frozenset(
+    _DEFS["projectionState"]["properties"]["freshness"]["enum"]
 )
+MODE_VALUES = frozenset(_DEFS["projectionState"]["properties"]["mode"]["enum"])
 SEVERITY_VALUES = frozenset(
-    {"normal", "info", "warning", "critical", "unknown"}
+    _DEFS["projectionState"]["properties"]["severity"]["enum"]
 )
-KIND_VALUES = frozenset({"snapshot", "patch", "event"})
-
-_TOPIC_RE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
-
-# Esta estructura es el contrato que queda congelado antes del EventBus. Cambiarla
-# exige una decisión explícita de compatibilidad y actualizar el fingerprint.
-CONTRACT_V1_SPEC = {
-    "snapshot_required": [
-        "contract",
-        "v",
-        "contract_fingerprint",
-        "snapshot_id",
-        "subject",
-        "generated_at",
-        "topics",
-        "cursors",
-    ],
-    "envelope_required": [
-        "contract",
-        "v",
-        "topic",
-        "kind",
-        "subject",
-        "seq",
-        "observed_at",
-        "received_at",
-        "expires_at",
-        "severity",
-        "source",
-        "payload",
-    ],
-    "projection_state_required": [
-        "health",
-        "freshness",
-        "mode",
-        "severity",
-        "source",
-        "as_of",
-    ],
-    "snapshot_types": {
-        "contract": "string",
-        "v": "integer",
-        "contract_fingerprint": "string",
-        "snapshot_id": "string",
-        "subject": "string",
-        "generated_at": "integer",
-        "topics": "object",
-        "cursors": "object",
-    },
-    "envelope_types": {
-        "contract": "string",
-        "v": "integer",
-        "topic": "string",
-        "kind": "string",
-        "subject": "string",
-        "seq": "integer",
-        "observed_at": "integer",
-        "received_at": "integer",
-        "expires_at": "integer",
-        "severity": "string",
-        "source": "string",
-        "payload": "object",
-    },
-    "projection_payload_types": {"state": "object", "data": "object"},
-    "enums": {
-        "health": ["healthy", "degraded", "failed", "unknown"],
-        "freshness": ["live", "current", "stale", "expired"],
-        "mode": ["live", "testnet", "dry", "shadow", "research", "disabled"],
-        "severity": ["normal", "info", "warning", "critical", "unknown"],
-        "kind": ["snapshot", "patch", "event"],
-    },
-    "patch_semantics": "RFC7396 JSON Merge Patch",
-    "sequence_semantics": "strictly contiguous per topic; duplicates ignored",
-    "projection_consistency": (
-        "envelope severity/source/observed_at equal "
-        "payload.state severity/source/as_of"
-    ),
-    "compatibility": "v1 additive only",
-}
-CONTRACT_V1_FINGERPRINT = (
-    "fa5892bd3fea247638a59a282aedbd80eebfcf6bbc6b034c1919a7cf5dae716d"
+AVAILABILITY_VALUES = frozenset(
+    _DEFS["projectionState"]["properties"]["availability"]["enum"]
 )
+DEGRADATION_CATEGORIES = frozenset(
+    _DEFS["degradation"]["oneOf"][1]["properties"]["category"]["enum"]
+)
+KIND_VALUES = frozenset(_DEFS["envelope"]["properties"]["kind"]["enum"])
+
+_TOPIC_RE = re.compile(_DEFS["topic"]["pattern"])
+_SOURCE_RE = re.compile(_DEFS["source"]["pattern"])
+_SUBJECT_RE = re.compile(_DEFS["subject"]["pattern"])
+_SEMANTIC_NAME_RE = re.compile(_DEFS["semanticName"]["pattern"])
+_UUID_RE = re.compile(_DEFS["uuid"]["pattern"])
+_MAX_INT = _DEFS["timestamp"]["maximum"]
+
+# Provisional hasta que la segunda Contract Freeze Review lo apruebe.
+CONTRACT_V1_FINGERPRINT = "__PENDING_FREEZE__"
 
 
 class ContractViolation(ValueError):
-    """Un payload no cumple el contrato congelado."""
+    """Un documento no cumple el ABI publicado."""
 
 
 @dataclass(frozen=True)
 class ReplayState:
-    """Estado reconstruido únicamente desde snapshot y envelopes posteriores."""
-
     subject: str
     topics: dict[str, dict[str, Any]]
     cursors: dict[str, int]
@@ -129,13 +70,14 @@ def _fingerprint() -> str:
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
 
 
-def assert_contract_frozen() -> None:
-    actual = _fingerprint()
-    if actual != CONTRACT_V1_FINGERPRINT:
-        raise RuntimeError(
-            "el contrato v1 cambio sin actualizar su decision de compatibilidad "
-            f"({actual})"
-        )
+def candidate_fingerprint() -> str:
+    """Fingerprint candidato; no lo declara estable."""
+    return _fingerprint()
+
+
+def assert_contract_candidate() -> None:
+    if CONTRACT_V1_FINGERPRINT != "__PENDING_FREEZE__":
+        raise RuntimeError("el ABI candidato fue marcado estable antes del freeze")
 
 
 def _required_dict(value: Any, name: str) -> dict[str, Any]:
@@ -144,15 +86,21 @@ def _required_dict(value: Any, name: str) -> dict[str, Any]:
     return value
 
 
-def _required_string(value: Any, name: str) -> str:
+def _required_string(value: Any, name: str, maximum: int | None = None) -> str:
     if not isinstance(value, str) or not value:
         raise ContractViolation(f"{name} debe ser string no vacio")
+    if maximum is not None and len(value.encode("utf-8")) > maximum:
+        raise ContractViolation(f"{name} excede el limite")
     return value
 
 
-def _required_int(value: Any, name: str, minimum: int = 0) -> int:
-    if type(value) is not int or value < minimum:
-        raise ContractViolation(f"{name} debe ser entero >= {minimum}")
+def _required_int(
+    value: Any, name: str, minimum: int = 0, maximum: int = _MAX_INT
+) -> int:
+    if type(value) is not int or value < minimum or value > maximum:
+        raise ContractViolation(
+            f"{name} debe ser entero entre {minimum} y {maximum}"
+        )
     return value
 
 
@@ -162,13 +110,100 @@ def _require_fields(value: Mapping[str, Any], fields: Iterable[str], name: str) 
         raise ContractViolation(f"{name} incompleto: faltan {', '.join(missing)}")
 
 
+def _compact_size(value: Any, name: str) -> int:
+    try:
+        encoded = json.dumps(
+            value, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ContractViolation(f"{name} no es JSON valido") from exc
+    return len(encoded)
+
+
+def _validate_json_limits(value: Any, name: str, depth: int = 0) -> None:
+    if depth > LIMITS["max_json_depth"]:
+        raise ContractViolation(f"{name} excede profundidad JSON")
+    if isinstance(value, dict):
+        if len(value) > LIMITS["max_object_keys"]:
+            raise ContractViolation(f"{name} excede claves por objeto")
+        for key, child in value.items():
+            if not isinstance(key, str):
+                raise ContractViolation(f"{name} contiene clave no string")
+            if len(key.encode("utf-8")) > LIMITS["max_string_bytes"]:
+                raise ContractViolation(f"{name} contiene clave demasiado larga")
+            _validate_json_limits(child, name, depth + 1)
+    elif isinstance(value, list):
+        if len(value) > LIMITS["max_array_items"]:
+            raise ContractViolation(f"{name} excede items por lista")
+        for child in value:
+            _validate_json_limits(child, name, depth + 1)
+    elif isinstance(value, str):
+        if len(value.encode("utf-8")) > LIMITS["max_string_bytes"]:
+            raise ContractViolation(f"{name} contiene string demasiado largo")
+    elif value is not None and type(value) not in (bool, int, float):
+        raise ContractViolation(f"{name} contiene tipo no JSON")
+
+
+def _validate_pattern(
+    value: Any, name: str, pattern: re.Pattern[str], maximum: int = 128
+) -> str:
+    text = _required_string(value, name, maximum)
+    if not pattern.fullmatch(text):
+        raise ContractViolation(f"{name} no usa la forma canonica")
+    return text
+
+
+def validate_topic_name(value: Any) -> str:
+    return _validate_pattern(value, "topic", _TOPIC_RE)
+
+
+def validate_source_name(value: Any) -> str:
+    return _validate_pattern(value, "source", _SOURCE_RE)
+
+
+def _validate_degradation(value: Any, availability: str) -> None:
+    if availability == "available":
+        if value is not None:
+            raise ContractViolation("estado available exige degradation=null")
+        return
+    degradation = _required_dict(value, "payload.state.degradation")
+    _require_fields(
+        degradation,
+        ("category", "code", "retryable", "since"),
+        "payload.state.degradation",
+    )
+    if degradation["category"] not in DEGRADATION_CATEGORIES:
+        raise ContractViolation("categoria de degradacion invalida")
+    _validate_pattern(
+        degradation["code"],
+        "payload.state.degradation.code",
+        _SEMANTIC_NAME_RE,
+    )
+    if type(degradation["retryable"]) is not bool:
+        raise ContractViolation("degradation.retryable debe ser boolean")
+    _required_int(degradation["since"], "degradation.since")
+
+
+def _validate_availability_consistency(health: str, availability: str) -> None:
+    expected = {
+        "healthy": {"available"},
+        "degraded": {"degraded"},
+        "failed": {"unavailable"},
+        "unknown": {"degraded", "unavailable"},
+    }
+    if availability not in expected[health]:
+        raise ContractViolation("health contradice availability")
+
+
 def validate_projection_payload(payload: Any) -> dict[str, Any]:
     data = _required_dict(payload, "payload")
+    _validate_json_limits(data, "projection payload")
+    if _compact_size(data, "projection payload") > LIMITS["max_projection_bytes"]:
+        raise ContractViolation("projection excede max_projection_bytes")
     _require_fields(data, ("state", "data"), "payload")
     state = _required_dict(data["state"], "payload.state")
-    _require_fields(
-        state, CONTRACT_V1_SPEC["projection_state_required"], "payload.state"
-    )
+    required = _DEFS["projectionState"]["required"]
+    _require_fields(state, required, "payload.state")
     if state["health"] not in HEALTH_VALUES:
         raise ContractViolation("health invalido")
     if state["freshness"] not in FRESHNESS_VALUES:
@@ -177,8 +212,12 @@ def validate_projection_payload(payload: Any) -> dict[str, Any]:
         raise ContractViolation("mode invalido")
     if state["severity"] not in SEVERITY_VALUES:
         raise ContractViolation("severity invalida")
-    _required_string(state["source"], "payload.state.source")
+    if state["availability"] not in AVAILABILITY_VALUES:
+        raise ContractViolation("availability invalida")
+    validate_source_name(state["source"])
     _required_int(state["as_of"], "payload.state.as_of")
+    _validate_availability_consistency(state["health"], state["availability"])
+    _validate_degradation(state["degradation"], state["availability"])
     _required_dict(data["data"], "payload.data")
     return data
 
@@ -193,54 +232,82 @@ def _validate_projection_consistency(
         raise ContractViolation("source contradice payload.state")
     if state["as_of"] != envelope["observed_at"]:
         raise ContractViolation("observed_at contradice payload.state.as_of")
+    received = envelope["received_at"]
+    if received >= envelope["expires_at"]:
+        expected = {"expired"}
+    elif received >= envelope["stale_at"]:
+        expected = {"stale"}
+    else:
+        expected = {"live", "current"}
+    if state["freshness"] not in expected:
+        raise ContractViolation("freshness contradice stale_at/expires_at")
 
 
 def validate_envelope(envelope: Any) -> dict[str, Any]:
     data = _required_dict(envelope, "envelope")
-    _require_fields(data, CONTRACT_V1_SPEC["envelope_required"], "envelope")
-    if data["contract"] != EVENT_CONTRACT:
-        raise ContractViolation("contrato de envelope invalido")
-    if data["v"] != CONTRACT_VERSION:
-        raise ContractViolation("version de envelope no soportada")
-    topic = _required_string(data["topic"], "topic")
-    if not _TOPIC_RE.fullmatch(topic):
-        raise ContractViolation("topic invalido")
+    _validate_json_limits(data, "envelope")
+    if _compact_size(data, "envelope") > LIMITS["max_envelope_bytes"]:
+        raise ContractViolation("envelope excede max_envelope_bytes")
+    _require_fields(data, _DEFS["envelope"]["required"], "envelope")
+    if data["contract"] != EVENT_CONTRACT or data["v"] != CONTRACT_VERSION:
+        raise ContractViolation("contrato de envelope no soportado")
+    validate_topic_name(data["topic"])
+    _validate_pattern(data["subject"], "subject", _SUBJECT_RE)
+    validate_source_name(data["source"])
     if data["kind"] not in KIND_VALUES:
         raise ContractViolation("kind invalido")
-    _required_string(data["subject"], "subject")
     _required_int(data["seq"], "seq")
-    _required_int(data["observed_at"], "observed_at")
-    _required_int(data["received_at"], "received_at")
-    expires_at = _required_int(data["expires_at"], "expires_at")
-    if expires_at < data["observed_at"]:
-        raise ContractViolation("expires_at anterior a observed_at")
+    observed = _required_int(data["observed_at"], "observed_at")
+    received = _required_int(data["received_at"], "received_at")
+    stale = _required_int(data["stale_at"], "stale_at")
+    expires = _required_int(data["expires_at"], "expires_at")
+    if observed > received + CLOCK_SKEW_MS:
+        raise ContractViolation("observed_at excede tolerancia de reloj")
+    if not observed <= stale <= expires:
+        raise ContractViolation("orden temporal invalido")
     if data["severity"] not in SEVERITY_VALUES:
         raise ContractViolation("severity invalida")
-    _required_string(data["source"], "source")
-    _required_dict(data["payload"], "payload")
-    if data["kind"] == "snapshot":
-        projection = validate_projection_payload(data["payload"])
+    payload = _required_dict(data["payload"], "payload")
+
+    if data["kind"] == "event":
+        _require_fields(data, ("event_type", "event_version"), "evento")
+        _validate_pattern(data["event_type"], "event_type", _SEMANTIC_NAME_RE)
+        _required_int(data["event_version"], "event_version", 1, 65535)
+        if _compact_size(payload, "event payload") > LIMITS["max_event_payload_bytes"]:
+            raise ContractViolation("evento excede max_event_payload_bytes")
+    elif "event_type" in data or "event_version" in data:
+        raise ContractViolation("event_type/event_version solo aplican a kind=event")
+
+    if data["kind"] == "patch":
+        if _compact_size(payload, "patch payload") > LIMITS["max_patch_payload_bytes"]:
+            raise ContractViolation("patch excede max_patch_payload_bytes")
+    elif data["kind"] == "snapshot":
+        projection = validate_projection_payload(payload)
         _validate_projection_consistency(data, projection)
     return data
 
 
 def validate_snapshot(snapshot: Any) -> dict[str, Any]:
     data = _required_dict(snapshot, "snapshot")
-    _require_fields(data, CONTRACT_V1_SPEC["snapshot_required"], "snapshot")
-    if data["contract"] != SNAPSHOT_CONTRACT:
-        raise ContractViolation("contrato de snapshot invalido")
-    if data["v"] != CONTRACT_VERSION:
-        raise ContractViolation("version de snapshot no soportada")
-    if data["contract_fingerprint"] != CONTRACT_V1_FINGERPRINT:
-        raise ContractViolation("fingerprint de snapshot no soportado")
-    _required_string(data["snapshot_id"], "snapshot_id")
-    subject = _required_string(data["subject"], "subject")
-    _required_int(data["generated_at"], "generated_at")
+    _validate_json_limits(data, "snapshot")
+    if _compact_size(data, "snapshot") > LIMITS["max_snapshot_bytes"]:
+        raise ContractViolation("snapshot excede max_snapshot_bytes")
+    _require_fields(data, _DEFS["snapshot"]["required"], "snapshot")
+    if data["contract"] != SNAPSHOT_CONTRACT or data["v"] != CONTRACT_VERSION:
+        raise ContractViolation("contrato de snapshot no soportado")
+    if data["contract_fingerprint"] != candidate_fingerprint():
+        raise ContractViolation("fingerprint candidato no coincide")
+    _validate_pattern(data["snapshot_id"], "snapshot_id", _UUID_RE)
+    subject = _validate_pattern(data["subject"], "subject", _SUBJECT_RE)
+    generated = _required_int(data["generated_at"], "generated_at")
     topics = _required_dict(data["topics"], "topics")
     cursors = _required_dict(data["cursors"], "cursors")
+    if len(topics) > LIMITS["max_topics"]:
+        raise ContractViolation("snapshot excede max_topics")
     if set(topics) != set(cursors):
         raise ContractViolation("topics y cursors no coinciden")
     for topic, envelope in topics.items():
+        _validate_pattern(topic, "clave de topic", _TOPIC_RE)
         validated = validate_envelope(envelope)
         if validated["topic"] != topic:
             raise ContractViolation("topic no coincide con su clave")
@@ -248,9 +315,53 @@ def validate_snapshot(snapshot: Any) -> dict[str, Any]:
             raise ContractViolation("subject de topic no coincide con snapshot")
         if validated["kind"] != "snapshot":
             raise ContractViolation("snapshot inicial solo acepta kind=snapshot")
+        if validated["received_at"] != generated:
+            raise ContractViolation("received_at inicial no coincide con generated_at")
         cursor = _required_int(cursors[topic], f"cursor {topic}")
         if cursor != validated["seq"]:
             raise ContractViolation("cursor no coincide con seq")
+    return data
+
+
+def error_document(
+    code: str,
+    message: str,
+    status: int,
+    *,
+    retryable: bool = False,
+    request_id: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    document = {
+        "contract": ERROR_CONTRACT,
+        "v": CONTRACT_VERSION,
+        "code": code,
+        "message": message,
+        "status": status,
+        "retryable": retryable,
+        "request_id": request_id or str(uuid.uuid4()),
+    }
+    if details:
+        document["details"] = details
+    return validate_error(document)
+
+
+def validate_error(document: Any) -> dict[str, Any]:
+    data = _required_dict(document, "error")
+    _validate_json_limits(data, "error")
+    if _compact_size(data, "error") > LIMITS["max_error_bytes"]:
+        raise ContractViolation("error excede max_error_bytes")
+    _require_fields(data, _DEFS["error"]["required"], "error")
+    if data["contract"] != ERROR_CONTRACT or data["v"] != CONTRACT_VERSION:
+        raise ContractViolation("contrato de error no soportado")
+    _validate_pattern(data["code"], "error.code", _SEMANTIC_NAME_RE)
+    _required_string(data["message"], "error.message", 240)
+    _required_int(data["status"], "error.status", 400, 599)
+    if type(data["retryable"]) is not bool:
+        raise ContractViolation("error.retryable debe ser boolean")
+    _validate_pattern(data["request_id"], "error.request_id", _UUID_RE)
+    if "details" in data:
+        _required_dict(data["details"], "error.details")
     return data
 
 
@@ -267,8 +378,9 @@ def json_merge_patch(target: Any, patch: Any) -> Any:
     return result
 
 
-def replay(snapshot: Mapping[str, Any], envelopes: Iterable[Mapping[str, Any]]) -> ReplayState:
-    """Reconstruye estado y cursores; no conoce semántica de dominio."""
+def replay(
+    snapshot: Mapping[str, Any], envelopes: Iterable[Mapping[str, Any]]
+) -> ReplayState:
     validated = validate_snapshot(snapshot)
     subject = validated["subject"]
     topics = {
@@ -301,10 +413,9 @@ def replay(snapshot: Mapping[str, Any], envelopes: Iterable[Mapping[str, Any]]) 
             projection = validate_projection_payload(patched)
             _validate_projection_consistency(envelope, projection)
             topics[topic] = projection
-        # kind=event es efimero: avanza el cursor, pero no altera el read model.
         cursors[topic] = envelope["seq"]
 
     return ReplayState(subject=subject, topics=topics, cursors=cursors)
 
 
-assert_contract_frozen()
+assert_contract_candidate()

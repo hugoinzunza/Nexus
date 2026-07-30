@@ -417,6 +417,13 @@ def _gate(slug: str, request: Request):
     is_api = request.url.path.startswith(f"/m/{slug}/api/")
     if user is None:
         if is_api:
+            if slug == "command-center":
+                from modules.command_center.contracts import error_document
+                return JSONResponse(error_document(
+                    "auth.required",
+                    "Se requiere una sesion autenticada.",
+                    401,
+                ), status_code=401)
             return JSONResponse({"error": "no autorizado", "login": "/login"}, status_code=401)
         nxt = request.url.path
         return RedirectResponse(url=f"/login?next={nxt}", status_code=307)
