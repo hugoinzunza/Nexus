@@ -18,6 +18,7 @@ from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
 from .event_bus import InMemoryEventBus
 from .gateway import CommandCenterGateway
 from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION
+from .module_registry import command_center_module_registry
 from .snapshot import (
     ConfiguredModulesProjection,
     IdentityError,
@@ -46,6 +47,7 @@ class CommandCenterModule(NexusModule):
                 f"command-center: gateway {code}"
             ),
         )
+        self.module_registry = command_center_module_registry()
 
     def _provider_error(self, topic: str, exc: Exception) -> None:
         self.context.log(
@@ -121,6 +123,7 @@ class CommandCenterModule(NexusModule):
             "contract_status": "frozen",
             "event_bus": self.event_bus.stats(),
             "gateway": self.gateway.stats(),
+            "module_registry": self.module_registry.stats(),
             "interfaces": {
                 "chart_provider": {
                     "version": CHART_PROVIDER_INTERFACE_VERSION,
