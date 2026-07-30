@@ -593,16 +593,29 @@ def _exception_code(exc: Exception) -> str:
     return "-".join(piece.lower() for piece in pieces) or "error"
 
 
-def command_center_module_registry() -> StaticModuleRegistry:
+def command_center_module_registry(
+    factories: Mapping[str, ModuleFactory] | None = None,
+    *,
+    chart_capabilities: Iterable[ChartCapability] | None = None,
+    media_capabilities: Iterable[MediaCapability] | None = None,
+) -> StaticModuleRegistry:
     """Catalogo oficial; los adaptadores permanecen sin factory y apagados."""
 
     chart_capabilities = frozenset(
         f"chart.{capability.value.replace('_', '-')}"
-        for capability in ChartCapability
+        for capability in (
+            ChartCapability
+            if chart_capabilities is None
+            else chart_capabilities
+        )
     )
     media_capabilities = frozenset(
         f"media.{capability.value.replace('_', '-')}"
-        for capability in MediaCapability
+        for capability in (
+            MediaCapability
+            if media_capabilities is None
+            else media_capabilities
+        )
     )
     return StaticModuleRegistry(
         (
@@ -620,5 +633,6 @@ def command_center_module_registry() -> StaticModuleRegistry:
                 permissions=frozenset({"media.read", "media.control"}),
                 allowed_roles=frozenset({"admin", "beta"}),
             ),
-        )
+        ),
+        factories,
     )
