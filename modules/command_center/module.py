@@ -31,6 +31,7 @@ from .media_surface import MediaCommandsDisabled, MediaSurfaceService
 from .market_ribbon import MarketRibbonService
 from .module_registry import command_center_module_registry
 from .operations import OperationContext
+from .positions_context import PositionsContextService
 from .qobuz_adapter import QobuzAdapter
 from .snapshot import (
     ConfiguredModulesProjection,
@@ -69,6 +70,7 @@ class CommandCenterModule(NexusModule):
             enabled_loader=self._ai_enabled,
         )
         self.bot_context = BotContextService()
+        self.positions_context = PositionsContextService()
         self._local_media_enabled = os.environ.get(
             "NEXUX_COMMAND_CENTER_MEDIA"
         ) in {"apple-music", "local"}
@@ -321,6 +323,42 @@ class CommandCenterModule(NexusModule):
                     error_document(
                         "ai-context.unavailable",
                         "No fue posible leer el contexto de IA.",
+                        502,
+                        retryable=True,
+                    ),
+                )
+        if subpath == "positions-context":
+            try:
+                from core.app import hub
+
+                journal = hub.modules_by_slug.get("journal")
+                bot = hub.modules_by_slug.get("bot")
+                if journal is None or bot is None:
+                    raise RuntimeError("position sources unavailable")
+                journal_response = journal.api("stats", {}, user=user)
+                bot_response = bot.api("state", {}, user=user)
+                journal_payload = self._module_json_payload(journal_response)
+                bot_payload = self._module_json_payload(
+                    bot_response,
+                    allow_forbidden=True,
+                )
+                return self._json(
+                    200,
+                    self.positions_context.project(
+                        journal_payload,
+                        bot_payload,
+                    ),
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(
+                    "command-center: posiciones Binance fallo "
+                    f"({type(exc).__name__})"
+                )
+                return self._json(
+                    502,
+                    error_document(
+                        "positions-context.unavailable",
+                        "No fue posible leer las posiciones abiertas.",
                         502,
                         retryable=True,
                     ),
@@ -626,6 +664,20 @@ class CommandCenterModule(NexusModule):
             },
             "surface": "visual-experimental",
         }
+
+    @staticmethod
+    def _module_json_payload(response, *, allow_forbidden: bool = False):
+        if response is None:
+            raise RuntimeError("module response unavailable")
+        status, _content_type, body = response
+        if allow_forbidden and status in {401, 403}:
+            return None
+        if status != 200:
+            raise RuntimeError(f"module response HTTP {status}")
+        payload = json.loads(body)
+        if not isinstance(payload, dict):
+            raise RuntimeError("module payload invalid")
+        return payload
 
     async def websocket(self, peer, user_loader) -> None:
         await self.gateway.handle(peer, user_loader)

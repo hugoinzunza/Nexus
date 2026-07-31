@@ -115,21 +115,38 @@
           </footer>
         </section>
 
-        <section class="ai-panel" aria-labelledby="ai-title">
+        <section class="positions-panel" aria-labelledby="positions-title">
           <header class="panel-header">
             <div>
-              <span class="eyebrow">Contexto de IA</span>
-              <h2 id="ai-title">Observación que merece atención</h2>
+              <span class="eyebrow">Binance · solo lectura</span>
+              <h2 id="positions-title">Posiciones abiertas</h2>
             </div>
             <span class="context-badge" data-state="unknown"
-              id="ai-severity">Unknown</span>
+              id="positions-state">Esperando</span>
           </header>
-          <p class="context-summary" id="ai-summary">
-            Sin observación contractual vigente.
-          </p>
-          <footer class="context-footer">
-            <span id="ai-source">IA inactiva</span>
-            <span id="ai-updated">Sin evaluación</span>
+          <div class="positions-accounts">
+            <section class="position-account" id="positions-principal">
+              <header>
+                <strong>Cuenta principal</strong>
+                <span data-account-pnl>--</span>
+              </header>
+              <div class="position-list" data-account-positions>
+                <span class="position-empty">Consultando Diario.</span>
+              </div>
+            </section>
+            <section class="position-account" id="positions-bot">
+              <header>
+                <strong>Cuenta Bot</strong>
+                <span data-account-pnl>--</span>
+              </header>
+              <div class="position-list" data-account-positions>
+                <span class="position-empty">Consultando Bot.</span>
+              </div>
+            </section>
+          </div>
+          <footer class="positions-footer">
+            <span id="positions-detail">Fuentes separadas por cuenta</span>
+            <span id="positions-updated">Sin lectura</span>
           </footer>
         </section>
 

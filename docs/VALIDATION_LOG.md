@@ -965,6 +965,39 @@ es opcional: sus fallos no degradan lectura ni controles.
 
 ---
 
+## VAL-0027 — Posiciones abiertas de Binance
+
+### Contexto
+
+El panel `Contexto de IA`, que permanecía inactivo, se sustituye por una
+proyección de solo lectura de las operaciones abiertas en la cuenta principal
+del usuario y en la cuenta secundaria del Bot.
+
+### Evidencia técnica
+
+- La cuenta principal reutiliza el estado del Diario correspondiente al usuario
+  autenticado; la cuenta Bot reutiliza su snapshot operacional existente.
+- Cada operación muestra símbolo, dirección, apalancamiento, entrada, mark,
+  PnL no realizado y ROE. Las pérdidas se ordenan primero para priorizar atención.
+- La vista no contiene controles de orden, cierre o modificación y el nuevo
+  servicio no lee llaves de Binance ni importa el ejecutor.
+- Los estados `stale` y `unavailable` permanecen visibles. Una ausencia de datos
+  frescos nunca se representa como una cuenta plana confirmada.
+- La llave de la cuenta principal continúa limitada a la IP del VPS. No se copió
+  ninguna credencial al Command Center ni al Mac.
+- Viewport 1920 × 992 validado con dos cuentas y una posición por cuenta, sin
+  desbordamiento ni modificación del layout general.
+- Wire ABI, EventBus, Gateway, registro, factories, Bot y producción permanecen
+  intactos.
+
+### Resolución
+
+**APROBADO técnicamente en local** y **PENDIENTE perceptualmente** en el Arzopa
+con posiciones reales. La frescura en local depende de recibir snapshots del
+VPS; sin ellos, el panel lo declara de forma explícita.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

@@ -161,18 +161,22 @@ def test_frontend_normaliza_unknown_sin_convertirlo_en_recomendacion() -> None:
     assert payload["valid"]["summary"] == "Revisar evidencia"
 
 
-def test_b5_agrega_un_solo_modulo_compacto_sin_controles() -> None:
+def test_b5_historico_sale_del_viewport_y_lo_reemplaza_posiciones() -> None:
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
 
-    assert page.count('class="ai-panel"') == 1
-    assert 'id="ai-summary"' in page
-    assert 'id="ai-severity"' in page
-    assert "/m/command-center/api/ai-context" in script
-    assert "new AiContextClient" in script
-    ai_markup = page.split('class="ai-panel"', 1)[1].split("</section>", 1)[0]
-    assert "<button" not in ai_markup
-    assert "<a " not in ai_markup
+    assert 'class="ai-panel"' not in page
+    assert 'id="ai-summary"' not in page
+    assert page.count('class="positions-panel"') == 1
+    assert 'id="positions-principal"' in page
+    assert 'id="positions-bot"' in page
+    assert "/m/command-center/api/positions-context" in script
+    assert "new PositionsContextClient" in script
+    positions_markup = page.split('class="positions-panel"', 1)[1].split(
+        '<section class="bot-context-panel"', 1
+    )[0]
+    assert "<button" not in positions_markup
+    assert "<a " not in positions_markup
     assert script.count('method: "POST"') == 1
     assert '"/m/command-center/api/media-command"' in script
     assert ".status-panel {\n  grid-column: 1 / -1;" in (

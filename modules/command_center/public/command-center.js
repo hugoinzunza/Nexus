@@ -8,6 +8,7 @@ const SNAPSHOT_URL = "/m/command-center/api/snapshot";
 const MACRO_URL = "/m/trading/api/dashboard?translate=0";
 const MARKET_RIBBON_URL = "/m/command-center/api/market-ribbon";
 const AI_CONTEXT_URL = "/m/command-center/api/ai-context";
+const POSITIONS_CONTEXT_URL = "/m/command-center/api/positions-context";
 const BOT_CONTEXT_URL = "/m/command-center/api/bot-context";
 const MEDIA_CONTEXT_URL = "/m/command-center/api/media-context";
 const MEDIA_COMMAND_URL = "/m/command-center/api/media-command";
@@ -345,6 +346,97 @@ export class AiContextClient {
       this.context = normalizeAiContext(await response.json());
     } catch {
       this.context = normalizeAiContext({ state: "degraded" });
+    }
+    this.onChange(this.context);
+  }
+}
+
+export function normalizePositionsContext(payload) {
+  const normalizeNumber = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+  const accounts = new Map(
+    (Array.isArray(payload?.accounts) ? payload.accounts : [])
+      .filter((account) => ["principal", "bot"].includes(account?.id))
+      .map((account) => [account.id, account]),
+  );
+  const normalizeAccount = (id, label) => {
+    const account = accounts.get(id) || {};
+    return {
+      id,
+      label: String(account.label || label).slice(0, 40),
+      environment: String(account.environment || "unknown").slice(0, 20),
+      state: ["ready", "stale", "failed", "unavailable"].includes(account.state)
+        ? account.state
+        : "unavailable",
+      detail: account.detail ? String(account.detail).slice(0, 80) : null,
+      ageSeconds: normalizeNumber(account.age_seconds),
+      totalPnl: normalizeNumber(account.total_pnl) ?? 0,
+      positions: (Array.isArray(account.positions) ? account.positions : [])
+        .slice(0, 12)
+        .map((position) => ({
+          symbol: String(position?.symbol || "Activo").slice(0, 24),
+          side: position?.side === "SHORT" ? "SHORT" : "LONG",
+          entry: normalizeNumber(position?.entry),
+          mark: normalizeNumber(position?.mark),
+          pnl: normalizeNumber(position?.pnl),
+          roe: normalizeNumber(position?.roe),
+          leverage: normalizeNumber(position?.leverage),
+        })),
+    };
+  };
+  return {
+    state: ["ready", "degraded"].includes(payload?.state)
+      ? payload.state
+      : "degraded",
+    generatedAtMs: normalizeNumber(payload?.generated_at_ms),
+    totalPositions: Math.max(0, Number(payload?.total_positions) || 0),
+    readOnly: payload?.read_only === true,
+    accounts: [
+      normalizeAccount("principal", "Cuenta principal"),
+      normalizeAccount("bot", "Cuenta Bot"),
+    ],
+  };
+}
+
+export class PositionsContextClient {
+  constructor({
+    contextUrl = POSITIONS_CONTEXT_URL,
+    fetcher = (...args) => fetch(...args),
+    onChange = () => {},
+  } = {}) {
+    this.contextUrl = contextUrl;
+    this.fetcher = fetcher;
+    this.onChange = onChange;
+    this.context = normalizePositionsContext(null);
+    this.refreshTimer = null;
+  }
+
+  async start() {
+    await this.refresh();
+    this.refreshTimer = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      this.refresh().catch(() => {});
+    }, 10_000);
+  }
+
+  stop() {
+    clearInterval(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+
+  async refresh() {
+    try {
+      const response = await this.fetcher(this.contextUrl, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`positions context HTTP ${response.status}`);
+      this.context = normalizePositionsContext(await response.json());
+    } catch {
+      this.context = normalizePositionsContext({ state: "degraded" });
     }
     this.onChange(this.context);
   }
@@ -1180,6 +1272,33 @@ function fixtureAiContext() {
   };
 }
 
+function fixturePositionsContext() {
+  return normalizePositionsContext({
+    state: "ready",
+    generated_at_ms: Date.now(),
+    total_positions: 2,
+    read_only: true,
+    accounts: [
+      {
+        id: "principal", label: "Cuenta principal", environment: "live",
+        state: "ready", total_pnl: 18.42,
+        positions: [{
+          symbol: "BTCUSDT", side: "LONG", entry: 64120.4, mark: 64502.1,
+          pnl: 18.42, roe: 6.8, leverage: 5,
+        }],
+      },
+      {
+        id: "bot", label: "Cuenta Bot", environment: "testnet",
+        state: "ready", total_pnl: -2.15,
+        positions: [{
+          symbol: "SOLUSDT", side: "SHORT", entry: 77.2, mark: 77.36,
+          pnl: -2.15, roe: -1.4, leverage: 5,
+        }],
+      },
+    ],
+  });
+}
+
 function fixtureBotContext() {
   return {
     state: "ready",
@@ -1459,6 +1578,88 @@ function renderAiContext(context) {
           { hour: "2-digit", minute: "2-digit" },
         )}`
       : "Sin evaluación";
+}
+
+function formatPositionNumber(value, { signed = false, suffix = "" } = {}) {
+  if (!Number.isFinite(value)) return "--";
+  const magnitude = Math.abs(value);
+  const digits = magnitude >= 1000 ? 1 : magnitude >= 10 ? 2 : 3;
+  const formatted = new Intl.NumberFormat("es-CL", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: 0,
+    signDisplay: signed ? "always" : "auto",
+  }).format(value);
+  return `${formatted}${suffix}`;
+}
+
+function renderPositionsContext(context) {
+  const badge = document.querySelector("#positions-state");
+  badge.dataset.state = context.state === "ready" ? "ready" : "degraded";
+  badge.textContent = context.totalPositions
+    ? `${context.totalPositions} abierta${context.totalPositions === 1 ? "" : "s"}`
+    : (context.state === "ready" ? "Sin posiciones" : "Revisar fuente");
+
+  for (const account of context.accounts) {
+    const root = document.querySelector(`#positions-${account.id}`);
+    if (!root) continue;
+    root.dataset.state = account.state;
+    const title = root.querySelector("strong");
+    title.textContent = account.label;
+    title.dataset.environment = account.environment;
+    const pnl = root.querySelector("[data-account-pnl]");
+    pnl.textContent = `${formatPositionNumber(account.totalPnl, { signed: true })} USDT`;
+    pnl.dataset.sign = account.totalPnl > 0 ? "positive" : (
+      account.totalPnl < 0 ? "negative" : "flat"
+    );
+    const list = root.querySelector("[data-account-positions]");
+    list.replaceChildren();
+    if (!account.positions.length) {
+      const empty = document.createElement("span");
+      empty.className = "position-empty";
+      empty.textContent = account.state === "ready"
+        ? `Sin operaciones · ${account.environment}`
+        : (account.detail || "Fuente no disponible");
+      list.append(empty);
+      continue;
+    }
+    for (const position of account.positions) {
+      const row = document.createElement("div");
+      row.className = "position-row";
+      const identity = document.createElement("div");
+      identity.className = "position-identity";
+      const symbol = document.createElement("strong");
+      symbol.textContent = position.symbol.replace(/USDT$/, "");
+      const side = document.createElement("span");
+      side.dataset.side = position.side.toLowerCase();
+      side.textContent = `${position.side === "LONG" ? "Long" : "Short"}${
+        position.leverage ? ` ${formatPositionNumber(position.leverage)}x` : ""
+      }`;
+      identity.append(symbol, side);
+      const prices = document.createElement("span");
+      prices.className = "position-prices";
+      prices.textContent = `E ${formatPositionNumber(position.entry)} · M ${formatPositionNumber(position.mark)}`;
+      const performance = document.createElement("div");
+      performance.className = "position-performance";
+      const positionPnl = document.createElement("strong");
+      positionPnl.dataset.sign = position.pnl > 0 ? "positive" : (
+        position.pnl < 0 ? "negative" : "flat"
+      );
+      positionPnl.textContent = `${formatPositionNumber(position.pnl, { signed: true })} USDT`;
+      const roe = document.createElement("span");
+      roe.textContent = `ROE ${formatPositionNumber(position.roe, { signed: true, suffix: "%" })}`;
+      performance.append(positionPnl, roe);
+      row.append(identity, prices, performance);
+      list.append(row);
+    }
+  }
+  document.querySelector("#positions-detail").textContent = context.readOnly
+    ? "Principal + Bot · solo lectura"
+    : "Fuente no confirmada";
+  document.querySelector("#positions-updated").textContent = context.generatedAtMs
+    ? `Leído ${new Date(context.generatedAtMs).toLocaleTimeString("es-CL", {
+        hour: "2-digit", minute: "2-digit",
+      })}`
+    : "Sin lectura";
 }
 
 function renderBotContext(context) {
@@ -1850,7 +2051,7 @@ export function bootstrap() {
     render(state);
     renderMacro(fixtureMacroState());
     renderMarketRibbon(fixtureMarketRibbonState());
-    renderAiContext(fixtureAiContext());
+    renderPositionsContext(fixturePositionsContext());
     renderBotContext(fixtureBotContext());
     renderMediaContext(fixtureMediaContext());
     wireMediaControls((action) => {
@@ -1899,8 +2100,8 @@ export function bootstrap() {
   const marketRibbonClient = new MarketRibbonClient({
     onChange: renderMarketRibbon,
   });
-  const aiContextClient = new AiContextClient({
-    onChange: renderAiContext,
+  const positionsContextClient = new PositionsContextClient({
+    onChange: renderPositionsContext,
   });
   const botContextClient = new BotContextClient({
     onChange: renderBotContext,
@@ -1917,7 +2118,7 @@ export function bootstrap() {
   window.__nexuxCommandCenter = client;
   window.__nexuxCommandCenterMacro = macroClient;
   window.__nexuxCommandCenterMarketRibbon = marketRibbonClient;
-  window.__nexuxCommandCenterAi = aiContextClient;
+  window.__nexuxCommandCenterPositions = positionsContextClient;
   window.__nexuxCommandCenterBot = botContextClient;
   window.__nexuxCommandCenterMedia = mediaContextClient;
   window.__nexuxCommandCenterHealth = healthClient;
@@ -1933,7 +2134,7 @@ export function bootstrap() {
   client.start().catch(() => {});
   macroClient.start().catch(() => {});
   marketRibbonClient.start().catch(() => {});
-  aiContextClient.start().catch(() => {});
+  positionsContextClient.start().catch(() => {});
   botContextClient.start().catch(() => {});
   mediaContextClient.start().catch(() => {});
   healthClient.start().catch(() => {});
@@ -1948,7 +2149,7 @@ export function bootstrap() {
     client.stop();
     macroClient.stop();
     marketRibbonClient.stop();
-    aiContextClient.stop();
+    positionsContextClient.stop();
     botContextClient.stop();
     mediaContextClient.stop();
     healthClient.stop();
