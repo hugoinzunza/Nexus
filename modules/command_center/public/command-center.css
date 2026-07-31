@@ -398,53 +398,98 @@ a:focus-visible {
   background: var(--surface-1);
 }
 
-.status-word {
+.status-panel {
+  background: var(--surface-2);
+}
+
+.readiness-overall {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
   color: var(--unknown);
-  font-size: var(--font-sm);
-  font-weight: 720;
+  font-size: var(--font-xs);
+  font-weight: 760;
+  text-transform: uppercase;
 }
 
-.primary-reading {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin: var(--space-5) 0;
+.readiness-overall[data-state="ready"] {
+  color: var(--success);
 }
 
-.primary-reading strong {
-  font-size: var(--font-display);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+.readiness-overall[data-state="degraded"] {
+  color: var(--warning);
 }
 
-.primary-reading span {
-  max-width: 150px;
+.readiness-overall[data-state="failed"] {
+  color: var(--danger);
+}
+
+.readiness-answer {
+  min-height: 20px;
+  margin: var(--space-3) 0;
   color: var(--text-2);
   font-size: var(--font-sm);
 }
 
-.signal-list {
+.readiness-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px var(--space-5);
   margin: 0;
-  border-top: 1px solid var(--border);
+  padding: var(--space-2) 0 0;
+  border-top: 1px solid var(--border-strong);
+  list-style: none;
 }
 
-.signal-list div {
+.readiness-item {
   display: flex;
+  min-width: 0;
+  min-height: 42px;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  min-height: 42px;
+  gap: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 
-.signal-list dt {
-  color: var(--text-2);
+.readiness-name {
+  overflow: hidden;
+  color: var(--text-1);
+  font-size: var(--font-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.signal-list dd {
-  margin: 0;
-  color: var(--text-1);
-  font-weight: 680;
+.readiness-state {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  color: var(--unknown);
+  font-size: var(--font-xs);
+  font-weight: 720;
+}
+
+.readiness-state::before {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.readiness-state[data-state="ready"] {
+  color: var(--success);
+}
+
+.readiness-state[data-state="degraded"] {
+  color: var(--warning);
+}
+
+.readiness-state[data-state="failed"] {
+  color: var(--danger);
 }
 
 .impact-badge {

@@ -603,6 +603,61 @@ Sprint B3 autorizado.
 
 ---
 
+## VAL-0019 — Línea B Sprint B3 · Preparación operacional
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Hardware | ARZOPA, 1920 × 1080 @ 60 Hz |
+| Viewport observado | Chrome 1920 × 936 durante control remoto |
+| Pregunta | ¿Está el núcleo listo para trabajar? |
+| Superficies nuevas | 1 módulo; reemplaza el contenido del panel existente |
+
+### Semántica
+
+El estado general depende exclusivamente de cinco servicios esenciales:
+Gateway, EventBus, Snapshot, Internet y Trading. Agente macOS, Apple Music e IA
+se muestran como opcionales `Unknown` hasta disponer de telemetría productiva.
+No se derivan estados de documentación, harnesses ni capacidades declaradas.
+
+`Ready` significa que el núcleo requerido para analizar está disponible. No
+significa que el bot live, IA o automatizaciones locales estén habilitados.
+
+### Evidencia técnica
+
+- Estado real: cinco esenciales `Ready`; tres opcionales `Unknown`; resultado
+  general `Ready`.
+- Fixture degradado: Gateway y Trading `Degraded`; resultado `Degraded`.
+- Fixture desconectado: Gateway, EventBus e Internet `Failed`; resultado
+  `Failed`.
+- Trading con más de 30 s sin actualización se degrada; con más de 120 s falla.
+- Snapshot stale degrada y expired falla.
+- La superficie conserva el track superior derecho de B2.
+- Viewport 1920 × 936 sin overflow horizontal ni vertical.
+- TradingView y el contexto macro permanecen sin cambios funcionales.
+- La lectura operacional usa únicamente GET sobre `/health`.
+
+### Evidencia visual
+
+- `docs/evidence/command-center-b3-arzopa-physical.png`
+
+### Restricciones preservadas
+
+- Wire ABI, fingerprint, EventBus, Gateway y runtime sin modificaciones.
+- Cero factories productivas.
+- Sin POST, comandos, noticias, clima ni widgets decorativos.
+- Sin merge a `main`, Railway o producción.
+
+### Conclusión
+
+**APROBADO técnicamente** y **PENDIENTE perceptualmente**. Hugo debe confirmar
+desde 80–90 cm que la lista de ocho estados se comprende en aproximadamente dos
+segundos y no compite con TradingView ni con el próximo evento macro.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

@@ -77,32 +77,20 @@
       </section>
 
       <aside class="context-rail" aria-label="Contexto operativo">
-        <section class="status-panel" aria-labelledby="system-title">
+        <section class="status-panel" aria-labelledby="readiness-title">
           <header class="panel-header">
             <div>
-              <span class="eyebrow">Sistema</span>
-              <h2 id="system-title">Conciencia situacional</h2>
+              <span class="eyebrow">Ecosistema NexUX</span>
+              <h2 id="readiness-title">Preparación operacional</h2>
             </div>
-            <span class="status-word" id="system-word">Esperando</span>
+            <span class="readiness-overall" data-state="unknown"
+              id="readiness-overall">Unknown</span>
           </header>
-          <div class="primary-reading">
-            <strong id="primary-value">--</strong>
-            <span id="primary-label">fuentes disponibles</span>
-          </div>
-          <dl class="signal-list">
-            <div>
-              <dt>Snapshot</dt>
-              <dd id="snapshot-state">Pendiente</dd>
-            </div>
-            <div>
-              <dt>Gateway</dt>
-              <dd id="gateway-state">Desconectado</dd>
-            </div>
-            <div>
-              <dt>Frescura</dt>
-              <dd id="freshness-state">Desconocida</dd>
-            </div>
-          </dl>
+          <p class="readiness-answer" id="readiness-answer">
+            Verificando servicios esenciales.
+          </p>
+          <ul class="readiness-list" id="readiness-list"
+            aria-label="Estado de servicios operacionales"></ul>
         </section>
 
         <section class="macro-panel" aria-labelledby="macro-title">

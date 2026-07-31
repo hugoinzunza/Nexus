@@ -6,6 +6,7 @@ export const CONTRACT_FINGERPRINT =
 
 const SNAPSHOT_URL = "/m/command-center/api/snapshot";
 const MACRO_URL = "/m/trading/api/dashboard?translate=0";
+const HEALTH_URL = "/health";
 const WS_PATH = "/m/command-center/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 15000];
 const FIXTURE_STATES = new Set([
@@ -132,6 +133,179 @@ export class MacroContextClient {
     }
     this.onChange(this.state());
   }
+}
+
+export class OperationalHealthClient {
+  constructor({
+    healthUrl = HEALTH_URL,
+    fetcher = (...args) => fetch(...args),
+    onChange = () => {},
+    now = () => Date.now(),
+  } = {}) {
+    this.healthUrl = healthUrl;
+    this.fetcher = fetcher;
+    this.onChange = onChange;
+    this.now = now;
+    this.status = "loading";
+    this.health = null;
+    this.checkedAt = null;
+    this.error = null;
+    this.refreshTimer = null;
+  }
+
+  state() {
+    return {
+      status: this.status,
+      health: this.health,
+      checkedAt: this.checkedAt,
+      error: this.error,
+    };
+  }
+
+  async start() {
+    await this.refresh();
+    this.refreshTimer = setInterval(() => {
+      this.refresh().catch(() => {});
+    }, 15_000);
+  }
+
+  stop() {
+    clearInterval(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+
+  async refresh() {
+    try {
+      const response = await this.fetcher(this.healthUrl, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`health HTTP ${response.status}`);
+      this.health = await response.json();
+      this.status = "ready";
+      this.checkedAt = this.now();
+      this.error = null;
+    } catch (error) {
+      this.status = this.health ? "degraded" : "failed";
+      this.error = error?.message || "health no disponible";
+    }
+    this.onChange(this.state());
+  }
+}
+
+const READINESS_LABELS = {
+  ready: "Ready",
+  degraded: "Degraded",
+  failed: "Failed",
+  unknown: "Unknown",
+};
+
+const REQUIRED_READINESS_IDS = new Set([
+  "gateway",
+  "event-bus",
+  "snapshot",
+  "internet",
+  "trading",
+]);
+
+function normalizeServiceState(value) {
+  if (value === "ready" || value === "ok") return "ready";
+  if (value === "degraded" || value === "degradado") return "degraded";
+  if (value === "failed" || value === "closed" || value === "error") {
+    return "failed";
+  }
+  return "unknown";
+}
+
+function moduleBySlug(health, slug) {
+  return (Array.isArray(health?.modules) ? health.modules : []).find(
+    (module) => module?.slug === slug,
+  );
+}
+
+export function deriveOperationalReadiness({
+  commandState,
+  healthState,
+  online = true,
+  now = Date.now(),
+}) {
+  const health = healthState?.health;
+  const commandCenter = moduleBySlug(health, "command-center");
+  const trading = moduleBySlug(health, "trading");
+  const registryModules = commandCenter?.module_registry?.modules || [];
+  const media = registryModules.find(
+    (module) => module?.module_id === "media.controller",
+  );
+
+  const freshness = worstFreshness(commandState?.readModel || {}, now);
+  const snapshot = !commandState?.snapshotAt
+    ? "unknown"
+    : freshness === "expired"
+      ? "failed"
+      : freshness === "stale"
+        ? "degraded"
+        : "ready";
+  const gateway = {
+    ready: "ready",
+    degraded: "degraded",
+    stale: "degraded",
+    expired: "failed",
+    disconnected: "failed",
+    loading: "unknown",
+  }[commandState?.connection] || "unknown";
+
+  let tradingState = normalizeServiceState(trading?.status);
+  if (trading?.upstream_ok === false) tradingState = "degraded";
+  if (trading?.upstream_ok === true && tradingState === "ready") {
+    const age = now - Number(trading?.last_update_ms || 0);
+    if (!Number.isFinite(age) || age > 120_000) tradingState = "failed";
+    else if (age > 30_000) tradingState = "degraded";
+  }
+
+  const healthAvailable = healthState?.status === "ready";
+  const services = [
+    { id: "gateway", name: "Gateway", state: gateway },
+    {
+      id: "event-bus",
+      name: "EventBus",
+      state: normalizeServiceState(commandCenter?.event_bus?.status),
+    },
+    { id: "snapshot", name: "Snapshot", state: snapshot },
+    {
+      id: "internet",
+      name: "Internet",
+      state:
+        online === false
+          ? "failed"
+          : healthAvailable && trading?.upstream_ok === true
+            ? "ready"
+            : healthState?.status === "degraded"
+              ? "degraded"
+              : "unknown",
+    },
+    { id: "trading", name: "Trading", state: tradingState },
+    { id: "agent", name: "Agente macOS", state: "unknown" },
+    {
+      id: "music",
+      name: "Apple Music",
+      state: media?.factory_attached
+        ? normalizeServiceState(media.lifecycle)
+        : "unknown",
+    },
+    { id: "ai", name: "IA", state: "unknown" },
+  ];
+  const required = services.filter((service) =>
+    REQUIRED_READINESS_IDS.has(service.id),
+  );
+  const overall = required.some((service) => service.state === "failed")
+    ? "failed"
+    : required.some(
+        (service) =>
+          service.state === "degraded" || service.state === "unknown",
+      )
+      ? "degraded"
+      : "ready";
+  return { overall, services };
 }
 
 export function reduceEnvelope(readModel, cursors, envelope) {
@@ -522,6 +696,40 @@ function fixtureMacroState() {
   };
 }
 
+function fixtureHealthState(name) {
+  const coreState =
+    name === "disconnected" || name === "expired" ? "closed" : "ready";
+  return {
+    status: name === "disconnected" ? "failed" : "ready",
+    health: {
+      status: name === "disconnected" ? "error" : "ok",
+      modules: [
+        {
+          slug: "trading",
+          status: name === "degraded" ? "degradado" : "ok",
+          upstream_ok: name !== "degraded",
+          last_update_ms: Date.now(),
+        },
+        {
+          slug: "command-center",
+          event_bus: { status: coreState },
+          module_registry: {
+            modules: [
+              {
+                module_id: "media.controller",
+                factory_attached: false,
+                lifecycle: "declared",
+              },
+            ],
+          },
+        },
+      ],
+    },
+    checkedAt: Date.now(),
+    error: null,
+  };
+}
+
 function worstFreshness(readModel, now) {
   const rank = { live: 0, current: 0, unknown: 1, stale: 2, expired: 3 };
   return Object.values(readModel).reduce((worst, envelope) => {
@@ -589,20 +797,6 @@ function render(state) {
 
   const modules =
     readModel["system.modules"]?.payload?.data?.modules || [];
-  document.querySelector("#primary-value").textContent =
-    effectiveSeverity === "normal" ? "OK" : "—";
-  document.querySelector("#primary-label").textContent =
-    effectiveSeverity === "normal"
-      ? "plataforma disponible"
-      : "requiere atención";
-  document.querySelector("#system-word").textContent =
-    effectiveSeverity === "normal" ? "Estable" : label(operational);
-  document.querySelector("#snapshot-state").textContent = state.snapshotAt
-    ? "Disponible"
-    : "Pendiente";
-  document.querySelector("#gateway-state").textContent =
-    state.connection === "ready" ? "Conectado" : label(state.connection);
-  document.querySelector("#freshness-state").textContent = label(freshness);
   document.querySelector("#subject-state").textContent = state.subject
     ? `Sesión ${state.subject.replace("user:", "")}`
     : "Sesión pendiente";
@@ -621,6 +815,36 @@ function render(state) {
 
   document.querySelector("#resync-button").disabled =
     state.resyncing || state.connection === "loading";
+}
+
+function renderOperationalReadiness(readiness) {
+  const overall = document.querySelector("#readiness-overall");
+  overall.dataset.state = readiness.overall;
+  overall.textContent = READINESS_LABELS[readiness.overall];
+  const answers = {
+    ready: "El núcleo necesario para analizar está disponible.",
+    degraded: "Puede trabajar, pero hay servicios esenciales degradados.",
+    failed: "La plataforma no está preparada para trabajar.",
+    unknown: "Aún no hay evidencia suficiente para responder.",
+  };
+  document.querySelector("#readiness-answer").textContent =
+    answers[readiness.overall];
+  const list = document.querySelector("#readiness-list");
+  list.replaceChildren(
+    ...readiness.services.map((service) => {
+      const item = document.createElement("li");
+      item.className = "readiness-item";
+      const name = document.createElement("span");
+      name.className = "readiness-name";
+      name.textContent = service.name;
+      const state = document.createElement("span");
+      state.className = "readiness-state";
+      state.dataset.state = service.state;
+      state.textContent = READINESS_LABELS[service.state];
+      item.append(name, state);
+      return item;
+    }),
+  );
 }
 
 function renderMacro(state) {
@@ -719,23 +943,67 @@ export function bootstrap() {
     const state = fixtureState(fixture);
     render(state);
     renderMacro(fixtureMacroState());
+    renderOperationalReadiness(
+      deriveOperationalReadiness({
+        commandState: state,
+        healthState: fixtureHealthState(fixture),
+        online: fixture !== "disconnected",
+      }),
+    );
     document.querySelector("#resync-button").disabled = true;
     return;
   }
 
-  const client = new CommandCenterClient({ onChange: render });
+  let commandState = null;
+  let operationalHealthState = {
+    status: "loading",
+    health: null,
+    checkedAt: null,
+    error: null,
+  };
+  const paintReadiness = () => {
+    renderOperationalReadiness(
+      deriveOperationalReadiness({
+        commandState,
+        healthState: operationalHealthState,
+        online: navigator.onLine,
+      }),
+    );
+  };
+  const client = new CommandCenterClient({
+    onChange: (state) => {
+      commandState = state;
+      render(state);
+      paintReadiness();
+    },
+  });
   const macroClient = new MacroContextClient({ onChange: renderMacro });
+  const healthClient = new OperationalHealthClient({
+    onChange: (state) => {
+      operationalHealthState = state;
+      paintReadiness();
+    },
+  });
   window.__nexuxCommandCenter = client;
   window.__nexuxCommandCenterMacro = macroClient;
+  window.__nexuxCommandCenterHealth = healthClient;
   document
     .querySelector("#resync-button")
     .addEventListener("click", () => client.resync());
   client.start().catch(() => {});
   macroClient.start().catch(() => {});
-  setInterval(() => render(client.state()), 1000);
+  healthClient.start().catch(() => {});
+  setInterval(() => {
+    commandState = client.state();
+    render(commandState);
+    paintReadiness();
+  }, 1000);
+  window.addEventListener("online", paintReadiness);
+  window.addEventListener("offline", paintReadiness);
   window.addEventListener("beforeunload", () => {
     client.stop();
     macroClient.stop();
+    healthClient.stop();
   });
 }
 

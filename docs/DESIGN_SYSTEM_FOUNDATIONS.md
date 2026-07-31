@@ -1,6 +1,6 @@
 # NEXUX Command Center — Design System Foundations
 
-- **Estado:** Base B2 perceptualmente aprobada; Sprint B3 autorizado
+- **Estado:** Base B2 perceptualmente aprobada; Sprint B3 candidato técnico
 - **Versión:** 0.2
 - **Fecha:** 2026-07-30
 - **Superficie objetivo:** ARZOPA 1920 × 1080, luminancia relativa limitada
@@ -103,3 +103,13 @@ moderadamente la separación tonal y la intensidad semántica para compensar la
 luminancia relativa del Arzopa. VAL-0018 aprobó perceptualmente estos tokens.
 B3 puede estudiar mayor saturación de estados, pero no debe reemplazar esta base
 sin nueva evidencia física.
+
+## 8. Extensión B3
+
+B3 no cambia los tokens de color. Refuerza el panel operacional con
+`--surface-2` y utiliza puntos de 9 px junto con texto explícito. El color no es
+la única señal: `Ready`, `Degraded`, `Failed` y `Unknown` siempre permanecen
+escritos.
+
+El panel ocupa el mismo track de B2 y distribuye ocho servicios en dos columnas.
+Esta densidad queda como candidata hasta la validación perceptual VAL-0019.

@@ -90,6 +90,25 @@ El módulo y la pregunta concreta de B3 deben seleccionarse antes de implementar
 Continúan bloqueados los cambios al Wire ABI, EventBus, Gateway, factories y
 producción.
 
+La implementación candidata reemplaza el contenido del panel superior derecho,
+sin crear una cuarta superficie. Responde **¿está el núcleo listo para
+trabajar?** con cuatro estados: `Ready`, `Degraded`, `Failed` y `Unknown`.
+
+Los servicios esenciales son Gateway, EventBus, Snapshot, Internet y Trading.
+`Ready` exige evidencia positiva de los cinco. Trading se degrada después de
+30 segundos sin actualización y falla después de 120 segundos. Internet usa
+como evidencia conjunta la conectividad del navegador y un upstream de Trading
+operativo; no se presenta como medidor de calidad de red.
+
+Agente macOS, Apple Music e IA son integraciones opcionales en esta fase. No
+bloquean el estado general, pero permanecen visibles como `Unknown` mientras no
+exista telemetría productiva. Haber superado un harness o un smoke técnico no
+equivale a estar conectado.
+
+La lectura usa `GET /health` y el estado contractual existente. No agrega
+endpoints, topics, envelopes, comandos ni factories. VAL-0019 debe validar
+perceptualmente que ocho estados compactos no aumenten la carga cognitiva.
+
 ### Fase A.5 — Integraciones headless
 
 Línea A arquitectónicamente completa permanece cerrada. A.5 incorpora
