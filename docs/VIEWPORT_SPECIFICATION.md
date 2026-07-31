@@ -1,7 +1,7 @@
 # NEXUX Command Center — Viewport Specification
 
-- **Estado:** Fase -1A completada; pendiente validación física
-- **Versión:** 0.1
+- **Estado:** Fase -1B activa; inventario técnico verificado
+- **Versión:** 0.2
 - **Fecha:** 2026-07-30
 - **Propósito:** definir y validar el entorno físico donde vivirá el Command Center
 
@@ -40,16 +40,26 @@ hardware.
 | Monitor principal | Verificado | TCL 34R83Q |
 | Resolución principal | Verificado | 3440 × 1440 |
 | Frecuencia principal | Verificado | 170 Hz |
-| Monitor secundario | Objetivo | Pantalla horizontal de 14 pulgadas |
-| Resolución secundaria | Hipótesis | 1920 × 1080 nativa |
-| Posición secundaria | Objetivo | Bajo el monitor principal y centrada con el usuario |
+| Monitor secundario | Verificado | ARZOPA, panel horizontal de aproximadamente 14 pulgadas |
+| Identificación EDID | Verificado | Vendor `1ee4`, producto `0140`, serie `89610209`, fabricación semana 17 de 2025 |
+| Área física informada | Verificado | 310 × 170 mm; diagonal calculada de 13,92 pulgadas |
+| Resolución secundaria | Verificado | 1920 × 1080 nativa y efectiva |
+| Densidad calculada | Verificado | Aproximadamente 158 PPI |
+| Posición física secundaria | Verificado | Bajo el monitor principal como superficie de monitoreo |
+| Disposición macOS | Verificado | A la izquierda del principal: origen lógico `(-1920, 0)` |
 | Inclinación secundaria | Hipótesis | Aproximadamente 30° hacia el usuario |
-| Modelo, panel y acabado | Pendiente | Se registrarán con el monitor conectado |
-| Escalado efectivo | Pendiente | Se medirá en macOS y en el navegador |
-| Frecuencia secundaria | Pendiente | Se detectará con el monitor conectado |
+| Escalado efectivo | Verificado | 1:1; bounds y pixels coinciden en 1920 × 1080 |
+| Frecuencia secundaria | Verificado | 60 Hz |
+| Rotación | Verificado | 0°, horizontal |
+| Conexión | Verificado | USB-C al Mac mini |
+| Brillo relativo | Observación | Menor luminancia percibida que el TCL MiniLED |
 
 La resolución nativa no equivale al viewport útil. El producto se diseñará contra
 el viewport CSS medido con el shell, navegador y escala reales.
+
+La posición lógica de macOS no coincide todavía con la posición física descrita.
+No bloquea el prototipo, pero debe corregirse o justificarse antes de validar
+movimiento del cursor entre pantallas.
 
 ## 4. Ergonomía objetivo
 
@@ -203,13 +213,13 @@ La calibración comprobará que un estado, un modo y una anomalía puedan recono
 en menos de dos segundos sin inclinarse ni recorrer toda la pantalla. No se
 evaluará estética ni preferencia.
 
-El primer mockup posterior a la Fase -1B deberá repetir la prueba con contenido
-realista. Esa prueba de producto es un gate de experiencia, no parte del cierre
-ergonómico.
+La shell experimental B1 repetirá la prueba con contenido realista. Esa prueba de
+producto es un gate de experiencia, no parte del cierre ergonómico, y no aprueba
+por sí sola el diseño.
 
 ### 7.4 Criterios de aprobación
 
-No se inicia el mockup hasta que:
+No se aprueba ni promueve la shell experimental hasta que:
 
 - el viewport útil real esté registrado;
 - la geometría física y el ángulo de mirada estén registrados;
@@ -224,13 +234,13 @@ No se inicia el mockup hasta que:
 
 | Campo | Resultado |
 |---|---|
-| Fecha | Pendiente |
-| Monitor secundario | Pendiente |
-| Resolución nativa | Pendiente |
-| Escalado macOS | Pendiente |
-| Viewport CSS útil | Pendiente |
-| `devicePixelRatio` | Pendiente |
-| Frecuencia | Pendiente |
+| Fecha | 2026-07-30 |
+| Monitor secundario | ARZOPA, EDID 2025-W17, aproximadamente 14 pulgadas |
+| Resolución nativa | 1920 × 1080 |
+| Escalado macOS | 1:1; 1920 × 1080 puntos sobre 1920 × 1080 píxeles |
+| Viewport CSS útil | 1920 × 992 en Chrome sobre el Arzopa; 1920 × 1080 en harness sin chrome |
+| `devicePixelRatio` | 1.00, medido por la shell |
+| Frecuencia | 60 Hz |
 | Distancia de observación | Pendiente |
 | Ángulo de mirada | Pendiente |
 | Inclinación del panel | Pendiente |
@@ -241,6 +251,10 @@ No se inicia el mockup hasta que:
 | Densidad máxima provisional | Pendiente |
 | Regla neutral de dos segundos | Pendiente |
 
+El inventario se obtuvo mediante `system_profiler` y CoreGraphics. Las mediciones
+ergonómicas y perceptuales permanecen pendientes porque requieren observación
+física; no se infieren desde EDID ni desde capturas.
+
 ## 9. Fuentes normativas
 
 - [OSHA — Computer Workstations: Monitors](https://www.osha.gov/etools/computer-workstations/components/monitors)
@@ -250,4 +264,3 @@ No se inicia el mockup hasta que:
 
 Estas fuentes entregan límites generales. La aprobación del producto depende además
 de la medición física del escritorio y de la validación directa del usuario.
-

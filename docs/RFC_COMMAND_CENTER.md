@@ -1,14 +1,13 @@
 # RFC: NEXUX Command Center
 
-- **Estado:** Aceptado; Línea A cerrada, Fase A.5 activa y Línea B condicionada
-  a la Fase -1B
+- **Estado:** Aceptado; Línea A cerrada, Fase A.5 activa y Línea B Sprint B1
+  en validación
 - **Versión:** 1.2.2
 - **Fecha:** 2026-07-30
 - **Autoría:** Codex, a partir del Product Vision Document, el repositorio actual
   y la revisión de arquitectura posterior
-- **Decisión:** autoriza infraestructura headless verificable; no autoriza
-  decisiones visuales, mockups ni despliegue de producción antes de completar la
-  Fase -1B
+- **Decisión:** autoriza el Sprint B1 visual sobre el Arzopa medido; factories,
+  decisiones irreversibles y despliegue de producción permanecen bloqueados
 - **Documento rector de producto:** `docs/PRODUCT_CHARTER.md`
 - **Especificación física:** `docs/VIEWPORT_SPECIFICATION.md`
 
@@ -24,9 +23,29 @@ Al 2026-07-30, Línea A completó y validó:
 - registro estático y harness de conformidad;
 - primer adaptador real mediante el TradingView Adapter Spike.
 
-Este estado no activa factories productivas ni autoriza decisiones de Línea B.
-Los adaptadores adicionales requieren autorización específica y deben conservar
-las mismas fronteras contractuales.
+Este estado no activa factories productivas. Los adaptadores adicionales
+requieren autorización específica y deben conservar las mismas fronteras
+contractuales.
+
+### Línea B — Sprint B1
+
+El monitor ARZOPA está conectado y medido en `1920 × 1080 @ 60 Hz`, escala 1:1.
+Línea B queda abierta exclusivamente para foundations visuales, una shell
+experimental y validación en ese hardware.
+
+La shell consume el snapshot y Gateway existentes, representa `loading`, `ready`,
+`degraded`, `stale`, `expired` y `disconnected`, y puede montar el spike público
+de TradingView. No contiene lógica de dominio, comandos ni factories.
+
+Las proyecciones estáticas actuales no avanzan secuencia en el EventBus. Para
+evitar que una sesión conectada expire por falta de eventos, el cliente renueva
+el snapshot HTTP antes de `stale_at` y reconcilia de forma monotónica: mayor
+secuencia prevalece y, a igual secuencia, prevalece el `observed_at` más reciente.
+Los huecos de secuencia continúan usando el resync contractual del Gateway.
+
+La shell B1 no constituye diseño definitivo. Distancia, ángulo, brillo
+diurno/nocturno, legibilidad y regla de los dos segundos siguen siendo gates
+físicos pendientes.
 
 ### Fase A.5 — Integraciones headless
 
@@ -38,8 +57,9 @@ OAuth, tokens y APIs externas detrás de las interfaces congeladas. Incluye
 pruebas de conformidad, observabilidad, degradación, recuperación y validación
 técnica del proveedor.
 
-Permanecen bloqueados layout, mockups, tipografía, paleta, dimensiones, densidad,
-composición de widgets, aprobación visual, factories productivas y despliegues.
+En A.5 permanecen bloqueadas factories productivas y despliegues. Las decisiones
+visuales experimentales pertenecen exclusivamente a Línea B y no modifican los
+contratos headless.
 
 El primer incremento seleccionado es Apple Music, conforme al orden del RFC. Su
 adaptador debe funcionar headless, superar `MediaController` y mantener todos
@@ -777,12 +797,14 @@ La validación física y la infraestructura avanzan como líneas paralelas:
 - **Línea A — Infraestructura headless:** puede producir comportamiento
   verificable, contratos, eventos, seguridad, adaptadores, reconexión, degradación
   y pruebas.
-- **Línea B — Experiencia visual:** permanece bloqueada hasta completar la Fase
-  -1B.
+- **Línea B — Experiencia visual:** Sprint B1 autorizado sobre el hardware ya
+  inventariado; su aprobación permanece condicionada a completar las mediciones
+  perceptuales de la Fase -1B.
 
-La Línea A no puede aprobar apariencia, layout, dimensiones, tipografía, densidad,
-jerarquía, paleta ni composición. Fixtures, adaptadores falsos y estados simulados
-sirven para probar comportamiento, no UX.
+La Línea A no aprueba apariencia, layout, dimensiones, tipografía, densidad,
+jerarquía, paleta ni composición. Línea B puede proponerlos de forma experimental
+y solo la evidencia física puede aprobarlos. Fixtures y estados simulados prueban
+comportamiento; no sustituyen la UX sobre el monitor real.
 
 ### Fase 0 — Spikes y contratos
 
@@ -797,11 +819,13 @@ Entregables headless autorizados:
 - esquema de widget manifest;
 - estados y primitivas headless sin estilo definitivo.
 
-Entregables visuales bloqueados:
+Entregables visuales habilitados solo como experimento B1:
 
 - tokens visuales, grid, tipografía, espaciado y densidad;
 - baseline de CPU/RAM en el viewport secundario validado;
 - wireframes y mockups.
+
+Su aprobación definitiva continúa bloqueada por el Experience Gate.
 
 Infrastructure Gate:
 
@@ -831,11 +855,13 @@ Entregables headless autorizados:
 - suscripción por topics;
 - secuencias, heartbeat, backoff y resync.
 
-Entregables visuales bloqueados:
+Entregables visuales habilitados solo como experimento B1:
 
 - shell visual del Command Center;
 - representación visual del estado general;
 - layout fijo para el viewport secundario validado y el ultrawide.
+
+El layout del ultrawide y cualquier promoción productiva siguen fuera de B1.
 
 Infrastructure Gate:
 

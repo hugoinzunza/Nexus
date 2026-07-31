@@ -438,6 +438,64 @@ de uso. Factory productiva, despliegue y Línea B continúan bloqueados.
 
 ---
 
+## VAL-0017 — Línea B Sprint B1 · Shell sobre ARZOPA
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Hardware | ARZOPA, 1920 × 1080 @ 60 Hz, 310 × 170 mm |
+| Escala | macOS 1:1; DPR 1.00 |
+| Viewport real | Chrome 1920 × 992 |
+| Posición física | Bajo el monitor principal |
+| Posición lógica | Izquierda, bounds `(-1920, 0, 1920, 1080)` |
+| Datos | Snapshot/Gateway reales y fixtures contractuales rotulados |
+
+### Evidencia técnica
+
+- Snapshot HTTP y Gateway WebSocket autenticado reconstruyen la sesión local.
+- Ocho módulos configurados aparecen sin activar factories.
+- Estados `loading`, `ready`, `degraded`, `stale`, `expired` y `disconnected`
+  poseen representación explícita.
+- Fixture degraded: banda warning, sin overflow a 1920 × 1080.
+- Fixture expired: banda critical y prohibición textual de usar el contexto.
+- TradingView montó un iframe real; latencia observada entre 609 y 2621 ms.
+- Validación compacta 1280 × 800 sin overflow horizontal.
+- Contraste automatizado ≥4.5:1 para textos y estados sobre la superficie base.
+
+### Hallazgo y corrección
+
+El primer smoke físico mostró `expired` con Gateway conectado. El EventBus
+conservaba un checkpoint válido pero antiguo para topics estáticos sin publisher.
+El resync por sí solo no podía actualizar su `observed_at`.
+
+La shell ahora renueva por HTTP antes de `stale_at` y reconcilia snapshots
+monotónicamente. Después de 32 segundos, `snapshot_at` avanzó y el estado
+permaneció `ready`. Los gaps de secuencia siguen usando resync del Gateway.
+
+### Evidencia visual
+
+- `docs/evidence/command-center-b1-arzopa-physical.png`
+- `docs/evidence/command-center-b1-ready-1920x1080.png`
+- `docs/evidence/command-center-b1-expired-1920x1080.png`
+
+### Restricciones preservadas
+
+- Wire ABI y fingerprint intactos.
+- Cero factories productivas.
+- Sin POST, comandos multimedia, bot ni lógica de dominio.
+- Sin merge a `main`, Railway o producción.
+
+### Conclusión
+
+**INCONCLUSO** como gate perceptual y **APROBADO** como candidato técnico B1.
+La ejecución en el hardware real está demostrada. Distancia, ángulo, inclinación,
+brillo día/noche, tamaños legibles y regla de los dos segundos requieren
+observación física del usuario antes de iniciar B2.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

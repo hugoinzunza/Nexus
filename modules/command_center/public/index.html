@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#101316">
+  <link rel="icon" href="/static/icons/nexux-favicon-v5.ico">
+  <link rel="stylesheet" href="./command-center.css">
+  <title>NexUX Command Center</title>
+</head>
+<body>
+  <div class="app-shell" id="app">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="NexUX">
+        <img src="/static/icons/nexux-favicon-64.png" alt="" width="30" height="30">
+        <span>Nex<span class="brand-accent">UX</span></span>
+      </a>
+      <div class="surface-title">
+        <strong>Command Center</strong>
+        <span>Arzopa · experimental</span>
+      </div>
+      <div class="topbar-status">
+        <span class="mode-flag" id="data-origin">Datos reales</span>
+        <span class="connection-state" data-state="loading" id="connection-state">
+          <i aria-hidden="true"></i>
+          <span>Cargando</span>
+        </span>
+        <time id="clock" aria-label="Hora local">--:--</time>
+      </div>
+    </header>
+
+    <section class="attention-band" data-severity="unknown" id="attention-band"
+      aria-live="polite">
+      <div class="attention-mark" aria-hidden="true"></div>
+      <div>
+        <span class="eyebrow">Estado inmediato</span>
+        <strong id="attention-title">Conectando con NexUX</strong>
+      </div>
+      <p id="attention-detail">Esperando el snapshot inicial.</p>
+      <button class="icon-button" id="resync-button" type="button"
+        title="Sincronizar de nuevo" aria-label="Sincronizar de nuevo">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 7v5h-5M4 17v-5h5M6.1 9a7 7 0 0 1 11.5-2.4L20 9M4 15l2.4 2.4A7 7 0 0 0 17.9 15"/>
+        </svg>
+      </button>
+    </section>
+
+    <main class="workspace">
+      <section class="chart-region" aria-labelledby="market-title">
+        <header class="region-header">
+          <div>
+            <span class="eyebrow">Mercado</span>
+            <h1 id="market-title">BTCUSDT <span>· 1H</span></h1>
+          </div>
+          <span class="source-label">TradingView · spike</span>
+        </header>
+        <div class="chart-stage" id="chart-target">
+          <div class="chart-placeholder">
+            <span>TradingView</span>
+            <small>Montando proveedor</small>
+          </div>
+        </div>
+        <footer class="chart-footer">
+          <span id="chart-health">Proveedor desconectado</span>
+          <span id="chart-latency">Montaje pendiente</span>
+        </footer>
+      </section>
+
+      <aside class="context-rail" aria-label="Contexto operativo">
+        <section class="status-panel" aria-labelledby="system-title">
+          <header class="panel-header">
+            <div>
+              <span class="eyebrow">Sistema</span>
+              <h2 id="system-title">Conciencia situacional</h2>
+            </div>
+            <span class="status-word" id="system-word">Esperando</span>
+          </header>
+          <div class="primary-reading">
+            <strong id="primary-value">--</strong>
+            <span id="primary-label">fuentes disponibles</span>
+          </div>
+          <dl class="signal-list">
+            <div>
+              <dt>Snapshot</dt>
+              <dd id="snapshot-state">Pendiente</dd>
+            </div>
+            <div>
+              <dt>Gateway</dt>
+              <dd id="gateway-state">Desconectado</dd>
+            </div>
+            <div>
+              <dt>Frescura</dt>
+              <dd id="freshness-state">Desconocida</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="modules-panel" aria-labelledby="modules-title">
+          <header class="panel-header">
+            <div>
+              <span class="eyebrow">Superficies</span>
+              <h2 id="modules-title">Módulos autorizados</h2>
+            </div>
+            <span class="count-badge" id="module-count">0</span>
+          </header>
+          <ul class="module-list" id="module-list">
+            <li class="empty-state">Esperando configuración</li>
+          </ul>
+        </section>
+
+        <section class="telemetry-panel" aria-labelledby="telemetry-title">
+          <header class="panel-header">
+            <div>
+              <span class="eyebrow">Pantalla</span>
+              <h2 id="telemetry-title">Viewport activo</h2>
+            </div>
+          </header>
+          <div class="viewport-reading">
+            <strong id="viewport-size">-- × --</strong>
+            <span id="viewport-density">DPR --</span>
+          </div>
+          <p id="last-update">Sin lectura todavía</p>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="status-footer">
+      <span id="contract-state">ABI v1</span>
+      <span id="subject-state">Sesión pendiente</span>
+      <span class="footer-spacer"></span>
+      <span id="sequence-state">Sin cursor</span>
+    </footer>
+  </div>
+
+  <script type="module" src="./command-center.js"></script>
+</body>
+</html>

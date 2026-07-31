@@ -134,7 +134,7 @@ class CommandCenterModule(NexusModule):
                     "status": "contract-only",
                 },
             },
-            "surface": "headless",
+            "surface": "visual-experimental",
         }
 
     async def websocket(self, peer, user_loader) -> None:
