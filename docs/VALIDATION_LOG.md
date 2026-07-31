@@ -195,6 +195,80 @@ factory productiva, el despliegue y Línea B permanecen bloqueados.
 
 ---
 
+## VAL-0012 — Discovery de Spotify Web API
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Fase | A.5 — Integraciones headless |
+| Método | Documentación oficial vigente + inventario local sin leer secretos |
+
+### Resultado
+
+- NexUX no posee variables, configuración ni aplicación local de Spotify.
+- Development Mode requiere que el propietario tenga Spotify Premium.
+- Cada app admite hasta cinco usuarios autorizados.
+- La cuota de Development Mode se comparte por cuenta de desarrollador.
+- Los refresh tokens caducan a los seis meses y `invalid_grant` exige
+  reautorización, no retry.
+- Los endpoints de reproducción continúan disponibles con scopes
+  `user-read-playback-state` y `user-modify-playback-state`.
+- Spotify advierte que Development Mode es para experimentación/proyectos
+  personales y no debe asumirse como base comercial de streaming.
+
+### Conclusión
+
+**PENDIENTE.** Spotify es técnicamente compatible con `MediaController`, pero no
+se implementará hasta disponer de una app, cuenta Premium y decisión de producto
+compatibles. Fase A.5 continúa con el agente macOS.
+
+---
+
+## VAL-0013 — Núcleo headless del agente macOS
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Fase | A.5 — Integraciones headless |
+| Plataforma | Swift 6.3.3 · macOS |
+| Protocolo interno | `nexux.agent.v1` |
+
+### Evidencia
+
+- Paquete Swift independiente en `agents/macos/NexusAgent/`.
+- Transporte exclusivamente WSS saliente con token Bearer de dispositivo.
+- Token persistido mediante Keychain y restringido a este dispositivo.
+- Allowlist por capacidad y acción antes de cualquier efecto.
+- ACK `applied`, `rejected` o `unknown` con caché idempotente por
+  `command_id`; reutilizar un ID con otro payload falla cerrado.
+- Backoff de reconexión acotado y recuperación comprobada con transporte fake.
+- Harness nativo: 33 comprobaciones aprobadas, incluida concurrencia sobre un
+  mismo `command_id`, límites temporales y rechazo de mensajes sobredimensionados.
+- Self-check: protocolo `nexux.agent.v1`, transporte `outbound-wss-only` y
+  `factory=disabled`.
+- Guard Python verifica ausencia de shell remoto, endpoint inseguro y factory.
+- El Wire ABI v1 del navegador no se modificó ni se reutilizó como protocolo
+  de control del dispositivo.
+
+### Límites
+
+- No existe todavía endpoint de pairing ni Gateway de agente en Railway.
+- No existe `LaunchAgent`, instalación persistente ni firma/notarización.
+- No hay handlers reales conectados al proceso Swift.
+- No existe factory productiva ni despliegue.
+
+### Conclusión
+
+**APROBADO** como núcleo técnico headless. El próximo sprint puede implementar
+pairing y autenticación del dispositivo contra un fake/fixture contractual. La
+activación persistente y productiva continúa bloqueada.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

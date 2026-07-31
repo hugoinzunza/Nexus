@@ -45,6 +45,18 @@ El primer incremento seleccionado es Apple Music, conforme al orden del RFC. Su
 adaptador debe funcionar headless, superar `MediaController` y mantener todos
 los efectos reales desactivados durante la validación automática.
 
+El discovery de Spotify queda diferido: no existe Client ID ni cuenta de
+desarrollo configurada en NexUX, y Development Mode exige Premium, limita
+usuarios/cuota y no debe asumirse como base de una integración comercial. Antes
+de implementarlo se requiere una decisión explícita de producto y una app
+Spotify verificable.
+
+El núcleo headless del agente macOS ya está implementado como paquete Swift
+desplegable por separado. Usa exclusivamente WSS saliente, token de dispositivo
+en Keychain, allowlist cerrada, ACK idempotente y no expone shell remoto. El
+emparejamiento con el Gateway, la instalación persistente en macOS y cualquier
+factory productiva continúan bloqueados hasta un sprint posterior de Fase A.5.
+
 ## 1. Resumen ejecutivo
 
 Se propone construir **NEXUX Command Center como un módulo nativo de NexUX**, no
