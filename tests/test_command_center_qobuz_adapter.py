@@ -1,5 +1,6 @@
 import asyncio
 import ast
+import sys
 from pathlib import Path
 
 import pytest
@@ -53,6 +54,7 @@ class RecordingPort:
             "qobuz:TRACK",
         )
         self.effects = []
+        self.known_playbacks = []
 
     def helper_available(self):
         return self.helper
@@ -77,8 +79,9 @@ class RecordingPort:
     async def current_state(self, context):
         return self.snapshot
 
-    async def execute(self, action, context):
+    async def execute(self, action, context, known_playback=None):
         self.effects.append(action)
+        self.known_playbacks.append(known_playback)
 
 
 def _command(command_id="qobuz-1", *, issued_at_ms=NOW):
@@ -176,6 +179,7 @@ def test_current_state_y_playback_provienen_del_puente_local():
             MediaAction.NEXT,
             MediaAction.PREVIOUS,
         ]
+        assert port.known_playbacks == ["playing", "playing", None, None]
         with pytest.raises(MediaCapabilityError):
             await adapter.execute(
                 MediaCommand(
@@ -326,9 +330,55 @@ def test_puerto_real_usa_agente_fijo_sin_shell_ni_api_remota():
     assert "requests." not in source
     assert "qobuz-connect" not in source.lower()
     assert "api.qobuz" not in source.lower()
-    assert "--media-state" in source
-    assert "--media-command" in source
+    assert '"--media-server"' in source
+    assert '"kind": "state"' in source
+    assert '"kind": "command"' in source
     assert OsaScriptQobuzPort is not None
+
+
+def test_puerto_reutiliza_helper_persistente_y_lo_cierra(tmp_path):
+    helper = tmp_path / "fake-media-agent"
+    helper.write_text(
+        f"""#!{sys.executable}
+import json
+import os
+import sys
+
+for line in sys.stdin:
+    request = json.loads(line)
+    if request["kind"] == "state":
+        payload = {{
+            "playback": "paused",
+            "track": "Hombre Lobo",
+            "artist": "Los Abuelos De La Nada",
+            "album": "Himno De Mi Corazon",
+            "item_ref": f"qobuz:{{os.getpid()}}",
+        }}
+    else:
+        payload = {{"status": "applied", "code": "qobuz.applied"}}
+    print(json.dumps(payload), flush=True)
+""",
+        encoding="utf-8",
+    )
+    helper.chmod(0o755)
+
+    port = OsaScriptQobuzPort(helper)
+    first = _run(port.current_state(OperationContext.with_timeout(2)))
+    second = _run(port.current_state(OperationContext.with_timeout(2)))
+    _run(
+        port.execute(
+            MediaAction.PLAY,
+            OperationContext.with_timeout(2),
+            known_playback="paused",
+        )
+    )
+    assert first.item_ref == second.item_ref
+    assert port._agent_process is not None
+    process = port._agent_process
+    _run(port.close_helper())
+    assert port._agent_process is None
+    assert process.poll() is not None
+
 
 
 def test_discovery_y_limites_quedan_documentados():

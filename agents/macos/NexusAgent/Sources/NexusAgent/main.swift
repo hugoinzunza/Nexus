@@ -3,6 +3,13 @@ import NexusAgentCore
 
 @main
 struct NexusAgentCommand {
+    private struct MediaRequest: Decodable {
+        let kind: String
+        let provider: String
+        let action: String?
+        let known_playback: String?
+    }
+
     private struct ErrorPayload: Encodable {
         let status: String
         let code: String
@@ -11,6 +18,10 @@ struct NexusAgentCommand {
 
     static func main() {
         let arguments = Array(CommandLine.arguments.dropFirst())
+        if arguments == ["--media-server"] {
+            serveMedia()
+            return
+        }
         if arguments == ["--self-check"] {
             let result = [
                 "agent": "NexusAgent",
@@ -33,10 +44,15 @@ struct NexusAgentCommand {
             emitMediaState(provider)
             return
         }
-        if arguments.count == 3,
+        if (arguments.count == 3 || arguments.count == 4),
            arguments[0] == "--media-command",
            let provider = DesktopMediaProvider(rawValue: arguments[1]) {
-            emitMediaCommand(provider, action: arguments[2])
+            let knownPlayback = arguments.count == 4 ? arguments[3] : nil
+            emitMediaCommand(
+                provider,
+                action: arguments[2],
+                knownPlayback: knownPlayback
+            )
             return
         }
         FileHandle.standardError.write(
@@ -59,14 +75,57 @@ struct NexusAgentCommand {
         }
     }
 
+    private static func serveMedia() {
+        let decoder = JSONDecoder()
+        let bridge = DesktopMediaAccessibilityBridge()
+        while let line = readLine() {
+            guard let data = line.data(using: .utf8),
+                  let request = try? decoder.decode(MediaRequest.self, from: data),
+                  let provider = DesktopMediaProvider(rawValue: request.provider)
+            else {
+                emit(ErrorPayload(
+                    status: "rejected",
+                    code: "media.request-invalid",
+                    retryable: false
+                ))
+                continue
+            }
+            if request.kind == "state" {
+                do {
+                    emit(try bridge.snapshot(provider: provider))
+                } catch {
+                    emitError(provider: provider.rawValue, error: error)
+                }
+            } else if request.kind == "command", let action = request.action {
+                do {
+                    emit(try bridge.execute(
+                        provider: provider,
+                        action: action,
+                        knownPlayback: request.known_playback
+                    ))
+                } catch {
+                    emitError(provider: provider.rawValue, error: error)
+                }
+            } else {
+                emit(ErrorPayload(
+                    status: "rejected",
+                    code: "media.request-invalid",
+                    retryable: false
+                ))
+            }
+        }
+    }
+
     private static func emitMediaCommand(
         _ provider: DesktopMediaProvider,
-        action: String
+        action: String,
+        knownPlayback: String?
     ) {
         do {
             let result = try DesktopMediaAccessibilityBridge().execute(
                 provider: provider,
-                action: action
+                action: action,
+                knownPlayback: knownPlayback
             )
             emit(result)
         } catch {

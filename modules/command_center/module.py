@@ -94,7 +94,7 @@ class CommandCenterModule(NexusModule):
                     if controller is not None
                     else None
                 ),
-                timeout_seconds=4.0,
+                timeout_seconds=7.0 if provider == "qobuz" else 4.0,
             )
             for provider, controller in controllers.items()
         }
@@ -120,7 +120,7 @@ class CommandCenterModule(NexusModule):
                 "/m/command-center/api/media-artwork?v=" + version
             )
         elif provider in {"qobuz", "tidal"} and self._external_artwork:
-            artwork_url = self._external_artwork.resolve(
+            artwork_url = self._external_artwork.resolve_cached_or_schedule(
                 provider=provider,
                 item_ref=item_ref,
                 track=str(result.get("track") or ""),

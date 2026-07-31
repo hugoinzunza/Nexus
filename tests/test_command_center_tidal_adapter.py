@@ -24,6 +24,7 @@ class RecordingPort:
         self.running = False
         self.open_calls = 0
         self.effects = []
+        self.known_playbacks = []
         self.snapshot = DesktopPlaybackSnapshot(
             "playing",
             "The Sweetest Taboo",
@@ -48,8 +49,9 @@ class RecordingPort:
     async def current_state(self, context):
         return self.snapshot
 
-    async def execute(self, action, context):
+    async def execute(self, action, context, known_playback=None):
         self.effects.append(action)
+        self.known_playbacks.append(known_playback)
 
 
 def test_tidal_declara_lectura_controles_y_apertura() -> None:
@@ -104,5 +106,6 @@ def test_tidal_proyecta_playback_y_control_del_puente_accesible() -> None:
         )
         assert ack.status is MediaAckStatus.APPLIED
         assert port.effects == [MediaAction.PAUSE]
+        assert port.known_playbacks == ["playing"]
 
     _run(scenario())

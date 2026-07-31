@@ -579,6 +579,11 @@ export class MediaContextClient {
     this.provider = provider;
     this.feedback = null;
     await this.refresh();
+    if (this.context.track && !this.context.artworkUrl) {
+      setTimeout(() => {
+        if (this.provider === provider) this.refresh().catch(() => {});
+      }, 5_000);
+    }
   }
 }
 

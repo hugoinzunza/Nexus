@@ -1,3 +1,5 @@
+import threading
+import time
 import urllib.parse
 
 from modules.command_center.external_artwork import ExternalArtworkResolver
@@ -216,3 +218,37 @@ def test_endpoint_sirve_solo_version_cacheada_y_proveedor_correcto() -> None:
 
     assert response == (200, "image/jpeg", b"\xff\xd8\xffcover")
     assert wrong_provider[0] == 404
+
+
+def test_resolucion_en_background_no_bloquea_controles() -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def fetch_json(_url):
+        started.set()
+        assert release.wait(timeout=1)
+        return {"recordings": [_recording(("Libertinaje", MBID_A))]}
+
+    resolver = ExternalArtworkResolver(
+        fetch_json=fetch_json,
+        fetch_image=lambda _url: (b"\xff\xd8\xffcover", "image/jpeg"),
+    )
+    arguments = {
+        "provider": "qobuz",
+        "item_ref": "qobuz:BACKGROUND",
+        "track": "De Onda",
+        "artist": "Bersuit Vergarabat",
+        "album": "Libertinaje",
+    }
+
+    assert resolver.resolve_cached_or_schedule(**arguments) is None
+    assert started.wait(timeout=1)
+    release.set()
+    result = None
+    for _attempt in range(50):
+        result = resolver.resolve_cached_or_schedule(**arguments)
+        if result:
+            break
+        time.sleep(0.01)
+
+    assert result and "provider=qobuz" in result

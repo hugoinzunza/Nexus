@@ -229,7 +229,8 @@ una coincidencia conservadora de canción y artista. El álbum debe coincidir o
 existir un único release group inequívoco. La imagen se valida, se limita a 5 MB,
 se conserva en una caché de memoria acotada y se sirve desde el endpoint
 autenticado de NexUX. Un timeout, una ambigüedad o una imagen inválida mantienen
-el placeholder; nunca degradan el reproductor.
+el placeholder; nunca degradan el reproductor. La búsqueda ocurre en segundo
+plano para que la red externa no retrase lectura ni controles multimedia.
 
 VAL-0023 debe comprobar en el Arzopa que pista, proveedor y controles se
 reconocen sin competir con Atención del Bot. La aprobación técnica no autoriza

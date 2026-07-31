@@ -125,6 +125,8 @@ class ExternalArtworkResolver:
         self._sleep = sleep
         self._max_entries = max_entries
         self._lock = threading.Lock()
+        self._lookup_lock = threading.Lock()
+        self._pending: set[tuple[str, str]] = set()
         self._last_musicbrainz_request = float("-inf")
         self._cache: OrderedDict[tuple[str, str], ArtworkEntry | ArtworkMiss] = (
             OrderedDict()
@@ -146,20 +148,41 @@ class ExternalArtworkResolver:
             return None
         key = (provider, item_ref)
         with self._lock:
-            if key in self._cache:
-                cached = self._cache[key]
-                self._cache.move_to_end(key)
-                if isinstance(cached, ArtworkEntry):
-                    return self._url(cached)
-                if self._monotonic() < cached.retry_at:
-                    return None
-                self._cache.pop(key, None)
-            try:
-                entry = self._lookup(provider, item_ref, track, artist, album)
-            except Exception:  # La carátula nunca debe romper el reproductor.
-                entry = None
+            found, url = self._cached_url(key)
+            if found:
+                return url
+        entry = self._lookup_safely(provider, item_ref, track, artist, album)
+        with self._lock:
             self._remember(key, entry)
             return self._url(entry) if entry else None
+
+    def resolve_cached_or_schedule(
+        self,
+        *,
+        provider: str,
+        item_ref: str,
+        track: str,
+        artist: str,
+        album: str | None,
+    ) -> str | None:
+        """Devuelve caché inmediata y resuelve misses fuera del request."""
+        if provider not in {"qobuz", "tidal"}:
+            return None
+        if not item_ref or not _canonical(track) or not _canonical(artist):
+            return None
+        key = (provider, item_ref)
+        with self._lock:
+            found, url = self._cached_url(key)
+            if found or key in self._pending:
+                return url
+            self._pending.add(key)
+        threading.Thread(
+            target=self._resolve_background,
+            args=(key, provider, item_ref, track, artist, album),
+            name=f"artwork-{provider}",
+            daemon=True,
+        ).start()
+        return None
 
     def artwork(self, provider: str, version: str) -> tuple[bytes, str] | None:
         if provider not in {"qobuz", "tidal"}:
@@ -203,6 +226,49 @@ class ExternalArtworkResolver:
             content_type,
             mbid,
         )
+
+    def _lookup_safely(
+        self,
+        provider: str,
+        item_ref: str,
+        track: str,
+        artist: str,
+        album: str | None,
+    ) -> ArtworkEntry | None:
+        try:
+            with self._lookup_lock:
+                return self._lookup(provider, item_ref, track, artist, album)
+        except Exception:  # La carátula nunca debe romper el reproductor.
+            return None
+
+    def _resolve_background(
+        self,
+        key: tuple[str, str],
+        provider: str,
+        item_ref: str,
+        track: str,
+        artist: str,
+        album: str | None,
+    ) -> None:
+        entry = self._lookup_safely(provider, item_ref, track, artist, album)
+        with self._lock:
+            self._pending.discard(key)
+            self._remember(key, entry)
+
+    def _cached_url(
+        self,
+        key: tuple[str, str],
+    ) -> tuple[bool, str | None]:
+        if key not in self._cache:
+            return False, None
+        cached = self._cache[key]
+        self._cache.move_to_end(key)
+        if isinstance(cached, ArtworkEntry):
+            return True, self._url(cached)
+        if self._monotonic() < cached.retry_at:
+            return True, None
+        self._cache.pop(key, None)
+        return False, None
 
     @staticmethod
     def _select_release_group(

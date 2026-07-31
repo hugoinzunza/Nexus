@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import select
+import subprocess
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -96,7 +99,10 @@ class QobuzPort(Protocol):
     ) -> DesktopPlaybackSnapshot: ...
 
     async def execute(
-        self, action: MediaAction, context: OperationContext
+        self,
+        action: MediaAction,
+        context: OperationContext,
+        known_playback: str | None = None,
     ) -> None: ...
 
     def helper_available(self) -> bool: ...
@@ -111,6 +117,8 @@ class OsaScriptQobuzPort:
     def __init__(self, agent_path: str | Path | None = None):
         configured = agent_path or os.environ.get("NEXUX_MACOS_AGENT_BIN")
         self.agent_path = Path(configured) if configured else _DEFAULT_AGENT
+        self._agent_process: subprocess.Popen[bytes] | None = None
+        self._agent_lock = threading.Lock()
 
     def helper_available(self) -> bool:
         return self.agent_path.is_file() and os.access(self.agent_path, os.X_OK)
@@ -158,7 +166,8 @@ class OsaScriptQobuzPort:
         self, context: OperationContext
     ) -> DesktopPlaybackSnapshot:
         payload = await self._agent_json(
-            ("--media-state", self.code_prefix), context
+            {"kind": "state", "provider": self.code_prefix},
+            context,
         )
         playback = payload.get("playback")
         if playback not in {"playing", "paused", "stopped", "unknown"}:
@@ -177,6 +186,7 @@ class OsaScriptQobuzPort:
         self,
         action: MediaAction,
         context: OperationContext,
+        known_playback: str | None = None,
     ) -> None:
         if action not in {
             MediaAction.PLAY,
@@ -189,9 +199,14 @@ class OsaScriptQobuzPort:
                 f"{self.provider_name} no soporta {action.value}",
                 retryable=False,
             )
-        payload = await self._agent_json(
-            ("--media-command", self.code_prefix, action.value), context
-        )
+        request = {
+            "kind": "command",
+            "provider": self.code_prefix,
+            "action": action.value,
+        }
+        if known_playback in {"playing", "paused"}:
+            request["known_playback"] = known_playback
+        payload = await self._agent_json(request, context, command=True)
         if payload.get("status") != "applied":
             raise QobuzPortError(
                 str(payload.get("code") or f"{self.code_prefix}.rejected"),
@@ -201,8 +216,10 @@ class OsaScriptQobuzPort:
 
     async def _agent_json(
         self,
-        arguments: tuple[str, ...],
+        request: dict[str, str],
         context: OperationContext,
+        *,
+        command: bool = False,
     ) -> dict:
         if not self.helper_available():
             raise QobuzPortError(
@@ -210,15 +227,32 @@ class OsaScriptQobuzPort:
                 "el agente macOS no esta compilado o no es ejecutable",
                 retryable=False,
             )
-        output = await self._run(
-            (str(self.agent_path), *arguments), context
-        )
+        operation_context = context
+        if operation_context.deadline is None:
+            operation_context = OperationContext.with_timeout(
+                8.0,
+                cancel_event=context.cancel_event,
+            )
         try:
-            payload = json.loads(output)
+            output = await asyncio.to_thread(
+                self._agent_request,
+                request,
+                operation_context,
+                command,
+            )
+            payload = json.loads(output.decode("utf-8", errors="strict"))
         except json.JSONDecodeError as exc:
+            await self.close_helper()
             raise QobuzPortError(
                 f"{self.code_prefix}.invalid-output",
                 "el agente macOS devolvio JSON invalido",
+                retryable=True,
+            ) from exc
+        except UnicodeDecodeError as exc:
+            await self.close_helper()
+            raise QobuzPortError(
+                f"{self.code_prefix}.invalid-output",
+                f"{self.provider_name} devolvio una salida no UTF-8",
                 retryable=True,
             ) from exc
         if not isinstance(payload, dict):
@@ -234,6 +268,110 @@ class OsaScriptQobuzPort:
                 retryable=bool(payload.get("retryable", True)),
             )
         return payload
+
+    async def close_helper(self) -> None:
+        await asyncio.to_thread(self._close_helper_sync)
+
+    def _agent_request(
+        self,
+        request: dict[str, str],
+        context: OperationContext,
+        command: bool,
+    ) -> bytes:
+        with self._agent_lock:
+            if context.cancel_event is not None and context.cancel_event.is_set():
+                raise OperationCancelled("operacion cancelada")
+            if context.remaining() == 0:
+                raise QobuzPortError(
+                    f"{self.code_prefix}.timeout",
+                    f"la automatizacion de {self.provider_name} excedio el deadline",
+                    retryable=True,
+                    ambiguous=command,
+                )
+            process = self._ensure_agent()
+            assert process.stdin is not None
+            assert process.stdout is not None
+            encoded = json.dumps(
+                request,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8") + b"\n"
+            try:
+                process.stdin.write(encoded)
+                process.stdin.flush()
+            except (BrokenPipeError, OSError) as exc:
+                self._reset_agent_locked()
+                raise QobuzPortError(
+                    f"{self.code_prefix}.helper-stopped",
+                    "el agente macOS termino antes de recibir la solicitud",
+                    retryable=True,
+                    ambiguous=command,
+                ) from exc
+            while True:
+                if (
+                    context.cancel_event is not None
+                    and context.cancel_event.is_set()
+                ):
+                    self._reset_agent_locked()
+                    raise OperationCancelled("operacion cancelada")
+                remaining = context.remaining()
+                if remaining == 0:
+                    self._reset_agent_locked()
+                    raise QobuzPortError(
+                        f"{self.code_prefix}.timeout",
+                        f"la automatizacion de {self.provider_name} excedio el deadline",
+                        retryable=True,
+                        ambiguous=command,
+                    )
+                wait_for = 0.1 if remaining is None else min(0.1, remaining)
+                ready, _, _ = select.select(
+                    [process.stdout],
+                    [],
+                    [],
+                    wait_for,
+                )
+                if ready:
+                    output = process.stdout.readline()
+                    if output:
+                        return output
+                    self._reset_agent_locked()
+                    raise QobuzPortError(
+                        f"{self.code_prefix}.helper-stopped",
+                        "el agente macOS termino sin responder",
+                        retryable=True,
+                        ambiguous=command,
+                    )
+
+    def _ensure_agent(self) -> subprocess.Popen[bytes]:
+        process = self._agent_process
+        if process is not None and process.poll() is None:
+            return process
+        self._agent_process = subprocess.Popen(
+            (str(self.agent_path), "--media-server"),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            shell=False,
+        )
+        return self._agent_process
+
+    def _close_helper_sync(self) -> None:
+        with self._agent_lock:
+            self._reset_agent_locked()
+
+    def _reset_agent_locked(self) -> None:
+        process = self._agent_process
+        self._agent_process = None
+        if process is None:
+            return
+        if process.stdin is not None:
+            process.stdin.close()
+        if process.poll() is None:
+            try:
+                process.wait(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
 
     def _optional_text(self, value, field: str) -> str | None:
         if value is None:
@@ -329,6 +467,8 @@ class QobuzAdapter:
         self._fingerprints: OrderedDict[str, tuple[Any, ...]] = OrderedDict()
         self._results: OrderedDict[str, MediaAck] = OrderedDict()
         self._metadata: dict[str, str] | None = None
+        self._last_playback: str | None = None
+        self._last_playback_at_ms: int | None = None
         self._metrics = {
             "health_checks": 0,
             "app_probes": 0,
@@ -392,6 +532,8 @@ class QobuzAdapter:
         self._metrics["state_reads"] += 1
         if not await self._port.is_running(context):
             self._metadata = None
+            self._last_playback = None
+            self._last_playback_at_ms = None
             return MediaState(
                 self.controller_id,
                 MediaLifecycle.UNAVAILABLE,
@@ -404,6 +546,9 @@ class QobuzAdapter:
             self._metrics["last_error_code"] = exc.code
             raise
         self._metrics["last_error_code"] = None
+        observed_at_ms = self._clock_ms()
+        self._last_playback = snapshot.playback
+        self._last_playback_at_ms = observed_at_ms
         self._metadata = (
             {
                 "item_ref": snapshot.item_ref,
@@ -417,7 +562,7 @@ class QobuzAdapter:
         return MediaState(
             self.controller_id,
             MediaLifecycle.READY,
-            self._clock_ms(),
+            observed_at_ms,
             snapshot.playback,
             None,
             snapshot.item_ref,
@@ -479,7 +624,21 @@ class QobuzAdapter:
                     )
                 )
             else:
-                await self._port.execute(command.action, context)
+                known_playback = None
+                if (
+                    command.action in {MediaAction.PLAY, MediaAction.PAUSE}
+                    and self._last_playback in {"playing", "paused"}
+                    and self._last_playback_at_ms is not None
+                    and 0
+                    <= self._clock_ms() - self._last_playback_at_ms
+                    <= 3_000
+                ):
+                    known_playback = self._last_playback
+                await self._port.execute(
+                    command.action,
+                    context,
+                    known_playback=known_playback,
+                )
         except OperationCancelled:
             self._fingerprints.pop(command.command_id, None)
             raise
@@ -519,6 +678,9 @@ class QobuzAdapter:
         try:
             self._closed = True
             self._metrics["app_version"] = None
+            close_helper = getattr(self._port, "close_helper", None)
+            if close_helper is not None:
+                await await_operation(close_helper(), context)
         finally:
             lock.release()
 

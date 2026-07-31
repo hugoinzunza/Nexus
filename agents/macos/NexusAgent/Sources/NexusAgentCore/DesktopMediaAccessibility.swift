@@ -106,7 +106,8 @@ public struct DesktopMediaAccessibilityBridge {
 
     public func execute(
         provider: DesktopMediaProvider,
-        action: String
+        action: String,
+        knownPlayback: String? = nil
     ) throws -> DesktopMediaCommandResult {
         guard let app = runningApplication(provider) else {
             throw DesktopMediaBridgeError.appNotRunning
@@ -114,7 +115,11 @@ public struct DesktopMediaAccessibilityBridge {
         guard AXIsProcessTrusted() else {
             throw DesktopMediaBridgeError.permissionDenied
         }
-        let player = try accessiblePlayerNodes(for: app, provider: provider)
+        let player = try accessiblePlayerNodes(
+            for: app,
+            provider: provider,
+            collapseExpandedQobuz: provider == .qobuz
+        )
         switch provider {
         case .tidal:
             try executeTidal(action: action, nodes: player)
@@ -122,7 +127,8 @@ public struct DesktopMediaAccessibilityBridge {
             try executeQobuz(
                 action: action,
                 app: app,
-                nodes: player
+                nodes: player,
+                knownPlayback: knownPlayback
             )
         }
         if action == "play" || action == "pause" {
@@ -136,7 +142,8 @@ public struct DesktopMediaAccessibilityBridge {
                 try executeQobuz(
                     action: action,
                     app: app,
-                    nodes: refreshed
+                    nodes: refreshed,
+                    knownPlayback: observed
                 )
                 observed = try verifiedPlayback(provider: provider)
             }
@@ -170,18 +177,77 @@ public struct DesktopMediaAccessibilityBridge {
 
     private func accessiblePlayerNodes(
         for app: NSRunningApplication,
-        provider: DesktopMediaProvider
+        provider: DesktopMediaProvider,
+        collapseExpandedQobuz: Bool = false
     ) throws -> [AccessibleNode] {
-        let root = AXUIElementCreateApplication(app.processIdentifier)
+        let root = accessibilityRoot(for: app)
         AXUIElementSetAttributeValue(
             root,
             "AXManualAccessibility" as CFString,
             kCFBooleanTrue
         )
-        var stack = [root]
-        var visited = 0
-        while let element = stack.popLast(), visited < Self.maximumNodes {
-            visited += 1
+        AXUIElementSetAttributeValue(
+            root,
+            "AXEnhancedUserInterface" as CFString,
+            kCFBooleanTrue
+        )
+        for _ in 0..<3 {
+            Thread.sleep(forTimeInterval: 0.18)
+            let refreshed = accessibilityRoot(for: app)
+            if let nodes = findPlayerNodes(
+                root: refreshed,
+                provider: provider
+            ) {
+                return nodes
+            }
+        }
+        if provider == .qobuz,
+           collapseExpandedQobuz,
+           collapseExpandedQobuzPlayer(root: accessibilityRoot(for: app)) {
+            Thread.sleep(forTimeInterval: 0.25)
+            if let nodes = findPlayerNodes(
+                root: accessibilityRoot(for: app),
+                provider: provider
+            ) {
+                return nodes
+            }
+        }
+        throw DesktopMediaBridgeError.playerUnavailable
+    }
+
+    private func collapseExpandedQobuzPlayer(root: AXUIElement) -> Bool {
+        var queue = [root]
+        var index = 0
+        while index < queue.count && index < Self.maximumNodes {
+            let element = queue[index]
+            index += 1
+            let role = stringAttribute(element, kAXRoleAttribute)
+            let label = firstNonEmpty(
+                stringAttribute(element, kAXDescriptionAttribute),
+                stringAttribute(element, kAXTitleAttribute),
+                stringAttribute(element, kAXHelpAttribute)
+            )
+            if role == kAXButtonRole as String,
+               normalize(label).contains("cerrar el player en modo pantalla completa") {
+                return AXUIElementPerformAction(
+                    element,
+                    kAXPressAction as CFString
+                ) == .success
+            }
+            queue.append(contentsOf: children(element))
+        }
+        return false
+    }
+
+    private func findPlayerNodes(
+        root: AXUIElement,
+        provider: DesktopMediaProvider
+    ) -> [AccessibleNode]? {
+        var queue = [root]
+        var index = 0
+        while index < queue.count && index < Self.maximumNodes {
+            let element = queue[index]
+            index += 1
             let role = stringAttribute(element, kAXRoleAttribute)
             let label = firstNonEmpty(
                 stringAttribute(element, kAXDescriptionAttribute),
@@ -201,6 +267,10 @@ public struct DesktopMediaAccessibilityBridge {
             switch provider {
             case .qobuz:
                 isAnchor = normalized == "mute"
+                    || role == kAXSliderRole as String
+                    || role == kAXProgressIndicatorRole as String
+                    || (role == kAXButtonRole as String
+                        && ["reproducir", "pausar", "pausa"].contains(normalized))
             case .tidal:
                 isAnchor = role == kAXSliderRole as String
                     && normalized == "progress bar"
@@ -209,9 +279,15 @@ public struct DesktopMediaAccessibilityBridge {
                 let scoped = descendants(player, limit: 600)
                 if scoped.count > 3 { return scoped }
             }
-            stack.append(contentsOf: children(element))
+            queue.append(contentsOf: children(element))
         }
-        throw DesktopMediaBridgeError.playerUnavailable
+        return nil
+    }
+
+    private func accessibilityRoot(
+        for app: NSRunningApplication
+    ) -> AXUIElement {
+        AXUIElementCreateApplication(app.processIdentifier)
     }
 
     private func playerRoot(from anchor: AXUIElement) -> AXUIElement? {
@@ -295,7 +371,9 @@ public struct DesktopMediaAccessibilityBridge {
         nodes: [AccessibleNode]
     ) -> String {
         let labels = nodes.map { normalize($0.label) }
-        if labels.contains("pausar") { return "playing" }
+        if labels.contains("pausar") || labels.contains("pausa") {
+            return "playing"
+        }
         if labels.contains("reproducir") { return "paused" }
         if provider == .qobuz,
            nodes.contains(where: {
@@ -311,7 +389,9 @@ public struct DesktopMediaAccessibilityBridge {
         initialNodes: [AccessibleNode],
         app: NSRunningApplication
     ) throws -> String {
-        guard let first = progressValue(initialNodes) else { return "unknown" }
+        guard let first = progressValue(initialNodes) else {
+            return playback(for: .qobuz, nodes: initialNodes)
+        }
         // Qobuz actualiza el progreso aproximadamente una vez por segundo.
         Thread.sleep(forTimeInterval: 1.10)
         let secondNodes = try accessiblePlayerNodes(for: app, provider: .qobuz)
@@ -363,18 +443,43 @@ public struct DesktopMediaAccessibilityBridge {
     private func executeQobuz(
         action: String,
         app: NSRunningApplication,
-        nodes: [AccessibleNode]
+        nodes: [AccessibleNode],
+        knownPlayback: String?
     ) throws {
-        let current = try qobuzPlayback(
-            initialNodes: nodes,
-            app: app
-        )
+        let current: String
+        if let knownPlayback,
+           knownPlayback == "playing" || knownPlayback == "paused" {
+            current = knownPlayback
+        } else {
+            current = try qobuzPlayback(initialNodes: nodes, app: app)
+        }
         let pid = app.processIdentifier
         switch action {
         case "play" where current == "playing": return
         case "pause" where current == "paused": return
         case "play", "pause":
-            try postKey(code: 49, flags: [], pid: pid)
+            let expectedLabels = action == "play"
+                ? ["reproducir"]
+                : ["pausar", "pausa"]
+            let button = nodes.first(where: {
+                $0.role == kAXButtonRole as String
+                    && expectedLabels.contains(normalize($0.label))
+            }) ?? nodes.first(where: {
+                guard $0.role == kAXButtonRole as String,
+                      $0.label.isEmpty,
+                      let frame = $0.frame else { return false }
+                return frame.width >= 56 && frame.height >= 56
+                    && abs(frame.width - frame.height) <= 8
+            })
+            guard let button else {
+                throw DesktopMediaBridgeError.actionUnavailable
+            }
+            guard AXUIElementPerformAction(
+                button.element,
+                kAXPressAction as CFString
+            ) == .success else {
+                throw DesktopMediaBridgeError.commandFailed
+            }
         case "next":
             try postKey(code: 124, flags: .maskCommand, pid: pid)
         case "previous":

@@ -924,10 +924,15 @@ expuso el árbol del reproductor.
 
 ### Evidencia técnica
 
-- Qobuz `8.2.0-b033`: lectura real de `De Onda`, `Bersuit Vergarabat`,
-  `Libertinaje`, progreso y estado. Play y pausa se ejecutaron y reconciliaron;
-  ambos devolvieron el estado esperado. Sus atajos documentados se envían al PID
-  de Qobuz, nunca como tecla multimedia global ni mediante coordenadas.
+- Qobuz `8.2.0-b033`: lectura real de `Hombre Lobo`,
+  `Los Abuelos De La Nada`, progreso y estado. La secuencia
+  `paused → play → playing → pause → paused` se ejecutó desde Command Center y
+  mantuvo la misma pista. Play y pausa usan `AXPress` sobre el control real del
+  reproductor compacto. Si Qobuz está ampliado, un comando cierra primero esa
+  vista mediante su botón accesible; no usa coordenadas ni teclas globales.
+- El agente multimedia permanece vivo y serializa lecturas y comandos. Así
+  conserva el contexto AX entre solicitudes HTTP y funciona con varias pestañas
+  sin compartir objetos `asyncio` entre event loops distintos.
 - TIDAL `2.43.0`: lectura real de pista, artista, playlist/álbum, progreso y
   estado. Los botones accesibles `Pausar`, `Reproducir`, `Anterior` y `Siguiente`
   se operan mediante `AXPress`. Pausa y reproducción fueron reconciliadas.
@@ -944,10 +949,10 @@ expuso el árbol del reproductor.
 **APROBADO técnicamente en local** para lectura y control. **PENDIENTE
 perceptualmente** en el Arzopa. La carátula de Qobuz/TIDAL sigue usando el
 placeholder cuando MusicBrainz/Cover Art Archive no ofrecen una coincidencia
-inequívoca. La búsqueda externa exige canción y artista exactos, valida el álbum
-cuando está disponible, respeta el límite de una consulta por segundo, limita
-la imagen a 5 MB y la sirve desde NexUX. Esta capa es opcional: sus fallos no
-degradan lectura ni controles.
+inequívoca. La búsqueda externa ocurre en segundo plano, exige canción y artista
+exactos, valida el álbum cuando está disponible, respeta el límite de una
+consulta por segundo, limita la imagen a 5 MB y la sirve desde NexUX. Esta capa
+es opcional: sus fallos no degradan lectura ni controles.
 
 ---
 
