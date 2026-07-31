@@ -99,7 +99,7 @@ def test_documentacion_registra_hardware_y_tokens_sin_inventar_ergonomia() -> No
     findings = (ROOT / "docs" / "COMMAND_CENTER_B1_FINDINGS.md").read_text(
         encoding="utf-8"
     )
-    assert "candidato de software completo; gate perceptual pendiente" in findings
+    assert "técnicamente aprobado; gate perceptual pendiente" in findings
     assert "VAL-0017" in (
         ROOT / "docs" / "VALIDATION_LOG.md"
     ).read_text(encoding="utf-8")

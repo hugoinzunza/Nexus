@@ -1,6 +1,6 @@
 # Command Center — Sprint B1 Findings
 
-- **Estado:** candidato de software completo; gate perceptual pendiente
+- **Estado:** técnicamente aprobado; gate perceptual pendiente
 - **Fecha:** 2026-07-30
 - **Rama:** `codex/command-center-contract-v1`
 

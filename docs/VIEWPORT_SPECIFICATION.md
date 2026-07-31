@@ -1,6 +1,6 @@
 # NEXUX Command Center — Viewport Specification
 
-- **Estado:** Fase -1B activa; inventario técnico verificado
+- **Estado:** Fase -1B activa; inventario y B1 técnico verificados, percepción pendiente
 - **Versión:** 0.2
 - **Fecha:** 2026-07-30
 - **Propósito:** definir y validar el entorno físico donde vivirá el Command Center

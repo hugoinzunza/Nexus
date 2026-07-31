@@ -1,7 +1,7 @@
 # RFC: NEXUX Command Center
 
 - **Estado:** Aceptado; Línea A cerrada, Fase A.5 activa y Línea B Sprint B1
-  en validación
+  técnicamente aprobado, con validación perceptual pendiente
 - **Versión:** 1.2.2
 - **Fecha:** 2026-07-30
 - **Autoría:** Codex, a partir del Product Vision Document, el repositorio actual
