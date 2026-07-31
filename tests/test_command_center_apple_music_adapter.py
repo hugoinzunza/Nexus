@@ -125,6 +125,9 @@ def test_metadata_y_caratula_se_exponen_fuera_de_media_controller():
             "artist": "Artist",
             "album": "Album",
             "has_artwork": True,
+            "position_seconds": 12.5,
+            "duration_seconds": None,
+            "progress": None,
         }
         assert artwork == (b"\xff\xd8\xffcover", "image/jpeg")
 
@@ -403,6 +406,16 @@ def test_registro_conserva_runtime_degradado_y_observa_recuperacion():
 )
 def test_parser_del_snapshot_real_es_determinista(raw, expected):
     assert OsaScriptAppleMusicPort._parse_snapshot(raw) == expected
+
+
+def test_parser_expone_duracion_para_progreso_real():
+    raw = (
+        "playing\x1f42\x1f92.5\x1fABC123\x1fSong\x1fArtist\x1fAlbum"
+        "\x1f267.0\x1f1\n"
+    )
+    snapshot = OsaScriptAppleMusicPort._parse_snapshot(raw)
+    assert snapshot.position_seconds == 92.5
+    assert snapshot.duration_seconds == 267.0
 
 
 @pytest.mark.parametrize(

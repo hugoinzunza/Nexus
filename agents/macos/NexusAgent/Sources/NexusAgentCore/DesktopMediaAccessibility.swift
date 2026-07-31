@@ -24,10 +24,11 @@ public struct DesktopMediaSnapshot: Codable, Equatable, Sendable {
     public let artist: String?
     public let album: String?
     public let itemRef: String?
+    public let progress: Double?
     public let code: String
 
     enum CodingKeys: String, CodingKey {
-        case provider, running, playback, track, artist, album, code
+        case provider, running, playback, track, artist, album, progress, code
         case itemRef = "item_ref"
     }
 }
@@ -53,6 +54,9 @@ private struct AccessibleNode {
     let role: String
     let label: String
     let value: String
+    let numericValue: Double?
+    let minimumValue: Double?
+    let maximumValue: Double?
     let frame: CGRect?
 }
 
@@ -73,6 +77,7 @@ public struct DesktopMediaAccessibilityBridge {
                 artist: nil,
                 album: nil,
                 itemRef: nil,
+                progress: nil,
                 code: "\(provider.rawValue).not-running"
             )
         }
@@ -98,6 +103,7 @@ public struct DesktopMediaAccessibilityBridge {
             artist: metadata.artist,
             album: metadata.album,
             itemRef: itemRef,
+            progress: progressFraction(player),
             code: metadata.track == nil
                 ? "\(provider.rawValue).player-empty"
                 : "\(provider.rawValue).accessible"
@@ -260,6 +266,9 @@ public struct DesktopMediaAccessibilityBridge {
                 role: role,
                 label: label,
                 value: value,
+                numericValue: numberAttribute(element, kAXValueAttribute),
+                minimumValue: numberAttribute(element, kAXMinValueAttribute),
+                maximumValue: numberAttribute(element, kAXMaxValueAttribute),
                 frame: frame(element)
             )
             let normalized = normalize(label)
@@ -351,6 +360,9 @@ public struct DesktopMediaAccessibilityBridge {
                         stringAttribute(element, kAXHelpAttribute)
                     ),
                     value: stringValue(element, kAXValueAttribute),
+                    numericValue: numberAttribute(element, kAXValueAttribute),
+                    minimumValue: numberAttribute(element, kAXMinValueAttribute),
+                    maximumValue: numberAttribute(element, kAXMaxValueAttribute),
                     frame: frame(element)
                 )
             )
@@ -428,7 +440,22 @@ public struct DesktopMediaAccessibilityBridge {
         nodes.first(where: {
             $0.role == kAXSliderRole as String
                 || $0.role == kAXProgressIndicatorRole as String
-        }).flatMap { Double($0.value) }
+        }).flatMap { $0.numericValue ?? Double($0.value) }
+    }
+
+    private func progressFraction(_ nodes: [AccessibleNode]) -> Double? {
+        guard let node = nodes.first(where: {
+            $0.role == kAXSliderRole as String
+                || $0.role == kAXProgressIndicatorRole as String
+        }), let value = node.numericValue ?? Double(node.value) else {
+            return nil
+        }
+        if let minimum = node.minimumValue,
+           let maximum = node.maximumValue,
+           maximum > minimum {
+            return min(1, max(0, (value - minimum) / (maximum - minimum)))
+        }
+        return (0...1).contains(value) ? value : nil
     }
 
     private func executeTidal(
@@ -608,6 +635,19 @@ public struct DesktopMediaAccessibilityBridge {
         if let text = value as? String { return text }
         if let number = value as? NSNumber { return number.stringValue }
         return ""
+    }
+
+    private func numberAttribute(
+        _ element: AXUIElement,
+        _ attribute: String
+    ) -> Double? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            attribute as CFString,
+            &value
+        ) == .success, let number = value as? NSNumber else { return nil }
+        return number.doubleValue
     }
 
     private func frame(_ element: AXUIElement) -> CGRect? {

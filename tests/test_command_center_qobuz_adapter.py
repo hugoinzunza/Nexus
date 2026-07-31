@@ -52,6 +52,7 @@ class RecordingPort:
             "Bersuit Vergarabat",
             "Libertinaje",
             "qobuz:TRACK",
+            0.34,
         )
         self.effects = []
         self.known_playbacks = []
@@ -161,6 +162,7 @@ def test_current_state_y_playback_provienen_del_puente_local():
             "track": "De Onda",
             "artist": "Bersuit Vergarabat",
             "album": "Libertinaje",
+            "progress": 0.34,
         }
         for action in (
             MediaAction.PLAY,

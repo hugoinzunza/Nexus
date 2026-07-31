@@ -13,26 +13,25 @@
   <div class="app-shell" id="app">
     <header class="topbar">
       <a class="brand" href="/" aria-label="NexUX">
-        <img src="/static/icons/nexux-favicon-64.png" alt="" width="30" height="30">
-        <span>Nex<span class="brand-accent">UX</span></span>
+        <img src="/static/icons/nexux-favicon-64.png" alt="" width="38" height="38">
+        <span class="brand-copy"><strong>Nex<span class="brand-accent">UX</span></strong>
+          <small>Command Center</small></span>
       </a>
       <div class="surface-title">
-        <strong>Command Center</strong>
-        <span>Arzopa · experimental</span>
-      </div>
-      <div class="topbar-status">
-        <span class="mode-flag" id="data-origin">Datos reales</span>
         <span class="connection-state" data-state="loading" id="connection-state">
           <i aria-hidden="true"></i>
           <span>Cargando</span>
         </span>
+        <time id="clock" aria-label="Hora local">--:--</time>
+      </div>
+      <div class="topbar-status">
+        <span class="mode-flag" id="data-origin">Datos reales</span>
         <button class="icon-button" id="resync-button" type="button"
           title="Sincronizar de nuevo" aria-label="Sincronizar de nuevo">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M20 7v5h-5M4 17v-5h5M6.1 9a7 7 0 0 1 11.5-2.4L20 9M4 15l2.4 2.4A7 7 0 0 0 17.9 15"/>
           </svg>
         </button>
-        <time id="clock" aria-label="Hora local">--:--</time>
       </div>
     </header>
 
@@ -73,83 +72,9 @@
             <small>Montando proveedor</small>
           </div>
         </div>
-        <footer class="chart-footer">
-          <span id="chart-health">Proveedor desconectado</span>
-          <span id="chart-latency">Montaje pendiente</span>
-        </footer>
       </section>
 
       <aside class="context-rail" aria-label="Contexto operativo">
-        <section class="status-panel" aria-labelledby="readiness-title">
-          <header class="panel-header">
-            <div>
-              <span class="eyebrow">Ecosistema NexUX</span>
-              <h2 id="readiness-title">Preparación operacional</h2>
-            </div>
-            <span class="readiness-overall" data-state="unknown"
-              id="readiness-overall">Unknown</span>
-          </header>
-          <p class="readiness-answer" id="readiness-answer">
-            Verificando servicios esenciales.
-          </p>
-          <ul class="readiness-list" id="readiness-list"
-            aria-label="Estado de servicios operacionales"></ul>
-        </section>
-
-        <section class="macro-panel" aria-labelledby="macro-title">
-          <header class="panel-header">
-            <div>
-              <span class="eyebrow">Contexto macro</span>
-              <h2 id="macro-title">Próximo evento de alto impacto</h2>
-            </div>
-            <span class="impact-badge" id="macro-impact">Esperando</span>
-          </header>
-          <div class="macro-reading">
-            <strong id="macro-countdown">--</strong>
-            <span id="macro-country">Calendario</span>
-          </div>
-          <p class="macro-event" id="macro-event">Consultando calendario real.</p>
-          <footer class="macro-footer">
-            <span id="macro-source">Trading Dashboard</span>
-            <span id="macro-updated">Sin lectura</span>
-          </footer>
-        </section>
-
-        <section class="positions-panel" aria-labelledby="positions-title">
-          <header class="panel-header">
-            <div>
-              <span class="eyebrow">Binance · solo lectura</span>
-              <h2 id="positions-title">Posiciones abiertas</h2>
-            </div>
-            <span class="context-badge" data-state="unknown"
-              id="positions-state">Esperando</span>
-          </header>
-          <div class="positions-accounts">
-            <section class="position-account" id="positions-principal">
-              <header>
-                <strong>Cuenta principal</strong>
-                <span data-account-pnl>--</span>
-              </header>
-              <div class="position-list" data-account-positions>
-                <span class="position-empty">Consultando Diario.</span>
-              </div>
-            </section>
-            <section class="position-account" id="positions-bot">
-              <header>
-                <strong>Cuenta Bot</strong>
-                <span data-account-pnl>--</span>
-              </header>
-              <div class="position-list" data-account-positions>
-                <span class="position-empty">Consultando Bot.</span>
-              </div>
-            </section>
-          </div>
-          <footer class="positions-footer">
-            <span id="positions-detail">Fuentes separadas por cuenta</span>
-            <span id="positions-updated">Sin lectura</span>
-          </footer>
-        </section>
-
         <section class="attention-panel" aria-labelledby="attention-title">
           <header class="panel-header">
             <div>
@@ -159,6 +84,9 @@
             <span class="context-badge" data-state="unknown"
               id="attention-state">Esperando</span>
           </header>
+          <div class="attention-focus" aria-hidden="true">
+            <span class="attention-pulse"></span>
+          </div>
           <p class="context-summary" data-state="unknown"
             id="attention-summary">Reuniendo contexto operacional.</p>
           <footer class="context-footer">
@@ -194,6 +122,7 @@
             <div class="music-now">
               <strong id="music-track">Sin reproducción disponible</strong>
               <span id="music-detail">Integración local inactiva</span>
+              <span class="music-provider-label" id="music-provider-label">Proveedor local</span>
             </div>
           </div>
           <div class="music-controls" aria-label="Controles de reproducción">
@@ -209,7 +138,7 @@
                 <path d="M6 5v14M18 6l-8 6 8 6z"/>
               </svg>
             </button>
-            <button class="music-control" id="music-toggle" type="button"
+            <button class="music-control music-toggle" id="music-toggle" type="button"
               title="Reproducir" aria-label="Reproducir" disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path id="music-toggle-icon" d="M8 5v14l11-7z"/>
@@ -223,16 +152,65 @@
             </button>
             <span id="music-feedback">Solo lectura</span>
           </div>
+          <div class="music-progress" id="music-progress" data-known="false">
+            <div class="music-progress-track"><i id="music-progress-value"></i></div>
+            <div class="music-progress-time"><span id="music-elapsed">--:--</span>
+              <span id="music-duration">--:--</span></div>
+          </div>
+        </section>
+
+        <section class="positions-panel" aria-labelledby="positions-title">
+          <header class="panel-header">
+            <div>
+              <span class="eyebrow">Binance · solo lectura</span>
+              <h2 id="positions-title">Posiciones abiertas</h2>
+            </div>
+            <span class="context-badge" data-state="unknown"
+              id="positions-state">Esperando</span>
+          </header>
+          <div class="positions-accounts">
+            <section class="position-account" id="positions-principal">
+              <header><strong>Cuenta principal</strong><span data-account-pnl>--</span></header>
+              <div class="position-list" data-account-positions>
+                <span class="position-empty">Consultando Diario.</span>
+              </div>
+            </section>
+            <section class="position-account" id="positions-bot">
+              <header><strong>Cuenta Bot</strong><span data-account-pnl>--</span></header>
+              <div class="position-list" data-account-positions>
+                <span class="position-empty">Consultando Bot.</span>
+              </div>
+            </section>
+          </div>
+          <footer class="positions-footer"><span id="positions-detail">Fuentes separadas por cuenta</span>
+            <span id="positions-updated">Sin lectura</span></footer>
+        </section>
+
+        <section class="macro-panel" aria-labelledby="macro-title">
+          <header class="panel-header"><div><span class="eyebrow">Contexto macro</span>
+            <h2 id="macro-title">Próximo evento de alto impacto</h2></div>
+            <span class="impact-badge" id="macro-impact">Esperando</span></header>
+          <div class="macro-reading"><strong id="macro-countdown">--</strong>
+            <span id="macro-country">Calendario</span></div>
+          <p class="macro-event" id="macro-event">Consultando calendario real.</p>
+          <footer class="macro-footer"><span id="macro-source">Trading Dashboard</span>
+            <span id="macro-updated">Sin lectura</span></footer>
         </section>
       </aside>
     </main>
 
     <footer class="status-footer">
-      <span id="contract-state">ABI v1</span>
-      <span id="subject-state">Sesión pendiente</span>
-      <span class="footer-spacer"></span>
-      <span id="sequence-state">Sin cursor</span>
-      <span id="last-update">Sin lectura todavía</span>
+      <div class="provider-status"><span id="chart-health">Proveedor desconectado</span>
+        <span id="chart-latency">Montaje pendiente</span></div>
+      <ul class="readiness-list" id="readiness-list"
+        aria-label="Estado de servicios operacionales"></ul>
+      <span class="readiness-overall" data-state="unknown"
+        id="readiness-overall">Unknown</span>
+      <span class="visually-hidden" id="readiness-answer">Verificando servicios esenciales.</span>
+      <div class="footer-meta"><span id="contract-state">NexUX v1.1</span>
+        <span id="subject-state">Sesión pendiente</span>
+        <span id="sequence-state">Sin cursor</span>
+        <span id="last-update">Sin lectura todavía</span></div>
     </footer>
   </div>
 

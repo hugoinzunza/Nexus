@@ -47,6 +47,7 @@ tell application "Music"
     set trackName to ""
     set artistName to ""
     set albumName to ""
+    set durationValue to "missing value"
     set artworkCount to 0
     try
         set activeTrack to current track
@@ -54,6 +55,7 @@ tell application "Music"
         set trackName to name of activeTrack
         set artistName to artist of activeTrack
         set albumName to album of activeTrack
+        set durationValue to duration of activeTrack
         set artworkCount to count of artworks of activeTrack
     end try
     return stateValue & (ASCII character 31) & (volumeValue as text) & ¬
@@ -62,6 +64,7 @@ tell application "Music"
         (ASCII character 31) & trackName & ¬
         (ASCII character 31) & artistName & ¬
         (ASCII character 31) & albumName & ¬
+        (ASCII character 31) & (durationValue as text) & ¬
         (ASCII character 31) & (artworkCount as text)
 end tell
 """.strip()
@@ -129,6 +132,7 @@ class AppleMusicSnapshot:
     artist: str | None = None
     album: str | None = None
     has_artwork: bool = False
+    duration_seconds: float | None = None
 
 
 class AppleMusicPort(Protocol):
@@ -275,7 +279,9 @@ class OsaScriptAppleMusicPort:
     @staticmethod
     def _parse_snapshot(output: str) -> AppleMusicSnapshot:
         fields = output.rstrip("\r\n").split(_FIELD_SEPARATOR)
-        if len(fields) != 8:
+        if len(fields) == 8:
+            fields.insert(7, "missing value")
+        if len(fields) != 9:
             raise AppleMusicPortError(
                 "apple-music.invalid-snapshot",
                 "Apple Music devolvio un snapshot incompleto",
@@ -289,6 +295,7 @@ class OsaScriptAppleMusicPort:
             track,
             artist,
             album,
+            duration_text,
             artwork_count_text,
         ) = fields
         try:
@@ -297,6 +304,11 @@ class OsaScriptAppleMusicPort:
                 None
                 if position_text == "missing value"
                 else float(position_text.replace(",", "."))
+            )
+            duration = (
+                None
+                if duration_text == "missing value"
+                else float(duration_text.replace(",", "."))
             )
             artwork_count = int(artwork_count_text)
         except ValueError as exc:
@@ -319,7 +331,7 @@ class OsaScriptAppleMusicPort:
             )
         if not 0 <= volume <= 1 or artwork_count < 0 or (
             position is not None and position < 0
-        ):
+        ) or (duration is not None and duration < 0):
             raise AppleMusicPortError(
                 "apple-music.invalid-snapshot",
                 "Apple Music devolvio un snapshot fuera de rango",
@@ -334,6 +346,7 @@ class OsaScriptAppleMusicPort:
             artist or None,
             album or None,
             artwork_count > 0,
+            duration,
         )
 
     @staticmethod
@@ -502,6 +515,14 @@ class AppleMusicAdapter:
                 "artist": snapshot.artist or "",
                 "album": snapshot.album or "",
                 "has_artwork": snapshot.has_artwork,
+                "position_seconds": snapshot.position_seconds,
+                "duration_seconds": snapshot.duration_seconds,
+                "progress": (
+                    min(1.0, snapshot.position_seconds / snapshot.duration_seconds)
+                    if snapshot.position_seconds is not None
+                    and snapshot.duration_seconds
+                    else None
+                ),
             }
             if item_ref
             else None
@@ -515,7 +536,7 @@ class AppleMusicAdapter:
             item_ref,
         )
 
-    def metadata(self, item_ref: str) -> Mapping[str, str | bool] | None:
+    def metadata(self, item_ref: str) -> Mapping[str, str | bool | float | None] | None:
         if not self._metadata or self._metadata.get("item_ref") != item_ref:
             return None
         return dict(self._metadata)

@@ -83,16 +83,15 @@ def test_b3_reemplaza_panel_existente_sin_cambiar_layout_general() -> None:
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     css = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
 
-    assert page.count('class="status-panel"') == 1
+    assert page.count('class="status-panel"') == 0
     assert page.count('id="readiness-list"') == 1
     assert 'id="system-title"' not in page
     assert 'id="primary-value"' not in page
     assert 'class="macro-panel"' in page
     assert 'class="music-panel"' in page
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
-    assert "minmax(260px, 1.2fr)" in css
-    assert "minmax(220px, 1fr)" in css
-    assert "minmax(130px, 0.55fr)" in css
+    assert "grid-template-columns: repeat(5, minmax(90px, 1fr));" in css
+    assert 'grid-area: attention' in css
+    assert 'grid-area: music' in css
 
 
 def test_b3_consume_salud_solo_lectura_y_no_inventa_integraciones() -> None:

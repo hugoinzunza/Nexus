@@ -48,6 +48,9 @@ def test_snapshot_expone_estado_y_metadata_sin_ampliar_media_controller() -> Non
                 "track": "Midnight City",
                 "artist": "M83",
                 "album": "Hurry Up, We're Dreaming",
+                "position_seconds": 92,
+                "duration_seconds": 267,
+                "progress": 92 / 267,
                 "ignored": "no se publica",
             },
         )
@@ -59,6 +62,9 @@ def test_snapshot_expone_estado_y_metadata_sin_ampliar_media_controller() -> Non
         assert result["track"] == "Midnight City"
         assert result["artist"] == "M83"
         assert result["album"] == "Hurry Up, We're Dreaming"
+        assert result["position_seconds"] == 92.0
+        assert result["duration_seconds"] == 267.0
+        assert result["progress"] == pytest.approx(92 / 267)
         assert "ignored" not in result
         assert result["commands_enabled"] is False
         assert result["read_only"] is True
@@ -218,6 +224,9 @@ def test_frontend_normaliza_capacidades_y_no_habilita_comandos_por_defecto() -> 
             selected_provider: "qobuz",
             available_providers: ["apple-music", "qobuz", "tidal"],
             artwork_url: "/m/command-center/api/media-artwork?v=abc",
+            position_seconds: 92,
+            duration_seconds: 267,
+            progress: 0.344,
             capabilities: ["open_app", "invented"],
             commands_enabled: false
           }})
@@ -240,6 +249,9 @@ def test_frontend_normaliza_capacidades_y_no_habilita_comandos_por_defecto() -> 
         "apple-music", "qobuz", "tidal"
     ]
     assert payload["qobuz"]["artworkUrl"].endswith("?v=abc")
+    assert payload["qobuz"]["positionSeconds"] == 92
+    assert payload["qobuz"]["durationSeconds"] == 267
+    assert payload["qobuz"]["progress"] == 0.344
 
 
 def test_b7_expone_solo_el_post_multimedia_acotado() -> None:
@@ -248,10 +260,13 @@ def test_b7_expone_solo_el_post_multimedia_acotado() -> None:
 
     assert page.count('class="music-panel"') == 1
     assert 'class="telemetry-panel"' not in page
-    assert page.count('class="music-control"') == 3
+    assert page.count('class="music-control"') == 2
+    assert page.count('class="music-control music-toggle"') == 1
     assert page.count('data-media-provider=') == 3
     assert 'id="music-open"' in page
     assert 'id="music-artwork-image"' in page
+    assert 'id="music-progress"' in page
+    assert 'id="music-provider-label"' in page
     assert "/m/command-center/api/media-context" in script
     assert "/m/command-center/api/media-command" in script
     assert script.count('method: "POST"') == 1

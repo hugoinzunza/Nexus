@@ -179,6 +179,6 @@ def test_b5_historico_sale_del_viewport_y_lo_reemplaza_posiciones() -> None:
     assert "<a " not in positions_markup
     assert script.count('method: "POST"') == 1
     assert '"/m/command-center/api/media-command"' in script
-    assert ".status-panel {\n  grid-column: 1 / -1;" in (
-        PUBLIC / "command-center.css"
-    ).read_text(encoding="utf-8")
+    css = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
+    assert ".readiness-list {" in css
+    assert "grid-template-columns: repeat(5, minmax(90px, 1fr));" in css

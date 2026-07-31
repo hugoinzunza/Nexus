@@ -31,6 +31,7 @@ class RecordingPort:
             "Sade",
             "EMAXSA VARIOS 1",
             "tidal:TRACK",
+            0.62,
         )
 
     def helper_available(self):
@@ -99,6 +100,7 @@ def test_tidal_proyecta_playback_y_control_del_puente_accesible() -> None:
             "track": "The Sweetest Taboo",
             "artist": "Sade",
             "album": "EMAXSA VARIOS 1",
+            "progress": 0.62,
         }
         ack = await adapter.execute(
             MediaCommand("tidal-pause", MediaAction.PAUSE, NOW),

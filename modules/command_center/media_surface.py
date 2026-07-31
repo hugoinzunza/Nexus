@@ -54,6 +54,9 @@ class MediaSurfaceService:
             "artist": None,
             "album": None,
             "artwork_url": None,
+            "position_seconds": None,
+            "duration_seconds": None,
+            "progress": None,
             "item_ref": None,
             "capabilities": [],
             "commands_enabled": False,
@@ -78,6 +81,9 @@ class MediaSurfaceService:
             "artist": None,
             "album": None,
             "artwork_url": None,
+            "position_seconds": None,
+            "duration_seconds": None,
+            "progress": None,
             "item_ref": None,
             "capabilities": sorted(item.value for item in capabilities),
             "commands_enabled": self._commands_enabled,
@@ -105,6 +111,10 @@ class MediaSurfaceService:
                     value = metadata.get(field)
                     if isinstance(value, str) and value.strip():
                         result[field] = value.strip()[:240]
+                for field in ("position_seconds", "duration_seconds", "progress"):
+                    value = metadata.get(field)
+                    if type(value) in (int, float) and float(value) >= 0:
+                        result[field] = float(value)
         return result
 
     async def execute(

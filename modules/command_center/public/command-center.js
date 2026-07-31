@@ -657,6 +657,15 @@ export function normalizeMediaContext(payload) {
     artworkUrl: payload?.artwork_url
       ? String(payload.artwork_url).slice(0, 240)
       : null,
+    positionSeconds: Number.isFinite(Number(payload?.position_seconds))
+      ? Math.max(0, Number(payload.position_seconds))
+      : null,
+    durationSeconds: Number.isFinite(Number(payload?.duration_seconds))
+      ? Math.max(0, Number(payload.duration_seconds))
+      : null,
+    progress: Number.isFinite(Number(payload?.progress))
+      ? Math.min(1, Math.max(0, Number(payload.progress)))
+      : null,
     itemRef: payload?.item_ref ? String(payload.item_ref) : null,
     capabilities,
     commandsEnabled: payload?.commands_enabled === true,
@@ -1423,6 +1432,9 @@ function fixtureMediaContext() {
     track: "Midnight City",
     artist: "M83",
     album: "Hurry Up, We're Dreaming",
+    position_seconds: 92,
+    duration_seconds: 267,
+    progress: 92 / 267,
     item_ref: "music:fixture",
     capabilities: [
       "current_state",
@@ -1590,19 +1602,21 @@ function renderOperationalReadiness(readiness) {
     answers[readiness.overall];
   const list = document.querySelector("#readiness-list");
   list.replaceChildren(
-    ...readiness.services.map((service) => {
-      const item = document.createElement("li");
-      item.className = "readiness-item";
-      const name = document.createElement("span");
-      name.className = "readiness-name";
-      name.textContent = service.name;
-      const state = document.createElement("span");
-      state.className = "readiness-state";
-      state.dataset.state = service.state;
-      state.textContent = READINESS_LABELS[service.state];
-      item.append(name, state);
-      return item;
-    }),
+    ...readiness.services
+      .filter((service) => REQUIRED_READINESS_IDS.has(service.id))
+      .map((service) => {
+        const item = document.createElement("li");
+        item.className = "readiness-item";
+        const name = document.createElement("span");
+        name.className = "readiness-name";
+        name.textContent = service.name;
+        const state = document.createElement("span");
+        state.className = "readiness-state";
+        state.dataset.state = service.state;
+        state.textContent = READINESS_LABELS[service.state];
+        item.append(name, state);
+        return item;
+      }),
   );
 }
 
@@ -1816,6 +1830,8 @@ function renderMediaContext(context) {
         ? "Cerrada"
         : stateLabels[context.lifecycle] || "Unknown";
   const selectedLabel = providerLabels[context.selectedProvider] || "Música";
+  document.querySelector("#music-provider-label").textContent =
+    context.provider || selectedLabel;
   document.querySelector("#music-track").textContent =
     context.track || (
       context.itemRef
@@ -1892,6 +1908,33 @@ function renderMediaContext(context) {
         ? FRESHNESS_LABELS[context.freshness] || "Estado leído"
         : "Solo lectura"
     );
+
+  const duration = context.durationSeconds > 0
+    ? context.durationSeconds
+    : null;
+  const position = context.positionSeconds !== null
+    ? context.positionSeconds
+    : null;
+  const progress = context.progress !== null
+    ? context.progress
+    : duration && position !== null
+      ? Math.min(1, position / duration)
+      : null;
+  const progressRoot = document.querySelector("#music-progress");
+  progressRoot.dataset.known = String(progress !== null);
+  document.querySelector("#music-progress-value").style.width =
+    `${Math.round((progress || 0) * 1000) / 10}%`;
+  document.querySelector("#music-elapsed").textContent =
+    position !== null ? formatMediaTime(position) : "--:--";
+  document.querySelector("#music-duration").textContent =
+    duration !== null ? formatMediaTime(duration) : "--:--";
+}
+
+function formatMediaTime(value) {
+  if (!Number.isFinite(value) || value < 0) return "--:--";
+  const seconds = Math.floor(value);
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 function wireMediaControls(onAction) {

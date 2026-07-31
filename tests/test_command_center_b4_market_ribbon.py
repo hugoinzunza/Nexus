@@ -291,7 +291,7 @@ def test_b4_reutiliza_banda_superior_y_seleccion_remonta_chart_provider() -> Non
     assert "font-size: var(--font-md);" in css
     assert ".market-change {" in css
     assert "font-size: 15px;" in css
-    for color in ("#38d7f0", "#2ee6a6", "#ffc44d", "#ff536e"):
+    for color in ("#19d9ff", "#20edac", "#ffbd3e", "#ff4168"):
         assert color in css
 
 

@@ -68,6 +68,7 @@ class DesktopPlaybackSnapshot:
     artist: str | None
     album: str | None
     item_ref: str | None
+    progress: float | None = None
 
 
 class QobuzPortError(RuntimeError):
@@ -180,7 +181,14 @@ class OsaScriptQobuzPort:
             key: self._optional_text(payload.get(key), key)
             for key in ("track", "artist", "album", "item_ref")
         }
-        return DesktopPlaybackSnapshot(playback, **fields)
+        progress_value = payload.get("progress")
+        progress = (
+            float(progress_value)
+            if type(progress_value) in (int, float)
+            and 0 <= float(progress_value) <= 1
+            else None
+        )
+        return DesktopPlaybackSnapshot(playback, progress=progress, **fields)
 
     async def execute(
         self,
@@ -466,7 +474,7 @@ class QobuzAdapter:
         self._command_lock: asyncio.Lock | None = None
         self._fingerprints: OrderedDict[str, tuple[Any, ...]] = OrderedDict()
         self._results: OrderedDict[str, MediaAck] = OrderedDict()
-        self._metadata: dict[str, str] | None = None
+        self._metadata: dict[str, str | float] | None = None
         self._last_playback: str | None = None
         self._last_playback_at_ms: int | None = None
         self._metrics = {
@@ -555,6 +563,11 @@ class QobuzAdapter:
                 "track": snapshot.track or "",
                 "artist": snapshot.artist or "",
                 "album": snapshot.album or "",
+                **(
+                    {"progress": snapshot.progress}
+                    if snapshot.progress is not None
+                    else {}
+                ),
             }
             if snapshot.item_ref
             else None
@@ -568,7 +581,7 @@ class QobuzAdapter:
             snapshot.item_ref,
         )
 
-    def metadata(self, item_ref: str) -> dict[str, str] | None:
+    def metadata(self, item_ref: str) -> dict[str, str | float] | None:
         if not self._metadata or self._metadata.get("item_ref") != item_ref:
             return None
         return dict(self._metadata)
