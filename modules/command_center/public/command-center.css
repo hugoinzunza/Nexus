@@ -1,19 +1,19 @@
 :root {
   color-scheme: dark;
-  --bg: #101316;
-  --surface-1: #171b1f;
-  --surface-2: #1d2227;
-  --surface-raised: #242a30;
+  --bg: #111519;
+  --surface-1: #1d2328;
+  --surface-2: #242b31;
+  --surface-raised: #2b333a;
   --text-1: #f4f7f8;
-  --text-2: #aeb8bf;
-  --text-3: #7f8a92;
-  --border: #323a41;
-  --border-strong: #46515a;
-  --info: #59c3d8;
-  --success: #49c58b;
-  --warning: #e9b44c;
-  --danger: #ef6a6a;
-  --unknown: #97a1a8;
+  --text-2: #c1c9ce;
+  --text-3: #929da5;
+  --border: #46515a;
+  --border-strong: #5a6670;
+  --info: #65d2e8;
+  --success: #56d99a;
+  --warning: #f2bd50;
+  --danger: #ff7272;
+  --unknown: #aab4bb;
   --focus: #8ed9e7;
   --space-1: 4px;
   --space-2: 8px;
@@ -132,7 +132,7 @@ a:focus-visible {
 .mode-flag,
 .connection-state,
 .source-label,
-.count-badge {
+.impact-badge {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
@@ -156,6 +156,40 @@ a:focus-visible {
 .connection-state {
   gap: var(--space-2);
   color: var(--unknown);
+}
+
+.chart-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.external-action {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--info) 55%, var(--border));
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  color: var(--info);
+  font-size: var(--font-xs);
+  font-weight: 720;
+  text-decoration: none;
+}
+
+.external-action:hover {
+  border-color: var(--info);
+  background: color-mix(in srgb, var(--info) 9%, transparent);
+}
+
+.external-action svg {
+  width: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .connection-state i {
@@ -356,7 +390,7 @@ a:focus-visible {
 }
 
 .status-panel,
-.modules-panel,
+.macro-panel,
 .telemetry-panel {
   min-height: 0;
   overflow: hidden;
@@ -413,57 +447,62 @@ a:focus-visible {
   font-weight: 680;
 }
 
-.count-badge {
-  min-width: 32px;
-  justify-content: center;
-  color: var(--info);
-  font-variant-numeric: tabular-nums;
+.impact-badge {
+  color: var(--warning);
 }
 
-.module-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-  margin: var(--space-4) 0 0;
-  padding: 0;
-  list-style: none;
+.impact-badge[data-state="ready"] {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
 }
 
-.module-item,
-.empty-state {
-  display: flex;
-  min-width: 0;
-  min-height: 42px;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0 var(--space-3);
-  background: var(--surface-2);
+.impact-badge[data-state="degraded"] {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
 }
 
-.module-item span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.module-item .module-health {
-  flex: 0 0 auto;
-  color: var(--success);
-  font-size: var(--font-xs);
-  text-transform: uppercase;
-}
-
-.module-item.disabled .module-health {
+.impact-badge[data-state="empty"] {
   color: var(--unknown);
 }
 
-.empty-state {
-  grid-column: 1 / -1;
-  justify-content: flex-start;
-  color: var(--text-2);
+.macro-reading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: var(--space-5) 0 var(--space-3);
+}
+
+.macro-reading strong {
+  font-size: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.macro-reading span {
+  color: var(--warning);
+  font-size: var(--font-sm);
+  font-weight: 720;
+}
+
+.macro-event {
+  min-height: 48px;
+  margin: 0;
+  color: var(--text-1);
+  font-size: var(--font-md);
+  font-weight: 680;
+  line-height: 1.45;
+}
+
+.macro-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: var(--font-xs);
 }
 
 .viewport-reading {
@@ -556,7 +595,7 @@ a:focus-visible {
   .attention-band,
   .chart-region,
   .status-panel,
-  .modules-panel,
+  .macro-panel,
   .telemetry-panel,
   .status-footer {
     padding-inline: var(--space-4);
@@ -583,10 +622,6 @@ a:focus-visible {
   .context-rail > section {
     min-height: 220px;
     border-top: 1px solid var(--border);
-  }
-
-  .module-list {
-    grid-template-columns: 1fr;
   }
 
   .status-footer {

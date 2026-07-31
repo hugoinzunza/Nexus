@@ -1,11 +1,14 @@
 import json
 import re
+import subprocess
 from pathlib import Path
 
 from core.module_base import ModuleContext
 from modules.command_center.contracts import CONTRACT_V1_FINGERPRINT
 from modules.command_center.module import CommandCenterModule
 from modules.command_center.module_registry import command_center_module_registry
+from modules.trading import claude_brief, dashboard
+from modules.trading.module import TradingModule
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +74,101 @@ def test_shell_fija_el_abi_y_no_agrega_superficie_de_comandos() -> None:
     assert command_center_module_registry().stats()["attached_factories"] == 0
 
 
+def test_b2_agrega_un_contexto_macro_y_salto_honesto_a_tradingview() -> None:
+    page = (PUBLIC / "index.html").read_text(encoding="utf-8")
+    script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
+
+    assert page.count('class="macro-panel"') == 1
+    assert 'id="macro-event"' in page
+    assert 'id="module-list"' not in page
+    assert 'href="https://www.tradingview.com/chart/"' in page
+    assert 'target="_blank"' in page
+    assert 'rel="noopener noreferrer"' in page
+    assert (
+        'const MACRO_URL = "/m/trading/api/dashboard?translate=0"' in script
+    )
+    assert "selectNextHighImpact" in script
+    assert "formatMacroCountdown" in script
+    assert "method: \"POST\"" not in script
+
+
+def test_b2_seleccion_macro_es_causal_y_no_inventa_impacto() -> None:
+    script_uri = (PUBLIC / "command-center.js").resolve().as_uri()
+    node = f"""
+      import({json.dumps(script_uri)}).then((module) => {{
+        const events = [
+          {{ title: "pasado", impact: "High", ts: 90 }},
+          {{ title: "medio", impact: "Medium", ts: 105 }},
+          {{ title: "posterior", impact: "High", ts: 120 }},
+          {{ title: "primero", impact: "High", ts: 110 }}
+        ];
+        const result = {{
+          selected: module.selectNextHighImpact(events, 100)?.title,
+          minutes: module.formatMacroCountdown(160, 100000),
+          hours: module.formatMacroCountdown(3700, 100000)
+        }};
+        process.stdout.write(JSON.stringify(result));
+      }});
+    """
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", node],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert json.loads(result.stdout) == {
+        "selected": "primero",
+        "minutes": "1 min",
+        "hours": "1 h",
+    }
+
+
+def test_dashboard_no_oculta_eventos_futuros_tras_ocho_recientes(
+    monkeypatch,
+) -> None:
+    calls = []
+
+    def calendar(*, max_keep):
+        calls.append(max_keep)
+        return [{"title": "próximo", "impact": "High", "ts": 200}]
+
+    monkeypatch.setattr(dashboard.news, "week_key_events", calendar)
+    monkeypatch.setattr(dashboard, "_global", lambda: {})
+    monkeypatch.setattr(dashboard, "_markets", lambda: [])
+    monkeypatch.setattr(dashboard, "_fear_greed", lambda: None)
+    monkeypatch.setattr(dashboard, "_news_feed", lambda: [])
+    monkeypatch.setattr(dashboard.regime, "vix_now", lambda: None)
+
+    result = dashboard.get_dashboard()
+
+    assert calls == [24]
+    assert result["calendar"][0]["title"] == "próximo"
+
+
+def test_lectura_macro_no_activa_traduccion_con_claude(monkeypatch) -> None:
+    translations = []
+    payload = {
+        "generated_at_ms": 100,
+        "calendar": [],
+        "news": [{"title": "English title", "lang": "en"}],
+    }
+    monkeypatch.setattr(dashboard, "get_dashboard", lambda: payload.copy())
+    monkeypatch.setattr(
+        claude_brief,
+        "translate_titles",
+        lambda titles: translations.append(titles) or {},
+    )
+    module = object.__new__(TradingModule)
+
+    status, _, _ = module.api("dashboard", {"translate": "0"})
+    assert status == 200
+    assert translations == []
+
+    module.api("dashboard", {})
+    assert translations == [["English title"]]
+
+
 def test_tokens_cumplen_contraste_minimo_en_superficie_objetivo() -> None:
     tokens = _tokens()
 
@@ -94,6 +192,8 @@ def test_documentacion_registra_hardware_y_tokens_sin_inventar_ergonomia() -> No
     assert "Distancia de observación | 80–90 cm" in viewport
     assert "Ángulo de mirada | Pendiente" in viewport
     assert "Superficie objetivo" in foundations
+    assert "Sprint B2" in foundations
+    assert "`#111519`" in foundations
     assert "`loading`" in foundations
     assert "`disconnected`" in foundations
     findings = (ROOT / "docs" / "COMMAND_CENTER_B1_FINDINGS.md").read_text(
@@ -109,6 +209,8 @@ def test_documentacion_registra_hardware_y_tokens_sin_inventar_ergonomia() -> No
     assert "VAL-0017 APROBADO" in validation
     assert "Distancia | 80–90 cm" in validation
     assert "Sprint B2 autorizado" in validation
+    assert "VAL-0018" in validation
+    assert "PENDIENTE perceptualmente" in validation
 
 
 def test_modulo_declara_superficie_visual_experimental() -> None:

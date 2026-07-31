@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="theme-color" content="#101316">
+  <meta name="theme-color" content="#111519">
   <link rel="icon" href="/static/icons/nexux-favicon-v5.ico">
   <link rel="stylesheet" href="./command-center.css">
   <title>NexUX Command Center</title>
@@ -53,7 +53,16 @@
             <span class="eyebrow">Mercado</span>
             <h1 id="market-title">BTCUSDT <span>· 1H</span></h1>
           </div>
-          <span class="source-label">TradingView · spike</span>
+          <div class="chart-actions">
+            <span class="source-label">TradingView · contexto</span>
+            <a class="external-action" href="https://www.tradingview.com/chart/"
+              target="_blank" rel="noopener noreferrer">
+              <span>Análisis completo</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>
+              </svg>
+            </a>
+          </div>
         </header>
         <div class="chart-stage" id="chart-target">
           <div class="chart-placeholder">
@@ -96,17 +105,23 @@
           </dl>
         </section>
 
-        <section class="modules-panel" aria-labelledby="modules-title">
+        <section class="macro-panel" aria-labelledby="macro-title">
           <header class="panel-header">
             <div>
-              <span class="eyebrow">Superficies</span>
-              <h2 id="modules-title">Módulos autorizados</h2>
+              <span class="eyebrow">Contexto macro</span>
+              <h2 id="macro-title">Próximo evento de alto impacto</h2>
             </div>
-            <span class="count-badge" id="module-count">0</span>
+            <span class="impact-badge" id="macro-impact">Esperando</span>
           </header>
-          <ul class="module-list" id="module-list">
-            <li class="empty-state">Esperando configuración</li>
-          </ul>
+          <div class="macro-reading">
+            <strong id="macro-countdown">--</strong>
+            <span id="macro-country">Calendario</span>
+          </div>
+          <p class="macro-event" id="macro-event">Consultando calendario real.</p>
+          <footer class="macro-footer">
+            <span id="macro-source">Trading Dashboard</span>
+            <span id="macro-updated">Sin lectura</span>
+          </footer>
         </section>
 
         <section class="telemetry-panel" aria-labelledby="telemetry-title">

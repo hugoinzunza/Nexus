@@ -5,6 +5,7 @@ export const CONTRACT_FINGERPRINT =
   "b0a8a7efa623a1aae4b681c3cfc42790d36a6a14fbc689688026c523f2e49b46";
 
 const SNAPSHOT_URL = "/m/command-center/api/snapshot";
+const MACRO_URL = "/m/trading/api/dashboard?translate=0";
 const WS_PATH = "/m/command-center/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 15000];
 const FIXTURE_STATES = new Set([
@@ -38,6 +39,99 @@ export function projectionFreshness(envelope, now = Date.now()) {
   if (now >= envelope.expires_at) return "expired";
   if (now >= envelope.stale_at) return "stale";
   return envelope.payload?.state?.freshness || "unknown";
+}
+
+export function selectNextHighImpact(calendar, nowSeconds = Date.now() / 1000) {
+  return (Array.isArray(calendar) ? calendar : [])
+    .filter(
+      (event) =>
+        String(event?.impact || "").toLowerCase() === "high" &&
+        Number.isFinite(Number(event?.ts)) &&
+        Number(event.ts) >= nowSeconds,
+    )
+    .sort((left, right) => Number(left.ts) - Number(right.ts))[0] || null;
+}
+
+export function formatMacroCountdown(eventTimestamp, now = Date.now()) {
+  const remainingSeconds = Math.max(
+    0,
+    Math.round(Number(eventTimestamp) - now / 1000),
+  );
+  if (remainingSeconds < 60) return "ahora";
+  const minutes = Math.ceil(remainingSeconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours} h ${remainder} min` : `${hours} h`;
+}
+
+export class MacroContextClient {
+  constructor({
+    dashboardUrl = MACRO_URL,
+    fetcher = (...args) => fetch(...args),
+    onChange = () => {},
+    now = () => Date.now(),
+  } = {}) {
+    this.dashboardUrl = dashboardUrl;
+    this.fetcher = fetcher;
+    this.onChange = onChange;
+    this.now = now;
+    this.status = "loading";
+    this.event = null;
+    this.generatedAt = null;
+    this.error = null;
+    this.refreshTimer = null;
+    this.countdownTimer = null;
+  }
+
+  state() {
+    return {
+      status: this.status,
+      event: this.event,
+      generatedAt: this.generatedAt,
+      error: this.error,
+      now: this.now(),
+    };
+  }
+
+  async start() {
+    await this.refresh();
+    this.refreshTimer = setInterval(() => {
+      this.refresh().catch(() => {});
+    }, 60_000);
+    this.countdownTimer = setInterval(() => this.onChange(this.state()), 1000);
+  }
+
+  stop() {
+    clearInterval(this.refreshTimer);
+    clearInterval(this.countdownTimer);
+    this.refreshTimer = null;
+    this.countdownTimer = null;
+  }
+
+  async refresh() {
+    try {
+      const response = await this.fetcher(this.dashboardUrl, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`dashboard HTTP ${response.status}`);
+      const dashboard = await response.json();
+      this.event = selectNextHighImpact(
+        dashboard?.calendar,
+        this.now() / 1000,
+      );
+      this.generatedAt = Number.isFinite(Number(dashboard?.generated_at_ms))
+        ? Number(dashboard.generated_at_ms)
+        : this.now();
+      this.status = this.event ? "ready" : "empty";
+      this.error = null;
+    } catch (error) {
+      this.status = "degraded";
+      this.error = error?.message || "calendario no disponible";
+    }
+    this.onChange(this.state());
+  }
 }
 
 export function reduceEnvelope(readModel, cursors, envelope) {
@@ -412,6 +506,22 @@ function fixtureState(name) {
   };
 }
 
+function fixtureMacroState() {
+  const now = Date.now();
+  return {
+    status: "ready",
+    event: {
+      title: "Decisión de tasas · fixture",
+      country: "USD",
+      impact: "High",
+      ts: Math.round(now / 1000) + 42 * 60,
+    },
+    generatedAt: now,
+    error: null,
+    now,
+  };
+}
+
 function worstFreshness(readModel, now) {
   const rank = { live: 0, current: 0, unknown: 1, stale: 2, expired: 3 };
   return Object.values(readModel).reduce((worst, envelope) => {
@@ -479,9 +589,12 @@ function render(state) {
 
   const modules =
     readModel["system.modules"]?.payload?.data?.modules || [];
-  const enabled = modules.filter((item) => item.enabled).length;
-  document.querySelector("#primary-value").textContent = String(enabled);
-  document.querySelector("#module-count").textContent = String(modules.length);
+  document.querySelector("#primary-value").textContent =
+    effectiveSeverity === "normal" ? "OK" : "—";
+  document.querySelector("#primary-label").textContent =
+    effectiveSeverity === "normal"
+      ? "plataforma disponible"
+      : "requiere atención";
   document.querySelector("#system-word").textContent =
     effectiveSeverity === "normal" ? "Estable" : label(operational);
   document.querySelector("#snapshot-state").textContent = state.snapshotAt
@@ -496,8 +609,8 @@ function render(state) {
 
   const cursorValues = Object.values(state.cursors || {});
   document.querySelector("#sequence-state").textContent = cursorValues.length
-    ? `${cursorValues.length} cursores · seq ${Math.max(...cursorValues)}`
-    : "Sin cursor";
+    ? `${modules.length} módulos · ${cursorValues.length} cursores · seq ${Math.max(...cursorValues)}`
+    : `${modules.length} módulos · sin cursor`;
   document.querySelector("#last-update").textContent = state.snapshotAt
     ? `Snapshot ${new Date(state.snapshotAt).toLocaleTimeString("es-CL", {
         hour: "2-digit",
@@ -506,26 +619,41 @@ function render(state) {
       })}`
     : "Sin lectura todavía";
 
-  const list = document.querySelector("#module-list");
-  if (!modules.length) {
-    list.innerHTML = '<li class="empty-state">Sin módulos publicados</li>';
-  } else {
-    list.replaceChildren(
-      ...modules.slice(0, 10).map((item) => {
-        const li = document.createElement("li");
-        li.className = `module-item${item.enabled ? "" : " disabled"}`;
-        const name = document.createElement("span");
-        name.textContent = item.slug;
-        const status = document.createElement("span");
-        status.className = "module-health";
-        status.textContent = item.enabled ? "activo" : "inactivo";
-        li.append(name, status);
-        return li;
-      }),
-    );
-  }
   document.querySelector("#resync-button").disabled =
     state.resyncing || state.connection === "loading";
+}
+
+function renderMacro(state) {
+  const badge = document.querySelector("#macro-impact");
+  badge.dataset.state = state.status;
+  const event = state.event;
+  if (state.status === "ready" && event) {
+    badge.textContent = "Alto";
+    document.querySelector("#macro-countdown").textContent =
+      formatMacroCountdown(event.ts, state.now);
+    document.querySelector("#macro-country").textContent =
+      event.country || "Global";
+    document.querySelector("#macro-event").textContent =
+      event.title || "Evento sin título";
+  } else {
+    const copies = {
+      loading: ["Esperando", "--", "Calendario", "Consultando calendario real."],
+      empty: ["Sin próximos", "--", "Calendario", "No hay eventos futuros publicados esta semana."],
+      degraded: ["No disponible", "--", "Calendario", "La última consulta del calendario falló."],
+    };
+    const [status, countdown, country, message] =
+      copies[state.status] || copies.degraded;
+    badge.textContent = status;
+    document.querySelector("#macro-countdown").textContent = countdown;
+    document.querySelector("#macro-country").textContent = country;
+    document.querySelector("#macro-event").textContent = message;
+  }
+  document.querySelector("#macro-updated").textContent = state.generatedAt
+    ? `Leído ${new Date(state.generatedAt).toLocaleTimeString("es-CL", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`
+    : "Sin lectura";
 }
 
 function updateViewport() {
@@ -590,17 +718,25 @@ export function bootstrap() {
     origin.classList.add("fixture");
     const state = fixtureState(fixture);
     render(state);
+    renderMacro(fixtureMacroState());
     document.querySelector("#resync-button").disabled = true;
     return;
   }
 
   const client = new CommandCenterClient({ onChange: render });
+  const macroClient = new MacroContextClient({ onChange: renderMacro });
   window.__nexuxCommandCenter = client;
+  window.__nexuxCommandCenterMacro = macroClient;
   document
     .querySelector("#resync-button")
     .addEventListener("click", () => client.resync());
   client.start().catch(() => {});
+  macroClient.start().catch(() => {});
   setInterval(() => render(client.state()), 1000);
+  window.addEventListener("beforeunload", () => {
+    client.stop();
+    macroClient.stop();
+  });
 }
 
 if (typeof document !== "undefined") bootstrap();

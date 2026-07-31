@@ -522,6 +522,54 @@ Sprint B2 autorizado.
 
 ---
 
+## VAL-0018 — Línea B Sprint B2 · Contexto macro y contraste
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Hardware | ARZOPA, 1920 × 1080 @ 60 Hz |
+| Viewport observado | Chrome 1920 × 936 durante control remoto |
+| Datos | Snapshot, Gateway, TradingView y calendario reales |
+| Módulos visibles nuevos | 1: próximo evento macro de alto impacto |
+
+### Evidencia técnica
+
+- TradingView público conserva la función de contexto continuo.
+- El enlace `Análisis completo` abre `https://www.tradingview.com/chart/` en una
+  pestaña separada con `noopener noreferrer`; no simula LuxAlgo dentro del embed.
+- El contexto macro seleccionó `BOJ Press Conference`, JPY, aproximadamente
+  2 h 34 min por delante durante la captura.
+- La selección ignora eventos pasados y cualquier impacto distinto de `High`.
+- El calendario corrigió un recorte que ocultaba eventos futuros detrás de ocho
+  eventos recientes.
+- La consulta usa `translate=0`; el refresco periódico no activa Claude para
+  traducir noticias que el módulo no presenta.
+- La composición ocupa 1920 px exactos, sin overflow horizontal ni vertical.
+- TradingView alcanzó `Proveedor disponible`.
+- La paleta B2 conserva contraste automatizado ≥4.5:1 para texto y estados.
+
+### Evidencia visual
+
+- `docs/evidence/command-center-b2-arzopa-physical.png`
+
+### Restricciones preservadas
+
+- Un solo módulo de contexto adicional.
+- Sin POST, decisiones de trading, umbrales inventados ni cambios de severidad.
+- Wire ABI, EventBus, Gateway y fingerprint intactos.
+- Cero factories productivas.
+- Sin merge a `main`, Railway o producción.
+
+### Conclusión
+
+**APROBADO técnicamente** y **PENDIENTE perceptualmente**. La captura confirma
+composición y legibilidad mecánica, pero Hugo debe repetir la regla de los dos
+segundos y comparar el brillo percibido desde 80–90 cm antes de cerrar B2.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

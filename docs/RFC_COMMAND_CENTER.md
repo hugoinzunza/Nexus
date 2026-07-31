@@ -61,6 +61,21 @@ Por ello B2 debe elegir explícitamente entre conservar el widget como contexto
 general o abrir el layout autenticado de TradingView como superficie externa.
 Reimplementar LuxAlgo dentro de NexUX no está autorizado.
 
+La implementación candidata conserva el widget como contexto permanente y
+ofrece un enlace externo a `https://www.tradingview.com/chart/`, donde la sesión
+del navegador mantiene LuxAlgo y los indicadores privados. El primer y único
+módulo adicional responde: **¿cuál es el próximo evento macro de alto impacto?**
+Lee el calendario existente del Trading Dashboard, selecciona causalmente el
+primer evento futuro marcado `High` por la fuente y no altera la severidad del
+sistema ni inventa umbrales.
+
+El dashboard publica hasta 24 eventos semanales porque el límite anterior de
+ocho podía agotarse con eventos recientes y ocultar eventos futuros. El cambio
+es aditivo y no afecta el Wire ABI, EventBus, Gateway ni factories. B2 permanece
+pendiente de aprobación perceptual en VAL-0018. La lectura usa
+`translate=0`: consultar el calendario no activa traducción con Claude ni
+consume IA para titulares que la superficie no muestra.
+
 ### Fase A.5 — Integraciones headless
 
 Línea A arquitectónicamente completa permanece cerrada. A.5 incorpora

@@ -1007,18 +1007,20 @@ class TradingModule(NexusModule):
                 data = _dash.get_dashboard()
             except Exception as exc:  # noqa: BLE001
                 return self._json_error(502, f"no se pudo armar el dashboard: {exc}")
-            # Titulares en inglés → traducir al español con Claude (cacheado).
-            try:
-                news = data.get("news") or []
-                en = [n["title"] for n in news if n.get("lang") != "es"]
-                if en:
-                    from . import claude_brief as _brief
-                    tr = _brief.translate_titles(en)
-                    for n in news:
-                        if n.get("lang") != "es":
-                            n["title"] = tr.get(n["title"], n["title"])
-            except Exception:  # noqa: BLE001
-                pass
+            # El Command Center solo consume calendario y evita activar IA por
+            # una lectura periódica que no necesita titulares traducidos.
+            if str(query.get("translate", "1")).lower() not in ("0", "false", "no"):
+                try:
+                    news = data.get("news") or []
+                    en = [n["title"] for n in news if n.get("lang") != "es"]
+                    if en:
+                        from . import claude_brief as _brief
+                        tr = _brief.translate_titles(en)
+                        for n in news:
+                            if n.get("lang") != "es":
+                                n["title"] = tr.get(n["title"], n["title"])
+                except Exception:  # noqa: BLE001
+                    pass
             body = json.dumps(data, ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)
         if subpath == "brief":

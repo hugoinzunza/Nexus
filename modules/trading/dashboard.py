@@ -234,7 +234,9 @@ def get_dashboard() -> dict:
     except Exception:  # noqa: BLE001
         vix = None
     try:
-        cal = news.week_key_events(max_keep=8)
+        # El Command Center selecciona el próximo evento futuro. Un límite de
+        # ocho podía agotarse con eventos recientes y ocultar los que venían.
+        cal = news.week_key_events(max_keep=24)
     except Exception:  # noqa: BLE001
         cal = []
     indicators = {

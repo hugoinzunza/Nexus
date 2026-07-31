@@ -1,7 +1,7 @@
 # NEXUX Command Center — Design System Foundations
 
-- **Estado:** Experimental; Sprint B1
-- **Versión:** 0.1
+- **Estado:** Experimental; Sprint B2
+- **Versión:** 0.2
 - **Fecha:** 2026-07-30
 - **Superficie objetivo:** ARZOPA 1920 × 1080, luminancia relativa limitada
 
@@ -30,20 +30,20 @@ La fuente ejecutable de estos tokens es
 
 | Token | Valor | Uso |
 |---|---:|---|
-| `--bg` | `#101316` | Fondo general |
-| `--surface-1` | `#171b1f` | Bandas y paneles |
-| `--surface-2` | `#1d2227` | Filas y énfasis estructural |
-| `--surface-raised` | `#242a30` | Superficie elevada excepcional |
+| `--bg` | `#111519` | Fondo general |
+| `--surface-1` | `#1d2328` | Bandas y paneles |
+| `--surface-2` | `#242b31` | Filas y énfasis estructural |
+| `--surface-raised` | `#2b333a` | Superficie elevada excepcional |
 | `--text-1` | `#f4f7f8` | Texto y valores primarios |
-| `--text-2` | `#aeb8bf` | Contexto y etiquetas |
-| `--text-3` | `#7f8a92` | Metadatos no críticos |
-| `--border` | `#323a41` | Separación |
-| `--border-strong` | `#46515a` | Foco estructural |
-| `--info` | `#59c3d8` | Información activa |
-| `--success` | `#49c58b` | Estado estable |
-| `--warning` | `#e9b44c` | Degradación o stale |
-| `--danger` | `#ef6a6a` | Crítico, expired o desconectado |
-| `--unknown` | `#97a1a8` | Estado no determinado |
+| `--text-2` | `#c1c9ce` | Contexto y etiquetas |
+| `--text-3` | `#929da5` | Metadatos no críticos |
+| `--border` | `#46515a` | Separación |
+| `--border-strong` | `#5a6670` | Foco estructural |
+| `--info` | `#65d2e8` | Información activa |
+| `--success` | `#56d99a` | Estado estable |
+| `--warning` | `#f2bd50` | Degradación o stale |
+| `--danger` | `#ff7272` | Crítico, expired o desconectado |
+| `--unknown` | `#aab4bb` | Estado no determinado |
 
 Los contrastes se verifican automáticamente contra `--bg` y `--surface-1`.
 `--text-3` solo puede usarse en metadatos no críticos; si la prueba física falla,
@@ -98,5 +98,7 @@ decisión visual local.
 - Medir montaje y espacio mínimo útil de TradingView.
 - Ejecutar la regla de los dos segundos con estados ready, warning y expired.
 
-Ningún token queda definitivo hasta registrar estas pruebas en
-`VALIDATION_LOG.md`.
+VAL-0017 aprobó físicamente los tamaños y la lectura general de B1. B2 aumenta
+moderadamente la separación tonal y la intensidad semántica para compensar la
+luminancia relativa del Arzopa. Los tokens siguen siendo experimentales hasta
+la validación perceptual de VAL-0018.
