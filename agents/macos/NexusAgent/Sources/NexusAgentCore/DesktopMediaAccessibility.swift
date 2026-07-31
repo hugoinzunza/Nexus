@@ -293,6 +293,7 @@ public struct DesktopMediaAccessibilityBridge {
     private func playerRoot(from anchor: AXUIElement) -> AXUIElement? {
         var current: AXUIElement? = anchor
         var candidate: AXUIElement?
+        var structuralCandidate: AXUIElement?
         for _ in 0..<14 {
             guard let element = current else { break }
             if let bounds = frame(element),
@@ -301,9 +302,33 @@ public struct DesktopMediaAccessibilityBridge {
                bounds.height <= 240 {
                 candidate = element
             }
+            if structuralCandidate == nil {
+                let scoped = descendants(element, limit: 121)
+                let hasProgress = scoped.contains {
+                    $0.role == kAXSliderRole as String
+                        || $0.role == kAXProgressIndicatorRole as String
+                }
+                let metadataLinks = scoped.filter {
+                    $0.role == "AXLink" && isMetadata($0.label)
+                }.count
+                let hasPlaybackControl = scoped.contains {
+                    guard $0.role == kAXButtonRole as String else {
+                        return false
+                    }
+                    return ["reproducir", "pausar", "pausa", "mute"]
+                        .contains(normalize($0.label))
+                }
+                if scoped.count > 3,
+                   scoped.count < 121,
+                   hasProgress,
+                   metadataLinks >= 2,
+                   hasPlaybackControl {
+                    structuralCandidate = element
+                }
+            }
             current = elementAttribute(element, kAXParentAttribute)
         }
-        return candidate
+        return candidate ?? structuralCandidate
     }
 
     private func descendants(
@@ -470,7 +495,10 @@ public struct DesktopMediaAccessibilityBridge {
                       let frame = $0.frame else { return false }
                 return frame.width >= 56 && frame.height >= 56
                     && abs(frame.width - frame.height) <= 8
-            })
+            }) ?? qobuzGlobalPlaybackButton(
+                app: app,
+                labels: expectedLabels
+            )
             guard let button else {
                 throw DesktopMediaBridgeError.actionUnavailable
             }
@@ -487,6 +515,24 @@ public struct DesktopMediaAccessibilityBridge {
         default:
             throw DesktopMediaBridgeError.actionUnavailable
         }
+    }
+
+    private func qobuzGlobalPlaybackButton(
+        app: NSRunningApplication,
+        labels: [String]
+    ) -> AccessibleNode? {
+        let candidates = descendants(
+            accessibilityRoot(for: app),
+            limit: Self.maximumNodes
+        ).filter {
+            $0.role == kAXButtonRole as String
+                && labels.contains(normalize($0.label))
+        }
+        return candidates.max {
+            let leftY = $0.frame?.midY ?? -.greatestFiniteMagnitude
+            let rightY = $1.frame?.midY ?? -.greatestFiniteMagnitude
+            return leftY < rightY
+        } ?? candidates.last
     }
 
     private func postKey(

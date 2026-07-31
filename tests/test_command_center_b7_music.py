@@ -383,6 +383,7 @@ def test_selector_automatico_sigue_nueva_reproduccion_y_su_caratula() -> None:
         user={"id": 1},
     )
     module.media_surfaces["qobuz"].playback = "playing"
+    module._invalidate_media_snapshot("qobuz")
     second = module.api(
         "media-context",
         {"provider": "auto", "preferred": "tidal"},
@@ -396,6 +397,49 @@ def test_selector_automatico_sigue_nueva_reproduccion_y_su_caratula() -> None:
     assert second_payload["track"] == "track-qobuz"
     assert second_payload["artwork_url"] == "/artwork-qobuz"
     assert second_payload["selection_mode"] == "automatic"
+
+
+def test_lecturas_concurrentes_comparten_un_snapshot_y_se_invalidan() -> None:
+    class SlowSurface:
+        def __init__(self):
+            self.calls = 0
+            self.lock = threading.Lock()
+
+        async def snapshot(self):
+            with self.lock:
+                self.calls += 1
+            await asyncio.sleep(0.05)
+            return {
+                "provider": "qobuz",
+                "lifecycle": "ready",
+                "playback": "paused",
+            }
+
+    module = object.__new__(CommandCenterModule)
+    surface = SlowSurface()
+    module.media_surfaces = {"qobuz": surface}
+    module._media_snapshot_locks = {"qobuz": threading.Lock()}
+    module._media_snapshot_cache = {}
+    module._media_snapshot_ttl_seconds = 2.5
+    barrier = threading.Barrier(6)
+    results = []
+
+    def read_snapshot():
+        barrier.wait()
+        results.append(module._cached_media_snapshot_sync("qobuz"))
+
+    workers = [threading.Thread(target=read_snapshot) for _ in range(5)]
+    for worker in workers:
+        worker.start()
+    barrier.wait()
+    for worker in workers:
+        worker.join(timeout=1)
+
+    assert len(results) == 5
+    assert surface.calls == 1
+    module._invalidate_media_snapshot("qobuz")
+    module._cached_media_snapshot_sync("qobuz")
+    assert surface.calls == 2
 
 
 def test_cliente_cambia_selector_pista_y_caratula_del_proveedor_activo() -> None:

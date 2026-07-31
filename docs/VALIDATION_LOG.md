@@ -937,6 +937,11 @@ expuso el árbol del reproductor.
   Una transición nueva a `playing` cambia selector, pista, artista y carátula al
   proveedor que comenzó a sonar; si ninguno reproduce conserva la selección
   manual. Las pestañas ocultas no generan sondeos multimedia periódicos.
+- Qobuz se validó también con su reproductor expandido. El agente reconoce el
+  panel por estructura cuando Electron no entrega geometría AX, y conserva
+  lectura, pausa, reproducción, anterior y siguiente. Las lecturas simultáneas
+  de varias ventanas comparten un snapshot corto para no saturar el puente AX;
+  cada comando invalida inmediatamente ese estado compartido.
 - TIDAL `2.43.0`: lectura real de pista, artista, playlist/álbum, progreso y
   estado. Los botones accesibles `Pausar`, `Reproducir`, `Anterior` y `Siguiente`
   se operan mediante `AXPress`. Pausa y reproducción fueron reconciliadas.

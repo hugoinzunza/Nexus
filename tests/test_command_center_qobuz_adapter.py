@@ -335,6 +335,19 @@ def test_puerto_real_usa_agente_fijo_sin_shell_ni_api_remota():
     assert '"kind": "command"' in source
     assert OsaScriptQobuzPort is not None
 
+    bridge = (
+        Path(__file__).parents[1]
+        / "agents"
+        / "macos"
+        / "NexusAgent"
+        / "Sources"
+        / "NexusAgentCore"
+        / "DesktopMediaAccessibility.swift"
+    ).read_text(encoding="utf-8")
+    assert "structuralCandidate" in bridge
+    assert "metadataLinks >= 2" in bridge
+    assert "qobuzGlobalPlaybackButton" in bridge
+
 
 def test_puerto_reutiliza_helper_persistente_y_lo_cierra(tmp_path):
     helper = tmp_path / "fake-media-agent"

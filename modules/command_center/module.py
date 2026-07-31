@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 
 from core.hub import load_config
 from core.module_base import NexusModule
@@ -85,6 +86,11 @@ class CommandCenterModule(NexusModule):
         self._qobuz = controllers["qobuz"]
         self._tidal = controllers["tidal"]
         self._media_selection_lock = threading.Lock()
+        self._media_snapshot_locks = {
+            provider: threading.Lock() for provider in _MEDIA_PROVIDERS
+        }
+        self._media_snapshot_cache: dict[str, tuple[float, dict]] = {}
+        self._media_snapshot_ttl_seconds = 2.5
         self._media_last_playback = {
             provider: "unknown" for provider in _MEDIA_PROVIDERS
         }
@@ -146,9 +152,54 @@ class CommandCenterModule(NexusModule):
             return getattr(self, "media_surface", None)
         return None
 
+    def _cached_media_snapshot_sync(
+        self,
+        provider: str,
+        *,
+        force: bool = False,
+    ) -> dict:
+        locks = getattr(self, "_media_snapshot_locks", None)
+        if not isinstance(locks, dict):
+            locks = {
+                item: threading.Lock() for item in _MEDIA_PROVIDERS
+            }
+            self._media_snapshot_locks = locks
+        lock = locks.setdefault(provider, threading.Lock())
+        with lock:
+            cache = getattr(self, "_media_snapshot_cache", None)
+            if not isinstance(cache, dict):
+                cache = {}
+                self._media_snapshot_cache = cache
+            now = time.monotonic()
+            cached = cache.get(provider)
+            ttl = getattr(self, "_media_snapshot_ttl_seconds", 2.5)
+            if (
+                not force
+                and cached is not None
+                and now - cached[0] <= ttl
+            ):
+                return copy.deepcopy(cached[1])
+            surface = self._media_surface_for(provider)
+            if surface is None:
+                raise LookupError("media provider unavailable")
+            snapshot = asyncio.run(surface.snapshot())
+            cache[provider] = (time.monotonic(), copy.deepcopy(snapshot))
+            return snapshot
+
+    async def _cached_media_snapshot(self, provider: str) -> dict:
+        return await asyncio.to_thread(
+            self._cached_media_snapshot_sync,
+            provider,
+        )
+
+    def _invalidate_media_snapshot(self, provider: str) -> None:
+        cache = getattr(self, "_media_snapshot_cache", None)
+        if isinstance(cache, dict):
+            cache.pop(provider, None)
+
     async def _automatic_media_snapshot(self, preferred: str) -> dict:
         snapshots = await asyncio.gather(
-            *(self.media_surfaces[provider].snapshot() for provider in _MEDIA_PROVIDERS),
+            *(self._cached_media_snapshot(provider) for provider in _MEDIA_PROVIDERS),
             return_exceptions=True,
         )
         available = {
@@ -412,7 +463,7 @@ class CommandCenterModule(NexusModule):
                     ),
                 )
             try:
-                snapshot = asyncio.run(surface.snapshot())
+                snapshot = self._cached_media_snapshot_sync(provider)
                 snapshot["selected_provider"] = provider
                 snapshot["available_providers"] = list(_MEDIA_PROVIDERS)
                 return self._json(200, snapshot)
@@ -514,6 +565,7 @@ class CommandCenterModule(NexusModule):
                 command_id=command_id,
                 action=action,
             )
+            self._invalidate_media_snapshot(provider)
             return self._json(200, result)
         except MediaCommandsDisabled:
             return self._json(
