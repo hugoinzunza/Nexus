@@ -201,26 +201,27 @@ están realmente disponibles.
 
 La proyección consume exclusivamente `MediaController`. Título, artista y álbum
 son metadatos opcionales externos al contrato; si el proveedor no los entrega,
-la UI no los inventa. Apple Music puede declarar lectura y reproducción. Qobuz
-conserva únicamente `open_app` y no presenta controles inexistentes.
+la UI no los inventa. Apple Music usa AppleScript. Qobuz y TIDAL usan un puente
+local explícito de Accesibilidad, ejecutado por el agente macOS.
 
 La superficie local ofrece un selector explícito entre Apple Music, Qobuz y
 TIDAL. Apple Music obtiene título, artista, álbum y, cuando existe, carátula
 directamente de la aplicación macOS. La imagen se limita a 5 MB, se valida como
 PNG o JPEG y se sirve desde una ruta autenticada sin caché persistente. Qobuz y
-TIDAL Desktop conservan únicamente salud, versión y `open_app`: sus aplicaciones
-no entregan reproducción ni metadatos mediante una interfaz soportada, por lo
-que el panel deshabilita anterior, play/pausa y siguiente al seleccionarlas.
+TIDAL Desktop entregan lectura y controles mediante su árbol accesible local. El
+puente no es una API oficial: debe degradar si cambia la estructura, nunca usar
+coordenadas y nunca enviar teclas multimedia globales sin identificar proceso.
 
 Los comandos conservan `command_id`, idempotencia, ACK `applied`, `rejected` o
 `unknown`, deadline y reconciliación por lectura. Producción permanece inactiva:
 sin configuración, `commands_enabled` es falso y los botones quedan
 deshabilitados. Para validación local existe un opt-in explícito mediante
 `NEXUX_COMMAND_CENTER_MEDIA=local` (con compatibilidad para `apple-music`);
-habilita `open_app` en los tres proveedores y, exclusivamente para Apple Music,
-play, pausa, anterior y siguiente en un único endpoint autenticado. Play puede
-abrir Music, espera disponibilidad sin repetir el efecto y reconcilia el estado
-observado. No se añadió factory productiva, LaunchAgent ni control remoto.
+habilita `open_app`, lectura, play, pausa, anterior y siguiente en los tres
+proveedores mediante un único endpoint autenticado. Qobuz recibe sus atajos
+documentados directamente en su PID; TIDAL recibe `AXPress` sobre botones con
+nombre estable. Play/pausa se reconcilian por lectura. No se añadió factory
+productiva, LaunchAgent ni control remoto.
 
 VAL-0023 debe comprobar en el Arzopa que pista, proveedor y controles se
 reconocen sin competir con Atención del Bot. La aprobación técnica no autoriza
@@ -259,30 +260,26 @@ la credencial en Keychain. Solo existe un Gateway fake; el endpoint real, la
 instalación persistente en macOS y cualquier factory productiva continúan
 bloqueados.
 
-El adaptador Qobuz ya está implementado con capacidades deliberadamente
-limitadas. Puede observar salud y abrir la aplicación, pero no declara
-`current_state` ni controles de reproducción: Qobuz Connect no admite apps de
-terceros y Qobuz Desktop no expone esas operaciones mediante su interfaz de
-automatización de macOS.
+El adaptador Qobuz conserva la limitación oficial de Qobuz Connect: NexUX no se
+presenta como cliente de Connect ni consume endpoints privados. Una validación
+posterior demostró, sin embargo, que Qobuz Desktop publica pista, artista, álbum,
+progreso y controles en el árbol de Accesibilidad de macOS. El agente local usa
+esa superficie como integración experimental y degradable.
 
 El discovery de TIDAL separa dos integraciones que no son equivalentes:
 
-- **TIDAL Desktop:** la aplicación macOS instalada permite observar proceso,
-  identidad y versión, además de abrirla. No publica controles de reproducción
-  mediante AppleScript ni una interfaz de automatización soportada. Un adaptador
-  nativo solo podría declarar esas capacidades limitadas.
+- **TIDAL Desktop:** la aplicación macOS publica pista, artista, álbum, progreso
+  y botones nominados de reproducción en Accesibilidad. El agente puede leerlos
+  y ejecutar `AXPress` sin APIs privadas ni automatización por coordenadas.
 - **TIDAL Developer Platform:** ofrece OAuth 2.1 con Authorization Code + PKCE y
   módulos oficiales de reproducción para construir una sesión propia dentro de
   una aplicación autorizada. No controla la sesión existente de TIDAL Desktop y
   requiere registrar una aplicación, gestionar consentimiento y tokens, aceptar
   las condiciones del proveedor y superar una revisión arquitectónica nueva.
 
-TIDAL Connect está reservado a integraciones de socios de dispositivos. NexUX no
-usará `api.tidal.com`, endpoints no oficiales, inspección del bundle, simulación
-de teclas ni automatización por coordenadas. La implementación queda pendiente:
-antes debe resolverse explícitamente la compatibilidad de las condiciones de
-TIDAL con las capacidades de inteligencia artificial de NexUX. Ninguna ruta
-puede ampliar el `MediaController` público ni activar una factory.
+TIDAL Connect continúa fuera de alcance. NexUX no usa `api.tidal.com`, endpoints
+no oficiales, inspección del bundle ni automatización por coordenadas. La ruta
+local implementa el `MediaController` existente y no activa una factory.
 
 ## 1. Resumen ejecutivo
 

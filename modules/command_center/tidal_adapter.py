@@ -1,4 +1,4 @@
-"""Adaptador headless y capability-limited para TIDAL Desktop."""
+"""Adaptador headless local para TIDAL Desktop."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ TIDAL_APP = "TIDAL"
 
 
 class OsaScriptTidalPort(OsaScriptQobuzPort):
-    """Puerto local limitado a proceso, versión y apertura de TIDAL."""
+    """Puerto local para proceso, versión y puente accesible de TIDAL."""
 
     provider_name = "TIDAL"
     code_prefix = "tidal"
@@ -67,7 +67,7 @@ class OsaScriptTidalPort(OsaScriptQobuzPort):
 
 
 class TidalAdapter(QobuzAdapter):
-    """MediaController real limitado a salud y apertura de TIDAL."""
+    """MediaController local respaldado por Accesibilidad de macOS."""
 
     controller_id = "tidal"
     provider_name = "TIDAL"

@@ -557,6 +557,7 @@ export class MediaContextClient {
       this.feedback =
         action === "play" &&
         payload.status === "applied" &&
+        payload.reconciled_state &&
         reconciledPlayback !== "playing"
           ? "Sin pista cargada"
           : labels[payload.status] || "Confirmado";
@@ -1506,33 +1507,32 @@ function renderMediaContext(context) {
     closed: "Cerrada",
     unknown: "Unknown",
   };
-  const limitedProvider = context.selectedProvider !== "apple-music";
+  const capabilities = new Set(context.capabilities);
+  const hasPlaybackControls =
+    capabilities.has("play") && capabilities.has("pause");
   badge.dataset.state =
     context.lifecycle === "ready" ? "ready" : context.lifecycle;
-  badge.textContent = limitedProvider
-    ? context.lifecycle === "ready"
-      ? "App abierta"
+  badge.textContent =
+    context.lifecycle === "ready" && context.playback === "playing"
+      ? "Reproduciendo"
       : context.lifecycle === "unavailable"
         ? "Cerrada"
-        : stateLabels[context.lifecycle] || "Unknown"
-    : stateLabels[context.lifecycle] || "Unknown";
+        : stateLabels[context.lifecycle] || "Unknown";
   const selectedLabel = providerLabels[context.selectedProvider] || "Música";
   document.querySelector("#music-track").textContent =
     context.track || (
       context.itemRef
         ? "Pista identificada"
-        : !limitedProvider
+        : context.lifecycle === "ready"
           ? "Sin reproducción disponible"
-          : context.lifecycle === "ready"
-            ? `${selectedLabel} está abierta`
-            : `Abrir ${selectedLabel}`
+          : `Abrir ${selectedLabel}`
     );
   const details = [context.artist, context.album].filter(Boolean);
   document.querySelector("#music-detail").textContent =
     details.length
       ? details.join(" · ")
-      : limitedProvider
-        ? "Sin metadatos ni control remoto"
+      : hasPlaybackControls
+        ? `${selectedLabel} · reproductor local`
         : context.provider || `${selectedLabel} · integración local inactiva`;
 
   const artworkImage = document.querySelector("#music-artwork-image");
@@ -1549,7 +1549,6 @@ function renderMediaContext(context) {
     artworkPlaceholder.hidden = false;
   }
 
-  const capabilities = new Set(context.capabilities);
   const canControl =
     context.commandsEnabled &&
     context.lifecycle === "ready" &&
@@ -1573,9 +1572,9 @@ function renderMediaContext(context) {
   controls.previous.disabled =
     !canControl || !capabilities.has("previous");
   controls.next.disabled = !canControl || !capabilities.has("next");
-  controls.previous.hidden = limitedProvider;
-  controls.toggle.hidden = limitedProvider;
-  controls.next.hidden = limitedProvider;
+  controls.previous.hidden = !hasPlaybackControls;
+  controls.toggle.hidden = !hasPlaybackControls;
+  controls.next.hidden = !hasPlaybackControls;
   const toggleAction =
     context.playback === "playing" ? "pause" : "play";
   controls.toggle.disabled =
@@ -1592,8 +1591,6 @@ function renderMediaContext(context) {
     context.feedback || (
       context.simulated
       ? "Fixture sin efectos"
-      : limitedProvider && context.commandsEnabled
-        ? "Solo apertura"
       : context.commandsEnabled
         ? FRESHNESS_LABELS[context.freshness] || "Estado leído"
         : "Solo lectura"

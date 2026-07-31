@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import time
 from collections import OrderedDict
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 from .media_controller import (
@@ -33,7 +37,34 @@ QOBUZ_APP = "Qobuz"
 
 _IS_RUNNING_SCRIPT = 'application "Qobuz" is running'
 _VERSION_PROBE_SCRIPT = 'tell application "Qobuz" to get version'
-_CAPABILITIES = frozenset({MediaCapability.OPEN_APP})
+_CAPABILITIES = frozenset(
+    {
+        MediaCapability.CURRENT_STATE,
+        MediaCapability.PLAY,
+        MediaCapability.PAUSE,
+        MediaCapability.NEXT,
+        MediaCapability.PREVIOUS,
+        MediaCapability.OPEN_APP,
+    }
+)
+_DEFAULT_AGENT = (
+    Path(__file__).resolve().parents[2]
+    / "agents"
+    / "macos"
+    / "NexusAgent"
+    / ".build"
+    / "release"
+    / "nexus-agent"
+)
+
+
+@dataclass(frozen=True)
+class DesktopPlaybackSnapshot:
+    playback: str
+    track: str | None
+    artist: str | None
+    album: str | None
+    item_ref: str | None
 
 
 class QobuzPortError(RuntimeError):
@@ -60,12 +91,29 @@ class QobuzPort(Protocol):
 
     async def open_app(self, context: OperationContext) -> None: ...
 
+    async def current_state(
+        self, context: OperationContext
+    ) -> DesktopPlaybackSnapshot: ...
+
+    async def execute(
+        self, action: MediaAction, context: OperationContext
+    ) -> None: ...
+
+    def helper_available(self) -> bool: ...
+
 
 class OsaScriptQobuzPort:
-    """Puerto real sin shell, API privada ni automatizacion de playback."""
+    """Puerto local hacia el agente macOS y su puente de Accesibilidad."""
 
     provider_name = "Qobuz"
     code_prefix = "qobuz"
+
+    def __init__(self, agent_path: str | Path | None = None):
+        configured = agent_path or os.environ.get("NEXUX_MACOS_AGENT_BIN")
+        self.agent_path = Path(configured) if configured else _DEFAULT_AGENT
+
+    def helper_available(self) -> bool:
+        return self.agent_path.is_file() and os.access(self.agent_path, os.X_OK)
 
     async def is_running(self, context: OperationContext) -> bool:
         output = await self._run(
@@ -105,6 +153,98 @@ class OsaScriptQobuzPort:
 
     async def open_app(self, context: OperationContext) -> None:
         await self._run((OPEN, "-gj", "-a", QOBUZ_APP), context)
+
+    async def current_state(
+        self, context: OperationContext
+    ) -> DesktopPlaybackSnapshot:
+        payload = await self._agent_json(
+            ("--media-state", self.code_prefix), context
+        )
+        playback = payload.get("playback")
+        if playback not in {"playing", "paused", "stopped", "unknown"}:
+            raise QobuzPortError(
+                f"{self.code_prefix}.invalid-state",
+                f"{self.provider_name} devolvio playback invalido",
+                retryable=True,
+            )
+        fields = {
+            key: self._optional_text(payload.get(key), key)
+            for key in ("track", "artist", "album", "item_ref")
+        }
+        return DesktopPlaybackSnapshot(playback, **fields)
+
+    async def execute(
+        self,
+        action: MediaAction,
+        context: OperationContext,
+    ) -> None:
+        if action not in {
+            MediaAction.PLAY,
+            MediaAction.PAUSE,
+            MediaAction.NEXT,
+            MediaAction.PREVIOUS,
+        }:
+            raise QobuzPortError(
+                f"{self.code_prefix}.action-unavailable",
+                f"{self.provider_name} no soporta {action.value}",
+                retryable=False,
+            )
+        payload = await self._agent_json(
+            ("--media-command", self.code_prefix, action.value), context
+        )
+        if payload.get("status") != "applied":
+            raise QobuzPortError(
+                str(payload.get("code") or f"{self.code_prefix}.rejected"),
+                f"{self.provider_name} rechazo {action.value}",
+                retryable=bool(payload.get("retryable", True)),
+            )
+
+    async def _agent_json(
+        self,
+        arguments: tuple[str, ...],
+        context: OperationContext,
+    ) -> dict:
+        if not self.helper_available():
+            raise QobuzPortError(
+                f"{self.code_prefix}.helper-unavailable",
+                "el agente macOS no esta compilado o no es ejecutable",
+                retryable=False,
+            )
+        output = await self._run(
+            (str(self.agent_path), *arguments), context
+        )
+        try:
+            payload = json.loads(output)
+        except json.JSONDecodeError as exc:
+            raise QobuzPortError(
+                f"{self.code_prefix}.invalid-output",
+                "el agente macOS devolvio JSON invalido",
+                retryable=True,
+            ) from exc
+        if not isinstance(payload, dict):
+            raise QobuzPortError(
+                f"{self.code_prefix}.invalid-output",
+                "el agente macOS devolvio un payload invalido",
+                retryable=True,
+            )
+        if payload.get("status") == "rejected":
+            raise QobuzPortError(
+                str(payload.get("code") or f"{self.code_prefix}.rejected"),
+                f"el agente macOS no pudo operar {self.provider_name}",
+                retryable=bool(payload.get("retryable", True)),
+            )
+        return payload
+
+    def _optional_text(self, value, field: str) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip() or len(value) > 512:
+            raise QobuzPortError(
+                f"{self.code_prefix}.invalid-state",
+                f"{self.provider_name} devolvio {field} invalido",
+                retryable=True,
+            )
+        return value.strip()
 
     @classmethod
     async def _run(
@@ -165,9 +305,10 @@ class OsaScriptQobuzPort:
 
 
 class QobuzAdapter:
-    """MediaController real, limitado a salud y apertura de la app."""
+    """MediaController local respaldado por Accesibilidad de macOS."""
 
     controller_id = "qobuz"
+    commands_self_verified = True
     provider_name = "Qobuz"
     code_prefix = "qobuz"
 
@@ -187,6 +328,7 @@ class QobuzAdapter:
         self._command_lock: asyncio.Lock | None = None
         self._fingerprints: OrderedDict[str, tuple[Any, ...]] = OrderedDict()
         self._results: OrderedDict[str, MediaAck] = OrderedDict()
+        self._metadata: dict[str, str] | None = None
         self._metrics = {
             "health_checks": 0,
             "app_probes": 0,
@@ -196,6 +338,7 @@ class QobuzAdapter:
             "cache_hits": 0,
             "last_error_code": None,
             "app_version": None,
+            "state_reads": 0,
         }
 
     def capabilities(self) -> frozenset[MediaCapability]:
@@ -220,6 +363,12 @@ class QobuzAdapter:
                 )
             self._metrics["app_probes"] += 1
             self._metrics["app_version"] = await self._port.probe_app(context)
+            if not self._port.helper_available():
+                raise QobuzPortError(
+                    f"{self.code_prefix}.helper-unavailable",
+                    "el agente macOS no esta disponible",
+                    retryable=False,
+                )
         except QobuzPortError as exc:
             self._metrics["last_error_code"] = exc.code
             self._metrics["app_version"] = None
@@ -240,10 +389,44 @@ class QobuzAdapter:
         self, context: OperationContext
     ) -> MediaState:
         self._require_open()
-        context.raise_if_cancelled()
-        raise MediaCapabilityError(
-            f"{self.provider_name} Desktop no expone current_state a terceros"
+        self._metrics["state_reads"] += 1
+        if not await self._port.is_running(context):
+            self._metadata = None
+            return MediaState(
+                self.controller_id,
+                MediaLifecycle.UNAVAILABLE,
+                self._clock_ms(),
+                "stopped",
+            )
+        try:
+            snapshot = await self._port.current_state(context)
+        except QobuzPortError as exc:
+            self._metrics["last_error_code"] = exc.code
+            raise
+        self._metrics["last_error_code"] = None
+        self._metadata = (
+            {
+                "item_ref": snapshot.item_ref,
+                "track": snapshot.track or "",
+                "artist": snapshot.artist or "",
+                "album": snapshot.album or "",
+            }
+            if snapshot.item_ref
+            else None
         )
+        return MediaState(
+            self.controller_id,
+            MediaLifecycle.READY,
+            self._clock_ms(),
+            snapshot.playback,
+            None,
+            snapshot.item_ref,
+        )
+
+    def metadata(self, item_ref: str) -> dict[str, str] | None:
+        if not self._metadata or self._metadata.get("item_ref") != item_ref:
+            return None
+        return dict(self._metadata)
 
     async def execute(
         self,
@@ -251,7 +434,7 @@ class QobuzAdapter:
         context: OperationContext,
     ) -> MediaAck:
         self._require_open()
-        if command.action is not MediaAction.OPEN_APP:
+        if MediaCapability(command.action.value) not in self.capabilities():
             raise MediaCapabilityError(
                 f"{self.provider_name} no expone "
                 f"{command.action.value} a terceros"
@@ -260,11 +443,11 @@ class QobuzAdapter:
         await await_operation(lock.acquire(), context)
         try:
             self._require_open()
-            return await self._open_locked(command, context)
+            return await self._execute_locked(command, context)
         finally:
             lock.release()
 
-    async def _open_locked(
+    async def _execute_locked(
         self,
         command: MediaCommand,
         context: OperationContext,
@@ -284,7 +467,19 @@ class QobuzAdapter:
         self._fingerprints[command.command_id] = fingerprint
         self._metrics["commands"] += 1
         try:
-            await self._port.open_app(context)
+            if command.action is MediaAction.OPEN_APP:
+                await self._port.open_app(context)
+            elif not await self._port.is_running(context):
+                return self._remember(
+                    self._ack(
+                        command,
+                        MediaAckStatus.REJECTED,
+                        f"{self.code_prefix}.not-running",
+                        retryable=True,
+                    )
+                )
+            else:
+                await self._port.execute(command.action, context)
         except OperationCancelled:
             self._fingerprints.pop(command.command_id, None)
             raise

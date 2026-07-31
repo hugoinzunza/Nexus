@@ -167,10 +167,13 @@ class MediaSurfaceService:
             "retryable": ack.retryable,
             "reconciled_state": None,
         }
-        if ack.status is MediaAckStatus.UNKNOWN or action in {
-            MediaAction.PLAY,
-            MediaAction.PAUSE,
-        }:
+        self_verified = bool(
+            getattr(self._controller, "commands_self_verified", False)
+        )
+        if ack.status is MediaAckStatus.UNKNOWN or (
+            not self_verified
+            and action in {MediaAction.PLAY, MediaAction.PAUSE}
+        ):
             result["reconciled_state"] = await self.snapshot()
         return result
 

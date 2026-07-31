@@ -22,6 +22,7 @@ from modules.command_center.media_controller import (
 from modules.command_center.module_registry import ModuleLifecycle
 from modules.command_center.operations import OperationContext
 from modules.command_center.qobuz_adapter import (
+    DesktopPlaybackSnapshot,
     OsaScriptQobuzPort,
     QobuzAdapter,
     QobuzPortError,
@@ -43,6 +44,18 @@ class RecordingPort:
         self.running_error = None
         self.probe_error = None
         self.open_error = None
+        self.helper = True
+        self.snapshot = DesktopPlaybackSnapshot(
+            "playing",
+            "De Onda",
+            "Bersuit Vergarabat",
+            "Libertinaje",
+            "qobuz:TRACK",
+        )
+        self.effects = []
+
+    def helper_available(self):
+        return self.helper
 
     async def is_running(self, context):
         if self.running_error:
@@ -61,6 +74,12 @@ class RecordingPort:
             raise self.open_error
         self.running = True
 
+    async def current_state(self, context):
+        return self.snapshot
+
+    async def execute(self, action, context):
+        self.effects.append(action)
+
 
 def _command(command_id="qobuz-1", *, issued_at_ms=NOW):
     return MediaCommand(
@@ -70,11 +89,20 @@ def _command(command_id="qobuz-1", *, issued_at_ms=NOW):
     )
 
 
-def test_adapter_publico_declara_solo_capacidad_demostrable():
+def test_adapter_publico_declara_capacidades_del_puente_accesible():
     port = RecordingPort()
     adapter = QobuzAdapter(port, clock_ms=lambda: NOW)
     assert PublicAdapter is QobuzAdapter
-    assert adapter.capabilities() == frozenset({MediaCapability.OPEN_APP})
+    assert adapter.capabilities() == frozenset(
+        {
+            MediaCapability.CURRENT_STATE,
+            MediaCapability.PLAY,
+            MediaCapability.PAUSE,
+            MediaCapability.NEXT,
+            MediaCapability.PREVIOUS,
+            MediaCapability.OPEN_APP,
+        }
+    )
     assert port.open_calls == 0
     assert port.probe_calls == 0
 
@@ -118,33 +146,46 @@ def test_health_distingue_ready_unavailable_degraded_y_revoked():
     _run(scenario())
 
 
-def test_current_state_y_playback_no_se_simulan():
+def test_current_state_y_playback_provienen_del_puente_local():
     async def scenario():
-        adapter = QobuzAdapter(RecordingPort(), clock_ms=lambda: NOW)
-        with pytest.raises(MediaCapabilityError):
-            await adapter.current_state(OperationContext())
+        port = RecordingPort()
+        adapter = QobuzAdapter(port, clock_ms=lambda: NOW)
+        state = await adapter.current_state(OperationContext())
+        assert state.playback == "playing"
+        assert state.item_ref == "qobuz:TRACK"
+        assert adapter.metadata(state.item_ref) == {
+            "item_ref": "qobuz:TRACK",
+            "track": "De Onda",
+            "artist": "Bersuit Vergarabat",
+            "album": "Libertinaje",
+        }
         for action in (
             MediaAction.PLAY,
             MediaAction.PAUSE,
             MediaAction.NEXT,
             MediaAction.PREVIOUS,
-            MediaAction.SET_VOLUME,
         ):
-            arguments = (
-                {"volume": 0.5}
-                if action is MediaAction.SET_VOLUME
-                else None
+            ack = await adapter.execute(
+                MediaCommand(f"qobuz-{action.value}", action, NOW),
+                OperationContext(),
             )
-            with pytest.raises(MediaCapabilityError):
-                await adapter.execute(
-                    MediaCommand(
-                        f"unsupported-{action.value}",
-                        action,
-                        NOW,
-                        arguments,
-                    ),
-                    OperationContext(),
-                )
+            assert ack.status is MediaAckStatus.APPLIED
+        assert port.effects == [
+            MediaAction.PLAY,
+            MediaAction.PAUSE,
+            MediaAction.NEXT,
+            MediaAction.PREVIOUS,
+        ]
+        with pytest.raises(MediaCapabilityError):
+            await adapter.execute(
+                MediaCommand(
+                    "unsupported-volume",
+                    MediaAction.SET_VOLUME,
+                    NOW,
+                    {"volume": 0.5},
+                ),
+                OperationContext(),
+            )
 
     _run(scenario())
 
@@ -210,13 +251,13 @@ def test_close_no_cierra_qobuz_y_bloquea_el_adaptador():
     _run(scenario())
 
 
-def test_supera_harness_sin_inventar_current_state_o_playback():
+def test_supera_harness_con_estado_y_controles_accesibles():
     async def scenario():
         read_port = RecordingPort()
         read_report = await verify_media_controller(
             QobuzAdapter(read_port, clock_ms=lambda: NOW)
         )
-        assert read_report.operations == ("health",)
+        assert read_report.operations == ("health", "current_state")
         assert read_port.open_calls == 0
 
         command_port = RecordingPort()
@@ -224,7 +265,15 @@ def test_supera_harness_sin_inventar_current_state_o_playback():
             QobuzAdapter(command_port, clock_ms=lambda: NOW),
             include_commands=True,
         )
-        assert command_report.operations == ("health", "open_app")
+        assert command_report.operations == (
+            "health",
+            "current_state",
+            "play",
+            "pause",
+            "next",
+            "previous",
+            "open_app",
+        )
         assert command_port.open_calls == 1
 
     _run(scenario())
@@ -254,7 +303,7 @@ def test_registro_conserva_degradacion_y_recuperacion():
     _run(scenario())
 
 
-def test_puerto_real_usa_comandos_fijos_sin_shell_ni_api_no_oficial():
+def test_puerto_real_usa_agente_fijo_sin_shell_ni_api_remota():
     path = (
         Path(__file__).parents[1]
         / "modules"
@@ -277,7 +326,8 @@ def test_puerto_real_usa_comandos_fijos_sin_shell_ni_api_no_oficial():
     assert "requests." not in source
     assert "qobuz-connect" not in source.lower()
     assert "api.qobuz" not in source.lower()
-    assert "System Events" not in source
+    assert "--media-state" in source
+    assert "--media-command" in source
     assert OsaScriptQobuzPort is not None
 
 
@@ -289,7 +339,7 @@ def test_discovery_y_limites_quedan_documentados():
     log = (root / "docs" / "VALIDATION_LOG.md").read_text(
         encoding="utf-8"
     )
-    assert "adaptador Qobuz ya está implementado" in rfc
+    assert "adaptador Qobuz conserva la limitación oficial" in rfc
     assert "VAL-0015 — Qobuz Adapter capability-limited" in log
     assert "aplicaciones de terceros no están soportadas" in log
-    assert "La ausencia de controles" in log
+    assert "VAL-0026 — Puente multimedia accesible Qobuz/TIDAL" in log

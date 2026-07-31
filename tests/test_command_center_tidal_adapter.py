@@ -1,16 +1,15 @@
 import asyncio
 
-import pytest
-
 from modules.command_center import TidalAdapter as PublicAdapter
 from modules.command_center.media_controller import (
+    MediaAckStatus,
     MediaAction,
     MediaCapability,
-    MediaCapabilityError,
     MediaCommand,
     MediaLifecycle,
 )
 from modules.command_center.operations import OperationContext
+from modules.command_center.qobuz_adapter import DesktopPlaybackSnapshot
 from modules.command_center.tidal_adapter import TidalAdapter
 
 NOW = 1_800_000_000_000
@@ -24,6 +23,17 @@ class RecordingPort:
     def __init__(self):
         self.running = False
         self.open_calls = 0
+        self.effects = []
+        self.snapshot = DesktopPlaybackSnapshot(
+            "playing",
+            "The Sweetest Taboo",
+            "Sade",
+            "EMAXSA VARIOS 1",
+            "tidal:TRACK",
+        )
+
+    def helper_available(self):
+        return True
 
     async def is_running(self, context):
         return self.running
@@ -35,14 +45,29 @@ class RecordingPort:
         self.open_calls += 1
         self.running = True
 
+    async def current_state(self, context):
+        return self.snapshot
 
-def test_tidal_declara_solo_apertura_y_salud() -> None:
+    async def execute(self, action, context):
+        self.effects.append(action)
+
+
+def test_tidal_declara_lectura_controles_y_apertura() -> None:
     async def scenario():
         port = RecordingPort()
         adapter = TidalAdapter(port, clock_ms=lambda: NOW)
 
         assert PublicAdapter is TidalAdapter
-        assert adapter.capabilities() == frozenset({MediaCapability.OPEN_APP})
+        assert adapter.capabilities() == frozenset(
+            {
+                MediaCapability.CURRENT_STATE,
+                MediaCapability.PLAY,
+                MediaCapability.PAUSE,
+                MediaCapability.NEXT,
+                MediaCapability.PREVIOUS,
+                MediaCapability.OPEN_APP,
+            }
+        )
         unavailable = await adapter.health(OperationContext())
         assert unavailable.lifecycle is MediaLifecycle.UNAVAILABLE
         assert unavailable.code == "tidal.not-running"
@@ -60,15 +85,24 @@ def test_tidal_declara_solo_apertura_y_salud() -> None:
     _run(scenario())
 
 
-def test_tidal_no_inventa_playback_ni_metadatos() -> None:
+def test_tidal_proyecta_playback_y_control_del_puente_accesible() -> None:
     async def scenario():
-        adapter = TidalAdapter(RecordingPort(), clock_ms=lambda: NOW)
-        with pytest.raises(MediaCapabilityError):
-            await adapter.current_state(OperationContext())
-        with pytest.raises(MediaCapabilityError):
-            await adapter.execute(
-                MediaCommand("tidal-play", MediaAction.PLAY, NOW),
-                OperationContext(),
-            )
+        port = RecordingPort()
+        port.running = True
+        adapter = TidalAdapter(port, clock_ms=lambda: NOW)
+        state = await adapter.current_state(OperationContext())
+        assert state.playback == "playing"
+        assert adapter.metadata(state.item_ref) == {
+            "item_ref": "tidal:TRACK",
+            "track": "The Sweetest Taboo",
+            "artist": "Sade",
+            "album": "EMAXSA VARIOS 1",
+        }
+        ack = await adapter.execute(
+            MediaCommand("tidal-pause", MediaAction.PAUSE, NOW),
+            OperationContext(),
+        )
+        assert ack.status is MediaAckStatus.APPLIED
+        assert port.effects == [MediaAction.PAUSE]
 
     _run(scenario())

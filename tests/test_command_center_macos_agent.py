@@ -102,6 +102,20 @@ def test_agente_no_activa_factory_productiva():
     }
 
 
+def test_puente_multimedia_es_local_dirigido_y_sin_coordenadas():
+    source = (CORE / "DesktopMediaAccessibility.swift").read_text(
+        encoding="utf-8"
+    )
+    assert '"AXManualAccessibility"' in source
+    assert "AXUIElementPerformAction" in source
+    assert "kAXPressAction" in source
+    assert "postToPid(pid)" in source
+    assert "CGEventPost(" not in source
+    assert "mouseEventSource" not in source
+    assert "api.qobuz" not in source.lower()
+    assert "api.tidal" not in source.lower()
+
+
 def test_fase_a5_documenta_spotify_diferido_y_agente_macos():
     rfc = (ROOT / "docs" / "RFC_COMMAND_CENTER.md").read_text(
         encoding="utf-8"

@@ -901,11 +901,49 @@ proveedores ofrezcan streaming continuo.
 - El registro conserva cero factories; el opt-in es exclusivamente local.
 - Suite completa: 806 pruebas aprobadas.
 
+**Corrección posterior:** la conclusión sobre Qobuz/TIDAL fue sustituida por
+VAL-0026. La inspección inicial no había habilitado la accesibilidad manual de
+Electron y, por tanto, no observó el reproductor interno.
+
 ### Conclusión
 
 **APROBADO técnicamente** y **PENDIENTE perceptualmente**. La carátula real debe
 validarse cuando Apple Music tenga una pista con artwork cargada; durante el
 smoke no existía `current track`, por lo que se verificó el placeholder honesto.
+
+---
+
+## VAL-0026 — Puente multimedia accesible Qobuz/TIDAL
+
+### Contexto
+
+La conclusión de VAL-0025 era incompleta: la inspección inicial no había
+habilitado `AXManualAccessibility` en las aplicaciones Electron y solo observó
+la envoltura de la ventana. Una segunda inspección sobre reproducción real sí
+expuso el árbol del reproductor.
+
+### Evidencia técnica
+
+- Qobuz `8.2.0-b033`: lectura real de `De Onda`, `Bersuit Vergarabat`,
+  `Libertinaje`, progreso y estado. Play y pausa se ejecutaron y reconciliaron;
+  ambos devolvieron el estado esperado. Sus atajos documentados se envían al PID
+  de Qobuz, nunca como tecla multimedia global ni mediante coordenadas.
+- TIDAL `2.43.0`: lectura real de pista, artista, playlist/álbum, progreso y
+  estado. Los botones accesibles `Pausar`, `Reproducir`, `Anterior` y `Siguiente`
+  se operan mediante `AXPress`. Pausa y reproducción fueron reconciliadas.
+- Si falta permiso de Accesibilidad, el agente o un control estable, el adaptador
+  degrada o rechaza la acción. No inventa metadatos ni confirma un efecto que no
+  pudo enviar.
+- El puente vive en el agente macOS. No modifica Wire ABI, EventBus, Gateway,
+  Bot, factories, Railway ni producción.
+- Qobuz Connect y TIDAL Connect siguen fuera de alcance; esta es una integración
+  local experimental que puede requerir mantenimiento cuando cambie la UI.
+
+### Resolución
+
+**APROBADO técnicamente en local** para lectura y control. **PENDIENTE
+perceptualmente** en el Arzopa. La carátula de Qobuz/TIDAL sigue usando el
+placeholder porque Accesibilidad no entrega bytes de imagen confiables.
 
 ---
 

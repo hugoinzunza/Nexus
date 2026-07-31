@@ -77,29 +77,40 @@ class CommandCenterModule(NexusModule):
             "qobuz": QobuzAdapter() if self._local_media_enabled else None,
             "tidal": TidalAdapter() if self._local_media_enabled else None,
         }
+        self._qobuz = controllers["qobuz"]
+        self._tidal = controllers["tidal"]
         self.media_surfaces = {
             provider: MediaSurfaceService(
                 controller,
                 commands_enabled=controller is not None,
                 metadata_resolver=(
-                    self._apple_metadata
-                    if provider == "apple-music" and controller is not None
+                    lambda item_ref, selected=provider: self._media_metadata(
+                        selected, item_ref
+                    )
+                    if controller is not None
                     else None
                 ),
+                timeout_seconds=4.0,
             )
             for provider, controller in controllers.items()
         }
         # Compatibilidad para consumidores internos anteriores a la selección.
         self.media_surface = self.media_surfaces["apple-music"]
 
-    def _apple_metadata(self, item_ref: str) -> dict | None:
-        if self._apple_music is None:
+    def _media_metadata(self, provider: str, item_ref: str) -> dict | None:
+        controller = {
+            "apple-music": self._apple_music,
+            "qobuz": self._qobuz,
+            "tidal": self._tidal,
+        }.get(provider)
+        metadata = getattr(controller, "metadata", None)
+        if not callable(metadata):
             return None
-        source = self._apple_music.metadata(item_ref)
+        source = metadata(item_ref)
         if not source:
             return None
         result = dict(source)
-        if result.pop("has_artwork", False):
+        if provider == "apple-music" and result.pop("has_artwork", False):
             version = hashlib.sha256(item_ref.encode("utf-8")).hexdigest()[:16]
             result["artwork_url"] = (
                 "/m/command-center/api/media-artwork?v=" + version
