@@ -685,15 +685,22 @@ honestamente el último cierre de un índice sin llamarlo live.
 - Orden fijo: SPX → VIX → DXY → TOTAL → BTC → ETH → SOL → XRP.
 - El fallo de un proveedor conserva únicamente su último valor bueno y expone la
   degradación; no rellena datos mediante otra fuente silenciosa.
-- Seleccionar un activo remonta serialmente el widget público porque no existe
-  `set_symbol` runtime.
+- Seleccionar un activo usa historia y cotización del mismo proveedor.
 - `Análisis completo` sigue el símbolo seleccionado.
 - La banda reemplaza la fila de estado duplicada; no agrega altura a la shell.
 - API autenticada y exclusivamente GET.
-- SPX, VIX, TOTAL y BTC fueron seleccionados y remontados contra el widget real
-  sin avisos de símbolo no disponible.
+- Los ocho referentes fueron abiertos en navegador real. Siete dibujan historia
+  del mismo proveedor y reportan `Precio y velas coinciden`.
+- El valor de cada cápsula coincide exactamente con el cierre de la última vela;
+  la precisión real del proveedor se conserva también en el eje.
+- TOTAL muestra la lectura actual CoinGecko y explica que el histórico global no
+  está incluido en el plan gratuito. Se eliminó la curva aproximada detectada
+  durante la revisión.
+- SPX, VIX y DXY ya no dependen de CFDs proxy del widget público.
+- Símbolo y variación usan 13 px; precio 16 px; las ocho cápsulas permanecen en
+  una fila sin overflow.
 - Viewport 1920 × 936 sin overflow; banda 1920 × 58 px.
-- Suite completa: 768 pruebas aprobadas.
+- Suite completa: 769 pruebas aprobadas.
 - Wire ABI, fingerprint, EventBus, Gateway, runtime y factories preservados.
 
 ### Evidencia visual

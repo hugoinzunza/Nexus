@@ -30,7 +30,19 @@ def _provider_payload(url: str):
                             "regularMarketPrice": price,
                             "chartPreviousClose": previous,
                             "regularMarketTime": NOW // 1000,
-                        }
+                            "priceHint": 2,
+                        },
+                        "timestamp": [NOW // 1000 - 3600, NOW // 1000],
+                        "indicators": {
+                            "quote": [
+                                {
+                                    "open": [previous, previous],
+                                    "high": [previous + 2, price + 1],
+                                    "low": [previous - 2, previous - 1],
+                                    "close": [previous + 1, price - 1],
+                                }
+                            ]
+                        },
                     }
                 ]
             }
@@ -44,6 +56,25 @@ def _provider_payload(url: str):
             }
         }
     if "fapi.binance.com" in url:
+        if "/klines?" in url:
+            return [
+                [
+                    NOW - 3_600_000,
+                    "69000",
+                    "71000",
+                    "68000",
+                    "69500",
+                    "1",
+                ],
+                [
+                    NOW,
+                    "69500",
+                    "71000",
+                    "69000",
+                    "69900",
+                    "1",
+                ],
+            ]
         return [
             {
                 "symbol": symbol,
@@ -85,6 +116,17 @@ def test_agregador_publica_los_ocho_activos_en_orden_y_con_timestamp() -> None:
     assert snapshot["assets"][0]["change_pct"] == 1.01
     assert snapshot["assets"][3]["source"] == "CoinGecko"
     assert snapshot["assets"][4]["source"] == "Binance Futures"
+    assert snapshot["assets"][0]["chart_mode"] == "same_source"
+    for asset in snapshot["assets"]:
+        history = service.history(asset["id"])
+        assert history["price"] == asset["price"]
+        if "candles" in history:
+            assert history["candles"][-1]["close"] == asset["price"]
+        else:
+            assert history["points"][-1]["value"] == asset["price"]
+        assert asset["chart_mode"] == (
+            "current_only" if asset["id"] == "total" else "same_source"
+        )
 
 
 def test_fallo_de_proveedor_conserva_ultimo_valor_y_expone_degradacion() -> None:
@@ -141,6 +183,38 @@ def test_endpoint_es_autenticado_read_only_y_fuera_del_wire_abi() -> None:
     )
 
 
+def test_endpoint_de_historia_usa_la_misma_cotizacion_y_rechaza_otro_activo() -> None:
+    class Ribbon:
+        def history(self, asset_id):
+            if asset_id != "spx":
+                raise KeyError(asset_id)
+            return {
+                "id": "spx",
+                "price": 6000.0,
+                "candles": [{"time": NOW // 1000, "close": 6000.0}],
+            }
+
+    module = object.__new__(CommandCenterModule)
+    module.market_ribbon = Ribbon()
+    module.context = type("Context", (), {"log": lambda *_args: None})()
+
+    history = module.api(
+        "market-history",
+        {"asset": "spx"},
+        user={"id": 1},
+    )
+    invalid = module.api(
+        "market-history",
+        {"asset": "btcusdt"},
+        user={"id": 1},
+    )
+
+    assert history[0] == 200
+    payload = json.loads(history[2])
+    assert payload["candles"][-1]["close"] == payload["price"]
+    assert invalid[0] == 400
+
+
 def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:
     script_uri = (PUBLIC / "command-center.js").resolve().as_uri()
     node = f"""
@@ -151,14 +225,18 @@ def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:
                tv_symbol: "BINANCE:BTCUSDT.P", price: 70000,
                change_pct: 1.2, freshness: "live", kind: "futures" }},
             {{ id: "spx", symbol: "SPX", chart_symbol: "SPX",
-               tv_symbol: "SP:SPX", price: null,
-               change_pct: null, freshness: "invented", kind: "index" }}
+               tv_symbol: "SP:SPX", chart_mode: "same_source", price: null,
+               price_decimals: 2, change_pct: null,
+               freshness: "invented", kind: "index" }}
           ]
         }});
         process.stdout.write(JSON.stringify({{
           ids: rows.map((row) => row.id),
           spx: rows[0],
-          btcPrice: module.formatMarketPrice(rows[4])
+          btcPrice: module.formatMarketPrice(rows[4]),
+          exactIndex: module.formatMarketPrice({{
+            price: 7437.63, priceDecimals: 2, kind: "index"
+          }})
         }}));
       }});
     """
@@ -182,14 +260,15 @@ def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:
     ]
     assert payload["spx"]["price"] is None
     assert payload["spx"]["freshness"] == "unknown"
+    assert payload["spx"]["chartMode"] == "same_source"
     assert payload["btcPrice"] != "--"
+    assert payload["exactIndex"].endswith("437,63")
 
 
 def test_b4_reutiliza_banda_superior_y_seleccion_remonta_chart_provider() -> None:
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
     css = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
-    adapter = (PUBLIC / "tradingview-spike.js").read_text(encoding="utf-8")
 
     assert page.count('class="market-ribbon"') == 1
     assert 'id="attention-band"' not in page
@@ -199,8 +278,15 @@ def test_b4_reutiliza_banda_superior_y_seleccion_remonta_chart_provider() -> Non
     assert "setChartLabels" in script
     assert "activeChartAdapter.destroy()" in script
     assert "method: \"POST\"" not in script
-    for symbol in ("SP:SPX", "TVC:VIX", "TVC:DXY", "CRYPTOCAP:TOTAL"):
-        assert symbol in adapter
+    assert "lightweight-charts.standalone.production.js" in page
+    assert "SameSourceMarketChart" in script
+    assert "market-history" in script
+    assert "Precio y velas coinciden" in script
+    assert "histórico no incluido" in script
+    assert ".current-only-chart" in css
+    assert 'id="chart-source-label"' in page
+    assert "precio y velas" in script
+    assert "font-size: var(--font-md);" in css
 
 
 def test_b4_documenta_val_0020_sin_cerrar_val_0019() -> None:

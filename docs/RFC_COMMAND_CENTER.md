@@ -133,10 +133,18 @@ no borra el contexto anterior: conserva el timestamp y cambia la frescura. Los
 lectura antigua nunca se presenta como live. La API es autenticada, read-only y
 queda fuera del Wire ABI congelado.
 
-Seleccionar un referente actualiza el gráfico integrado. Como el widget público
-no ofrece mutación runtime, el cliente destruye y remonta serialmente el
-`TradingViewWidgetAdapter`; no simula `set_symbol`. El enlace `Análisis completo`
-apunta al mismo símbolo dentro del TradingView autenticado.
+Seleccionar un referente actualiza el gráfico integrado con la misma fuente que
+publica su precio. SPX, VIX y DXY usan velas Yahoo Finance; los perpetuos usan
+klines Binance Futures. La última vela se actualiza con la misma lectura que
+alimenta la cápsula y ambas superficies conservan la precisión declarada por el
+proveedor. Esto evita comparar un índice exacto con un CFD proxy de TradingView.
+
+CoinGecko gratuito publica TOTAL actual, pero su histórico global es un endpoint
+de pago. Por ello TOTAL muestra únicamente la lectura actual exacta y declara la
+ausencia de histórico; no dibuja ni interpola una curva aproximada. `Análisis
+completo` sigue abriendo el símbolo correspondiente en TradingView autenticado.
+El widget público se conserva como fallback técnico, no como fuente de estos
+ocho gráficos.
 
 VAL-0020 debe comprobar en el Arzopa que ocho referentes se entiendan sin lectura
 secuencial, que la banda no compita con el gráfico y que la frescura sea
