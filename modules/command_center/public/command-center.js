@@ -552,6 +552,66 @@ export function deriveImmediateAttention({
   bot = null,
   now = Date.now(),
 } = {}) {
+  const systemState = readiness?.overall === "failed" ? "critical" : (
+    readiness?.overall === "degraded" ? "warning" : (
+      readiness?.overall === "ready" ? "normal" : "unknown"
+    )
+  );
+  const unavailableAccounts = (positions?.accounts || []).filter((account) =>
+    ["stale", "failed", "unavailable"].includes(account.state),
+  );
+  const positionState = unavailableAccounts.length ? "warning" : (
+    positions ? "normal" : "unknown"
+  );
+  const macroRemaining = macro?.status === "ready" && macro.event
+    ? Number(macro.event.ts) * 1000 - now
+    : null;
+  const macroState = Number.isFinite(macroRemaining) && macroRemaining >= 0
+    && macroRemaining <= 15 * 60_000
+    ? "critical"
+    : Number.isFinite(macroRemaining) && macroRemaining >= 0
+      && macroRemaining <= 60 * 60_000
+      ? "warning"
+      : macro?.status === "degraded" ? "warning" : (
+        macro ? "info" : "unknown"
+      );
+  const botState = bot?.severity === "critical" ? "critical" : (
+    bot?.state === "degraded" || bot?.severity === "warning"
+      ? "warning"
+      : bot ? "info" : "unknown"
+  );
+  const items = [
+    {
+      label: "Sistema",
+      detail: readiness?.overall === "ready" ? "Listo" : (
+        readiness?.overall === "degraded" ? "Degradado" : (
+          readiness?.overall === "failed" ? "Falló" : "Esperando"
+        )
+      ),
+      state: systemState,
+    },
+    {
+      label: "Binance",
+      detail: unavailableAccounts.length
+        ? `${unavailableAccounts.length} sin confirmar`
+        : positions ? `${positions.totalPositions || 0} abiertas` : "Esperando",
+      state: positionState,
+    },
+    {
+      label: "Macro",
+      detail: macro?.status === "ready" && macro.event
+        ? formatMacroCountdown(macro.event.ts, now)
+        : macro?.status === "empty" ? "Sin próximos" : "Esperando",
+      state: macroState,
+    },
+    {
+      label: "Bot",
+      detail: bot?.mode === "live" ? "Live" : (
+        bot?.mode === "dry-run" ? "Dry-run" : "Esperando"
+      ),
+      state: botState,
+    },
+  ];
   const available = [readiness, macro, positions, bot].filter(Boolean).length;
   if (available < 4) {
     return {
@@ -559,6 +619,7 @@ export function deriveImmediateAttention({
       summary: "Reuniendo contexto operacional.",
       detail: `${available}/4 fuentes`,
       count: 0,
+      items,
       evaluatedAtMs: now,
     };
   }
@@ -578,9 +639,6 @@ export function deriveImmediateAttention({
     });
   }
 
-  const unavailableAccounts = positions.accounts.filter((account) =>
-    ["stale", "failed", "unavailable"].includes(account.state),
-  );
   if (unavailableAccounts.length) {
     alerts.push({
       state: "warning",
@@ -633,6 +691,7 @@ export function deriveImmediateAttention({
       summary: "Sin intervención inmediata.",
       detail: macroDetail,
       count: 0,
+      items,
       evaluatedAtMs: now,
     };
   }
@@ -644,6 +703,7 @@ export function deriveImmediateAttention({
       ? first.source
       : `${first.source} · ${alerts.length} alertas`,
     count: alerts.length,
+    items,
     evaluatedAtMs: now,
   };
 }
@@ -1881,7 +1941,10 @@ function renderMacOSContext(context) {
     degraded: "Revisar",
     unavailable: "Solo local",
   };
-  badge.textContent = labels[context.state] || "Unknown";
+  badge.textContent = badge.classList.contains("macos-compact-state")
+    ? "macOS"
+    : labels[context.state] || "Unknown";
+  badge.title = labels[context.state] || "Unknown";
   document.querySelector("#macos-answer").textContent = context.detail || (
     context.state === "ready"
       ? "El equipo local está listo para operar."
@@ -1918,6 +1981,18 @@ function renderImmediateAttention(attention) {
   const summary = document.querySelector("#attention-summary");
   summary.dataset.state = attention.state;
   summary.textContent = attention.summary;
+  const list = document.querySelector("#attention-list");
+  list.replaceChildren(...(attention.items || []).map((source) => {
+    const item = document.createElement("div");
+    item.className = "attention-item";
+    item.dataset.state = source.state;
+    const name = document.createElement("strong");
+    name.textContent = source.label;
+    const detail = document.createElement("span");
+    detail.textContent = source.detail;
+    item.append(name, detail);
+    return item;
+  }));
   document.querySelector("#attention-detail").textContent = attention.detail;
   document.querySelector("#attention-updated").textContent =
     attention.evaluatedAtMs

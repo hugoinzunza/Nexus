@@ -78,24 +78,6 @@
           </div>
         </div>
         </section>
-
-        <section class="macos-panel" aria-labelledby="macos-title">
-          <header class="panel-header">
-            <div><span class="eyebrow">Este equipo · solo lectura</span>
-              <h2 id="macos-title">macOS</h2></div>
-            <span class="context-badge" data-state="unknown"
-              id="macos-state">Esperando</span>
-          </header>
-          <p class="macos-answer" id="macos-answer">Verificando el equipo local.</p>
-          <dl class="macos-metrics">
-            <div><dt>Carga</dt><dd id="macos-load">--</dd></div>
-            <div><dt>Memoria</dt><dd id="macos-memory">--</dd></div>
-            <div><dt>Disco</dt><dd id="macos-disk">--</dd></div>
-            <div><dt>Energía</dt><dd id="macos-power">--</dd></div>
-          </dl>
-          <footer class="macos-footer"><span id="macos-device">Mac local</span>
-            <span id="macos-uptime">Sin lectura</span></footer>
-        </section>
       </div>
 
       <aside class="context-rail" aria-label="Contexto operativo">
@@ -108,11 +90,10 @@
             <span class="context-badge" data-state="unknown"
               id="attention-state">Esperando</span>
           </header>
-          <div class="attention-focus" aria-hidden="true">
-            <span class="attention-pulse"></span>
-          </div>
           <p class="context-summary" data-state="unknown"
             id="attention-summary">Reuniendo contexto operacional.</p>
+          <div class="attention-list" id="attention-list"
+            aria-label="Fuentes de atención"></div>
           <footer class="context-footer">
             <span id="attention-detail">Sin evaluación completa</span>
             <span id="attention-updated">Sin lectura</span>
@@ -221,6 +202,17 @@
       <span class="readiness-overall" data-state="unknown"
         id="readiness-overall">Unknown</span>
       <span class="visually-hidden" id="readiness-answer">Verificando servicios esenciales.</span>
+      <div class="macos-compact" aria-label="Estado de macOS">
+        <span class="macos-compact-state" data-state="unknown"
+          id="macos-state">macOS</span>
+        <span><small>Carga</small><strong id="macos-load">--</strong></span>
+        <span><small>Mem</small><strong id="macos-memory">--</strong></span>
+        <span><small>Disco</small><strong id="macos-disk">--</strong></span>
+        <span><small>Energía</small><strong id="macos-power">--</strong></span>
+        <span class="visually-hidden" id="macos-answer">Verificando el equipo local.</span>
+        <span class="visually-hidden" id="macos-device">Mac local</span>
+        <span class="visually-hidden" id="macos-uptime">Sin lectura</span>
+      </div>
       <div class="footer-meta"><span id="contract-state">NexUX v1.1</span>
         <span id="subject-state">Sesión pendiente</span>
         <span id="sequence-state">Sin cursor</span>

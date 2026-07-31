@@ -218,10 +218,12 @@ normal del navegador. Se reemplazó por una shell nativa macOS basada en
 Los enlaces externos, como Análisis completo, continúan abriéndose en el
 navegador habitual.
 
-La cuadrícula final reduce TradingView a una celda superior y agrega debajo una
-lectura local de macOS que responde si el equipo está listo para operar. Expone
-solamente carga normalizada, memoria, disco, energía, versión y uptime. No
-publica procesos, aplicaciones abiertas ni información personal.
+La primera cuadrícula redujo TradingView a una celda superior y agregó debajo una
+lectura local de macOS. Esa composición validó la integración técnica, pero la
+revisión perceptual posterior mostró que daba demasiado protagonismo a métricas
+que cambian lentamente. La lectura local expone solamente carga normalizada,
+memoria, disco, energía, versión y uptime. No publica procesos, aplicaciones
+abiertas ni información personal.
 
 La validación directa en el Arzopa `1920 x 1080` confirmó:
 
@@ -230,3 +232,28 @@ La validación directa en el Arzopa `1920 x 1080` confirmó:
 - macOS `ready` con datos reales y frescos;
 - cuatro zonas visuales alineadas;
 - Música, Atención y Posiciones sin superposición horizontal.
+
+## Refinamiento de jerarquía premium
+
+La composición posterior reemplaza la igualdad entre paneles por una jerarquía
+explícita. No se agregaron módulos ni nuevas funciones:
+
+- TradingView ocupa aproximadamente el `67%` del ancho útil y toda la altura de
+  trabajo disponible bajo el Market Ribbon.
+- Atención inmediata se convierte en un centro compacto de cuatro fuentes:
+  Sistema, Binance, Macro y Bot. La ausencia de alertas ya no produce un panel
+  vacío.
+- Música usa carátula de `200 x 200 px`, controles principales reforzados, título
+  de mayor jerarquía y una barra de progreso más visible.
+- Posiciones reduce separaciones internas y conserva la distinción entre cuenta
+  principal y Bot sin incorporar métricas nuevas.
+- macOS deja de competir como módulo y pasa al footer como resumen secundario de
+  carga, memoria, disco y energía.
+- El shell queda limitado estrictamente a un viewport, sin scroll ni crecimiento
+  vertical inducido por el contenido.
+
+![Command Center refinado](evidence/command-center-premium-refinement.png)
+
+Esta es la composición recomendada para la siguiente validación perceptual en el
+Arzopa. Preserva TradingView como proveedor principal y mantiene libre el mismo
+espacio físico para un futuro `NexuxChartProvider`.

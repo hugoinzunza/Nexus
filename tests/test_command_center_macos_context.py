@@ -66,18 +66,19 @@ def test_contexto_macos_fuera_del_host_local_falla_explicito(monkeypatch):
     }
 
 
-def test_shell_incorpora_macos_y_reduce_trading_a_una_celda():
+def test_shell_compacta_macos_y_devuelve_protagonismo_a_trading():
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     css = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
 
-    assert page.count('class="macos-panel"') == 1
+    assert page.count('class="macos-compact"') == 1
     assert page.count('class="market-column"') == 1
     assert 'id="macos-load"' in page
     assert 'id="macos-memory"' in page
     assert 'id="macos-disk"' in page
     assert 'id="macos-power"' in page
-    assert "grid-template-rows: minmax(430px, 1.45fr)" in css
+    assert "grid-template-columns: minmax(0, 2.08fr) minmax(560px, 1fr)" in css
+    assert ".macos-compact" in css
     assert 'const MACOS_CONTEXT_URL = "/m/command-center/api/macos-context"' in script
     assert "new MacOSContextClient" in script
     assert script.count('method: "POST"') == 1

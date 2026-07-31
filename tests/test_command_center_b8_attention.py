@@ -53,6 +53,10 @@ def test_b8_prioriza_solo_alertas_operacionales_verificables() -> None:
     assert payload["normal"]["state"] == "normal"
     assert payload["normal"]["count"] == 0
     assert payload["normal"]["detail"] == "Macro: sin eventos próximos"
+    assert [item["label"] for item in payload["normal"]["items"]] == [
+        "Sistema", "Binance", "Macro", "Bot"
+    ]
+    assert payload["normal"]["items"][0]["state"] == "normal"
     assert payload["macroAlert"]["state"] == "critical"
     assert payload["macroAlert"]["summary"] == "FOMC · 10 min."
     assert payload["failed"]["state"] == "critical"
