@@ -143,6 +143,7 @@ class CommandCenterModule(NexusModule):
             "event_bus": self.event_bus.stats(),
             "gateway": self.gateway.stats(),
             "module_registry": self.module_registry.stats(),
+            "market_ribbon": self.market_ribbon.stats(),
             "interfaces": {
                 "chart_provider": {
                     "version": CHART_PROVIDER_INTERFACE_VERSION,

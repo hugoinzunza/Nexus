@@ -88,6 +88,11 @@ class MarketRibbonService:
         self._last_response: dict | None = None
         self._last_refresh_ms = 0
         self._provider_cache: dict[str, list[dict]] = {}
+        self._refresh_count = 0
+        self._cache_hit_count = 0
+        self._last_refresh_duration_ms: float | None = None
+        self._provider_successes: dict[str, int] = {}
+        self._provider_failures: dict[str, int] = {}
 
     def snapshot(self) -> dict:
         now_ms = self._clock_ms()
@@ -96,8 +101,10 @@ class MarketRibbonService:
                 self._last_response
                 and now_ms - self._last_refresh_ms < self._ttl_ms
             ):
+                self._cache_hit_count += 1
                 return self._decorate(self._last_response, now_ms)
 
+            refresh_started = time.perf_counter()
             providers = (
                 ("yahoo", self._load_yahoo),
                 ("coingecko", self._load_total),
@@ -120,7 +127,13 @@ class MarketRibbonService:
                     if not rows:
                         raise ValueError("provider returned no assets")
                     self._provider_cache[provider] = rows
+                    self._provider_successes[provider] = (
+                        self._provider_successes.get(provider, 0) + 1
+                    )
                 except Exception as exc:  # noqa: BLE001
+                    self._provider_failures[provider] = (
+                        self._provider_failures.get(provider, 0) + 1
+                    )
                     errors.append(
                         {
                             "provider": provider,
@@ -140,7 +153,44 @@ class MarketRibbonService:
                 "provider_errors": errors,
             }
             self._last_refresh_ms = now_ms
+            self._refresh_count += 1
+            self._last_refresh_duration_ms = round(
+                (time.perf_counter() - refresh_started) * 1000,
+                3,
+            )
             return self._decorate(self._last_response, now_ms)
+
+    def stats(self) -> dict:
+        """Expone telemetría operacional sin incluir datos de mercado."""
+        with self._lock:
+            errors = (
+                self._last_response.get("provider_errors", [])
+                if self._last_response
+                else []
+            )
+            if not self._last_response:
+                status = "idle"
+            elif errors:
+                status = "degraded"
+            else:
+                status = "ready"
+            return {
+                "status": status,
+                "refresh_count": self._refresh_count,
+                "cache_hit_count": self._cache_hit_count,
+                "last_refresh_ms": self._last_refresh_ms or None,
+                "last_refresh_duration_ms": self._last_refresh_duration_ms,
+                "cached_providers": sorted(self._provider_cache),
+                "current_error_providers": sorted(
+                    error["provider"] for error in errors
+                ),
+                "provider_successes": dict(
+                    sorted(self._provider_successes.items())
+                ),
+                "provider_failures": dict(
+                    sorted(self._provider_failures.items())
+                ),
+            }
 
     def _decorate(self, response: dict, now_ms: int) -> dict:
         assets = []

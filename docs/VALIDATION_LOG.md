@@ -689,16 +689,24 @@ honestamente el último cierre de un índice sin llamarlo live.
   exacto de Binance.
 - SPX, VIX, DXY y TOTAL conservan precio y porcentaje, pero abren el símbolo
   exacto en una pestaña nueva de TradingView y no alteran el gráfico integrado.
+- Las cuatro rutas externas son enlaces nativos con `target="_blank"` y
+  `rel="noopener noreferrer"`; no dependen de que el navegador permita un popup
+  iniciado por JavaScript.
 - `Análisis completo` y las cápsulas externas usan el mismo constructor de URL.
 - La banda reemplaza la fila de estado duplicada; no agrega altura a la shell.
 - API autenticada y exclusivamente GET.
+- `/health` expone únicamente estado, refrescos, uso de caché y degradación por
+  proveedor; no publica precios ni modifica el Wire ABI.
 - Los símbolos externos no aparecen en el mapa estático del adaptador, por lo que
   una regresión no puede volver a montarlos accidentalmente.
 - Símbolo usa 13 px, variación 15 px y precio 16 px.
 - Los colores semánticos aumentan saturación sin modificar fondos, densidad ni
   composición.
 - Viewport 1920 × 936 sin overflow; banda 1920 × 58 px.
-- Suite completa: 768 pruebas aprobadas.
+- Smoke local autenticado: SPX abrió
+  `https://www.tradingview.com/chart/5qSvm5Yx/?symbol=SP%3ASPX` en una pestaña
+  nueva y el gráfico integrado permaneció en BTC.
+- Suite completa: 770 pruebas aprobadas.
 - Wire ABI, fingerprint, EventBus, Gateway, runtime y factories preservados.
 
 ### Evidencia visual

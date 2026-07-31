@@ -1060,20 +1060,27 @@ function renderMarketRibbon(state) {
   const list = document.querySelector("#market-ribbon-list");
   list.replaceChildren(
     ...state.assets.map((asset) => {
-      const button = document.createElement("button");
-      button.className = "market-asset";
-      button.type = "button";
-      button.dataset.assetId = asset.id;
-      button.dataset.destination =
+      const external = asset.chartMode === "external_only";
+      const control = document.createElement(external ? "a" : "button");
+      control.className = "market-asset";
+      if (external) {
+        control.href = tradingViewAnalysisUrl(asset);
+        control.target = "_blank";
+        control.rel = "noopener noreferrer";
+      } else {
+        control.type = "button";
+      }
+      control.dataset.assetId = asset.id;
+      control.dataset.destination =
         asset.chartMode === "external_only" ? "tradingview" : "embedded";
-      button.setAttribute(
+      control.setAttribute(
         "aria-pressed",
         String(
           asset.chartMode !== "external_only" &&
           asset.id === selectedMarketAssetId,
         ),
       );
-      button.title = [
+      control.title = [
         asset.chartMode === "external_only"
           ? "Abrir análisis completo en TradingView"
           : "Mostrar gráfico en Command Center",
@@ -1101,15 +1108,11 @@ function renderMarketRibbon(state) {
       change.className = "market-change";
       change.dataset.direction = marketChangeDirection(asset.changePct);
       change.textContent = formatMarketChange(asset.changePct);
-      button.append(symbol, freshness, price, change);
-      button.addEventListener("click", () => {
-        if (asset.chartMode === "external_only") {
-          openTradingViewAnalysis(asset);
-        } else {
-          selectMarketAsset(asset);
-        }
-      });
-      return button;
+      control.append(symbol, freshness, price, change);
+      if (!external) {
+        control.addEventListener("click", () => selectMarketAsset(asset));
+      }
+      return control;
     }),
   );
 }
@@ -1184,14 +1187,14 @@ export function selectMarketAsset(asset) {
   selectedMarketAssetId = asset.id;
   if (lastMarketRibbonState) renderMarketRibbon(lastMarketRibbonState);
   document
-    .querySelectorAll(".market-asset")
+    .querySelectorAll("button.market-asset")
     .forEach((button) => { button.disabled = true; });
   chartQueue = chartQueue
     .catch(() => {})
     .then(() => remountChart(asset))
     .finally(() => {
       document
-        .querySelectorAll(".market-asset")
+        .querySelectorAll("button.market-asset")
         .forEach((button) => { button.disabled = false; });
     });
   return chartQueue.then(() => true);

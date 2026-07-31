@@ -2,6 +2,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from core.module_base import ModuleContext
 from modules.command_center.contracts import CONTRACT_V1_FINGERPRINT
 from modules.command_center.market_ribbon import MarketRibbonService
 from modules.command_center.module import CommandCenterModule
@@ -122,6 +123,53 @@ def test_fallo_de_proveedor_conserva_ultimo_valor_y_expone_degradacion() -> None
     assert degraded["assets"][0]["freshness"] == "current"
     assert degraded["assets"][3]["freshness"] == "stale"
     assert degraded["assets"][4]["freshness"] == "stale"
+    stats = service.stats()
+    assert stats["status"] == "degraded"
+    assert stats["refresh_count"] == 2
+    assert stats["cache_hit_count"] == 0
+    assert stats["last_refresh_ms"] == now[0]
+    assert stats["last_refresh_duration_ms"] >= 0
+    assert stats["cached_providers"] == [
+        "binance-futures",
+        "coingecko",
+        "yahoo",
+    ]
+    assert stats["current_error_providers"] == [
+        "binance-futures",
+        "coingecko",
+        "yahoo",
+    ]
+    assert stats["provider_successes"] == {
+        "binance-futures": 1,
+        "coingecko": 1,
+        "yahoo": 1,
+    }
+    assert stats["provider_failures"] == {
+        "binance-futures": 1,
+        "coingecko": 1,
+        "yahoo": 1,
+    }
+
+
+def test_telemetria_distingue_cache_de_refresh_sin_exponer_precios() -> None:
+    service = MarketRibbonService(
+        fetch_json=_provider_payload,
+        clock_ms=lambda: NOW,
+    )
+
+    assert service.stats()["status"] == "idle"
+    service.snapshot()
+    service.snapshot()
+    stats = service.stats()
+
+    assert stats["status"] == "ready"
+    assert stats["refresh_count"] == 1
+    assert stats["cache_hit_count"] == 1
+    assert stats["last_refresh_ms"] == NOW
+    assert stats["last_refresh_duration_ms"] >= 0
+    assert stats["current_error_providers"] == []
+    assert stats["provider_failures"] == {}
+    assert "price" not in json.dumps(stats)
 
 
 def test_endpoint_es_autenticado_read_only_y_fuera_del_wire_abi() -> None:
@@ -143,6 +191,23 @@ def test_endpoint_es_autenticado_read_only_y_fuera_del_wire_abi() -> None:
     assert CONTRACT_V1_FINGERPRINT == (
         "b0a8a7efa623a1aae4b681c3cfc42790d36a6a14fbc689688026c523f2e49b46"
     )
+
+
+def test_health_expone_telemetria_del_ribbon_sin_forzar_un_refresh() -> None:
+    module = CommandCenterModule(
+        ModuleContext(
+            "command_center",
+            str(ROOT / "modules" / "command_center"),
+            {},
+            lambda _message: None,
+        )
+    )
+
+    health = module.health()
+
+    assert health["market_ribbon"]["status"] == "idle"
+    assert health["market_ribbon"]["refresh_count"] == 0
+    assert health["market_ribbon"]["cached_providers"] == []
 
 
 def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:
@@ -214,8 +279,13 @@ def test_b4_reutiliza_banda_superior_y_seleccion_remonta_chart_provider() -> Non
     assert "method: \"POST\"" not in script
     for symbol in ("SP:SPX", "TVC:VIX", "TVC:DXY", "CRYPTOCAP:TOTAL"):
         assert symbol not in adapter
-    assert "openTradingViewAnalysis(asset)" in script
-    assert 'button.dataset.destination' in script
+    assert 'document.createElement(external ? "a" : "button")' in script
+    assert 'control.target = "_blank"' in script
+    assert 'control.rel = "noopener noreferrer"' in script
+    assert 'control.dataset.destination' in script
+    assert "control.title = [" in script
+    assert "button.title = [" not in script
+    assert 'querySelectorAll("button.market-asset")' in script
     assert 'asset.chartMode === "external_only"' in script
     assert "font-size: var(--font-md);" in css
     assert ".market-change {" in css

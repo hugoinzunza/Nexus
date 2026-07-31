@@ -266,6 +266,7 @@ a:focus-visible {
   background: transparent;
   color: var(--text-1);
   cursor: pointer;
+  text-decoration: none;
   text-align: left;
 }
 
