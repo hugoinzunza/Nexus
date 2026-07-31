@@ -29,7 +29,9 @@ def test_agente_solo_admite_wss_saliente_y_no_expone_shell_remoto():
     source = _source_tree()
     assert 'endpoint.scheme?.lowercased() == "wss"' in transport
     assert '"Authorization"' in transport
-    assert '"Bearer \\(deviceToken)"' in transport
+    assert '"Bearer \\(credential.token)"' in transport
+    assert '"X-Nexux-Device-ID"' in transport
+    assert "credential.deviceId" in transport
     for forbidden in ("Process(", "NSTask", "/bin/sh", "/bin/zsh"):
         assert forbidden not in source
 
@@ -40,6 +42,8 @@ def test_token_de_dispositivo_se_guarda_en_keychain_local():
     assert "SecItemUpdate" in source
     assert "SecItemAdd" in source
     assert "kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly" in source
+    assert "DeviceCredential" in source
+    assert "expiresAtMs" in source
 
 
 def test_protocolo_del_agente_es_separado_del_wire_abi_del_navegador():
@@ -58,6 +62,36 @@ def test_runtime_impone_allowlist_ack_e_idempotencia():
     assert "cache[command.commandId]" in source
     assert "inFlight[command.commandId]" in source
     assert "AgentAck(" in source
+
+
+def test_pairing_es_contractual_y_liga_respuesta_a_la_solicitud():
+    source = (CORE / "AgentPairing.swift").read_text(encoding="utf-8")
+    assert 'agentPairingProtocolVersion = "nexux.agent-pairing.v1"' in source
+    assert "requestId == request.requestId" in source
+    assert "deviceId == request.deviceId" in source
+    assert "nonce == request.nonce" in source
+    assert "pairingCode" in source
+    assert "alreadyInProgress" in source
+    assert "withThrowingTaskGroup" in source
+    assert "URLSession" not in source
+    assert "http://" not in source
+    assert "https://" not in source
+
+
+def test_observabilidad_del_pairing_no_expone_credenciales():
+    source = (CORE / "AgentPairing.swift").read_text(encoding="utf-8")
+    credential_source = (CORE / "DeviceTokenStore.swift").read_text(
+        encoding="utf-8"
+    )
+    stats = source[
+        source.index("public struct AgentPairingStats") :
+        source.index("public actor AgentPairingCoordinator")
+    ]
+    assert "token" not in stats.lower()
+    assert "pairingCode" not in stats
+    assert "pairingCode: <redacted>" in source
+    assert "deviceToken: <redacted>" in source
+    assert "token: <redacted>" in credential_source
 
 
 def test_agente_no_activa_factory_productiva():

@@ -1,26 +1,67 @@
 import Foundation
 import Security
 
-public enum DeviceTokenStoreError: Error, Equatable {
+public struct DeviceCredential:
+    Codable,
+    Equatable,
+    Sendable,
+    CustomStringConvertible,
+    CustomDebugStringConvertible
+{
+    public let deviceId: String
+    public let token: String
+    public let expiresAtMs: Int64
+
+    public init(deviceId: String, token: String, expiresAtMs: Int64) {
+        self.deviceId = deviceId
+        self.token = token
+        self.expiresAtMs = expiresAtMs
+    }
+
+    public func validationCode(nowMs: Int64) -> String? {
+        guard AgentIdentity.isCanonicalIdentifier(deviceId) else {
+            return "agent.device-id-invalid"
+        }
+        guard AgentIdentity.isOpaqueSecret(token) else {
+            return "agent.device-token-invalid"
+        }
+        guard expiresAtMs > nowMs else {
+            return "agent.device-token-expired"
+        }
+        return nil
+    }
+
+    public var description: String {
+        "DeviceCredential(deviceId: \(deviceId), token: <redacted>, "
+            + "expiresAtMs: \(expiresAtMs))"
+    }
+
+    public var debugDescription: String { description }
+}
+
+public enum DeviceCredentialStoreError: Error, Equatable {
     case invalidIdentifier
-    case invalidTokenEncoding
+    case invalidCredential
     case keychain(OSStatus)
 }
 
-public protocol DeviceTokenStore: Sendable {
-    func load(deviceId: String) throws -> String?
-    func save(_ token: String, deviceId: String) throws
+public protocol DeviceCredentialStore: Sendable {
+    func load(deviceId: String) throws -> DeviceCredential?
+    func save(_ credential: DeviceCredential) throws
     func delete(deviceId: String) throws
 }
 
-public struct KeychainDeviceTokenStore: DeviceTokenStore, @unchecked Sendable {
+public struct KeychainDeviceCredentialStore:
+    DeviceCredentialStore,
+    @unchecked Sendable
+{
     public let service: String
 
     public init(service: String = "cl.nexux.command-center.agent") {
         self.service = service
     }
 
-    public func load(deviceId: String) throws -> String? {
+    public func load(deviceId: String) throws -> DeviceCredential? {
         try Self.validate(deviceId)
         var query = baseQuery(deviceId: deviceId)
         query[kSecReturnData as String] = true
@@ -32,21 +73,26 @@ public struct KeychainDeviceTokenStore: DeviceTokenStore, @unchecked Sendable {
         )
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess else {
-            throw DeviceTokenStoreError.keychain(status)
+            throw DeviceCredentialStoreError.keychain(status)
         }
         guard let data = result as? Data,
-              let token = String(data: data, encoding: .utf8) else {
-            throw DeviceTokenStoreError.invalidTokenEncoding
+              let credential = try? JSONDecoder().decode(
+                  DeviceCredential.self,
+                  from: data
+              ),
+              credential.deviceId == deviceId else {
+            throw DeviceCredentialStoreError.invalidCredential
         }
-        return token
+        return credential
     }
 
-    public func save(_ token: String, deviceId: String) throws {
-        try Self.validate(deviceId)
-        guard !token.isEmpty, let data = token.data(using: .utf8) else {
-            throw DeviceTokenStoreError.invalidTokenEncoding
+    public func save(_ credential: DeviceCredential) throws {
+        try Self.validate(credential.deviceId)
+        guard credential.validationCode(nowMs: 0) == nil,
+              let data = try? JSONEncoder().encode(credential) else {
+            throw DeviceCredentialStoreError.invalidCredential
         }
-        let query = baseQuery(deviceId: deviceId)
+        let query = baseQuery(deviceId: credential.deviceId)
         let update = [kSecValueData as String: data]
         let updateStatus = SecItemUpdate(
             query as CFDictionary,
@@ -54,13 +100,13 @@ public struct KeychainDeviceTokenStore: DeviceTokenStore, @unchecked Sendable {
         )
         if updateStatus == errSecSuccess { return }
         guard updateStatus == errSecItemNotFound else {
-            throw DeviceTokenStoreError.keychain(updateStatus)
+            throw DeviceCredentialStoreError.keychain(updateStatus)
         }
         var item = query
         item[kSecValueData as String] = data
         let addStatus = SecItemAdd(item as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
-            throw DeviceTokenStoreError.keychain(addStatus)
+            throw DeviceCredentialStoreError.keychain(addStatus)
         }
     }
 
@@ -70,7 +116,7 @@ public struct KeychainDeviceTokenStore: DeviceTokenStore, @unchecked Sendable {
             baseQuery(deviceId: deviceId) as CFDictionary
         )
         guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw DeviceTokenStoreError.keychain(status)
+            throw DeviceCredentialStoreError.keychain(status)
         }
     }
 
@@ -85,24 +131,8 @@ public struct KeychainDeviceTokenStore: DeviceTokenStore, @unchecked Sendable {
     }
 
     private static func validate(_ deviceId: String) throws {
-        guard !deviceId.isEmpty, deviceId.count <= 128 else {
-            throw DeviceTokenStoreError.invalidIdentifier
-        }
-        let allowed = CharacterSet(
-            charactersIn:
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:-"
-        )
-        guard deviceId.unicodeScalars.allSatisfy(allowed.contains),
-              deviceId.first?.isLetterOrNumber == true else {
-            throw DeviceTokenStoreError.invalidIdentifier
-        }
-    }
-}
-
-private extension Character {
-    var isLetterOrNumber: Bool {
-        unicodeScalars.allSatisfy {
-            CharacterSet.alphanumerics.contains($0)
+        guard AgentIdentity.isCanonicalIdentifier(deviceId) else {
+            throw DeviceCredentialStoreError.invalidIdentifier
         }
     }
 }

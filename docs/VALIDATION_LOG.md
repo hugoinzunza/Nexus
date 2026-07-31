@@ -269,6 +269,60 @@ activación persistente y productiva continúa bloqueada.
 
 ---
 
+## VAL-0014 — Pairing contractual del agente macOS
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Fase | A.5 — Integraciones headless |
+| Gateway | Fake contractual; ninguna red real |
+| Protocolo interno | `nexux.agent-pairing.v1` |
+
+### Contrato
+
+1. El agente envía `request_id`, `device_id`, código de pairing, nonce,
+   capacidades ordenadas y deadline.
+2. La respuesta debe conservar `request_id`, `device_id` y nonce.
+3. Solo `pairing.accepted` puede producir una credencial.
+4. El token debe ser opaco, válido y tener expiración futura.
+5. La credencial completa se guarda en Keychain; no se escribe en archivos.
+6. El transporte WSS exige esa credencial y envía identidad de dispositivo
+   explícita junto al Bearer.
+
+### Evidencia
+
+- Aceptación y persistencia contractual verificadas con store en memoria.
+- El Gateway fake consume cada código una sola vez.
+- Reutilizar un código es rechazado.
+- Una respuesta asociada a otro dispositivo no persiste credenciales.
+- Un token vencido no se acepta.
+- Dos pairings concurrentes fallan cerrados.
+- El timeout cancela el intercambio.
+- La revocación local elimina la credencial.
+- La observabilidad solo publica contadores; no contiene código ni token.
+- Harness Swift completo: 48 comprobaciones aprobadas, incluidas descripciones
+  redactadas para solicitud, respuesta y credencial.
+- Guards Python: 9 aprobados para límites del agente y pairing.
+
+### Límites y riesgos pendientes
+
+- No existe endpoint real ni integración con Railway.
+- El consumo atómico del código deberá implementarse y probarse en el servidor.
+- La autenticación usa Bearer ligado a `device_id`; aún no incorpora
+  proof-of-possession criptográfico.
+- No existe rotación silenciosa, revocación remota ni recuperación de cuenta.
+- No existe `LaunchAgent`, firma, notarización, handler real o factory.
+
+### Conclusión
+
+**APROBADO** como pairing contractual contra fake. Antes de conectar una red real
+se requerirá revisión específica del contrato servidor, almacenamiento de
+tokens, consumo atómico del código y política de revocación.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

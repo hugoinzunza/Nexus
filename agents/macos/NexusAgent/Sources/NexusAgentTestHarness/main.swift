@@ -2,9 +2,15 @@ import Foundation
 import NexusAgentCore
 
 private let now: Int64 = 1_785_430_000_000
+private let validCredential = DeviceCredential(
+    deviceId: "device-test-1",
+    token: "opaque-device-token",
+    expiresAtMs: now + 60_000
+)
 
 private enum HarnessError: Error {
     case disconnected
+    case credentialStore
 }
 
 private actor RecordingHandler: AgentCapabilityHandler {
@@ -72,6 +78,134 @@ private actor StubTransport: AgentTransport {
     func close() async {}
 
     func sent() -> [Data] { sentPayloads }
+}
+
+private final class MemoryCredentialStore:
+    DeviceCredentialStore,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private let failSave: Bool
+    private var credentials: [String: DeviceCredential] = [:]
+
+    init(failSave: Bool = false) {
+        self.failSave = failSave
+    }
+
+    func load(deviceId: String) throws -> DeviceCredential? {
+        lock.lock()
+        defer { lock.unlock() }
+        return credentials[deviceId]
+    }
+
+    func save(_ credential: DeviceCredential) throws {
+        if failSave { throw HarnessError.credentialStore }
+        lock.lock()
+        defer { lock.unlock() }
+        credentials[credential.deviceId] = credential
+    }
+
+    func delete(deviceId: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        credentials.removeValue(forKey: deviceId)
+    }
+}
+
+private enum FakePairingMode: Sendable {
+    case accepted
+    case rejected
+    case mismatched
+    case expiredCredential
+}
+
+private actor FakePairingGateway: AgentPairingGateway {
+    private let mode: FakePairingMode
+    private let nowMs: Int64
+    private let delayNs: UInt64
+    private var usedCodes: Set<String> = []
+    private var calls = 0
+
+    init(
+        mode: FakePairingMode = .accepted,
+        nowMs: Int64 = now,
+        delayNs: UInt64 = 0
+    ) {
+        self.mode = mode
+        self.nowMs = nowMs
+        self.delayNs = delayNs
+    }
+
+    func pair(
+        _ request: AgentPairingRequest
+    ) async throws -> AgentPairingResponse {
+        calls += 1
+        if delayNs > 0 {
+            try await Task.sleep(nanoseconds: delayNs)
+        }
+        if usedCodes.contains(request.pairingCode) {
+            return response(
+                request,
+                status: .rejected,
+                code: "pairing.code-consumed"
+            )
+        }
+        usedCodes.insert(request.pairingCode)
+        switch mode {
+        case .accepted:
+            return response(
+                request,
+                status: .accepted,
+                code: "pairing.accepted",
+                token: "issued-device-token",
+                expiresAtMs: nowMs + 86_400_000
+            )
+        case .rejected:
+            return response(
+                request,
+                status: .rejected,
+                code: "pairing.rejected"
+            )
+        case .mismatched:
+            return AgentPairingResponse(
+                requestId: request.requestId,
+                deviceId: "other-device",
+                nonce: request.nonce,
+                status: .accepted,
+                code: "pairing.accepted",
+                deviceToken: "issued-device-token",
+                tokenExpiresAtMs: nowMs + 86_400_000
+            )
+        case .expiredCredential:
+            return response(
+                request,
+                status: .accepted,
+                code: "pairing.accepted",
+                token: "issued-device-token",
+                expiresAtMs: nowMs - 1
+            )
+        }
+    }
+
+    func callCount() -> Int { calls }
+
+    private func response(
+        _ request: AgentPairingRequest,
+        status: AgentPairingStatus,
+        code: String,
+        token: String? = nil,
+        expiresAtMs: Int64? = nil
+    ) -> AgentPairingResponse {
+        AgentPairingResponse(
+            requestId: request.requestId,
+            deviceId: request.deviceId,
+            nonce: request.nonce,
+            status: status,
+            code: code,
+            deviceToken: token,
+            tokenExpiresAtMs: expiresAtMs
+        )
+    }
 }
 
 private struct Harness {
@@ -313,24 +447,36 @@ private struct NexusAgentTestHarness {
         try harness.expectThrows("insecure ws endpoint was accepted") {
             _ = try URLSessionWebSocketTransport(
                 endpoint: URL(string: "ws://localhost/agent")!,
-                deviceToken: "token"
+                credential: validCredential,
+                nowMs: now
             )
         }
         try harness.expectThrows("empty device token was accepted") {
             _ = try URLSessionWebSocketTransport(
                 endpoint: URL(string: "wss://nexux.cl/agent")!,
-                deviceToken: ""
+                credential: DeviceCredential(
+                    deviceId: "device-test-1",
+                    token: "",
+                    expiresAtMs: now + 60_000
+                ),
+                nowMs: now
             )
         }
         try harness.expectThrows("whitespace device token was accepted") {
             _ = try URLSessionWebSocketTransport(
                 endpoint: URL(string: "wss://nexux.cl/agent")!,
-                deviceToken: "bad token"
+                credential: DeviceCredential(
+                    deviceId: "device-test-1",
+                    token: "bad token",
+                    expiresAtMs: now + 60_000
+                ),
+                nowMs: now
             )
         }
         _ = try URLSessionWebSocketTransport(
             endpoint: URL(string: "wss://nexux.cl/agent")!,
-            deviceToken: "opaque-device-token"
+            credential: validCredential,
+            nowMs: now
         )
         try harness.expect(true, "valid WSS transport failed")
 
@@ -366,7 +512,7 @@ private struct NexusAgentTestHarness {
             "command envelope leaked identity or token fields"
         )
 
-        let store = KeychainDeviceTokenStore(service: "cl.nexux.test")
+        let store = KeychainDeviceCredentialStore(service: "cl.nexux.test")
         try harness.expectThrows("empty Keychain device id was accepted") {
             _ = try store.load(deviceId: "")
         }
@@ -436,5 +582,214 @@ private struct NexusAgentTestHarness {
             oversizedSent.isEmpty,
             "oversized command produced an ACK"
         )
+
+        try await verifyPairing(&harness)
+    }
+
+    private static func verifyPairing(
+        _ harness: inout Harness
+    ) async throws {
+        let store = MemoryCredentialStore()
+        let gateway = FakePairingGateway()
+        let coordinator = AgentPairingCoordinator(
+            gateway: gateway,
+            store: store,
+            clockMs: { now }
+        )
+        let credential = try await coordinator.pair(
+            deviceId: "device-pairing-1",
+            pairingCode: "ABC123",
+            capabilities: [.mediaRead, .mediaControl]
+        )
+        try harness.expect(
+            credential.deviceId == "device-pairing-1"
+                && credential.token == "issued-device-token",
+            "accepted pairing returned the wrong credential"
+        )
+        try harness.expect(
+            !String(describing: credential).contains("issued-device-token"),
+            "credential description leaked its token"
+        )
+        let persisted = try await coordinator.credential(
+            deviceId: "device-pairing-1"
+        )
+        try harness.expect(
+            persisted == credential,
+            "accepted pairing was not persisted"
+        )
+        let acceptedStats = await coordinator.stats()
+        try harness.expect(
+            acceptedStats.attempts == 1
+                && acceptedStats.accepted == 1
+                && !acceptedStats.inProgress,
+            "pairing stats exposed an invalid state"
+        )
+        let capturedRequest = AgentPairingRequest(
+            requestId: "request-redaction",
+            deviceId: "device-pairing-1",
+            pairingCode: "SECRET1",
+            nonce: "nonce-redaction",
+            capabilities: [.mediaRead],
+            issuedAtMs: now,
+            deadlineAtMs: now + 1_000
+        )
+        let capturedResponse = AgentPairingResponse(
+            requestId: capturedRequest.requestId,
+            deviceId: capturedRequest.deviceId,
+            nonce: capturedRequest.nonce,
+            status: .accepted,
+            code: "pairing.accepted",
+            deviceToken: "response-secret",
+            tokenExpiresAtMs: now + 60_000
+        )
+        try harness.expect(
+            !String(describing: capturedRequest).contains("SECRET1"),
+            "pairing request description leaked its code"
+        )
+        try harness.expect(
+            !String(describing: capturedResponse).contains("response-secret"),
+            "pairing response description leaked its token"
+        )
+
+        do {
+            _ = try await coordinator.pair(
+                deviceId: "device-pairing-1",
+                pairingCode: "ABC123",
+                capabilities: [.mediaRead]
+            )
+            try harness.expect(false, "consumed pairing code was reused")
+        } catch let error as AgentPairingError {
+            try harness.expect(
+                error == .rejected,
+                "consumed pairing code did not fail as rejected"
+            )
+        }
+
+        let mismatchStore = MemoryCredentialStore()
+        let mismatchCoordinator = AgentPairingCoordinator(
+            gateway: FakePairingGateway(mode: .mismatched),
+            store: mismatchStore,
+            clockMs: { now }
+        )
+        do {
+            _ = try await mismatchCoordinator.pair(
+                deviceId: "device-pairing-2",
+                pairingCode: "DEF456",
+                capabilities: [.mediaRead]
+            )
+            try harness.expect(false, "mismatched device was accepted")
+        } catch let error as AgentPairingError {
+            try harness.expect(
+                error == .responseMismatch,
+                "mismatched response returned the wrong error"
+            )
+        }
+        let mismatchedCredential = try mismatchStore.load(
+            deviceId: "device-pairing-2"
+        )
+        try harness.expect(
+            mismatchedCredential == nil,
+            "mismatched response persisted a credential"
+        )
+
+        let expiredStore = MemoryCredentialStore()
+        let expiredCoordinator = AgentPairingCoordinator(
+            gateway: FakePairingGateway(mode: .expiredCredential),
+            store: expiredStore,
+            clockMs: { now }
+        )
+        do {
+            _ = try await expiredCoordinator.pair(
+                deviceId: "device-pairing-3",
+                pairingCode: "GHI789",
+                capabilities: [.mediaRead]
+            )
+            try harness.expect(false, "expired credential was accepted")
+        } catch let error as AgentPairingError {
+            try harness.expect(
+                error == .invalidCredential,
+                "expired credential returned the wrong error"
+            )
+        }
+
+        let delayedGateway = FakePairingGateway(delayNs: 10_000_000)
+        let concurrentCoordinator = AgentPairingCoordinator(
+            gateway: delayedGateway,
+            store: MemoryCredentialStore(),
+            clockMs: { now },
+            pairingLifetimeMs: 50
+        )
+        let firstPairing = Task {
+            try await concurrentCoordinator.pair(
+                deviceId: "device-pairing-4",
+                pairingCode: "JKL012",
+                capabilities: [.mediaRead]
+            )
+        }
+        try? await Task.sleep(nanoseconds: 1_000_000)
+        do {
+            _ = try await concurrentCoordinator.pair(
+                deviceId: "device-pairing-4",
+                pairingCode: "MNO345",
+                capabilities: [.mediaRead]
+            )
+            try harness.expect(false, "concurrent pairing was accepted")
+        } catch let error as AgentPairingError {
+            try harness.expect(
+                error == .alreadyInProgress,
+                "concurrent pairing returned the wrong error"
+            )
+        }
+        _ = try await firstPairing.value
+
+        let timeoutCoordinator = AgentPairingCoordinator(
+            gateway: FakePairingGateway(delayNs: 20_000_000),
+            store: MemoryCredentialStore(),
+            clockMs: { now },
+            pairingLifetimeMs: 2
+        )
+        do {
+            _ = try await timeoutCoordinator.pair(
+                deviceId: "device-pairing-5",
+                pairingCode: "PQR678",
+                capabilities: [.mediaRead]
+            )
+            try harness.expect(false, "pairing timeout was accepted")
+        } catch let error as AgentPairingError {
+            try harness.expect(
+                error == .timeout,
+                "pairing timeout returned the wrong error"
+            )
+        }
+
+        let failingStoreCoordinator = AgentPairingCoordinator(
+            gateway: FakePairingGateway(),
+            store: MemoryCredentialStore(failSave: true),
+            clockMs: { now }
+        )
+        do {
+            _ = try await failingStoreCoordinator.pair(
+                deviceId: "device-pairing-6",
+                pairingCode: "STU901",
+                capabilities: [.mediaRead]
+            )
+            try harness.expect(false, "credential store failure was ignored")
+        } catch let error as AgentPairingError {
+            try harness.expect(
+                error == .credentialStore,
+                "credential store returned the wrong error"
+            )
+        }
+        let failingStats = await failingStoreCoordinator.stats()
+        try harness.expect(
+            failingStats.failures == 1,
+            "credential store failure was counted more than once"
+        )
+
+        try await coordinator.revoke(deviceId: "device-pairing-1")
+        let revoked = try await coordinator.credential(
+            deviceId: "device-pairing-1"
+        )
+        try harness.expect(revoked == nil, "revoked credential remained stored")
     }
 }

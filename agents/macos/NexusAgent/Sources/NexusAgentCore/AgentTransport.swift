@@ -2,7 +2,7 @@ import Foundation
 
 public enum AgentTransportError: Error, Equatable {
     case invalidEndpoint
-    case missingDeviceToken
+    case invalidCredential
     case alreadyConnected
     case notConnected
     case unsupportedMessage
@@ -17,28 +17,25 @@ public protocol AgentTransport: Sendable {
 
 public actor URLSessionWebSocketTransport: AgentTransport {
     private let endpoint: URL
-    private let deviceToken: String
+    private let credential: DeviceCredential
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
 
     public init(
         endpoint: URL,
-        deviceToken: String,
+        credential: DeviceCredential,
+        nowMs: Int64 = Int64(Date().timeIntervalSince1970 * 1_000),
         session: URLSession = .shared
     ) throws {
         guard endpoint.scheme?.lowercased() == "wss",
               endpoint.host != nil else {
             throw AgentTransportError.invalidEndpoint
         }
-        guard !deviceToken.isEmpty,
-              deviceToken.utf8.count <= 4_096,
-              !deviceToken.unicodeScalars.contains(
-                  where: CharacterSet.whitespacesAndNewlines.contains
-              ) else {
-            throw AgentTransportError.missingDeviceToken
+        guard credential.validationCode(nowMs: nowMs) == nil else {
+            throw AgentTransportError.invalidCredential
         }
         self.endpoint = endpoint
-        self.deviceToken = deviceToken
+        self.credential = credential
         self.session = session
     }
 
@@ -48,8 +45,12 @@ public actor URLSessionWebSocketTransport: AgentTransport {
         }
         var request = URLRequest(url: endpoint)
         request.setValue(
-            "Bearer \(deviceToken)",
+            "Bearer \(credential.token)",
             forHTTPHeaderField: "Authorization"
+        )
+        request.setValue(
+            credential.deviceId,
+            forHTTPHeaderField: "X-Nexux-Device-ID"
         )
         request.setValue(
             agentProtocolVersion,

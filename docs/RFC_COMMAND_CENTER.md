@@ -54,8 +54,15 @@ Spotify verificable.
 El núcleo headless del agente macOS ya está implementado como paquete Swift
 desplegable por separado. Usa exclusivamente WSS saliente, token de dispositivo
 en Keychain, allowlist cerrada, ACK idempotente y no expone shell remoto. El
-emparejamiento con el Gateway, la instalación persistente en macOS y cualquier
-factory productiva continúan bloqueados hasta un sprint posterior de Fase A.5.
+pairing contractual también está implementado: valida código de un solo uso,
+nonce, identidad, expiración y respuesta ligada a la solicitud antes de guardar
+la credencial en Keychain. Solo existe un Gateway fake; el endpoint real, la
+instalación persistente en macOS y cualquier factory productiva continúan
+bloqueados.
+
+Tras la revisión arquitectónica de este pairing, los siguientes candidatos de
+Fase A.5 son Qobuz y TIDAL, en ese orden. Cada uno deberá ajustarse al
+`MediaController` existente sin ampliar el contrato público.
 
 ## 1. Resumen ejecutivo
 

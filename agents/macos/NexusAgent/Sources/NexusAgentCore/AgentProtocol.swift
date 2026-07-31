@@ -5,6 +5,29 @@ public let agentClockToleranceMs: Int64 = 30_000
 public let agentMaximumCommandLifetimeMs: Int64 = 60_000
 public let agentMaximumMessageBytes = 65_536
 
+public enum AgentIdentity {
+    public static func isCanonicalIdentifier(
+        _ value: String,
+        maxLength: Int = 128
+    ) -> Bool {
+        guard !value.isEmpty, value.count <= maxLength else { return false }
+        let allowed = CharacterSet(
+            charactersIn:
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:-"
+        )
+        return value.unicodeScalars.allSatisfy(allowed.contains)
+            && value.first?.isLetterOrNumber == true
+    }
+
+    public static func isOpaqueSecret(_ value: String) -> Bool {
+        !value.isEmpty
+            && value.utf8.count <= 4_096
+            && !value.unicodeScalars.contains(
+                where: CharacterSet.whitespacesAndNewlines.contains
+            )
+    }
+}
+
 public enum JSONValue: Codable, Hashable, Sendable {
     case string(String)
     case number(Double)
@@ -101,10 +124,10 @@ public struct AgentCommand: Codable, Hashable, Sendable {
         guard protocolVersion == agentProtocolVersion else {
             return "agent.protocol-unsupported"
         }
-        guard Self.isCanonicalIdentifier(commandId, maxLength: 128) else {
+        guard AgentIdentity.isCanonicalIdentifier(commandId) else {
             return "agent.command-id-invalid"
         }
-        guard Self.isCanonicalIdentifier(action, maxLength: 96) else {
+        guard AgentIdentity.isCanonicalIdentifier(action, maxLength: 96) else {
             return "agent.action-invalid"
         }
         guard issuedAtMs >= 0, deadlineAtMs >= issuedAtMs else {
@@ -126,20 +149,9 @@ public struct AgentCommand: Codable, Hashable, Sendable {
         return try encoder.encode(self)
     }
 
-    private static func isCanonicalIdentifier(
-        _ value: String,
-        maxLength: Int
-    ) -> Bool {
-        guard !value.isEmpty, value.count <= maxLength else { return false }
-        let allowed = CharacterSet(
-            charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:-"
-        )
-        return value.unicodeScalars.allSatisfy(allowed.contains)
-            && value.first?.isLetterOrNumber == true
-    }
 }
 
-private extension Character {
+extension Character {
     var isLetterOrNumber: Bool {
         unicodeScalars.allSatisfy {
             CharacterSet.alphanumerics.contains($0)
