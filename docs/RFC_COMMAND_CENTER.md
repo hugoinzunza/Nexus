@@ -263,6 +263,12 @@ una superficie al viewport se debe evaluar si puede sustituirse otra de menor
 valor. Agregar un bloque requiere justificar por qué ninguna sustitución conserva
 la pregunta operacional y reduce mejor la carga cognitiva.
 
+B8 cierra el ciclo de expansión visual inmediato. Las siguientes iteraciones de
+Línea B quedan limitadas a refinar, simplificar, sustituir y consolidar las
+superficies existentes. Un módulo nuevo requerirá una autorización posterior que
+demuestre que ninguna mejora sobre la composición actual responde la misma
+pregunta con menor carga cognitiva.
+
 ### Fase A.5 — Integraciones headless
 
 Línea A arquitectónicamente completa permanece cerrada. A.5 incorpora

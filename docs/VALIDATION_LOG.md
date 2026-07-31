@@ -1040,6 +1040,11 @@ informativo sin aumentar la carga cognitiva. Atención inmediata queda consolida
 y Línea B continúa. Se adopta como regla permanente preferir la sustitución de
 contexto de menor valor antes que agregar otro bloque al viewport.
 
+**Cierre posterior:** B8 queda cerrado y el Command Center consolidado como
+sistema de conciencia situacional. No se autorizan módulos nuevos en la siguiente
+iteración; el trabajo pasa a refinamiento, simplificación, sustitución y
+consolidación de las capacidades visibles.
+
 ---
 
 ## Próximas validaciones
