@@ -150,18 +150,40 @@
           </footer>
         </section>
 
-        <section class="telemetry-panel" aria-labelledby="telemetry-title">
+        <section class="music-panel" aria-labelledby="music-title">
           <header class="panel-header">
             <div>
-              <span class="eyebrow">Pantalla</span>
-              <h2 id="telemetry-title">Viewport activo</h2>
+              <span class="eyebrow">Música</span>
+              <h2 id="music-title">Reproducción</h2>
             </div>
+            <span class="context-badge" data-state="unknown"
+              id="music-state">Unknown</span>
           </header>
-          <div class="viewport-reading">
-            <strong id="viewport-size">-- × --</strong>
-            <span id="viewport-density">DPR --</span>
+          <div class="music-now">
+            <strong id="music-track">Sin reproducción disponible</strong>
+            <span id="music-detail">Factory inactiva</span>
           </div>
-          <p id="last-update">Sin lectura todavía</p>
+          <div class="music-controls" aria-label="Controles de reproducción">
+            <button class="music-control" id="music-previous" type="button"
+              title="Anterior" aria-label="Anterior" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 5v14M18 6l-8 6 8 6z"/>
+              </svg>
+            </button>
+            <button class="music-control" id="music-toggle" type="button"
+              title="Reproducir" aria-label="Reproducir" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path id="music-toggle-icon" d="M8 5v14l11-7z"/>
+              </svg>
+            </button>
+            <button class="music-control" id="music-next" type="button"
+              title="Siguiente" aria-label="Siguiente" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18 5v14M6 6l8 6-8 6z"/>
+              </svg>
+            </button>
+            <span id="music-feedback">Solo lectura</span>
+          </div>
         </section>
       </aside>
     </main>
@@ -171,6 +193,7 @@
       <span id="subject-state">Sesión pendiente</span>
       <span class="footer-spacer"></span>
       <span id="sequence-state">Sin cursor</span>
+      <span id="last-update">Sin lectura todavía</span>
     </footer>
   </div>
 

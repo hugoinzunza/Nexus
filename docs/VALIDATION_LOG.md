@@ -794,6 +794,42 @@ parezca una consola de ejecución.
 
 ---
 
+## VAL-0023 — Línea B Sprint B7 · Música
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-31 |
+| Hardware objetivo | ARZOPA, 1920 × 1080 @ 60 Hz |
+| Pregunta | ¿Qué está sonando y puedo controlarlo? |
+| Superficies nuevas | 1 módulo compacto que reemplaza telemetría temporal |
+
+### Evidencia técnica
+
+- Proyección construida exclusivamente sobre `MediaController`.
+- Apple Music conserva estado y controles demostrados por su adaptador.
+- Qobuz no inventa pista, reproducción ni controles no soportados.
+- Comandos con `command_id`, idempotencia, ACK y reconciliación de `unknown`.
+- Los efectos se verifican únicamente con `FakeMediaController`.
+- Endpoint real GET con `media.factory-inactive`, solo lectura y controles
+  deshabilitados.
+- Sin POST, sin LaunchAgent, sin shell remoto y sin efectos reales.
+- Cero factories productivas.
+- Viewport técnico 1920 × 907 sin overflow horizontal ni vertical.
+
+### Evidencia visual
+
+- `docs/evidence/command-center-b7-arzopa-technical.png`
+
+### Conclusión
+
+**TÉCNICAMENTE COMPLETO** y **PENDIENTE perceptualmente**. Hugo debe confirmar
+desde 80–90 cm que pista, proveedor y controles pueden reconocerse sin competir
+con Atención del Bot.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

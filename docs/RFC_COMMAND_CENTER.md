@@ -187,6 +187,27 @@ VAL-0022 debe comprobar en el Arzopa que modo y última señal se reconocen sin
 confundir el panel con una consola de ejecución. Su aprobación técnica no
 autoriza operar ni cierra la validación perceptual.
 
+### Línea B — Sprint B7
+
+B7 reemplaza la telemetría temporal de viewport por un único módulo:
+**Reproducción**. Responde qué está sonando, en qué proveedor y si sus controles
+están realmente disponibles.
+
+La proyección consume exclusivamente `MediaController`. Título, artista y álbum
+son metadatos opcionales externos al contrato; si el proveedor no los entrega,
+la UI no los inventa. Apple Music puede declarar lectura y reproducción. Qobuz
+conserva únicamente `open_app` y no presenta controles inexistentes.
+
+Los comandos conservan `command_id`, idempotencia, ACK `applied`, `rejected` o
+`unknown`, deadline y reconciliación por lectura. Se prueban solo con
+`FakeMediaController`. En la aplicación real no existe controller activo,
+`commands_enabled` es falso, el endpoint es GET y los botones permanecen
+deshabilitados. No se añadió factory ni se ejecutó un efecto multimedia real.
+
+VAL-0023 debe comprobar en el Arzopa que pista, proveedor y controles se
+reconocen sin competir con Atención del Bot. La aprobación técnica no autoriza
+factories ni cierra la validación perceptual.
+
 ### Fase A.5 — Integraciones headless
 
 Línea A arquitectónicamente completa permanece cerrada. A.5 incorpora

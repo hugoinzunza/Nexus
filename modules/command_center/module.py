@@ -20,6 +20,7 @@ from .bot_context import BotContextService
 from .event_bus import InMemoryEventBus
 from .gateway import CommandCenterGateway
 from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION
+from .media_surface import MediaSurfaceService
 from .market_ribbon import MarketRibbonService
 from .module_registry import command_center_module_registry
 from .snapshot import (
@@ -56,6 +57,8 @@ class CommandCenterModule(NexusModule):
             enabled_loader=self._ai_enabled,
         )
         self.bot_context = BotContextService()
+        # Sin controller hasta que una factory productiva sea autorizada.
+        self.media_surface = MediaSurfaceService()
 
     @staticmethod
     def _ai_enabled() -> bool:
@@ -167,6 +170,8 @@ class CommandCenterModule(NexusModule):
                         retryable=True,
                     ),
                 )
+        if subpath == "media-context":
+            return self._json(200, self.media_surface.inactive_snapshot())
         if subpath != "snapshot":
             return self._json(
                 404,

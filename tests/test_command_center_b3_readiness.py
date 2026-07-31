@@ -88,7 +88,7 @@ def test_b3_reemplaza_panel_existente_sin_cambiar_layout_general() -> None:
     assert 'id="system-title"' not in page
     assert 'id="primary-value"' not in page
     assert 'class="macro-panel"' in page
-    assert 'class="telemetry-panel"' in page
+    assert 'class="music-panel"' in page
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
     assert "minmax(260px, 1.2fr)" in css
     assert "minmax(220px, 1fr)" in css

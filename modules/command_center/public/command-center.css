@@ -483,7 +483,7 @@ a:focus-visible {
 .macro-panel,
 .ai-panel,
 .bot-context-panel,
-.telemetry-panel {
+.music-panel {
   min-height: 0;
   overflow: hidden;
   padding: var(--space-5);
@@ -689,28 +689,80 @@ a:focus-visible {
   font-size: var(--font-xs);
 }
 
-.viewport-reading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
+.music-panel {
+  padding: var(--space-4);
 }
 
-.viewport-reading strong {
-  font-size: var(--font-xl);
-  font-variant-numeric: tabular-nums;
+.music-now {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin-top: var(--space-2);
 }
 
-.viewport-reading span,
-.telemetry-panel p {
+.music-now strong,
+.music-now span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-now strong {
+  font-size: var(--font-sm);
+}
+
+.music-now span {
   color: var(--text-2);
-  font-variant-numeric: tabular-nums;
+  font-size: var(--font-xs);
 }
 
-.telemetry-panel p {
-  margin: var(--space-2) 0 0;
+.music-controls {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.music-control {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.music-control:hover:not(:disabled) {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.music-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.36;
+}
+
+.music-control svg {
+  width: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.music-controls > span {
+  overflow: hidden;
+  margin-left: auto;
+  color: var(--text-3);
   font-size: var(--font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-footer {
@@ -781,7 +833,7 @@ a:focus-visible {
   .macro-panel,
   .ai-panel,
   .bot-context-panel,
-  .telemetry-panel,
+  .music-panel,
   .status-footer {
     padding-inline: var(--space-4);
   }

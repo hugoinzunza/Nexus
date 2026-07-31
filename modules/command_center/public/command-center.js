@@ -9,6 +9,7 @@ const MACRO_URL = "/m/trading/api/dashboard?translate=0";
 const MARKET_RIBBON_URL = "/m/command-center/api/market-ribbon";
 const AI_CONTEXT_URL = "/m/command-center/api/ai-context";
 const BOT_CONTEXT_URL = "/m/command-center/api/bot-context";
+const MEDIA_CONTEXT_URL = "/m/command-center/api/media-context";
 const HEALTH_URL = "/health";
 const WS_PATH = "/m/command-center/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 15000];
@@ -416,6 +417,93 @@ export class BotContextClient {
       this.context = normalizeBotContext(await response.json());
     } catch {
       this.context = normalizeBotContext({ state: "degraded" });
+    }
+    this.onChange(this.context);
+  }
+}
+
+const MEDIA_CAPABILITIES = new Set([
+  "current_state",
+  "play",
+  "pause",
+  "next",
+  "previous",
+  "set_volume",
+  "open_app",
+]);
+
+export function normalizeMediaContext(payload) {
+  const lifecycle = new Set([
+    "ready",
+    "degraded",
+    "unavailable",
+    "revoked",
+    "closed",
+    "unknown",
+  ]);
+  const freshness = new Set(["live", "current", "stale", "unknown"]);
+  const capabilities = Array.isArray(payload?.capabilities)
+    ? payload.capabilities.filter((item) => MEDIA_CAPABILITIES.has(item))
+    : [];
+  return {
+    provider: payload?.provider ? String(payload.provider) : null,
+    lifecycle: lifecycle.has(payload?.lifecycle)
+      ? payload.lifecycle
+      : "unknown",
+    playback: String(payload?.playback || "unknown"),
+    freshness: freshness.has(payload?.freshness)
+      ? payload.freshness
+      : "unknown",
+    observedAtMs: Number.isFinite(Number(payload?.observed_at_ms))
+      ? Number(payload.observed_at_ms)
+      : null,
+    track: payload?.track ? String(payload.track).slice(0, 160) : null,
+    artist: payload?.artist ? String(payload.artist).slice(0, 160) : null,
+    album: payload?.album ? String(payload.album).slice(0, 160) : null,
+    itemRef: payload?.item_ref ? String(payload.item_ref) : null,
+    capabilities,
+    commandsEnabled: payload?.commands_enabled === true,
+    readOnly: payload?.read_only !== false,
+    code: payload?.code ? String(payload.code) : null,
+    simulated: payload?.simulated === true,
+  };
+}
+
+export class MediaContextClient {
+  constructor({
+    contextUrl = MEDIA_CONTEXT_URL,
+    fetcher = (...args) => fetch(...args),
+    onChange = () => {},
+  } = {}) {
+    this.contextUrl = contextUrl;
+    this.fetcher = fetcher;
+    this.onChange = onChange;
+    this.context = normalizeMediaContext(null);
+    this.refreshTimer = null;
+  }
+
+  async start() {
+    await this.refresh();
+    this.refreshTimer = setInterval(() => {
+      this.refresh().catch(() => {});
+    }, 15_000);
+  }
+
+  stop() {
+    clearInterval(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+
+  async refresh() {
+    try {
+      const response = await this.fetcher(this.contextUrl, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`media context HTTP ${response.status}`);
+      this.context = normalizeMediaContext(await response.json());
+    } catch {
+      this.context = normalizeMediaContext({ lifecycle: "degraded" });
     }
     this.onChange(this.context);
   }
@@ -1010,6 +1098,32 @@ function fixtureBotContext() {
   };
 }
 
+function fixtureMediaContext() {
+  return normalizeMediaContext({
+    provider: "apple-music",
+    lifecycle: "ready",
+    playback: "playing",
+    freshness: "live",
+    observed_at_ms: Date.now(),
+    track: "Midnight City",
+    artist: "M83",
+    album: "Hurry Up, We're Dreaming",
+    item_ref: "music:fixture",
+    capabilities: [
+      "current_state",
+      "play",
+      "pause",
+      "next",
+      "previous",
+      "set_volume",
+      "open_app",
+    ],
+    commands_enabled: true,
+    read_only: false,
+    simulated: true,
+  });
+}
+
 function fixtureMarketRibbonState() {
   const now = Date.now();
   const definitions = [
@@ -1299,6 +1413,73 @@ function renderBotContext(context) {
         : "Sin lectura";
 }
 
+function renderMediaContext(context) {
+  const badge = document.querySelector("#music-state");
+  const stateLabels = {
+    ready: "Ready",
+    degraded: "Degradada",
+    unavailable: "No disponible",
+    revoked: "Sin permiso",
+    closed: "Cerrada",
+    unknown: "Unknown",
+  };
+  badge.dataset.state =
+    context.lifecycle === "ready" ? "ready" : context.lifecycle;
+  badge.textContent = stateLabels[context.lifecycle] || "Unknown";
+  document.querySelector("#music-track").textContent =
+    context.track || (
+      context.itemRef
+        ? "Pista identificada"
+        : "Sin reproducción disponible"
+    );
+  const details = [context.artist, context.album].filter(Boolean);
+  document.querySelector("#music-detail").textContent =
+    details.length
+      ? details.join(" · ")
+      : context.provider || "Factory inactiva";
+
+  const capabilities = new Set(context.capabilities);
+  const canControl = context.commandsEnabled && context.lifecycle === "ready";
+  const controls = {
+    previous: document.querySelector("#music-previous"),
+    toggle: document.querySelector("#music-toggle"),
+    next: document.querySelector("#music-next"),
+  };
+  controls.previous.disabled =
+    !canControl || !capabilities.has("previous");
+  controls.next.disabled = !canControl || !capabilities.has("next");
+  const toggleAction =
+    context.playback === "playing" ? "pause" : "play";
+  controls.toggle.disabled =
+    !canControl || !capabilities.has(toggleAction);
+  controls.toggle.dataset.action = toggleAction;
+  controls.toggle.title =
+    toggleAction === "pause" ? "Pausar" : "Reproducir";
+  controls.toggle.setAttribute("aria-label", controls.toggle.title);
+  document.querySelector("#music-toggle-icon").setAttribute(
+    "d",
+    toggleAction === "pause" ? "M8 5v14M16 5v14" : "M8 5v14l11-7z",
+  );
+  document.querySelector("#music-feedback").textContent =
+    context.simulated
+      ? "Fixture sin efectos"
+      : context.commandsEnabled
+        ? FRESHNESS_LABELS[context.freshness] || "Estado leído"
+        : "Solo lectura";
+}
+
+function wireMediaFixtureControls() {
+  document.querySelectorAll(".music-control").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.id === "music-toggle"
+        ? button.dataset.action
+        : button.id.replace("music-", "");
+      document.querySelector("#music-feedback").textContent =
+        `${action} · fake ACK`;
+    });
+  });
+}
+
 const FRESHNESS_LABELS = {
   live: "En vivo",
   current: "Actual",
@@ -1466,13 +1647,6 @@ export function selectMarketAsset(asset) {
   return chartQueue.then(() => true);
 }
 
-function updateViewport() {
-  document.querySelector("#viewport-size").textContent =
-    `${window.innerWidth} × ${window.innerHeight}`;
-  document.querySelector("#viewport-density").textContent =
-    `DPR ${window.devicePixelRatio.toFixed(2)}`;
-}
-
 function startClock() {
   const tick = () => {
     document.querySelector("#clock").textContent =
@@ -1487,9 +1661,7 @@ function startClock() {
 }
 
 export function bootstrap() {
-  updateViewport();
   startClock();
-  window.addEventListener("resize", updateViewport);
   remountChart({
     id: "btcusdt",
     symbol: "BTCUSDT.P",
@@ -1508,6 +1680,8 @@ export function bootstrap() {
     renderMarketRibbon(fixtureMarketRibbonState());
     renderAiContext(fixtureAiContext());
     renderBotContext(fixtureBotContext());
+    renderMediaContext(fixtureMediaContext());
+    wireMediaFixtureControls();
     renderOperationalReadiness(
       deriveOperationalReadiness({
         commandState: state,
@@ -1552,6 +1726,9 @@ export function bootstrap() {
   const botContextClient = new BotContextClient({
     onChange: renderBotContext,
   });
+  const mediaContextClient = new MediaContextClient({
+    onChange: renderMediaContext,
+  });
   const healthClient = new OperationalHealthClient({
     onChange: (state) => {
       operationalHealthState = state;
@@ -1563,6 +1740,7 @@ export function bootstrap() {
   window.__nexuxCommandCenterMarketRibbon = marketRibbonClient;
   window.__nexuxCommandCenterAi = aiContextClient;
   window.__nexuxCommandCenterBot = botContextClient;
+  window.__nexuxCommandCenterMedia = mediaContextClient;
   window.__nexuxCommandCenterHealth = healthClient;
   document
     .querySelector("#resync-button")
@@ -1572,6 +1750,7 @@ export function bootstrap() {
   marketRibbonClient.start().catch(() => {});
   aiContextClient.start().catch(() => {});
   botContextClient.start().catch(() => {});
+  mediaContextClient.start().catch(() => {});
   healthClient.start().catch(() => {});
   setInterval(() => {
     commandState = client.state();
@@ -1586,6 +1765,7 @@ export function bootstrap() {
     marketRibbonClient.stop();
     aiContextClient.stop();
     botContextClient.stop();
+    mediaContextClient.stop();
     healthClient.stop();
   });
 }
