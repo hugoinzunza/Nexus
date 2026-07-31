@@ -30,6 +30,9 @@ try:
         "http://127.0.0.1:8800/m/bot/api/state", timeout=4
     ) as response:
         bot = json.load(response)
+    if isinstance(bot, dict):
+        bot["source"] = "vps-ssh"
+        bot["age_seconds"] = 0
 except Exception:
     pass
 
