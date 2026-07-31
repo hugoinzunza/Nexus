@@ -4,6 +4,7 @@ from pathlib import Path
 
 from modules.command_center.module import CommandCenterModule
 from modules.command_center.positions_context import PositionsContextService
+from modules.command_center.vps_positions_bridge import VpsPositionsBridge
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -182,3 +183,41 @@ def test_panel_no_contiene_controles_de_ordenes_ni_credenciales() -> None:
     assert "market_order" not in source
     assert "api_secret" not in source
     assert "BINANCE_" not in source
+
+
+def test_puente_vps_es_read_only_cacheado_y_falla_cerrado() -> None:
+    calls = []
+    clock = [10.0]
+
+    def runner(command, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout='ruido\n{"journal":{"has_data":true},"bot":{"live":false}}\n',
+            stderr="",
+        )
+
+    bridge = VpsPositionsBridge(
+        enabled=True,
+        target="hugo@example.test",
+        runner=runner,
+        clock=lambda: clock[0],
+    )
+
+    assert bridge.read()["journal"]["has_data"] is True
+    assert bridge.read()["bot"]["live"] is False
+    assert len(calls) == 1
+    command = calls[0][0]
+    assert command[:2] == ["ssh", "-o"]
+    assert calls[0][1]["timeout"] == 10
+    assert "market_order" not in command[-1]
+    assert "close_position" not in command[-1]
+
+    disabled = VpsPositionsBridge(
+        enabled=True,
+        target="$(orden-inyectada)",
+        runner=runner,
+    )
+    assert disabled.enabled is False
+    assert disabled.read() is None

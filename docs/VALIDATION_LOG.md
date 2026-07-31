@@ -985,6 +985,9 @@ del usuario y en la cuenta secundaria del Bot.
   frescos nunca se representa como una cuenta plana confirmada.
 - La llave de la cuenta principal continúa limitada a la IP del VPS. No se copió
   ninguna credencial al Command Center ni al Mac.
+- En ejecución local, un puente SSH de solo lectura consulta desde el VPS las
+  posiciones y el balance, con destino fijo, timeout y caché de 15 segundos. El
+  comando remoto no acepta parámetros del navegador y nunca devuelve llaves.
 - Viewport 1920 × 992 validado con dos cuentas y una posición por cuenta, sin
   desbordamiento ni modificación del layout general.
 - Wire ABI, EventBus, Gateway, registro, factories, Bot y producción permanecen

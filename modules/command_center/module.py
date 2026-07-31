@@ -39,6 +39,7 @@ from .snapshot import (
     SessionProjection,
     SnapshotComposer,
 )
+from .vps_positions_bridge import VpsPositionsBridge
 from .tidal_adapter import TidalAdapter
 
 _MEDIA_PROVIDERS = ("apple-music", "qobuz", "tidal")
@@ -74,6 +75,9 @@ class CommandCenterModule(NexusModule):
         self._local_media_enabled = os.environ.get(
             "NEXUX_COMMAND_CENTER_MEDIA"
         ) in {"apple-music", "local"}
+        self.positions_bridge = VpsPositionsBridge(
+            enabled=self._local_media_enabled,
+        )
         self._external_artwork = (
             ExternalArtworkResolver() if self._local_media_enabled else None
         )
@@ -342,6 +346,15 @@ class CommandCenterModule(NexusModule):
                     bot_response,
                     allow_forbidden=True,
                 )
+                bridge = getattr(self, "positions_bridge", None)
+                remote = bridge.read() if bridge is not None else None
+                if isinstance(remote, dict):
+                    journal_remote = remote.get("journal")
+                    bot_remote = remote.get("bot")
+                    if isinstance(journal_remote, dict):
+                        journal_payload = journal_remote
+                    if isinstance(bot_remote, dict):
+                        bot_payload = bot_remote
                 return self._json(
                     200,
                     self.positions_context.project(
