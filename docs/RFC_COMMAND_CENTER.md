@@ -1,7 +1,7 @@
 # RFC: NEXUX Command Center
 
-- **Estado:** Aceptado; Línea A arquitectónicamente completa y Línea B
-  condicionada a la Fase -1B
+- **Estado:** Aceptado; Línea A cerrada, Fase A.5 activa y Línea B condicionada
+  a la Fase -1B
 - **Versión:** 1.2.2
 - **Fecha:** 2026-07-30
 - **Autoría:** Codex, a partir del Product Vision Document, el repositorio actual
@@ -27,6 +27,23 @@ Al 2026-07-30, Línea A completó y validó:
 Este estado no activa factories productivas ni autoriza decisiones de Línea B.
 Los adaptadores adicionales requieren autorización específica y deben conservar
 las mismas fronteras contractuales.
+
+### Fase A.5 — Integraciones headless
+
+Línea A arquitectónicamente completa permanece cerrada. A.5 incorpora
+integraciones sobre esa base sin reabrir su infraestructura.
+
+La Fase A.5 está autorizada para integrar adaptadores reales, agente macOS,
+OAuth, tokens y APIs externas detrás de las interfaces congeladas. Incluye
+pruebas de conformidad, observabilidad, degradación, recuperación y validación
+técnica del proveedor.
+
+Permanecen bloqueados layout, mockups, tipografía, paleta, dimensiones, densidad,
+composición de widgets, aprobación visual, factories productivas y despliegues.
+
+El primer incremento seleccionado es Apple Music, conforme al orden del RFC. Su
+adaptador debe funcionar headless, superar `MediaController` y mantener todos
+los efectos reales desactivados durante la validación automática.
 
 ## 1. Resumen ejecutivo
 

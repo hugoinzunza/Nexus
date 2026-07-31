@@ -110,7 +110,12 @@ class MediaControllerComponent:
         health = await self.controller.health(operation)
         if health.controller_id != self.controller.controller_id:
             raise MediaControllerError("health contradice al MediaController")
-        if health.lifecycle is MediaLifecycle.DEGRADED:
+        if health.lifecycle in {
+            MediaLifecycle.CONNECTING,
+            MediaLifecycle.DEGRADED,
+            MediaLifecycle.DISCONNECTED,
+            MediaLifecycle.UNAVAILABLE,
+        }:
             return RuntimeReport(
                 ModuleLifecycle.DEGRADED,
                 health.code or "media.degraded",

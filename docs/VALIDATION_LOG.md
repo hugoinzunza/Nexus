@@ -139,6 +139,62 @@ bloqueadas.
 
 ---
 
+## VAL-0011 — Adaptador headless de Apple Music
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Fase | A.5 — Integraciones headless |
+| Equipo | Mac mini con Apple M4 |
+| Proveedor | Music.app mediante su diccionario AppleScript instalado |
+| Método | Harness contractual, dobles deterministas y smoke real acotado |
+
+### Resultado
+
+- El adaptador declaró `current_state`, `play`, `pause`, `next`, `previous`,
+  `set_volume` y `open_app`.
+- El harness read-only no produjo efectos.
+- El harness con comandos validó ACK e idempotencia para todas las capacidades.
+- Los reintentos concurrentes con el mismo `command_id` produjeron un solo efecto.
+- Music cerrada produjo `unavailable` y el registro conservó el runtime como
+  `degraded`; al estar disponible recuperó `ready`.
+- Un permiso de automatización pendiente produjo `degraded`, nunca un falso
+  `ready`.
+- Con el permiso `ChatGPT → Música` autorizado, el smoke real alcanzó `ready` y
+  leyó estado `stopped`, volumen `0,59` y ausencia de pista activa.
+- `player position = missing value` se modeló como `None`, sin inventar cero.
+- `set_volume` al mismo valor y `pause` estando detenido devolvieron ACK
+  `applied` sin cambiar estado ni volumen.
+- Music estaba cerrada antes de cada smoke y fue cerrada al terminar.
+- La suite completa cerró con 727 pruebas aprobadas.
+
+### Límites
+
+- El smoke real no ejecutó `play`, `next` ni `previous` para no alterar la sesión
+  del usuario; esas rutas se verificaron contra el diccionario oficial instalado
+  y mediante el harness.
+- No existe factory productiva, LaunchAgent ni despliegue.
+- El adaptador usa `osascript` como puerto técnico local. Una futura
+  implementación del agente macOS podrá sustituir el puerto sin cambiar
+  `MediaController`.
+
+### Evidencia
+
+- Implementación: `modules/command_center/apple_music_adapter.py`.
+- Pruebas: `tests/test_command_center_apple_music_adapter.py`.
+- Diccionario local:
+  `/System/Applications/Music.app/Contents/Resources/com.apple.Music.sdef`.
+
+### Conclusión
+
+**APROBADO.** Apple Music funciona como primer adaptador real de Fase A.5,
+supera el contrato headless y queda listo para revisión arquitectónica. La
+factory productiva, el despliegue y Línea B permanecen bloqueados.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario
