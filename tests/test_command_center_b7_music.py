@@ -256,6 +256,8 @@ def test_b7_expone_solo_el_post_multimedia_acotado() -> None:
     assert script.count('method: "POST"') == 1
     assert "Fixture sin efectos" in script
     assert "Sin pista cargada" in script
+    assert "Sin metadatos ni control remoto" in script
+    assert 'controls.toggle.hidden = limitedProvider' in script
 
 
 def test_comando_http_usa_surface_y_rechaza_acciones_fuera_del_alcance() -> None:

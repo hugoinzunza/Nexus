@@ -887,6 +887,10 @@ proveedores ofrezcan streaming continuo.
 - Qobuz y TIDAL: salud, versión y apertura; playback y metadatos permanecen
   deshabilitados porque las aplicaciones Desktop no los exponen de forma
   soportada.
+- La inspección read-only con Qobuz reproduciendo confirmó que su árbol de
+  Accesibilidad solo publica la ventana y controles estándar de macOS. La UI
+  muestra `App abierta` y `Sin metadatos ni control remoto`, oculta los botones
+  de pista y conserva únicamente `Abrir aplicación`.
 - TIDAL instalado `2.43.0` fue detectado cerrado; Qobuz fue detectado `ready` y
   Apple Music `ready` durante el smoke read-only.
 - Carátulas limitadas a 5 MB y aceptadas solo como PNG o JPEG.
