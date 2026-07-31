@@ -1,6 +1,6 @@
 # NEXUX Command Center — Design System Foundations
 
-- **Estado:** Experimental; Sprint B2
+- **Estado:** Base B2 perceptualmente aprobada; Sprint B3 autorizado
 - **Versión:** 0.2
 - **Fecha:** 2026-07-30
 - **Superficie objetivo:** ARZOPA 1920 × 1080, luminancia relativa limitada
@@ -100,5 +100,6 @@ decisión visual local.
 
 VAL-0017 aprobó físicamente los tamaños y la lectura general de B1. B2 aumenta
 moderadamente la separación tonal y la intensidad semántica para compensar la
-luminancia relativa del Arzopa. Los tokens siguen siendo experimentales hasta
-la validación perceptual de VAL-0018.
+luminancia relativa del Arzopa. VAL-0018 aprobó perceptualmente estos tokens.
+B3 puede estudiar mayor saturación de estados, pero no debe reemplazar esta base
+sin nueva evidencia física.

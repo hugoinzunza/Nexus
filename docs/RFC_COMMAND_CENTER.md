@@ -71,10 +71,24 @@ sistema ni inventa umbrales.
 
 El dashboard publica hasta 24 eventos semanales porque el límite anterior de
 ocho podía agotarse con eventos recientes y ocultar eventos futuros. El cambio
-es aditivo y no afecta el Wire ABI, EventBus, Gateway ni factories. B2 permanece
-pendiente de aprobación perceptual en VAL-0018. La lectura usa
+es aditivo y no afecta el Wire ABI, EventBus, Gateway ni factories. La lectura usa
 `translate=0`: consultar el calendario no activa traducción con Claude ni
 consume IA para titulares que la superficie no muestra.
+
+VAL-0018 aprobó perceptualmente contraste, jerarquía, densidad, próximo evento y
+regla de los dos segundos sobre el Arzopa a 80–90 cm. B2 queda cerrado.
+
+### Línea B — Sprint B3
+
+B3 queda autorizado bajo la estrategia incremental validada: un solo módulo
+nuevo por iteración y una pregunta operacional explícita. No se rediseña el
+layout general. Puede estudiarse un aumento ligero de saturación en estados y
+mayor énfasis del contexto derecho, siempre sujeto a una nueva validación
+perceptual.
+
+El módulo y la pregunta concreta de B3 deben seleccionarse antes de implementar.
+Continúan bloqueados los cambios al Wire ABI, EventBus, Gateway, factories y
+producción.
 
 ### Fase A.5 — Integraciones headless
 

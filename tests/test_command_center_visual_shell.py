@@ -192,7 +192,7 @@ def test_documentacion_registra_hardware_y_tokens_sin_inventar_ergonomia() -> No
     assert "Distancia de observación | 80–90 cm" in viewport
     assert "Ángulo de mirada | Pendiente" in viewport
     assert "Superficie objetivo" in foundations
-    assert "Sprint B2" in foundations
+    assert "B2 perceptualmente aprobada" in foundations
     assert "`#111519`" in foundations
     assert "`loading`" in foundations
     assert "`disconnected`" in foundations
@@ -211,6 +211,8 @@ def test_documentacion_registra_hardware_y_tokens_sin_inventar_ergonomia() -> No
     assert "Sprint B2 autorizado" in validation
     assert "VAL-0018" in validation
     assert "PENDIENTE perceptualmente" in validation
+    assert "VAL-0018 APROBADO" in validation
+    assert "Sprint B3 autorizado" in validation
 
 
 def test_modulo_declara_superficie_visual_experimental() -> None:

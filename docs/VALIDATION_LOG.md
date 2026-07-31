@@ -568,6 +568,39 @@ Sprint B2 autorizado.
 composición y legibilidad mecánica, pero Hugo debe repetir la regla de los dos
 segundos y comparar el brillo percibido desde 80–90 cm antes de cerrar B2.
 
+### Cierre perceptual — evidencia posterior
+
+| Campo | Resultado |
+|---|---|
+| Evaluador | Hugo |
+| Distancia | 80–90 cm |
+| Iluminación | Noche, barra Quntis, sin iluminación adicional |
+| Contraste | Aprobado; mejora claramente frente a B1 |
+| Jerarquía | Aprobada |
+| Próximo evento | Visible sin competir con el gráfico |
+| Densidad | Adecuada |
+| Regla de dos segundos | Cumplida |
+
+La optimización mejora la separación entre paneles y la legibilidad sin aumentar
+artificialmente el brillo. El gráfico, el estado operacional y el próximo evento
+se reconocen sin búsqueda visual consciente. La incorporación de un único
+módulo adicional no produjo sobrecarga.
+
+Se aprueba mantener el widget integrado como contexto permanente y usar
+`Análisis completo` para abrir el TradingView autenticado con el layout personal
+y LuxAlgo. El gráfico propio de NexUX podrá sustituir el widget cuando alcance
+madurez, sin modificar ChartProvider, Wire ABI, Gateway, EventBus ni runtime.
+
+Para B3 se recomienda aumentar ligeramente la saturación de estados y reforzar
+el contexto derecho, sin rediseñar el layout. Se mantiene la regla de incorporar
+un solo módulo por iteración y repetir la validación perceptual.
+
+La conclusión anterior `PENDIENTE perceptualmente` se conserva como evidencia
+histórica y queda resuelta por esta observación.
+
+**Resolución final:** `VAL-0018 APROBADO`, Sprint B2 perceptualmente aprobado y
+Sprint B3 autorizado.
+
 ---
 
 ## Próximas validaciones
