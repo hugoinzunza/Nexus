@@ -378,6 +378,66 @@ Factory productiva y despliegue continúan bloqueados.
 
 ---
 
+## VAL-0016 — TIDAL Discovery
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Fase | A.5 — Integraciones headless |
+| Aplicación local | TIDAL `2.43.0` · `com.tidal.desktop` |
+| Método | Documentación oficial + bundle y Apple Events read-only |
+
+### Discovery
+
+- TIDAL Desktop es una aplicación Electron sin diccionario `sdef`. Responde a
+  identidad y versión estándar de macOS, pero `player state` no pertenece a su
+  interfaz AppleScript.
+- El smoke se realizó con TIDAL cerrado. No se abrió la aplicación, no se leyó
+  contenido de sesión y no se ejecutaron comandos de reproducción.
+- La Developer Platform oficial permite registrar aplicaciones, autenticar al
+  usuario mediante OAuth 2.1/PKCE y reproducir contenido mediante módulos
+  oficiales dentro de una aplicación propia:
+  <https://developer.tidal.com/documentation/overview>.
+- Esa plataforma no controla la sesión de TIDAL Desktop. TIDAL Connect está
+  reservado a socios de dispositivos:
+  <https://developer.tidal.com/documentation/connect>.
+- TIDAL identifica `openapi.tidal.com` como su plataforma autorizada y rechaza
+  el uso de APIs no oficiales:
+  <https://github.com/orgs/tidal-music/discussions/38>.
+- Las Developer Guidelines exigen módulos oficiales y contienen restricciones
+  relacionadas con el uso de TIDAL Content junto a tecnologías de inteligencia
+  artificial. Su aplicabilidad a NexUX debe resolverse antes de implementar:
+  <https://developer.tidal.com/documentation/guidelines/guidelines-developer-guidelines>.
+
+### Rutas evaluadas
+
+| Ruta | Capacidad honesta | Estado |
+|---|---|---|
+| TIDAL Desktop | salud, proceso, versión y `open_app` | Viable pero redundante con Qobuz |
+| TIDAL Developer Platform | reproductor propio con OAuth/PKCE y Player SDK | Pendiente de app, consentimiento y revisión de condiciones |
+| TIDAL Connect | control de dispositivos | No disponible sin acuerdo de device partner |
+| API o automatización no oficial | no admisible | Descartada |
+
+### Evidencia
+
+- Aplicación instalada en `/Applications/TIDAL.app`, versión `2.43.0`.
+- Sin proceso TIDAL activo antes o después del discovery.
+- Sin variables, Client ID, Client Secret ni tokens TIDAL configurados en NexUX.
+- Sin lectura de credenciales o contenido de `Application Support`.
+- Sin archivos de implementación, factories, cambios de ABI ni efectos laterales.
+
+### Conclusión
+
+**APROBADO** como discovery y **PENDIENTE** como integración. No se implementa un
+adaptador en este sprint. La ruta nativa solo justificaría capacidades limitadas;
+la ruta con SDK oficial es un reproductor NexUX independiente y requiere una
+autorización nueva después de registrar la aplicación y resolver las condiciones
+de uso. Factory productiva, despliegue y Línea B continúan bloqueados.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

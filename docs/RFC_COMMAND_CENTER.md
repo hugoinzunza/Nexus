@@ -64,8 +64,26 @@ El adaptador Qobuz ya está implementado con capacidades deliberadamente
 limitadas. Puede observar salud y abrir la aplicación, pero no declara
 `current_state` ni controles de reproducción: Qobuz Connect no admite apps de
 terceros y Qobuz Desktop no expone esas operaciones mediante su interfaz de
-automatización de macOS. TIDAL queda como siguiente candidato, sujeto a revisión
-arquitectónica de Qobuz. Ninguno puede ampliar el `MediaController` público.
+automatización de macOS.
+
+El discovery de TIDAL separa dos integraciones que no son equivalentes:
+
+- **TIDAL Desktop:** la aplicación macOS instalada permite observar proceso,
+  identidad y versión, además de abrirla. No publica controles de reproducción
+  mediante AppleScript ni una interfaz de automatización soportada. Un adaptador
+  nativo solo podría declarar esas capacidades limitadas.
+- **TIDAL Developer Platform:** ofrece OAuth 2.1 con Authorization Code + PKCE y
+  módulos oficiales de reproducción para construir una sesión propia dentro de
+  una aplicación autorizada. No controla la sesión existente de TIDAL Desktop y
+  requiere registrar una aplicación, gestionar consentimiento y tokens, aceptar
+  las condiciones del proveedor y superar una revisión arquitectónica nueva.
+
+TIDAL Connect está reservado a integraciones de socios de dispositivos. NexUX no
+usará `api.tidal.com`, endpoints no oficiales, inspección del bundle, simulación
+de teclas ni automatización por coordenadas. La implementación queda pendiente:
+antes debe resolverse explícitamente la compatibilidad de las condiciones de
+TIDAL con las capacidades de inteligencia artificial de NexUX. Ninguna ruta
+puede ampliar el `MediaController` público ni activar una factory.
 
 ## 1. Resumen ejecutivo
 
