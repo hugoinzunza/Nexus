@@ -92,7 +92,7 @@ def test_b3_reemplaza_panel_existente_sin_cambiar_layout_general() -> None:
     assert "grid-template-columns: repeat(5, minmax(90px, 1fr));" in css
     assert 'grid-area: attention' in css
     assert 'grid-area: music' in css
-    assert '"positions music"' in css
+    assert '"positions positions"' in css
 
 
 def test_b3_consume_salud_solo_lectura_y_no_inventa_integraciones() -> None:

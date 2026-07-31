@@ -502,9 +502,9 @@ a:focus-visible {
   display: grid;
   grid-template-areas:
     "attention music"
-    "positions music";
-  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
-  grid-template-rows: minmax(250px, 0.74fr) minmax(300px, 1.26fr);
+    "positions positions";
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  grid-template-rows: minmax(330px, 0.95fr) minmax(300px, 1.05fr);
   gap: 10px;
   background: transparent;
 }
@@ -861,16 +861,17 @@ a:focus-visible {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  margin-top: 16px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 20px;
+  margin-top: 14px;
   text-align: center;
 }
 
 .music-artwork {
   display: grid;
-  width: 240px;
-  height: 240px;
-  max-width: min(72%, 240px);
+  width: 190px;
+  height: 190px;
   flex: 0 0 auto;
   aspect-ratio: 1;
   overflow: hidden;
@@ -904,7 +905,8 @@ a:focus-visible {
   gap: 6px;
   width: 100%;
   min-width: 0;
-  justify-items: center;
+  justify-items: start;
+  text-align: left;
 }
 
 .music-now strong,
@@ -943,7 +945,7 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  margin-top: 18px;
+  margin-top: 12px;
 }
 
 .music-control,
@@ -1002,7 +1004,7 @@ a:focus-visible {
 }
 
 .music-progress {
-  margin-top: 18px;
+  margin-top: 10px;
   padding: 0 8px 4px;
 }
 
@@ -1175,12 +1177,12 @@ a:focus-visible {
   }
 
   .context-rail {
-    grid-template-rows: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
+    grid-template-rows: minmax(310px, 0.95fr) minmax(300px, 1.05fr);
   }
 
   .music-artwork {
-    width: 190px;
-    height: 190px;
+    width: 150px;
+    height: 150px;
   }
 }
 
@@ -1222,7 +1224,7 @@ a:focus-visible {
   .context-rail {
     grid-template-areas:
       "attention music"
-      "positions music";
+      "positions positions";
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: repeat(2, minmax(250px, auto));
   }

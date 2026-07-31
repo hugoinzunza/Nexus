@@ -196,14 +196,14 @@ pregunta ya resuelta por Atención inmediata.
 
 Se aplicaron estas correcciones sin agregar módulos:
 
-- manifiesto standalone y lanzador macOS para abrir Chrome como aplicación en
-  pantalla completa, sin pestañas ni barra de direcciones;
-- Música ocupa ahora toda la columna derecha, con carátula de `240 x 240 px` en
-  el viewport objetivo, título reforzado, controles mayores y progreso visible;
+- manifiesto standalone y lanzador macOS con perfil dedicado y modo kiosco para
+  abrir Chrome sin pestañas, barra de direcciones ni controles del navegador;
+- Música comparte la fila superior con Atención, con carátula de `190 x 190 px`,
+  título reforzado, controles mayores y progreso visible;
 - Macro deja de ocupar una superficie propia y se integra causalmente en
   Atención inmediata; solo se muestra cuando existe un evento relevante o como
   contexto secundario discreto;
-- Posiciones abiertas permanece debajo de Atención y conserva las dos cuentas
+- Posiciones abiertas ocupa todo el ancho inferior y conserva las dos cuentas
   separadas.
 
 La prueba visual a `1280 x 720` confirmó que la carátula conserva `190 x 190 px`
