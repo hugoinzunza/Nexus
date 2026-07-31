@@ -166,8 +166,8 @@ del gráfico propio justifican la inversión, pero todavía no justifican una pr
 
 ## Integridad arquitectónica
 
-- Pruebas Command Center: `263 passed`.
-- Suite verificable: `827 passed`, con una prueba de research deseleccionada por
+- Pruebas Command Center: `267 passed`.
+- Suite verificable: `831 passed`, con una prueba de research deseleccionada por
   la alerta V1/V2 descrita arriba.
 - Agente macOS Release: build correcto y `48 checks passed`.
 - Wire ABI v1: intacto.
@@ -209,3 +209,24 @@ Se aplicaron estas correcciones sin agregar módulos:
 La prueba visual a `1280 x 720` confirmó que la carátula conserva `190 x 190 px`
 incluso en el breakpoint compacto. La validación definitiva sigue siendo el
 Arzopa a `1920 x 992` mediante el lanzador de modo aplicación.
+
+## Shell nativa y cuadrícula macOS
+
+La bandera kiosco de Chrome no resultó estable cuando coexistía con una sesión
+normal del navegador. Se reemplazó por una shell nativa macOS basada en
+`WKWebView`, con ventana sin bordes sobre el Arzopa y barras de sistema ocultas.
+Los enlaces externos, como Análisis completo, continúan abriéndose en el
+navegador habitual.
+
+La cuadrícula final reduce TradingView a una celda superior y agrega debajo una
+lectura local de macOS que responde si el equipo está listo para operar. Expone
+solamente carga normalizada, memoria, disco, energía, versión y uptime. No
+publica procesos, aplicaciones abiertas ni información personal.
+
+La validación directa en el Arzopa `1920 x 1080` confirmó:
+
+- ausencia de pestañas, dirección y barra de menú;
+- TradingView cargado dentro de la shell nativa;
+- macOS `ready` con datos reales y frescos;
+- cuatro zonas visuales alineadas;
+- Música, Atención y Posiciones sin superposición horizontal.

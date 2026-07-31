@@ -51,7 +51,8 @@
     </section>
 
     <main class="workspace">
-      <section class="chart-region" aria-labelledby="market-title">
+      <div class="market-column">
+        <section class="chart-region" aria-labelledby="market-title">
         <header class="region-header">
           <div>
             <span class="eyebrow">Mercado</span>
@@ -76,7 +77,26 @@
             <small>Montando proveedor</small>
           </div>
         </div>
-      </section>
+        </section>
+
+        <section class="macos-panel" aria-labelledby="macos-title">
+          <header class="panel-header">
+            <div><span class="eyebrow">Este equipo · solo lectura</span>
+              <h2 id="macos-title">macOS</h2></div>
+            <span class="context-badge" data-state="unknown"
+              id="macos-state">Esperando</span>
+          </header>
+          <p class="macos-answer" id="macos-answer">Verificando el equipo local.</p>
+          <dl class="macos-metrics">
+            <div><dt>Carga</dt><dd id="macos-load">--</dd></div>
+            <div><dt>Memoria</dt><dd id="macos-memory">--</dd></div>
+            <div><dt>Disco</dt><dd id="macos-disk">--</dd></div>
+            <div><dt>Energía</dt><dd id="macos-power">--</dd></div>
+          </dl>
+          <footer class="macos-footer"><span id="macos-device">Mac local</span>
+            <span id="macos-uptime">Sin lectura</span></footer>
+        </section>
+      </div>
 
       <aside class="context-rail" aria-label="Contexto operativo">
         <section class="attention-panel" aria-labelledby="attention-title">

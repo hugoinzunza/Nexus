@@ -418,18 +418,25 @@ a:focus-visible {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.02fr) minmax(620px, 0.98fr);
+  grid-template-columns: minmax(0, 0.92fr) minmax(720px, 1.08fr);
   min-height: 0;
   gap: 10px;
   padding: 10px 14px;
   background: var(--bg);
 }
 
-.chart-region,
+.market-column,
 .context-rail {
   min-width: 0;
   min-height: 0;
   background: var(--bg);
+}
+
+.market-column {
+  display: grid;
+  grid-template-rows: minmax(430px, 1.45fr) minmax(210px, 0.55fr);
+  gap: 10px;
+  background: transparent;
 }
 
 .chart-region {
@@ -504,12 +511,13 @@ a:focus-visible {
     "attention music"
     "positions positions";
   grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
-  grid-template-rows: minmax(330px, 0.95fr) minmax(300px, 1.05fr);
+  grid-template-rows: minmax(430px, 1.45fr) minmax(210px, 0.55fr);
   gap: 10px;
   background: transparent;
 }
 
 .ai-panel,
+.macos-panel,
 .positions-panel,
 .attention-panel,
 .music-panel {
@@ -537,6 +545,65 @@ a:focus-visible {
 
 .positions-panel {
   grid-area: positions;
+}
+
+.macos-panel {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 10px;
+  border-color: color-mix(in srgb, var(--info) 40%, var(--border));
+  background: color-mix(in srgb, var(--info) 3%, var(--surface-1));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--info) 7%, transparent);
+}
+
+.macos-answer {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.macos-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  margin: 0;
+  border-block: 1px solid var(--border);
+}
+
+.macos-metrics div {
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.macos-metrics div + div {
+  border-left: 1px solid var(--border);
+}
+
+.macos-metrics dt {
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.macos-metrics dd {
+  overflow: hidden;
+  margin: 5px 0 0;
+  color: var(--text-1);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.macos-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-3);
+  font-size: 10px;
 }
 
 .readiness-overall {
@@ -903,8 +970,10 @@ a:focus-visible {
 .music-now {
   display: grid;
   gap: 6px;
-  width: 100%;
+  width: auto;
   min-width: 0;
+  max-width: 100%;
+  flex: 1 1 0;
   justify-items: start;
   text-align: left;
 }
@@ -1176,8 +1245,9 @@ a:focus-visible {
     min-height: 650px;
   }
 
+  .market-column,
   .context-rail {
-    grid-template-rows: minmax(310px, 0.95fr) minmax(300px, 1.05fr);
+    grid-template-rows: minmax(390px, 1.35fr) minmax(250px, 0.65fr);
   }
 
   .music-artwork {
@@ -1217,6 +1287,10 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .market-column {
+    grid-template-rows: minmax(500px, auto) minmax(210px, auto);
+  }
+
   .chart-region {
     min-height: 540px;
   }
@@ -1247,6 +1321,7 @@ a:focus-visible {
   .market-ribbon,
   .chart-region,
   .status-panel,
+  .macos-panel,
   .ai-panel,
   .positions-panel,
   .attention-panel,
@@ -1266,6 +1341,7 @@ a:focus-visible {
   }
 
   .workspace,
+  .market-column,
   .context-rail {
     display: block;
   }

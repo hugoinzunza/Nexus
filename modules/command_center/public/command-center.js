@@ -9,6 +9,7 @@ const MACRO_URL = "/m/trading/api/dashboard?translate=0";
 const MARKET_RIBBON_URL = "/m/command-center/api/market-ribbon";
 const AI_CONTEXT_URL = "/m/command-center/api/ai-context";
 const POSITIONS_CONTEXT_URL = "/m/command-center/api/positions-context";
+const MACOS_CONTEXT_URL = "/m/command-center/api/macos-context";
 const BOT_CONTEXT_URL = "/m/command-center/api/bot-context";
 const MEDIA_CONTEXT_URL = "/m/command-center/api/media-context";
 const MEDIA_COMMAND_URL = "/m/command-center/api/media-command";
@@ -437,6 +438,73 @@ export class PositionsContextClient {
       this.context = normalizePositionsContext(await response.json());
     } catch {
       this.context = normalizePositionsContext({ state: "degraded" });
+    }
+    this.onChange(this.context);
+  }
+}
+
+export function normalizeMacOSContext(payload) {
+  const number = (value) => (
+    value === null || value === undefined || value === ""
+      ? null
+      : Number.isFinite(Number(value))
+        ? Math.max(0, Number(value))
+        : null
+  );
+  return {
+    state: ["ready", "degraded", "unavailable"].includes(payload?.state)
+      ? payload.state
+      : "degraded",
+    generatedAtMs: number(payload?.generated_at_ms),
+    device: String(payload?.device || "Mac local").slice(0, 60),
+    osVersion: String(payload?.os_version || "macOS").slice(0, 30),
+    loadPercent: number(payload?.load_percent),
+    memoryPercent: number(payload?.memory_percent),
+    diskPercent: number(payload?.disk_percent),
+    powerSource: String(payload?.power_source || "Sin lectura").slice(0, 30),
+    batteryPercent: number(payload?.battery_percent),
+    uptimeSeconds: number(payload?.uptime_seconds),
+    detail: payload?.detail ? String(payload.detail).slice(0, 100) : null,
+    readOnly: payload?.read_only === true,
+  };
+}
+
+export class MacOSContextClient {
+  constructor({
+    contextUrl = MACOS_CONTEXT_URL,
+    fetcher = (...args) => fetch(...args),
+    onChange = () => {},
+  } = {}) {
+    this.contextUrl = contextUrl;
+    this.fetcher = fetcher;
+    this.onChange = onChange;
+    this.context = normalizeMacOSContext(null);
+    this.refreshTimer = null;
+  }
+
+  async start() {
+    await this.refresh();
+    this.refreshTimer = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      this.refresh().catch(() => {});
+    }, 15_000);
+  }
+
+  stop() {
+    clearInterval(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+
+  async refresh() {
+    try {
+      const response = await this.fetcher(this.contextUrl, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`macOS context HTTP ${response.status}`);
+      this.context = normalizeMacOSContext(await response.json());
+    } catch {
+      this.context = normalizeMacOSContext({ state: "degraded" });
     }
     this.onChange(this.context);
   }
@@ -1413,6 +1481,21 @@ function fixturePositionsContext() {
   });
 }
 
+function fixtureMacOSContext() {
+  return normalizeMacOSContext({
+    state: "ready",
+    generated_at_ms: Date.now(),
+    device: "Mac de Hugo",
+    os_version: "26.0",
+    load_percent: 24,
+    memory_percent: 58,
+    disk_percent: 41,
+    power_source: "Corriente",
+    uptime_seconds: 86_400,
+    read_only: true,
+  });
+}
+
 function fixtureBotContext() {
   return {
     state: "ready",
@@ -1780,6 +1863,45 @@ function renderPositionsContext(context) {
         hour: "2-digit", minute: "2-digit",
       })}`
     : "Sin lectura";
+}
+
+function formatMacUptime(seconds) {
+  if (!Number.isFinite(seconds)) return "Sin lectura";
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3600);
+  if (days) return `Activo ${days} d ${hours} h`;
+  return `Activo ${hours} h`;
+}
+
+function renderMacOSContext(context) {
+  const badge = document.querySelector("#macos-state");
+  badge.dataset.state = context.state;
+  const labels = {
+    ready: "Ready",
+    degraded: "Revisar",
+    unavailable: "Solo local",
+  };
+  badge.textContent = labels[context.state] || "Unknown";
+  document.querySelector("#macos-answer").textContent = context.detail || (
+    context.state === "ready"
+      ? "El equipo local está listo para operar."
+      : context.state === "degraded"
+        ? "Una lectura del equipo requiere revisión."
+        : "La telemetría está disponible solo en este Mac."
+  );
+  const percent = (value) => Number.isFinite(value)
+    ? `${value.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%`
+    : "--";
+  document.querySelector("#macos-load").textContent = percent(context.loadPercent);
+  document.querySelector("#macos-memory").textContent = percent(context.memoryPercent);
+  document.querySelector("#macos-disk").textContent = percent(context.diskPercent);
+  document.querySelector("#macos-power").textContent = context.batteryPercent === null
+    ? context.powerSource
+    : `${context.batteryPercent.toLocaleString("es-CL")}%`;
+  document.querySelector("#macos-device").textContent =
+    `${context.device} · ${context.osVersion}`;
+  document.querySelector("#macos-uptime").textContent =
+    formatMacUptime(context.uptimeSeconds);
 }
 
 function renderImmediateAttention(attention) {
@@ -2172,6 +2294,7 @@ export function bootstrap() {
     const state = fixtureState(fixture);
     const macroState = fixtureMacroState();
     const positionsState = fixturePositionsContext();
+    const macosState = fixtureMacOSContext();
     const botState = fixtureBotContext();
     const readinessState = deriveOperationalReadiness({
       commandState: state,
@@ -2182,6 +2305,7 @@ export function bootstrap() {
     renderMacro(macroState);
     renderMarketRibbon(fixtureMarketRibbonState());
     renderPositionsContext(positionsState);
+    renderMacOSContext(macosState);
     renderImmediateAttention(deriveImmediateAttention({
       readiness: readinessState,
       macro: macroState,
@@ -2251,6 +2375,9 @@ export function bootstrap() {
       paintAttention();
     },
   });
+  const macosContextClient = new MacOSContextClient({
+    onChange: renderMacOSContext,
+  });
   const botContextClient = new BotContextClient({
     onChange: (state) => {
       attentionInputs.bot = state;
@@ -2270,6 +2397,7 @@ export function bootstrap() {
   window.__nexuxCommandCenterMacro = macroClient;
   window.__nexuxCommandCenterMarketRibbon = marketRibbonClient;
   window.__nexuxCommandCenterPositions = positionsContextClient;
+  window.__nexuxCommandCenterMacOS = macosContextClient;
   window.__nexuxCommandCenterBot = botContextClient;
   window.__nexuxCommandCenterMedia = mediaContextClient;
   window.__nexuxCommandCenterHealth = healthClient;
@@ -2286,6 +2414,7 @@ export function bootstrap() {
   macroClient.start().catch(() => {});
   marketRibbonClient.start().catch(() => {});
   positionsContextClient.start().catch(() => {});
+  macosContextClient.start().catch(() => {});
   botContextClient.start().catch(() => {});
   mediaContextClient.start().catch(() => {});
   healthClient.start().catch(() => {});
@@ -2301,6 +2430,7 @@ export function bootstrap() {
     macroClient.stop();
     marketRibbonClient.stop();
     positionsContextClient.stop();
+    macosContextClient.stop();
     botContextClient.stop();
     mediaContextClient.stop();
     healthClient.stop();

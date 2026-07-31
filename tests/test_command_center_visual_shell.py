@@ -106,9 +106,13 @@ def test_shell_declara_modo_aplicacion_y_lanzador_sin_barra() -> None:
 
     assert 'rel="manifest" href="./manifest.webmanifest"' in page
     assert '"display": "standalone"' in manifest
-    assert '--app="$URL"' in launcher
-    assert "--kiosk" in launcher
-    assert '--user-data-dir="$PROFILE"' in launcher
+    assert 'open -na "$APP" --args "$URL"' in launcher
+    native = (
+        ROOT / "agents" / "macos" / "CommandCenterShell" / "main.swift"
+    ).read_text(encoding="utf-8")
+    assert "styleMask: [.borderless]" in native
+    assert "WKWebView" in native
+    assert ".hideMenuBar" in native
 
 
 def test_b2_seleccion_macro_es_causal_y_no_inventa_impacto() -> None:

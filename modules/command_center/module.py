@@ -29,6 +29,7 @@ from .gateway import CommandCenterGateway
 from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION, MediaAction
 from .media_surface import MediaCommandsDisabled, MediaSurfaceService
 from .market_ribbon import MarketRibbonService
+from .macos_context import MacOSContextService
 from .module_registry import command_center_module_registry
 from .operations import OperationContext
 from .positions_context import PositionsContextService
@@ -75,6 +76,9 @@ class CommandCenterModule(NexusModule):
         self._local_media_enabled = os.environ.get(
             "NEXUX_COMMAND_CENTER_MEDIA"
         ) in {"apple-music", "local"}
+        self.macos_context = MacOSContextService(
+            enabled=self._local_media_enabled,
+        )
         self.positions_bridge = VpsPositionsBridge(
             enabled=self._local_media_enabled,
         )
@@ -376,6 +380,8 @@ class CommandCenterModule(NexusModule):
                         retryable=True,
                     ),
                 )
+        if subpath == "macos-context":
+            return self._json(200, self.macos_context.snapshot())
         if subpath == "bot-context":
             try:
                 from core.app import hub
