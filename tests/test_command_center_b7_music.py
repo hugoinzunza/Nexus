@@ -263,6 +263,13 @@ def test_b7_expone_solo_el_post_multimedia_acotado() -> None:
     assert page.count('class="music-control"') == 2
     assert page.count('class="music-control music-toggle"') == 1
     assert page.count('data-media-provider=') == 3
+    music_panel = page.split('<section class="music-panel"', 1)[1].split(
+        "</section>", 1
+    )[0]
+    music_header = music_panel.split('<header class="panel-header">', 1)[1].split(
+        "</header>", 1
+    )[0]
+    assert 'class="media-provider-selector"' in music_header
     assert 'id="music-open"' in page
     assert 'id="music-artwork-image"' in page
     assert 'id="music-progress"' in page

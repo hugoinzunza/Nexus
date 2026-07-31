@@ -845,13 +845,19 @@ a:focus-visible {
   box-shadow: 0 0 34px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
+.music-panel .panel-header {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 300px) auto;
+  gap: 12px;
+}
+
 .media-provider-selector {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
-  width: min(300px, 100%);
+  width: 100%;
   padding: 3px;
-  margin: 14px auto 0;
+  margin: 0;
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
   border-radius: 7px;
   background: color-mix(in srgb, var(--surface-3) 62%, transparent);
@@ -883,7 +889,7 @@ a:focus-visible {
   flex-direction: row;
   justify-content: flex-start;
   gap: 20px;
-  margin-top: 14px;
+  margin-top: 12px;
   text-align: center;
 }
 
