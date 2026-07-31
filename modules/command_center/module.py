@@ -16,6 +16,7 @@ from .contracts import (
 )
 from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
 from .ai_context import AiContextService
+from .bot_context import BotContextService
 from .event_bus import InMemoryEventBus
 from .gateway import CommandCenterGateway
 from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION
@@ -54,6 +55,7 @@ class CommandCenterModule(NexusModule):
         self.ai_context = AiContextService(
             enabled_loader=self._ai_enabled,
         )
+        self.bot_context = BotContextService()
 
     @staticmethod
     def _ai_enabled() -> bool:
@@ -101,6 +103,15 @@ class CommandCenterModule(NexusModule):
                     "command-center: market ribbon fallo "
                     f"({type(exc).__name__})"
                 )
+                return self._json(
+                    502,
+                    error_document(
+                        "market-ribbon.unavailable",
+                        "No fue posible obtener el contexto de mercado.",
+                        502,
+                        retryable=True,
+                    ),
+                )
         if subpath == "ai-context":
             try:
                 return self._json(200, self.ai_context.snapshot())
@@ -118,11 +129,40 @@ class CommandCenterModule(NexusModule):
                         retryable=True,
                     ),
                 )
+        if subpath == "bot-context":
+            try:
+                from core.app import hub
+
+                bot = hub.modules_by_slug.get("bot")
+                if bot is None:
+                    raise RuntimeError("bot module unavailable")
+                response = bot.api("state", {}, user=user)
+                if response is None:
+                    raise RuntimeError("bot state unavailable")
+                status, _content_type, body = response
+                if status in {401, 403}:
+                    return self._json(
+                        403,
+                        error_document(
+                            "bot-context.forbidden",
+                            "No tienes acceso al estado del Bot.",
+                            403,
+                        ),
+                    )
+                if status != 200:
+                    raise RuntimeError(f"bot state HTTP {status}")
+                source = json.loads(body)
+                return self._json(200, self.bot_context.project(source))
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(
+                    "command-center: contexto Bot fallo "
+                    f"({type(exc).__name__})"
+                )
                 return self._json(
                     502,
                     error_document(
-                        "market-ribbon.unavailable",
-                        "No fue posible obtener el contexto de mercado.",
+                        "bot-context.unavailable",
+                        "No fue posible leer el estado del Bot.",
                         502,
                         retryable=True,
                     ),

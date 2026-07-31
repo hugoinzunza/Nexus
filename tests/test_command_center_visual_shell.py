@@ -69,7 +69,8 @@ def test_shell_fija_el_abi_y_no_agrega_superficie_de_comandos() -> None:
 
     assert CONTRACT_V1_FINGERPRINT in script
     assert "method: \"POST\"" not in script
-    assert "api/bot" not in script
+    assert '"/m/bot/' not in script
+    assert '"bot/api/' not in script
     assert "market_order" not in script
     assert command_center_module_registry().stats()["attached_factories"] == 0
 

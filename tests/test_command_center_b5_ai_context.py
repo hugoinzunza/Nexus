@@ -174,6 +174,6 @@ def test_b5_agrega_un_solo_modulo_compacto_sin_controles() -> None:
     assert "<button" not in ai_markup
     assert "<a " not in ai_markup
     assert "method: \"POST\"" not in script
-    assert ".status-panel,\n.telemetry-panel {\n  grid-column: 1 / -1;" in (
+    assert ".status-panel {\n  grid-column: 1 / -1;" in (
         PUBLIC / "command-center.css"
     ).read_text(encoding="utf-8")

@@ -475,14 +475,14 @@ a:focus-visible {
   background: var(--border);
 }
 
-.status-panel,
-.telemetry-panel {
+.status-panel {
   grid-column: 1 / -1;
 }
 
 .status-panel,
 .macro-panel,
 .ai-panel,
+.bot-context-panel,
 .telemetry-panel {
   min-height: 0;
   overflow: hidden;
@@ -768,7 +768,7 @@ a:focus-visible {
   }
 
   .status-panel,
-  .telemetry-panel {
+  .bot-context-panel {
     grid-column: 1 / -1;
   }
 }
@@ -780,6 +780,7 @@ a:focus-visible {
   .status-panel,
   .macro-panel,
   .ai-panel,
+  .bot-context-panel,
   .telemetry-panel,
   .status-footer {
     padding-inline: var(--space-4);

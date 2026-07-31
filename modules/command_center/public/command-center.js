@@ -8,6 +8,7 @@ const SNAPSHOT_URL = "/m/command-center/api/snapshot";
 const MACRO_URL = "/m/trading/api/dashboard?translate=0";
 const MARKET_RIBBON_URL = "/m/command-center/api/market-ribbon";
 const AI_CONTEXT_URL = "/m/command-center/api/ai-context";
+const BOT_CONTEXT_URL = "/m/command-center/api/bot-context";
 const HEALTH_URL = "/health";
 const WS_PATH = "/m/command-center/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 15000];
@@ -342,6 +343,79 @@ export class AiContextClient {
       this.context = normalizeAiContext(await response.json());
     } catch {
       this.context = normalizeAiContext({ state: "degraded" });
+    }
+    this.onChange(this.context);
+  }
+}
+
+export function normalizeBotContext(payload) {
+  const states = new Set(["ready", "paused", "degraded", "unknown"]);
+  const severity = new Set(["normal", "info", "warning", "critical"]);
+  const signal = payload?.latest_signal;
+  return {
+    state: states.has(payload?.state) ? payload.state : "unknown",
+    mode: payload?.mode === "live" ? "live" : (
+      payload?.mode === "dry-run" ? "dry-run" : "unknown"
+    ),
+    severity: severity.has(payload?.severity)
+      ? payload.severity
+      : "normal",
+    sourceAgeSeconds: Number.isFinite(Number(payload?.source_age_seconds))
+      ? Math.max(0, Number(payload.source_age_seconds))
+      : null,
+    latestSignal:
+      signal && typeof signal === "object"
+        ? {
+            pair: String(signal.pair || "Activo"),
+            direction: ["long", "short"].includes(signal.direction)
+              ? signal.direction
+              : "unknown",
+            status: String(signal.status || "unknown"),
+            mode: String(signal.mode || "unknown"),
+            occurredAtMs: Number.isFinite(Number(signal.occurred_at_ms))
+              ? Number(signal.occurred_at_ms)
+              : null,
+          }
+        : null,
+    readOnly: payload?.read_only === true,
+  };
+}
+
+export class BotContextClient {
+  constructor({
+    contextUrl = BOT_CONTEXT_URL,
+    fetcher = (...args) => fetch(...args),
+    onChange = () => {},
+  } = {}) {
+    this.contextUrl = contextUrl;
+    this.fetcher = fetcher;
+    this.onChange = onChange;
+    this.context = normalizeBotContext(null);
+    this.refreshTimer = null;
+  }
+
+  async start() {
+    await this.refresh();
+    this.refreshTimer = setInterval(() => {
+      this.refresh().catch(() => {});
+    }, 30_000);
+  }
+
+  stop() {
+    clearInterval(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+
+  async refresh() {
+    try {
+      const response = await this.fetcher(this.contextUrl, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`bot context HTTP ${response.status}`);
+      this.context = normalizeBotContext(await response.json());
+    } catch {
+      this.context = normalizeBotContext({ state: "degraded" });
     }
     this.onChange(this.context);
   }
@@ -919,6 +993,23 @@ function fixtureAiContext() {
   };
 }
 
+function fixtureBotContext() {
+  return {
+    state: "ready",
+    mode: "dry-run",
+    severity: "info",
+    sourceAgeSeconds: 8,
+    latestSignal: {
+      pair: "BTC",
+      direction: "short",
+      status: "abierta",
+      mode: "dry",
+      occurredAtMs: Date.now() - 7 * 60_000,
+    },
+    readOnly: true,
+  };
+}
+
 function fixtureMarketRibbonState() {
   const now = Date.now();
   const definitions = [
@@ -1157,6 +1248,57 @@ function renderAiContext(context) {
       : "Sin evaluación";
 }
 
+function renderBotContext(context) {
+  const badge = document.querySelector("#bot-context-state");
+  const visualState =
+    context.state === "ready" ? context.severity : context.state;
+  badge.dataset.state = visualState;
+  const labels = {
+    normal: "Ready",
+    info: "Observando",
+    warning: "Atención",
+    critical: "Crítico",
+    paused: "Pausado",
+    degraded: "Degradado",
+    unknown: "Unknown",
+  };
+  badge.textContent = labels[visualState] || "Unknown";
+  const signal = context.latestSignal;
+  const summary = document.querySelector("#bot-context-summary");
+  summary.dataset.state = context.state;
+  if (signal) {
+    const direction =
+      signal.direction === "long"
+        ? "Long"
+        : signal.direction === "short"
+          ? "Short"
+          : "Sin dirección";
+    summary.textContent =
+      `${signal.pair} · ${direction} · ${signal.status}`;
+  } else {
+    summary.textContent =
+      context.state === "degraded"
+        ? "El estado del Bot no está actualizado."
+        : "No hay una señal reciente que requiera atención.";
+  }
+  const modeLabels = {
+    live: "LIVE · solo lectura",
+    "dry-run": "DRY-RUN · solo lectura",
+    unknown: "Modo desconocido · solo lectura",
+  };
+  document.querySelector("#bot-context-mode").textContent =
+    modeLabels[context.mode] || modeLabels.unknown;
+  document.querySelector("#bot-context-updated").textContent =
+    signal?.occurredAtMs
+      ? `Señal ${new Date(signal.occurredAtMs).toLocaleTimeString("es-CL", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`
+      : context.sourceAgeSeconds !== null
+        ? `Leído hace ${Math.round(context.sourceAgeSeconds)} s`
+        : "Sin lectura";
+}
+
 const FRESHNESS_LABELS = {
   live: "En vivo",
   current: "Actual",
@@ -1365,6 +1507,7 @@ export function bootstrap() {
     renderMacro(fixtureMacroState());
     renderMarketRibbon(fixtureMarketRibbonState());
     renderAiContext(fixtureAiContext());
+    renderBotContext(fixtureBotContext());
     renderOperationalReadiness(
       deriveOperationalReadiness({
         commandState: state,
@@ -1406,6 +1549,9 @@ export function bootstrap() {
   const aiContextClient = new AiContextClient({
     onChange: renderAiContext,
   });
+  const botContextClient = new BotContextClient({
+    onChange: renderBotContext,
+  });
   const healthClient = new OperationalHealthClient({
     onChange: (state) => {
       operationalHealthState = state;
@@ -1416,6 +1562,7 @@ export function bootstrap() {
   window.__nexuxCommandCenterMacro = macroClient;
   window.__nexuxCommandCenterMarketRibbon = marketRibbonClient;
   window.__nexuxCommandCenterAi = aiContextClient;
+  window.__nexuxCommandCenterBot = botContextClient;
   window.__nexuxCommandCenterHealth = healthClient;
   document
     .querySelector("#resync-button")
@@ -1424,6 +1571,7 @@ export function bootstrap() {
   macroClient.start().catch(() => {});
   marketRibbonClient.start().catch(() => {});
   aiContextClient.start().catch(() => {});
+  botContextClient.start().catch(() => {});
   healthClient.start().catch(() => {});
   setInterval(() => {
     commandState = client.state();
@@ -1437,6 +1585,7 @@ export function bootstrap() {
     macroClient.stop();
     marketRibbonClient.stop();
     aiContextClient.stop();
+    botContextClient.stop();
     healthClient.stop();
   });
 }

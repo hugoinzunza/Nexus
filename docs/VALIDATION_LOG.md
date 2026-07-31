@@ -759,6 +759,41 @@ fixture se reconoce sin lectura sostenida.
 
 ---
 
+## VAL-0022 — Línea B Sprint B6 · Atención del Bot
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-31 |
+| Hardware objetivo | ARZOPA, 1920 × 1080 @ 60 Hz |
+| Pregunta | ¿El Bot detectó algo que requiere mi atención? |
+| Superficies nuevas | 1 módulo compacto en el rail de contexto |
+
+### Evidencia técnica
+
+- Consume únicamente el estado GET del Bot y reutiliza su autorización.
+- La proyección elimina cuenta, órdenes, posiciones, precios, SL, TP y P&L.
+- Muestra estado, modo, última señal sanitizada, antigüedad y severidad.
+- `dry-run` se representa como estado válido; `kill` como pausa.
+- Una fuente con más de 120 segundos se degrada.
+- El panel está marcado `solo lectura` y no contiene controles ni enlaces.
+- No importa ejecutor, no escribe stores y no modifica el Bot.
+- Cero factories productivas.
+- Viewport técnico 1920 × 907 sin overflow horizontal ni vertical.
+
+### Evidencia visual
+
+- `docs/evidence/command-center-b6-arzopa-technical.png`
+
+### Conclusión
+
+**TÉCNICAMENTE COMPLETO** y **PENDIENTE perceptualmente**. Hugo debe confirmar
+desde 80–90 cm que el modo y la última señal se reconocen sin que el panel
+parezca una consola de ejecución.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

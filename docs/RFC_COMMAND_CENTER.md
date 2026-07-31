@@ -167,6 +167,26 @@ VAL-0021 debe comprobar en el Arzopa que el estado sin observación no compita c
 el contexto macro y que una severidad de fixture pueda reconocerse sin leer el
 resumen completo. Su aprobación técnica no cierra la validación perceptual.
 
+### Línea B — Sprint B6
+
+B6 incorpora un único módulo: **Atención del Bot**. Responde si la actividad más
+reciente del Bot requiere atención y muestra exclusivamente estado operacional,
+modo, última señal sanitizada, antigüedad, severidad y la marca permanente
+`solo lectura`.
+
+La proyección consume el endpoint GET existente del Bot y conserva su
+autorización de administrador. Descarta cuenta, balance, posiciones, órdenes,
+precios, stops, targets y P&L. El Command Center no importa el ejecutor, no
+ejecuta comandos y no escribe en el store.
+
+`dry-run` es un modo válido y no se presenta como fallo. `kill` se representa
+como pausa; una fuente con más de 120 segundos se degrada. La última señal
+incluye únicamente par, dirección, estado, modo y timestamp.
+
+VAL-0022 debe comprobar en el Arzopa que modo y última señal se reconocen sin
+confundir el panel con una consola de ejecución. Su aprobación técnica no
+autoriza operar ni cierra la validación perceptual.
+
 ### Fase A.5 — Integraciones headless
 
 Línea A arquitectónicamente completa permanece cerrada. A.5 incorpora
