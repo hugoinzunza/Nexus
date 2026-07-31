@@ -223,6 +223,14 @@ documentados directamente en su PID; TIDAL recibe `AXPress` sobre botones con
 nombre estable. Play/pausa se reconcilian por lectura. No se añadió factory
 productiva, LaunchAgent ni control remoto.
 
+Qobuz y TIDAL no publican bytes de carátula en Accesibilidad. Para esos dos
+proveedores, el modo local puede consultar MusicBrainz y Cover Art Archive con
+una coincidencia conservadora de canción y artista. El álbum debe coincidir o
+existir un único release group inequívoco. La imagen se valida, se limita a 5 MB,
+se conserva en una caché de memoria acotada y se sirve desde el endpoint
+autenticado de NexUX. Un timeout, una ambigüedad o una imagen inválida mantienen
+el placeholder; nunca degradan el reproductor.
+
 VAL-0023 debe comprobar en el Arzopa que pista, proveedor y controles se
 reconocen sin competir con Atención del Bot. La aprobación técnica no autoriza
 factories ni cierra la validación perceptual.

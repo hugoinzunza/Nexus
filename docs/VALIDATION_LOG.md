@@ -943,7 +943,11 @@ expuso el árbol del reproductor.
 
 **APROBADO técnicamente en local** para lectura y control. **PENDIENTE
 perceptualmente** en el Arzopa. La carátula de Qobuz/TIDAL sigue usando el
-placeholder porque Accesibilidad no entrega bytes de imagen confiables.
+placeholder cuando MusicBrainz/Cover Art Archive no ofrecen una coincidencia
+inequívoca. La búsqueda externa exige canción y artista exactos, valida el álbum
+cuando está disponible, respeta el límite de una consulta por segundo, limita
+la imagen a 5 MB y la sirve desde NexUX. Esta capa es opcional: sus fallos no
+degradan lectura ni controles.
 
 ---
 

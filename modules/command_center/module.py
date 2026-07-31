@@ -22,6 +22,7 @@ from .ai_context import AiContextService
 from .apple_music_adapter import AppleMusicAdapter
 from .bot_context import BotContextService
 from .event_bus import InMemoryEventBus
+from .external_artwork import ExternalArtworkResolver
 from .gateway import CommandCenterGateway
 from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION, MediaAction
 from .media_surface import MediaCommandsDisabled, MediaSurfaceService
@@ -69,6 +70,9 @@ class CommandCenterModule(NexusModule):
         self._local_media_enabled = os.environ.get(
             "NEXUX_COMMAND_CENTER_MEDIA"
         ) in {"apple-music", "local"}
+        self._external_artwork = (
+            ExternalArtworkResolver() if self._local_media_enabled else None
+        )
         self._apple_music = (
             AppleMusicAdapter() if self._local_media_enabled else None
         )
@@ -115,6 +119,16 @@ class CommandCenterModule(NexusModule):
             result["artwork_url"] = (
                 "/m/command-center/api/media-artwork?v=" + version
             )
+        elif provider in {"qobuz", "tidal"} and self._external_artwork:
+            artwork_url = self._external_artwork.resolve(
+                provider=provider,
+                item_ref=item_ref,
+                track=str(result.get("track") or ""),
+                artist=str(result.get("artist") or ""),
+                album=str(result.get("album") or "") or None,
+            )
+            if artwork_url:
+                result["artwork_url"] = artwork_url
         result.pop("item_ref", None)
         return result
 
@@ -237,7 +251,26 @@ class CommandCenterModule(NexusModule):
                     ),
                 )
         if subpath == "media-artwork":
-            if self._apple_music is None:
+            provider = query.get("provider", "apple-music")
+            if provider in {"qobuz", "tidal"}:
+                resolver = getattr(self, "_external_artwork", None)
+                artwork = (
+                    resolver.artwork(provider, query.get("v", ""))
+                    if resolver is not None
+                    else None
+                )
+                if artwork is not None:
+                    data, content_type = artwork
+                    return 200, content_type, data
+                return self._json(
+                    404,
+                    error_document(
+                        "media-artwork.unavailable",
+                        "No existe una caratula externa validada.",
+                        404,
+                    ),
+                )
+            if provider != "apple-music" or self._apple_music is None:
                 return self._json(
                     404,
                     error_document(
