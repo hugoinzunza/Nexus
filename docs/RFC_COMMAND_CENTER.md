@@ -133,10 +133,16 @@ no borra el contexto anterior: conserva el timestamp y cambia la frescura. Los
 lectura antigua nunca se presenta como live. La API es autenticada, read-only y
 queda fuera del Wire ABI congelado.
 
-Seleccionar un referente actualiza el gráfico integrado. Como el widget público
-no ofrece mutación runtime, el cliente destruye y remonta serialmente el
-`TradingViewWidgetAdapter`; no simula `set_symbol`. El enlace `Análisis completo`
-apunta al mismo símbolo dentro del TradingView autenticado.
+La selección distingue dos destinos. BTC, ETH, SOL y XRP actualizan el gráfico
+integrado con el perpetuo exacto de Binance disponible en TradingView. SPX, VIX,
+DXY y TOTAL conservan precio y variación en la banda, pero nunca intentan montar
+un gráfico público incompatible: el clic abre directamente el símbolo exacto en
+una pestaña nueva del TradingView autenticado del usuario. No se usan CFDs proxy,
+gráficos aproximados ni extracción de una sesión privada.
+
+El enlace `Análisis completo` comparte la misma construcción de URL. La sesión
+pertenece al navegador; NexUX no recibe cookies, layouts ni credenciales de
+TradingView.
 
 VAL-0020 debe comprobar en el Arzopa que ocho referentes se entiendan sin lectura
 secuencial, que la banda no compita con el gráfico y que la frescura sea

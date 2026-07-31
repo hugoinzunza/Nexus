@@ -192,7 +192,9 @@ class MarketRibbonService:
             "symbol": symbol,
             "chart_symbol": symbol,
             "tv_symbol": tv_symbol,
+            "chart_mode": "external_only",
             "price": price,
+            "price_decimals": max(0, min(8, int(meta.get("priceHint", 2)))),
             "change_pct": _change_percent(price, previous),
             "observed_at_ms": int(meta["regularMarketTime"]) * 1000,
             "source": "Yahoo Finance",
@@ -208,7 +210,9 @@ class MarketRibbonService:
                 "symbol": "TOTAL",
                 "chart_symbol": "TOTAL",
                 "tv_symbol": "CRYPTOCAP:TOTAL",
+                "chart_mode": "external_only",
                 "price": float(data["total_market_cap"]["usd"]),
+                "price_decimals": 2,
                 "change_pct": round(
                     float(data["market_cap_change_percentage_24h_usd"]),
                     3,
@@ -231,13 +235,22 @@ class MarketRibbonService:
         rows = []
         for asset_id, symbol, provider_symbol, tv_symbol in _FUTURES_ASSETS:
             row = by_symbol[provider_symbol]
+            raw_price = str(row["lastPrice"])
+            decimals = (
+                len(raw_price.rstrip("0").split(".", 1)[1])
+                if "." in raw_price
+                and raw_price.rstrip("0").split(".", 1)[1]
+                else 0
+            )
             rows.append(
                 {
                     "id": asset_id,
                     "symbol": symbol,
                     "chart_symbol": provider_symbol,
                     "tv_symbol": tv_symbol,
+                    "chart_mode": "tradingview",
                     "price": float(row["lastPrice"]),
+                    "price_decimals": max(0, min(8, decimals)),
                     "change_pct": round(float(row["priceChangePercent"]), 3),
                     "observed_at_ms": int(row["closeTime"]),
                     "source": "Binance Futures",
@@ -270,7 +283,11 @@ class MarketRibbonService:
             "symbol": symbol,
             "chart_symbol": chart_symbol,
             "tv_symbol": tv_symbol,
+            "chart_mode": "external_only"
+            if kind in {"index", "aggregate"}
+            else "tradingview",
             "price": None,
+            "price_decimals": 2,
             "change_pct": None,
             "observed_at_ms": None,
             "source": None,

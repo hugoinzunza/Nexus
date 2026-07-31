@@ -122,9 +122,13 @@ filas de la shell. Distribuye ocho referentes en columnas estables para que
 precio, variación y selección no provoquen movimiento del layout.
 
 La variación usa texto con signo y color semántico. La frescura usa un punto de
-8 px con nombre accesible y tooltip que conserva fuente y timestamp; el color no
+9 px con nombre accesible y tooltip que conserva fuente y timestamp; el color no
 es la única representación disponible. La selección activa usa `--info` y no
 altera la jerarquía de alertas del panel operacional.
+
+Símbolo y variación usan 13 px; precio usa 16 px. Las cápsulas externas no
+adoptan estado seleccionado: su hover indica que abren una superficie nueva y
+el gráfico integrado permanece en el último perpetuo elegido.
 
 En el Arzopa objetivo los ocho referentes ocupan una sola fila. Los breakpoints
 de cuatro y dos columnas son únicamente adaptaciones funcionales para viewports

@@ -177,7 +177,11 @@ export function normalizeMarketRibbon(payload) {
       symbol: String(source.symbol || id.toUpperCase()),
       chartSymbol: String(source.chart_symbol || ""),
       tvSymbol: String(source.tv_symbol || ""),
+      chartMode: String(source.chart_mode || "tradingview"),
       price: Number.isFinite(price) ? price : null,
+      priceDecimals: Number.isInteger(Number(source.price_decimals))
+        ? Math.max(0, Math.min(8, Number(source.price_decimals)))
+        : 2,
       changePct: Number.isFinite(change) ? change : null,
       observedAt: Number.isFinite(Number(source.observed_at_ms))
         ? Number(source.observed_at_ms)
@@ -196,12 +200,12 @@ export function formatMarketPrice(asset) {
   if (asset.kind === "aggregate") {
     return `$${(asset.price / 1e12).toFixed(2)}T`;
   }
-  const magnitude = Math.abs(asset.price);
-  const maximumFractionDigits =
-    magnitude >= 1000 ? 0 : magnitude >= 10 ? 2 : 4;
+  const digits = Number.isInteger(asset.priceDecimals)
+    ? asset.priceDecimals
+    : 2;
   return new Intl.NumberFormat("es-CL", {
-    maximumFractionDigits,
-    minimumFractionDigits: magnitude < 10 ? 2 : 0,
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
   }).format(asset.price);
 }
 
@@ -1060,11 +1064,19 @@ function renderMarketRibbon(state) {
       button.className = "market-asset";
       button.type = "button";
       button.dataset.assetId = asset.id;
+      button.dataset.destination =
+        asset.chartMode === "external_only" ? "tradingview" : "embedded";
       button.setAttribute(
         "aria-pressed",
-        String(asset.id === selectedMarketAssetId),
+        String(
+          asset.chartMode !== "external_only" &&
+          asset.id === selectedMarketAssetId,
+        ),
       );
       button.title = [
+        asset.chartMode === "external_only"
+          ? "Abrir análisis completo en TradingView"
+          : "Mostrar gráfico en Command Center",
         asset.source || "Fuente no disponible",
         FRESHNESS_LABELS[asset.freshness],
         asset.observedAt
@@ -1090,18 +1102,39 @@ function renderMarketRibbon(state) {
       change.dataset.direction = marketChangeDirection(asset.changePct);
       change.textContent = formatMarketChange(asset.changePct);
       button.append(symbol, freshness, price, change);
-      button.addEventListener("click", () => selectMarketAsset(asset));
+      button.addEventListener("click", () => {
+        if (asset.chartMode === "external_only") {
+          openTradingViewAnalysis(asset);
+        } else {
+          selectMarketAsset(asset);
+        }
+      });
       return button;
     }),
   );
+}
+
+export function tradingViewAnalysisUrl(asset) {
+  return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(
+    asset.tvSymbol,
+  )}`;
+}
+
+export function openTradingViewAnalysis(asset) {
+  if (!asset?.tvSymbol) return false;
+  window.open(
+    tradingViewAnalysisUrl(asset),
+    "_blank",
+    "noopener,noreferrer",
+  );
+  return true;
 }
 
 function setChartLabels(asset) {
   document.querySelector("#market-symbol-title").textContent = asset.symbol;
   document.querySelector("#market-interval-title").textContent = "· 1H";
   const fullAnalysis = document.querySelector("#full-analysis-link");
-  fullAnalysis.href =
-    `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(asset.tvSymbol)}`;
+  fullAnalysis.href = tradingViewAnalysisUrl(asset);
 }
 
 async function remountChart(asset) {
@@ -1145,6 +1178,9 @@ async function remountChart(asset) {
 
 export function selectMarketAsset(asset) {
   if (!asset?.chartSymbol || !asset?.tvSymbol) return Promise.resolve(false);
+  if (asset.chartMode === "external_only") {
+    return Promise.resolve(openTradingViewAnalysis(asset));
+  }
   selectedMarketAssetId = asset.id;
   if (lastMarketRibbonState) renderMarketRibbon(lastMarketRibbonState);
   document

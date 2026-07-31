@@ -30,6 +30,7 @@ def _provider_payload(url: str):
                             "regularMarketPrice": price,
                             "chartPreviousClose": previous,
                             "regularMarketTime": NOW // 1000,
+                            "priceHint": 2,
                         }
                     }
                 ]
@@ -83,6 +84,9 @@ def test_agregador_publica_los_ocho_activos_en_orden_y_con_timestamp() -> None:
     assert all(row["observed_at_ms"] == NOW for row in snapshot["assets"])
     assert all(row["freshness"] == "live" for row in snapshot["assets"])
     assert snapshot["assets"][0]["change_pct"] == 1.01
+    assert snapshot["assets"][0]["chart_mode"] == "external_only"
+    assert snapshot["assets"][3]["chart_mode"] == "external_only"
+    assert snapshot["assets"][4]["chart_mode"] == "tradingview"
     assert snapshot["assets"][3]["source"] == "CoinGecko"
     assert snapshot["assets"][4]["source"] == "Binance Futures"
 
@@ -151,14 +155,20 @@ def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:
                tv_symbol: "BINANCE:BTCUSDT.P", price: 70000,
                change_pct: 1.2, freshness: "live", kind: "futures" }},
             {{ id: "spx", symbol: "SPX", chart_symbol: "SPX",
-               tv_symbol: "SP:SPX", price: null,
+               tv_symbol: "SP:SPX", chart_mode: "external_only",
+               price_decimals: 2, price: null,
                change_pct: null, freshness: "invented", kind: "index" }}
           ]
         }});
         process.stdout.write(JSON.stringify({{
           ids: rows.map((row) => row.id),
           spx: rows[0],
-          btcPrice: module.formatMarketPrice(rows[4])
+          btcPrice: module.formatMarketPrice(rows[4]),
+          exactIndex: module.formatMarketPrice({{
+            price: 7437.63, priceDecimals: 2, kind: "index"
+          }}),
+          spxMode: rows[0].chartMode,
+          spxUrl: module.tradingViewAnalysisUrl(rows[0])
         }}));
       }});
     """
@@ -183,6 +193,9 @@ def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:
     assert payload["spx"]["price"] is None
     assert payload["spx"]["freshness"] == "unknown"
     assert payload["btcPrice"] != "--"
+    assert payload["exactIndex"].endswith("437,63")
+    assert payload["spxMode"] == "external_only"
+    assert payload["spxUrl"].endswith("symbol=SP%3ASPX")
 
 
 def test_b4_reutiliza_banda_superior_y_seleccion_remonta_chart_provider() -> None:
@@ -200,7 +213,11 @@ def test_b4_reutiliza_banda_superior_y_seleccion_remonta_chart_provider() -> Non
     assert "activeChartAdapter.destroy()" in script
     assert "method: \"POST\"" not in script
     for symbol in ("SP:SPX", "TVC:VIX", "TVC:DXY", "CRYPTOCAP:TOTAL"):
-        assert symbol in adapter
+        assert symbol not in adapter
+    assert "openTradingViewAnalysis(asset)" in script
+    assert 'button.dataset.destination' in script
+    assert 'asset.chartMode === "external_only"' in script
+    assert "font-size: var(--font-md);" in css
 
 
 def test_b4_documenta_val_0020_sin_cerrar_val_0019() -> None:
