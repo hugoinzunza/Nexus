@@ -283,39 +283,11 @@ a:focus-visible {
   opacity: 0.65;
 }
 
-.current-only-chart {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  place-content: center;
-  justify-items: center;
-  gap: 10px;
-  background:
-    linear-gradient(rgba(139, 158, 176, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(139, 158, 176, 0.08) 1px, transparent 1px),
-    #11171d;
-  background-size: 64px 64px;
-  color: var(--text-2);
-  text-align: center;
-}
-
-.current-only-chart strong {
-  color: var(--info);
-  font-size: 32px;
-  font-variant-numeric: tabular-nums;
-}
-
-.current-only-chart small {
-  max-width: 430px;
-  color: var(--text-3);
-  font-size: var(--font-sm);
-}
-
 .market-symbol {
   overflow: hidden;
   align-self: end;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 760;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -323,8 +295,8 @@ a:focus-visible {
 
 .market-freshness {
   align-self: center;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--unknown);
 }
@@ -345,7 +317,7 @@ a:focus-visible {
 .market-price {
   overflow: hidden;
   align-self: start;
-  font-size: var(--font-md);
+  font-size: var(--font-sm);
   font-variant-numeric: tabular-nums;
   font-weight: 720;
   text-overflow: ellipsis;
@@ -355,7 +327,7 @@ a:focus-visible {
 .market-change {
   align-self: start;
   color: var(--unknown);
-  font-size: 13px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   font-weight: 720;
 }

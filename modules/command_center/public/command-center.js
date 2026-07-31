@@ -7,7 +7,6 @@ export const CONTRACT_FINGERPRINT =
 const SNAPSHOT_URL = "/m/command-center/api/snapshot";
 const MACRO_URL = "/m/trading/api/dashboard?translate=0";
 const MARKET_RIBBON_URL = "/m/command-center/api/market-ribbon";
-const MARKET_HISTORY_URL = "/m/command-center/api/market-history";
 const HEALTH_URL = "/health";
 const WS_PATH = "/m/command-center/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 15000];
@@ -178,12 +177,7 @@ export function normalizeMarketRibbon(payload) {
       symbol: String(source.symbol || id.toUpperCase()),
       chartSymbol: String(source.chart_symbol || ""),
       tvSymbol: String(source.tv_symbol || ""),
-      chartProxy: source.chart_proxy === true,
-      chartMode: String(source.chart_mode || "tradingview"),
       price: Number.isFinite(price) ? price : null,
-      priceDecimals: Number.isInteger(Number(source.price_decimals))
-        ? Math.max(0, Math.min(8, Number(source.price_decimals)))
-        : 2,
       changePct: Number.isFinite(change) ? change : null,
       observedAt: Number.isFinite(Number(source.observed_at_ms))
         ? Number(source.observed_at_ms)
@@ -202,12 +196,12 @@ export function formatMarketPrice(asset) {
   if (asset.kind === "aggregate") {
     return `$${(asset.price / 1e12).toFixed(2)}T`;
   }
-  const digits = Number.isInteger(asset.priceDecimals)
-    ? asset.priceDecimals
-    : 2;
+  const magnitude = Math.abs(asset.price);
+  const maximumFractionDigits =
+    magnitude >= 1000 ? 0 : magnitude >= 10 ? 2 : 4;
   return new Intl.NumberFormat("es-CL", {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: digits,
+    maximumFractionDigits,
+    minimumFractionDigits: magnitude < 10 ? 2 : 0,
   }).format(asset.price);
 }
 
@@ -838,9 +832,9 @@ function fixtureMacroState() {
 function fixtureMarketRibbonState() {
   const now = Date.now();
   const definitions = [
-    ["spx", "SPX", "SPX_PROXY", "SP:SPX", 7437.63, 0.396, "index", true],
-    ["vix", "VIX", "VIX_PROXY", "TVC:VIX", 17.09, -8.019, "index", true],
-    ["dxy", "DXY", "DXY_PROXY", "TVC:DXY", 100.225, -1.266, "index", true],
+    ["spx", "SPX", "SPX", "SP:SPX", 7437.63, 0.396, "index"],
+    ["vix", "VIX", "VIX", "TVC:VIX", 17.09, -8.019, "index"],
+    ["dxy", "DXY", "DXY", "TVC:DXY", 100.225, -1.266, "index"],
     ["total", "TOTAL", "TOTAL", "CRYPTOCAP:TOTAL", 2.28e12, 0.37, "aggregate"],
     ["btcusdt", "BTCUSDT.P", "BTCUSDT", "BINANCE:BTCUSDT.P", 64375, 0.204, "futures"],
     ["ethusdt", "ETHUSDT.P", "ETHUSDT", "BINANCE:ETHUSDT.P", 3318.2, 0.86, "futures"],
@@ -852,16 +846,7 @@ function fixtureMarketRibbonState() {
     generatedAt: now,
     error: null,
     assets: definitions.map(
-      ([
-        id,
-        symbol,
-        chartSymbol,
-        tvSymbol,
-        price,
-        changePct,
-        kind,
-        chartProxy = false,
-      ]) => ({
+      ([id, symbol, chartSymbol, tvSymbol, price, changePct, kind]) => ({
         id,
         symbol,
         chartSymbol,
@@ -877,7 +862,6 @@ function fixtureMarketRibbonState() {
               ? "CoinGecko"
               : "Binance Futures",
         kind,
-        chartProxy,
       }),
     ),
   };
@@ -1055,8 +1039,6 @@ const FRESHNESS_LABELS = {
 let selectedMarketAssetId = "btcusdt";
 let lastMarketRibbonState = null;
 let activeChartAdapter = null;
-let activeChartAssetId = null;
-let activeChartMode = null;
 let chartQueue = Promise.resolve();
 
 function marketChangeDirection(change) {
@@ -1112,172 +1094,14 @@ function renderMarketRibbon(state) {
       return button;
     }),
   );
-  const selected = state.assets.find(
-    (asset) => asset.id === selectedMarketAssetId,
-  );
-  if (
-    selected &&
-    activeChartAssetId === selected.id &&
-    activeChartAdapter?.updatePrice
-  ) {
-    activeChartAdapter.updatePrice(selected.price);
-  }
 }
 
 function setChartLabels(asset) {
   document.querySelector("#market-symbol-title").textContent = asset.symbol;
   document.querySelector("#market-interval-title").textContent = "· 1H";
   const fullAnalysis = document.querySelector("#full-analysis-link");
-  document.querySelector("#chart-source-label").textContent =
-    asset.chartMode === "same_source"
-      ? `${asset.source} · precio y velas`
-      : asset.chartMode === "current_only"
-        ? `${asset.source} · lectura actual`
-      : "TradingView · contexto";
   fullAnalysis.href =
     `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(asset.tvSymbol)}`;
-}
-
-class SameSourceMarketChart {
-  constructor() {
-    this.chart = null;
-    this.series = null;
-    this.container = null;
-    this.lastCandle = null;
-    this.valueElement = null;
-    this.startedAt = null;
-  }
-
-  async mount(container, asset) {
-    if (!window.LightweightCharts) {
-      throw new Error("lightweight-charts.unavailable");
-    }
-    this.startedAt = performance.now();
-    const response = await fetch(
-      `${MARKET_HISTORY_URL}?asset=${encodeURIComponent(asset.id)}`,
-      { headers: { Accept: "application/json" }, cache: "no-store" },
-    );
-    if (!response.ok) throw new Error(`market-history.http-${response.status}`);
-    const payload = await response.json();
-    const hasCandles =
-      Array.isArray(payload.candles) && payload.candles.length;
-    const hasPoints = Array.isArray(payload.points) && payload.points.length;
-    if (!hasCandles && !hasPoints) {
-      throw new Error("market-history.empty");
-    }
-    this.container = container;
-    container.replaceChildren();
-    if (asset.chartMode === "current_only") {
-      const panel = document.createElement("div");
-      panel.className = "current-only-chart";
-      panel.innerHTML =
-        "<span>Capitalización cripto global</span>" +
-        `<strong>${formatMarketPrice(asset)}</strong>` +
-        "<small>CoinGecko no incluye el histórico global en su plan gratuito.</small>";
-      container.appendChild(panel);
-      this.valueElement = panel.querySelector("strong");
-      this.lastCandle = { ...payload.points.at(-1) };
-      return {
-        providerId: "coingecko-current",
-        mountedAtMs: Date.now(),
-        latencyMs: Math.round(performance.now() - this.startedAt),
-      };
-    }
-    const LC = window.LightweightCharts;
-    this.chart = LC.createChart(container, {
-      autoSize: true,
-      layout: {
-        background: { color: "#11171d" },
-        textColor: "#aeb9c5",
-        fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
-        attributionLogo: false,
-      },
-      grid: {
-        vertLines: { color: "rgba(139, 158, 176, 0.08)" },
-        horzLines: { color: "rgba(139, 158, 176, 0.08)" },
-      },
-      rightPriceScale: { borderColor: "rgba(139, 158, 176, 0.24)" },
-      timeScale: {
-        borderColor: "rgba(139, 158, 176, 0.24)",
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      localization: { locale: "es-CL" },
-    });
-    if (hasCandles) {
-      this.series = this.chart.addSeries(LC.CandlestickSeries, {
-        upColor: "#27c59a",
-        downColor: "#f06a7a",
-        borderVisible: false,
-        wickUpColor: "#27c59a",
-        wickDownColor: "#f06a7a",
-        priceLineVisible: true,
-        lastValueVisible: true,
-        priceFormat: {
-          type: "price",
-          precision: asset.priceDecimals,
-          minMove: 10 ** -asset.priceDecimals,
-        },
-      });
-      this.series.setData(payload.candles);
-      this.lastCandle = { ...payload.candles.at(-1) };
-    } else {
-      this.series = this.chart.addSeries(LC.AreaSeries, {
-        lineColor: "#55c9e8",
-        topColor: "rgba(85, 201, 232, 0.28)",
-        bottomColor: "rgba(85, 201, 232, 0.02)",
-        priceLineVisible: true,
-        lastValueVisible: true,
-        priceFormat: {
-          type: "price",
-          precision: 0,
-          minMove: 1,
-        },
-      });
-      this.series.setData(payload.points);
-      this.lastCandle = { ...payload.points.at(-1) };
-    }
-    this.updatePrice(asset.price);
-    this.chart.timeScale().fitContent();
-    return {
-      providerId: "yahoo-same-source",
-      mountedAtMs: Date.now(),
-      latencyMs: Math.round(performance.now() - this.startedAt),
-    };
-  }
-
-  updatePrice(price) {
-    if (!this.lastCandle || !Number.isFinite(price)) return;
-    if (this.valueElement) {
-      this.lastCandle = { ...this.lastCandle, value: price };
-      this.valueElement.textContent = formatMarketPrice({
-        price,
-        priceDecimals: 2,
-        kind: "aggregate",
-      });
-      return;
-    }
-    if (!this.series) return;
-    this.lastCandle = "value" in this.lastCandle
-      ? { ...this.lastCandle, value: price }
-      : {
-          ...this.lastCandle,
-          high: Math.max(this.lastCandle.high, price),
-          low: Math.min(this.lastCandle.low, price),
-          close: price,
-        };
-    this.series.update(this.lastCandle);
-  }
-
-  async destroy() {
-    this.chart?.remove();
-    this.chart = null;
-    this.series = null;
-    this.lastCandle = null;
-    this.valueElement = null;
-    this.container?.replaceChildren();
-    this.container = null;
-  }
 }
 
 async function remountChart(asset) {
@@ -1293,43 +1117,24 @@ async function remountChart(asset) {
     return;
   }
   if (activeChartAdapter) await activeChartAdapter.destroy();
-  activeChartAssetId = null;
-  activeChartMode = null;
   target.innerHTML =
     '<div class="chart-placeholder"><span>TradingView</span>' +
     `<small>Montando ${asset.symbol}</small></div>`;
-  const sameSource = ["same_source", "current_only"].includes(
-    asset.chartMode,
-  );
-  const adapter = sameSource
-    ? new SameSourceMarketChart()
-    : new TradingViewWidgetAdapter();
+  const adapter = new TradingViewWidgetAdapter();
   activeChartAdapter = adapter;
   window.__nexuxCommandCenterChart = adapter;
   try {
-    let latency;
-    if (sameSource) {
-      const session = await adapter.mount(target, asset);
-      latency = session.latencyMs;
-    } else {
-      await adapter.mount(target, {
-        targetRef: "command-center:market",
-        symbol: asset.chartSymbol,
-        interval: "1h",
-        themeRef: "dark",
-      });
-      latency = adapter.stats().lastMountLatencyMs;
-    }
+    await adapter.mount(target, {
+      targetRef: "command-center:market",
+      symbol: asset.chartSymbol,
+      interval: "1h",
+      themeRef: "dark",
+    });
+    const stats = adapter.stats();
     document.querySelector("#chart-health").textContent =
-      asset.chartMode === "current_only"
-        ? "Lectura exacta · histórico no incluido"
-        : sameSource
-          ? "Precio y velas coinciden"
-          : "Proveedor disponible";
+      "Proveedor disponible";
     document.querySelector("#chart-latency").textContent =
-      `Montaje ${latency} ms`;
-    activeChartAssetId = asset.id;
-    activeChartMode = asset.chartMode;
+      `Montaje ${stats.lastMountLatencyMs} ms`;
   } catch (error) {
     document.querySelector("#chart-health").textContent =
       "Proveedor degradado";
@@ -1380,16 +1185,15 @@ export function bootstrap() {
   updateViewport();
   startClock();
   window.addEventListener("resize", updateViewport);
+  remountChart({
+    id: "btcusdt",
+    symbol: "BTCUSDT.P",
+    chartSymbol: "BTCUSDT",
+    tvSymbol: "BINANCE:BTCUSDT.P",
+  });
 
   const fixture = new URLSearchParams(location.search).get("fixture");
   if (FIXTURE_STATES.has(fixture)) {
-    remountChart({
-      id: "btcusdt",
-      symbol: "BTCUSDT.P",
-      chartSymbol: "BTCUSDT",
-      tvSymbol: "BINANCE:BTCUSDT.P",
-      chartMode: "tradingview",
-    });
     const origin = document.querySelector("#data-origin");
     origin.textContent = "Fixture contractual";
     origin.classList.add("fixture");
@@ -1433,21 +1237,7 @@ export function bootstrap() {
   });
   const macroClient = new MacroContextClient({ onChange: renderMacro });
   const marketRibbonClient = new MarketRibbonClient({
-    onChange: (state) => {
-      renderMarketRibbon(state);
-      const selected = state.assets.find(
-        (asset) => asset.id === selectedMarketAssetId,
-      );
-      if (
-        selected &&
-        (
-          activeChartAssetId !== selected.id ||
-          activeChartMode !== selected.chartMode
-        )
-      ) {
-        selectMarketAsset(selected).catch(() => {});
-      }
-    },
+    onChange: renderMarketRibbon,
   });
   const healthClient = new OperationalHealthClient({
     onChange: (state) => {

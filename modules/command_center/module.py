@@ -100,35 +100,6 @@ class CommandCenterModule(NexusModule):
                         retryable=True,
                     ),
                 )
-        if subpath == "market-history":
-            try:
-                return self._json(
-                    200,
-                    self.market_ribbon.history(str(query.get("asset", ""))),
-                )
-            except KeyError:
-                return self._json(
-                    400,
-                    error_document(
-                        "market-history.asset-invalid",
-                        "El activo no posee historia del mismo proveedor.",
-                        400,
-                    ),
-                )
-            except Exception as exc:  # noqa: BLE001
-                self.context.log(
-                    "command-center: market history fallo "
-                    f"({type(exc).__name__})"
-                )
-                return self._json(
-                    502,
-                    error_document(
-                        "market-history.unavailable",
-                        "No fue posible obtener la historia de mercado.",
-                        502,
-                        retryable=True,
-                    ),
-                )
         if subpath != "snapshot":
             return self._json(
                 404,

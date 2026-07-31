@@ -186,6 +186,9 @@ export class TradingViewWidgetAdapter {
 
   #buildConfig(options = {}) {
     const symbolMap = {
+      SPX: "SP:SPX",
+      VIX: "TVC:VIX",
+      DXY: "TVC:DXY",
       TOTAL: "CRYPTOCAP:TOTAL",
       BTCUSDT: "BINANCE:BTCUSDT.P",
       ETHUSDT: "BINANCE:ETHUSDT.P",
