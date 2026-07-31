@@ -933,6 +933,10 @@ expuso el árbol del reproductor.
 - El agente multimedia permanece vivo y serializa lecturas y comandos. Así
   conserva el contexto AX entre solicitudes HTTP y funciona con varias pestañas
   sin compartir objetos `asyncio` entre event loops distintos.
+- Command Center consulta los tres proveedores como un único estado automático.
+  Una transición nueva a `playing` cambia selector, pista, artista y carátula al
+  proveedor que comenzó a sonar; si ninguno reproduce conserva la selección
+  manual. Las pestañas ocultas no generan sondeos multimedia periódicos.
 - TIDAL `2.43.0`: lectura real de pista, artista, playlist/álbum, progreso y
   estado. Los botones accesibles `Pausar`, `Reproducir`, `Anterior` y `Siguiente`
   se operan mediante `AXPress`. Pausa y reproducción fueron reconciliadas.

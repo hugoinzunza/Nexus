@@ -495,13 +495,22 @@ export class MediaContextClient {
     this.feedback = null;
     this.busy = false;
     this.refreshTimer = null;
+    this.autoRefreshBusy = false;
+    this.refreshSequence = 0;
   }
 
   async start() {
-    await this.refresh();
+    await this.refresh({ detectActive: true });
     this.refreshTimer = setInterval(() => {
-      this.refresh().catch(() => {});
-    }, 15_000);
+      if (document.visibilityState === "hidden") return;
+      if (this.autoRefreshBusy) return;
+      this.autoRefreshBusy = true;
+      this.refresh({ detectActive: true })
+        .catch(() => {})
+        .finally(() => {
+          this.autoRefreshBusy = false;
+        });
+    }, 5_000);
   }
 
   stop() {
@@ -509,18 +518,30 @@ export class MediaContextClient {
     this.refreshTimer = null;
   }
 
-  async refresh() {
+  async refresh({ detectActive = false } = {}) {
+    const sequence = ++this.refreshSequence;
     try {
       const url = new URL(this.contextUrl, location.origin);
-      url.searchParams.set("provider", this.provider);
+      url.searchParams.set("provider", detectActive ? "auto" : this.provider);
+      if (detectActive) url.searchParams.set("preferred", this.provider);
       const response = await this.fetcher(url, {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
       if (!response.ok) throw new Error(`media context HTTP ${response.status}`);
-      this.context = normalizeMediaContext(await response.json());
+      const nextContext = normalizeMediaContext(await response.json());
+      if (sequence !== this.refreshSequence) return;
+      if (detectActive && nextContext.selectedProvider !== this.provider) {
+        this.provider = nextContext.selectedProvider;
+        this.feedback = null;
+      }
+      this.context = nextContext;
     } catch {
-      this.context = normalizeMediaContext({ lifecycle: "degraded" });
+      if (sequence !== this.refreshSequence) return;
+      this.context = normalizeMediaContext({
+        lifecycle: "degraded",
+        selected_provider: this.provider,
+      });
     }
     this.onChange({ ...this.context, feedback: this.feedback, busy: this.busy });
   }

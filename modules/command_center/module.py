@@ -7,6 +7,7 @@ import copy
 import hashlib
 import json
 import os
+import threading
 
 from core.hub import load_config
 from core.module_base import NexusModule
@@ -83,6 +84,11 @@ class CommandCenterModule(NexusModule):
         }
         self._qobuz = controllers["qobuz"]
         self._tidal = controllers["tidal"]
+        self._media_selection_lock = threading.Lock()
+        self._media_last_playback = {
+            provider: "unknown" for provider in _MEDIA_PROVIDERS
+        }
+        self._active_media_provider: str | None = None
         self.media_surfaces = {
             provider: MediaSurfaceService(
                 controller,
@@ -139,6 +145,62 @@ class CommandCenterModule(NexusModule):
         if provider == "apple-music":
             return getattr(self, "media_surface", None)
         return None
+
+    async def _automatic_media_snapshot(self, preferred: str) -> dict:
+        snapshots = await asyncio.gather(
+            *(self.media_surfaces[provider].snapshot() for provider in _MEDIA_PROVIDERS),
+            return_exceptions=True,
+        )
+        available = {
+            provider: snapshot
+            for provider, snapshot in zip(_MEDIA_PROVIDERS, snapshots)
+            if isinstance(snapshot, dict)
+        }
+        if not available:
+            raise RuntimeError("no media provider available")
+
+        lock = getattr(self, "_media_selection_lock", None)
+        if lock is None:
+            lock = threading.Lock()
+            self._media_selection_lock = lock
+        with lock:
+            previous = getattr(self, "_media_last_playback", {})
+            playing = [
+                provider
+                for provider, snapshot in available.items()
+                if snapshot.get("playback") == "playing"
+            ]
+            transitions = [
+                provider
+                for provider in playing
+                if previous.get(provider) != "playing"
+            ]
+            active = getattr(self, "_active_media_provider", None)
+            if transitions:
+                selected = (
+                    preferred if preferred in transitions else transitions[-1]
+                )
+            elif active in playing:
+                selected = active
+            elif preferred in playing:
+                selected = preferred
+            elif playing:
+                selected = playing[0]
+            elif preferred in available:
+                selected = preferred
+            else:
+                selected = next(iter(available))
+            self._media_last_playback = {
+                provider: snapshot.get("playback", "unknown")
+                for provider, snapshot in available.items()
+            }
+            self._active_media_provider = selected if selected in playing else None
+
+        result = dict(available[selected])
+        result["selected_provider"] = selected
+        result["available_providers"] = list(_MEDIA_PROVIDERS)
+        result["selection_mode"] = "automatic"
+        return result
 
     @staticmethod
     def _ai_enabled() -> bool:
@@ -314,6 +376,31 @@ class CommandCenterModule(NexusModule):
                 )
         if subpath == "media-context":
             provider = query.get("provider", "apple-music")
+            if provider == "auto":
+                preferred = query.get("preferred", "apple-music")
+                if preferred not in _MEDIA_PROVIDERS:
+                    preferred = "apple-music"
+                try:
+                    return self._json(
+                        200,
+                        asyncio.run(
+                            self._automatic_media_snapshot(preferred)
+                        ),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self.context.log(
+                        "command-center: seleccion multimedia fallo "
+                        f"({type(exc).__name__})"
+                    )
+                    return self._json(
+                        502,
+                        error_document(
+                            "media-context.unavailable",
+                            "No fue posible detectar el reproductor activo.",
+                            502,
+                            retryable=True,
+                        ),
+                    )
             surface = self._media_surface_for(provider)
             if surface is None:
                 return self._json(

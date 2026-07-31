@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -342,6 +343,110 @@ def test_selector_lee_cada_proveedor_sin_cambiar_estado_global() -> None:
 
     assert json.loads(qobuz[2])["selected_provider"] == "qobuz"
     assert json.loads(tidal[2])["selected_provider"] == "tidal"
+
+
+def test_selector_automatico_sigue_nueva_reproduccion_y_su_caratula() -> None:
+    class Surface:
+        def __init__(self, provider, playback, artwork_url=None):
+            self.provider = provider
+            self.playback = playback
+            self.artwork_url = artwork_url
+
+        async def snapshot(self):
+            return {
+                "provider": self.provider,
+                "lifecycle": "ready",
+                "playback": self.playback,
+                "track": f"track-{self.provider}",
+                "artist": f"artist-{self.provider}",
+                "artwork_url": self.artwork_url,
+            }
+
+    module = object.__new__(CommandCenterModule)
+    module.context = type("Context", (), {"log": lambda *_args: None})()
+    module._media_selection_lock = threading.Lock()
+    module._media_last_playback = {
+        "apple-music": "unknown",
+        "qobuz": "unknown",
+        "tidal": "unknown",
+    }
+    module._active_media_provider = None
+    module.media_surfaces = {
+        "apple-music": Surface("apple-music", "paused"),
+        "qobuz": Surface("qobuz", "paused", "/artwork-qobuz"),
+        "tidal": Surface("tidal", "playing", "/artwork-tidal"),
+    }
+
+    first = module.api(
+        "media-context",
+        {"provider": "auto", "preferred": "tidal"},
+        user={"id": 1},
+    )
+    module.media_surfaces["qobuz"].playback = "playing"
+    second = module.api(
+        "media-context",
+        {"provider": "auto", "preferred": "tidal"},
+        user={"id": 1},
+    )
+    first_payload = json.loads(first[2])
+    second_payload = json.loads(second[2])
+
+    assert first_payload["selected_provider"] == "tidal"
+    assert second_payload["selected_provider"] == "qobuz"
+    assert second_payload["track"] == "track-qobuz"
+    assert second_payload["artwork_url"] == "/artwork-qobuz"
+    assert second_payload["selection_mode"] == "automatic"
+
+
+def test_cliente_cambia_selector_pista_y_caratula_del_proveedor_activo() -> None:
+    script_uri = (PUBLIC / "command-center.js").resolve().as_uri()
+    node = f"""
+      globalThis.location = {{ origin: "http://localhost" }};
+      import({json.dumps(script_uri)}).then(async (module) => {{
+        const responses = [
+          {{
+            selected_provider: "tidal", provider: "tidal",
+            lifecycle: "ready", playback: "playing",
+            track: "Lovin' You", artist: "Minnie Riperton",
+            artwork_url: "/artwork-tidal"
+          }},
+          {{
+            selected_provider: "qobuz", provider: "qobuz",
+            lifecycle: "ready", playback: "playing",
+            track: "Hombre Lobo", artist: "Los Abuelos De La Nada",
+            artwork_url: "/artwork-qobuz"
+          }}
+        ];
+        const urls = [];
+        const client = new module.MediaContextClient({{
+          fetcher: async (url) => {{
+            urls.push(String(url));
+            return {{ ok: true, json: async () => responses.shift() }};
+          }}
+        }});
+        await client.refresh({{ detectActive: true }});
+        const first = {{ provider: client.provider, ...client.context }};
+        await client.refresh({{ detectActive: true }});
+        process.stdout.write(JSON.stringify({{
+          first,
+          second: {{ provider: client.provider, ...client.context }},
+          urls
+        }}));
+      }});
+    """
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", node],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+
+    assert payload["first"]["provider"] == "tidal"
+    assert payload["second"]["provider"] == "qobuz"
+    assert payload["second"]["track"] == "Hombre Lobo"
+    assert payload["second"]["artworkUrl"] == "/artwork-qobuz"
+    assert all("provider=auto" in url for url in payload["urls"])
 
 
 def test_endpoint_de_caratula_entrega_solo_imagen_local_acotada() -> None:
