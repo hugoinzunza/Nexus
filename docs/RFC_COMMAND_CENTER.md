@@ -60,9 +60,12 @@ la credencial en Keychain. Solo existe un Gateway fake; el endpoint real, la
 instalación persistente en macOS y cualquier factory productiva continúan
 bloqueados.
 
-Tras la revisión arquitectónica de este pairing, los siguientes candidatos de
-Fase A.5 son Qobuz y TIDAL, en ese orden. Cada uno deberá ajustarse al
-`MediaController` existente sin ampliar el contrato público.
+El adaptador Qobuz ya está implementado con capacidades deliberadamente
+limitadas. Puede observar salud y abrir la aplicación, pero no declara
+`current_state` ni controles de reproducción: Qobuz Connect no admite apps de
+terceros y Qobuz Desktop no expone esas operaciones mediante su interfaz de
+automatización de macOS. TIDAL queda como siguiente candidato, sujeto a revisión
+arquitectónica de Qobuz. Ninguno puede ampliar el `MediaController` público.
 
 ## 1. Resumen ejecutivo
 

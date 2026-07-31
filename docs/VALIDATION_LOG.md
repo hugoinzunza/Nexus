@@ -323,6 +323,61 @@ tokens, consumo atómico del código y política de revocación.
 
 ---
 
+## VAL-0015 — Qobuz Adapter capability-limited
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Fase | A.5 — Integraciones headless |
+| Aplicación local | Qobuz `8.2.0-b033` · `com.qobuz.desktop` |
+| Método | Documentación oficial + bundle/Apple Events/Accessibility read-only |
+
+### Discovery
+
+- Qobuz Connect permite controlar dispositivos y otras apps Qobuz, pero Qobuz
+  declara que las aplicaciones de terceros no están soportadas:
+  <https://help.qobuz.com/en/articles/313603-can-qobuz-connect-be-used-via-a-third-party-app>.
+- La aplicación instalada responde a identidad y versión estándar de macOS.
+- El bundle no contiene diccionario `sdef` y `player state` no pertenece a su
+  interfaz AppleScript.
+- Accessibility solo expone la ventana Electron y controles de ventana; no
+  publica el reproductor.
+- No se adoptaron API reversa, endpoints no oficiales, Qobuz Connect privado,
+  teclas multimedia globales ni automatización por coordenadas.
+
+### Capacidades
+
+| Capacidad `MediaController` | Estado | Motivo |
+|---|---|---|
+| `open_app` | Disponible | `/usr/bin/open` con argumentos fijos |
+| `current_state` | No declarada | No existe fuente pública causal |
+| `play` / `pause` | No declaradas | Sin interfaz Qobuz de terceros |
+| `next` / `previous` | No declaradas | Sin interfaz Qobuz de terceros |
+| `set_volume` | No declarada | Depende del dispositivo de salida |
+
+### Evidencia
+
+- 9 pruebas específicas aprobadas.
+- Harness read-only ejecuta únicamente `health`.
+- Harness con comandos ejecuta únicamente `open_app` y conserva idempotencia.
+- Timeout ambiguo queda en `unknown` y no repite la apertura.
+- Registro conserva degradación y recuperación.
+- Smoke real read-only: `ready`, versión `8.2.0-b033`, capacidad
+  `open_app`, comandos ejecutados `0`.
+- El puerto usa `create_subprocess_exec`; no shell, `System Events`, API web ni
+  entrada libre.
+
+### Conclusión
+
+**APROBADO** como adaptador real de capacidad limitada. La ausencia de controles
+de reproducción es una conclusión del discovery, no trabajo incompleto. Añadirlos
+requerirá una interfaz oficial nueva de Qobuz y otra revisión arquitectónica.
+Factory productiva y despliegue continúan bloqueados.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario
