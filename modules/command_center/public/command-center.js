@@ -6,6 +6,7 @@ export const CONTRACT_FINGERPRINT =
 
 const SNAPSHOT_URL = "/m/command-center/api/snapshot";
 const MACRO_URL = "/m/trading/api/dashboard?translate=0";
+const MARKET_RIBBON_URL = "/m/command-center/api/market-ribbon";
 const HEALTH_URL = "/health";
 const WS_PATH = "/m/command-center/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 15000];
@@ -130,6 +131,138 @@ export class MacroContextClient {
     } catch (error) {
       this.status = "degraded";
       this.error = error?.message || "calendario no disponible";
+    }
+    this.onChange(this.state());
+  }
+}
+
+const MARKET_ASSET_ORDER = [
+  "spx",
+  "vix",
+  "dxy",
+  "total",
+  "btcusdt",
+  "ethusdt",
+  "solusdt",
+  "xrpusdt",
+];
+const MARKET_FRESHNESS = new Set([
+  "live",
+  "current",
+  "close",
+  "stale",
+  "unknown",
+]);
+
+export function normalizeMarketRibbon(payload) {
+  const byId = new Map(
+    (Array.isArray(payload?.assets) ? payload.assets : [])
+      .filter((asset) => MARKET_ASSET_ORDER.includes(asset?.id))
+      .map((asset) => [asset.id, asset]),
+  );
+  return MARKET_ASSET_ORDER.map((id) => {
+    const source = byId.get(id) || {};
+    const price =
+      source.price === null || source.price === undefined || source.price === ""
+        ? Number.NaN
+        : Number(source.price);
+    const change =
+      source.change_pct === null ||
+      source.change_pct === undefined ||
+      source.change_pct === ""
+        ? Number.NaN
+        : Number(source.change_pct);
+    return {
+      id,
+      symbol: String(source.symbol || id.toUpperCase()),
+      chartSymbol: String(source.chart_symbol || ""),
+      tvSymbol: String(source.tv_symbol || ""),
+      price: Number.isFinite(price) ? price : null,
+      changePct: Number.isFinite(change) ? change : null,
+      observedAt: Number.isFinite(Number(source.observed_at_ms))
+        ? Number(source.observed_at_ms)
+        : null,
+      freshness: MARKET_FRESHNESS.has(source.freshness)
+        ? source.freshness
+        : "unknown",
+      source: source.source ? String(source.source) : null,
+      kind: String(source.kind || "unknown"),
+    };
+  });
+}
+
+export function formatMarketPrice(asset) {
+  if (!Number.isFinite(asset?.price)) return "--";
+  if (asset.kind === "aggregate") {
+    return `$${(asset.price / 1e12).toFixed(2)}T`;
+  }
+  const magnitude = Math.abs(asset.price);
+  const maximumFractionDigits =
+    magnitude >= 1000 ? 0 : magnitude >= 10 ? 2 : 4;
+  return new Intl.NumberFormat("es-CL", {
+    maximumFractionDigits,
+    minimumFractionDigits: magnitude < 10 ? 2 : 0,
+  }).format(asset.price);
+}
+
+export class MarketRibbonClient {
+  constructor({
+    ribbonUrl = MARKET_RIBBON_URL,
+    fetcher = (...args) => fetch(...args),
+    onChange = () => {},
+  } = {}) {
+    this.ribbonUrl = ribbonUrl;
+    this.fetcher = fetcher;
+    this.onChange = onChange;
+    this.status = "loading";
+    this.assets = normalizeMarketRibbon(null);
+    this.generatedAt = null;
+    this.error = null;
+    this.refreshTimer = null;
+  }
+
+  state() {
+    return {
+      status: this.status,
+      assets: this.assets,
+      generatedAt: this.generatedAt,
+      error: this.error,
+    };
+  }
+
+  async start() {
+    await this.refresh();
+    this.refreshTimer = setInterval(() => {
+      this.refresh().catch(() => {});
+    }, 30_000);
+  }
+
+  stop() {
+    clearInterval(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+
+  async refresh() {
+    try {
+      const response = await this.fetcher(this.ribbonUrl, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`market ribbon HTTP ${response.status}`);
+      const payload = await response.json();
+      this.assets = normalizeMarketRibbon(payload);
+      this.generatedAt = Number.isFinite(Number(payload?.generated_at_ms))
+        ? Number(payload.generated_at_ms)
+        : Date.now();
+      this.status = this.assets.some((asset) => asset.price !== null)
+        ? "ready"
+        : "degraded";
+      this.error = null;
+    } catch (error) {
+      this.status = this.assets.some((asset) => asset.price !== null)
+        ? "degraded"
+        : "failed";
+      this.error = error?.message || "market ribbon no disponible";
     }
     this.onChange(this.state());
   }
@@ -696,6 +829,44 @@ function fixtureMacroState() {
   };
 }
 
+function fixtureMarketRibbonState() {
+  const now = Date.now();
+  const definitions = [
+    ["spx", "SPX", "SPX", "SP:SPX", 7437.63, 0.396, "index"],
+    ["vix", "VIX", "VIX", "TVC:VIX", 17.09, -8.019, "index"],
+    ["dxy", "DXY", "DXY", "TVC:DXY", 100.225, -1.266, "index"],
+    ["total", "TOTAL", "TOTAL", "CRYPTOCAP:TOTAL", 2.28e12, 0.37, "aggregate"],
+    ["btcusdt", "BTCUSDT.P", "BTCUSDT", "BINANCE:BTCUSDT.P", 64375, 0.204, "futures"],
+    ["ethusdt", "ETHUSDT.P", "ETHUSDT", "BINANCE:ETHUSDT.P", 3318.2, 0.86, "futures"],
+    ["solusdt", "SOLUSDT.P", "SOLUSDT", "BINANCE:SOLUSDT.P", 158.42, -0.72, "futures"],
+    ["xrpusdt", "XRPUSDT.P", "XRPUSDT", "BINANCE:XRPUSDT.P", 1.78, 1.14, "futures"],
+  ];
+  return {
+    status: "ready",
+    generatedAt: now,
+    error: null,
+    assets: definitions.map(
+      ([id, symbol, chartSymbol, tvSymbol, price, changePct, kind]) => ({
+        id,
+        symbol,
+        chartSymbol,
+        tvSymbol,
+        price,
+        changePct,
+        observedAt: now,
+        freshness: kind === "index" ? "close" : "live",
+        source:
+          kind === "index"
+            ? "Yahoo Finance"
+            : kind === "aggregate"
+              ? "CoinGecko"
+              : "Binance Futures",
+        kind,
+      }),
+    ),
+  };
+}
+
 function fixtureHealthState(name) {
   const coreState =
     name === "disconnected" || name === "expired" ? "closed" : "ready";
@@ -765,7 +936,6 @@ function render(state) {
   const now = Date.now();
   const readModel = state.readModel || {};
   const freshness = worstFreshness(readModel, now);
-  const severity = worstSeverity(readModel);
   let operational = state.connection;
   if (state.connection === "ready" && freshness === "stale") operational = "stale";
   if (freshness === "expired") operational = "expired";
@@ -773,27 +943,6 @@ function render(state) {
   const connection = document.querySelector("#connection-state");
   connection.dataset.state = operational;
   connection.querySelector("span").textContent = label(operational);
-
-  const band = document.querySelector("#attention-band");
-  const effectiveSeverity =
-    operational === "expired" || operational === "disconnected"
-      ? "critical"
-      : operational === "degraded" || operational === "stale"
-        ? "warning"
-        : severity;
-  band.dataset.severity = effectiveSeverity;
-
-  const messages = {
-    ready: ["Sin alertas críticas", "Fuentes contractuales conectadas y vigentes."],
-    loading: ["Sincronizando estado", "Reconstruyendo la sesión desde el snapshot."],
-    degraded: ["Operación degradada", state.lastError || "El snapshot sigue disponible sin conexión incremental."],
-    stale: ["Datos desactualizados", "Una o más fuentes superaron su ventana de frescura."],
-    expired: ["Contexto expirado", "No use esta pantalla para tomar decisiones hasta resincronizar."],
-    disconnected: ["NexUX desconectado", "No hay snapshot utilizable ni conexión incremental."],
-  };
-  const message = messages[operational] || messages.degraded;
-  document.querySelector("#attention-title").textContent = message[0];
-  document.querySelector("#attention-detail").textContent = message[1];
 
   const modules =
     readModel["system.modules"]?.payload?.data?.modules || [];
@@ -880,40 +1029,143 @@ function renderMacro(state) {
     : "Sin lectura";
 }
 
+const FRESHNESS_LABELS = {
+  live: "En vivo",
+  current: "Actual",
+  close: "Último cierre",
+  stale: "Desactualizado",
+  unknown: "Sin lectura",
+};
+let selectedMarketAssetId = "btcusdt";
+let lastMarketRibbonState = null;
+let activeChartAdapter = null;
+let chartQueue = Promise.resolve();
+
+function marketChangeDirection(change) {
+  if (!Number.isFinite(change) || change === 0) return "flat";
+  return change > 0 ? "up" : "down";
+}
+
+function formatMarketChange(change) {
+  if (!Number.isFinite(change)) return "--";
+  return `${change > 0 ? "+" : ""}${change.toFixed(2)}%`;
+}
+
+function renderMarketRibbon(state) {
+  lastMarketRibbonState = state;
+  const list = document.querySelector("#market-ribbon-list");
+  list.replaceChildren(
+    ...state.assets.map((asset) => {
+      const button = document.createElement("button");
+      button.className = "market-asset";
+      button.type = "button";
+      button.dataset.assetId = asset.id;
+      button.setAttribute(
+        "aria-pressed",
+        String(asset.id === selectedMarketAssetId),
+      );
+      button.title = [
+        asset.source || "Fuente no disponible",
+        FRESHNESS_LABELS[asset.freshness],
+        asset.observedAt
+          ? new Date(asset.observedAt).toLocaleString("es-CL")
+          : "sin timestamp",
+      ].join(" · ");
+
+      const symbol = document.createElement("span");
+      symbol.className = "market-symbol";
+      symbol.textContent = asset.symbol;
+      const freshness = document.createElement("span");
+      freshness.className = "market-freshness";
+      freshness.dataset.state = asset.freshness;
+      freshness.setAttribute(
+        "aria-label",
+        `Frescura: ${FRESHNESS_LABELS[asset.freshness]}`,
+      );
+      const price = document.createElement("span");
+      price.className = "market-price";
+      price.textContent = formatMarketPrice(asset);
+      const change = document.createElement("span");
+      change.className = "market-change";
+      change.dataset.direction = marketChangeDirection(asset.changePct);
+      change.textContent = formatMarketChange(asset.changePct);
+      button.append(symbol, freshness, price, change);
+      button.addEventListener("click", () => selectMarketAsset(asset));
+      return button;
+    }),
+  );
+}
+
+function setChartLabels(asset) {
+  document.querySelector("#market-symbol-title").textContent = asset.symbol;
+  document.querySelector("#market-interval-title").textContent = "· 1H";
+  const fullAnalysis = document.querySelector("#full-analysis-link");
+  fullAnalysis.href =
+    `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(asset.tvSymbol)}`;
+}
+
+async function remountChart(asset) {
+  const target = document.querySelector("#chart-target");
+  setChartLabels(asset);
+  if (new URLSearchParams(location.search).get("chart") === "0") {
+    target.innerHTML =
+      '<div class="chart-placeholder"><span>Proveedor omitido</span>' +
+      "<small>Validación sin red externa</small></div>";
+    document.querySelector("#chart-health").textContent = "Proveedor omitido";
+    document.querySelector("#chart-latency").textContent =
+      "Validación sin red externa";
+    return;
+  }
+  if (activeChartAdapter) await activeChartAdapter.destroy();
+  target.innerHTML =
+    '<div class="chart-placeholder"><span>TradingView</span>' +
+    `<small>Montando ${asset.symbol}</small></div>`;
+  const adapter = new TradingViewWidgetAdapter();
+  activeChartAdapter = adapter;
+  window.__nexuxCommandCenterChart = adapter;
+  try {
+    await adapter.mount(target, {
+      targetRef: "command-center:market",
+      symbol: asset.chartSymbol,
+      interval: "1h",
+      themeRef: "dark",
+    });
+    const stats = adapter.stats();
+    document.querySelector("#chart-health").textContent =
+      "Proveedor disponible";
+    document.querySelector("#chart-latency").textContent =
+      `Montaje ${stats.lastMountLatencyMs} ms`;
+  } catch (error) {
+    document.querySelector("#chart-health").textContent =
+      "Proveedor degradado";
+    document.querySelector("#chart-latency").textContent =
+      error?.code || "Montaje fallido";
+  }
+}
+
+export function selectMarketAsset(asset) {
+  if (!asset?.chartSymbol || !asset?.tvSymbol) return Promise.resolve(false);
+  selectedMarketAssetId = asset.id;
+  if (lastMarketRibbonState) renderMarketRibbon(lastMarketRibbonState);
+  document
+    .querySelectorAll(".market-asset")
+    .forEach((button) => { button.disabled = true; });
+  chartQueue = chartQueue
+    .catch(() => {})
+    .then(() => remountChart(asset))
+    .finally(() => {
+      document
+        .querySelectorAll(".market-asset")
+        .forEach((button) => { button.disabled = false; });
+    });
+  return chartQueue.then(() => true);
+}
+
 function updateViewport() {
   document.querySelector("#viewport-size").textContent =
     `${window.innerWidth} × ${window.innerHeight}`;
   document.querySelector("#viewport-density").textContent =
     `DPR ${window.devicePixelRatio.toFixed(2)}`;
-}
-
-async function mountChart() {
-  const target = document.querySelector("#chart-target");
-  if (new URLSearchParams(location.search).get("chart") === "0") {
-    target.querySelector(".chart-placeholder").innerHTML =
-      "<span>Proveedor omitido</span><small>Validación sin red externa</small>";
-    document.querySelector("#chart-health").textContent = "Proveedor omitido";
-    document.querySelector("#chart-latency").textContent = "Validación sin red externa";
-    return;
-  }
-  const adapter = new TradingViewWidgetAdapter();
-  window.__nexuxCommandCenterChart = adapter;
-  try {
-    await adapter.mount(target, {
-      targetRef: "command-center:market",
-      symbol: "BTCUSDT",
-      interval: "1h",
-      themeRef: "dark",
-    });
-    const stats = adapter.stats();
-    document.querySelector("#chart-health").textContent = "Proveedor disponible";
-    document.querySelector("#chart-latency").textContent =
-      `Montaje ${stats.lastMountLatencyMs} ms`;
-  } catch (error) {
-    document.querySelector("#chart-health").textContent = "Proveedor degradado";
-    document.querySelector("#chart-latency").textContent =
-      error?.code || "Montaje fallido";
-  }
 }
 
 function startClock() {
@@ -933,7 +1185,12 @@ export function bootstrap() {
   updateViewport();
   startClock();
   window.addEventListener("resize", updateViewport);
-  mountChart();
+  remountChart({
+    id: "btcusdt",
+    symbol: "BTCUSDT.P",
+    chartSymbol: "BTCUSDT",
+    tvSymbol: "BINANCE:BTCUSDT.P",
+  });
 
   const fixture = new URLSearchParams(location.search).get("fixture");
   if (FIXTURE_STATES.has(fixture)) {
@@ -943,6 +1200,7 @@ export function bootstrap() {
     const state = fixtureState(fixture);
     render(state);
     renderMacro(fixtureMacroState());
+    renderMarketRibbon(fixtureMarketRibbonState());
     renderOperationalReadiness(
       deriveOperationalReadiness({
         commandState: state,
@@ -978,6 +1236,9 @@ export function bootstrap() {
     },
   });
   const macroClient = new MacroContextClient({ onChange: renderMacro });
+  const marketRibbonClient = new MarketRibbonClient({
+    onChange: renderMarketRibbon,
+  });
   const healthClient = new OperationalHealthClient({
     onChange: (state) => {
       operationalHealthState = state;
@@ -986,12 +1247,14 @@ export function bootstrap() {
   });
   window.__nexuxCommandCenter = client;
   window.__nexuxCommandCenterMacro = macroClient;
+  window.__nexuxCommandCenterMarketRibbon = marketRibbonClient;
   window.__nexuxCommandCenterHealth = healthClient;
   document
     .querySelector("#resync-button")
     .addEventListener("click", () => client.resync());
   client.start().catch(() => {});
   macroClient.start().catch(() => {});
+  marketRibbonClient.start().catch(() => {});
   healthClient.start().catch(() => {});
   setInterval(() => {
     commandState = client.state();
@@ -1003,6 +1266,7 @@ export function bootstrap() {
   window.addEventListener("beforeunload", () => {
     client.stop();
     macroClient.stop();
+    marketRibbonClient.stop();
     healthClient.stop();
   });
 }

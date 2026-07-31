@@ -222,49 +222,122 @@ a:focus-visible {
   text-align: right;
 }
 
-.attention-band {
+.market-ribbon {
   display: grid;
-  grid-template-columns: 4px minmax(240px, 0.8fr) minmax(280px, 1.4fr) 36px;
+  grid-template-columns: 132px minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  min-width: 0;
   padding: 0 var(--space-5);
   border-bottom: 1px solid var(--border);
   background: var(--surface-2);
 }
 
-.attention-mark {
+.market-ribbon-heading strong {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-sm);
+}
+
+.market-ribbon-list {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   align-self: stretch;
+}
+
+.market-ribbon-loading {
+  grid-column: 1 / -1;
+  align-self: center;
+  color: var(--text-2);
+  font-size: var(--font-xs);
+}
+
+.market-asset {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 18px 20px;
+  align-content: center;
+  gap: 0 6px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  padding: 0 9px;
+  background: transparent;
+  color: var(--text-1);
+  cursor: pointer;
+  text-align: left;
+}
+
+.market-asset:hover,
+.market-asset[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--info) 9%, transparent);
+}
+
+.market-asset[aria-pressed="true"] {
+  box-shadow: inset 0 -2px var(--info);
+}
+
+.market-asset:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.market-symbol {
+  overflow: hidden;
+  align-self: end;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-freshness {
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   background: var(--unknown);
 }
 
-.attention-band[data-severity="normal"] .attention-mark {
+.market-freshness[data-state="live"] {
   background: var(--success);
 }
 
-.attention-band[data-severity="warning"] .attention-mark {
-  background: var(--warning);
-}
-
-.attention-band[data-severity="critical"] .attention-mark {
-  background: var(--danger);
-}
-
-.attention-band[data-severity="info"] .attention-mark {
+.market-freshness[data-state="current"],
+.market-freshness[data-state="close"] {
   background: var(--info);
 }
 
-.attention-band strong {
-  display: block;
-  margin-top: 2px;
-  font-size: var(--font-md);
+.market-freshness[data-state="stale"] {
+  background: var(--warning);
 }
 
-.attention-band p {
-  margin: 0;
-  color: var(--text-2);
+.market-price {
   overflow: hidden;
+  align-self: start;
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.market-change {
+  align-self: start;
+  color: var(--unknown);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
+}
+
+.market-change[data-direction="up"] {
+  color: var(--success);
+}
+
+.market-change[data-direction="down"] {
+  color: var(--danger);
 }
 
 .eyebrow {
@@ -601,20 +674,18 @@ a:focus-visible {
     display: none;
   }
 
-  .attention-band {
-    min-height: 72px;
-    grid-template-columns: 4px 1fr 36px;
+  .market-ribbon {
+    min-height: 116px;
+    grid-template-columns: 112px minmax(0, 1fr);
     padding-block: var(--space-2);
   }
 
-  .attention-band p {
-    grid-column: 2;
-    white-space: normal;
+  .market-ribbon-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .icon-button {
-    grid-column: 3;
-    grid-row: 1 / span 2;
+  .market-asset:nth-child(n + 5) {
+    border-top: 1px solid var(--border);
   }
 
   .workspace {
@@ -637,7 +708,7 @@ a:focus-visible {
 
 @media (max-width: 680px) {
   .topbar,
-  .attention-band,
+  .market-ribbon,
   .chart-region,
   .status-panel,
   .macro-panel,
@@ -647,7 +718,8 @@ a:focus-visible {
   }
 
   .mode-flag,
-  #clock {
+  #clock,
+  .topbar-status .icon-button {
     display: none;
   }
 
@@ -658,6 +730,25 @@ a:focus-visible {
   .workspace,
   .context-rail {
     display: block;
+  }
+
+  .market-ribbon {
+    display: block;
+    min-height: 160px;
+    padding-block: var(--space-3);
+  }
+
+  .market-ribbon-heading {
+    margin-bottom: var(--space-2);
+  }
+
+  .market-ribbon-list {
+    min-height: 112px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-asset {
+    border-top: 1px solid var(--border);
   }
 
   .chart-region {

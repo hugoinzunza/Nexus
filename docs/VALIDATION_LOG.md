@@ -658,6 +658,57 @@ segundos y no compite con TradingView ni con el próximo evento macro.
 
 ---
 
+## VAL-0020 — Línea B Sprint B4 · Market Ribbon
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-30 |
+| Hardware objetivo | ARZOPA, 1920 × 1080 @ 60 Hz |
+| Pregunta | ¿Qué merece atención antes de analizar un activo? |
+| Superficies nuevas | 1 módulo; reutiliza la banda superior existente |
+| Activos | SPX, VIX, DXY, TOTAL, BTC, ETH, SOL y XRP |
+
+### Semántica
+
+Cada activo muestra únicamente símbolo, precio, variación diaria y frescura. SPX,
+VIX y DXY provienen de Yahoo Finance; TOTAL de CoinGecko; los cuatro perpetuos de
+Binance Futures. La fuente y el timestamp se conservan aunque un proveedor falle.
+
+`live`, `current`, `close`, `stale` y `unknown` describen actualidad de la
+lectura, no dirección ni calidad de una oportunidad. `close` permite representar
+honestamente el último cierre de un índice sin llamarlo live.
+
+### Evidencia técnica
+
+- Orden fijo: SPX → VIX → DXY → TOTAL → BTC → ETH → SOL → XRP.
+- El fallo de un proveedor conserva únicamente su último valor bueno y expone la
+  degradación; no rellena datos mediante otra fuente silenciosa.
+- Seleccionar un activo remonta serialmente el widget público porque no existe
+  `set_symbol` runtime.
+- `Análisis completo` sigue el símbolo seleccionado.
+- La banda reemplaza la fila de estado duplicada; no agrega altura a la shell.
+- API autenticada y exclusivamente GET.
+- SPX, VIX, TOTAL y BTC fueron seleccionados y remontados contra el widget real
+  sin avisos de símbolo no disponible.
+- Viewport 1920 × 936 sin overflow; banda 1920 × 58 px.
+- Suite completa: 768 pruebas aprobadas.
+- Wire ABI, fingerprint, EventBus, Gateway, runtime y factories preservados.
+
+### Evidencia visual
+
+- `docs/evidence/command-center-b4-arzopa-physical.png`
+
+### Conclusión
+
+**APROBADO técnicamente** y **PENDIENTE perceptualmente**. Hugo debe confirmar
+desde 80–90 cm que la banda se entiende en aproximadamente dos segundos, que la
+frescura es reconocible y que los ocho referentes no compiten con el gráfico.
+VAL-0019 continúa abierto de forma independiente.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

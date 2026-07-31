@@ -81,7 +81,8 @@ def test_b2_agrega_un_contexto_macro_y_salto_honesto_a_tradingview() -> None:
     assert page.count('class="macro-panel"') == 1
     assert 'id="macro-event"' in page
     assert 'id="module-list"' not in page
-    assert 'href="https://www.tradingview.com/chart/"' in page
+    assert 'id="full-analysis-link"' in page
+    assert "https://www.tradingview.com/chart/?symbol=" in page
     assert 'target="_blank"' in page
     assert 'rel="noopener noreferrer"' in page
     assert (

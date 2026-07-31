@@ -18,6 +18,7 @@ from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
 from .event_bus import InMemoryEventBus
 from .gateway import CommandCenterGateway
 from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION
+from .market_ribbon import MarketRibbonService
 from .module_registry import command_center_module_registry
 from .snapshot import (
     ConfiguredModulesProjection,
@@ -48,6 +49,7 @@ class CommandCenterModule(NexusModule):
             ),
         )
         self.module_registry = command_center_module_registry()
+        self.market_ribbon = MarketRibbonService()
 
     def _provider_error(self, topic: str, exc: Exception) -> None:
         self.context.log(
@@ -81,6 +83,23 @@ class CommandCenterModule(NexusModule):
                     "schema": copy.deepcopy(CONTRACT_V1_SPEC),
                 },
             )
+        if subpath == "market-ribbon":
+            try:
+                return self._json(200, self.market_ribbon.snapshot())
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(
+                    "command-center: market ribbon fallo "
+                    f"({type(exc).__name__})"
+                )
+                return self._json(
+                    502,
+                    error_document(
+                        "market-ribbon.unavailable",
+                        "No fue posible obtener el contexto de mercado.",
+                        502,
+                        retryable=True,
+                    ),
+                )
         if subpath != "snapshot":
             return self._json(
                 404,

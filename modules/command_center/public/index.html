@@ -26,24 +26,25 @@
           <i aria-hidden="true"></i>
           <span>Cargando</span>
         </span>
+        <button class="icon-button" id="resync-button" type="button"
+          title="Sincronizar de nuevo" aria-label="Sincronizar de nuevo">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 7v5h-5M4 17v-5h5M6.1 9a7 7 0 0 1 11.5-2.4L20 9M4 15l2.4 2.4A7 7 0 0 0 17.9 15"/>
+          </svg>
+        </button>
         <time id="clock" aria-label="Hora local">--:--</time>
       </div>
     </header>
 
-    <section class="attention-band" data-severity="unknown" id="attention-band"
-      aria-live="polite">
-      <div class="attention-mark" aria-hidden="true"></div>
-      <div>
-        <span class="eyebrow">Estado inmediato</span>
-        <strong id="attention-title">Conectando con NexUX</strong>
+    <section class="market-ribbon" aria-labelledby="market-ribbon-title">
+      <header class="market-ribbon-heading">
+        <span class="eyebrow">Contexto global</span>
+        <strong id="market-ribbon-title">Market Ribbon</strong>
+      </header>
+      <div class="market-ribbon-list" id="market-ribbon-list"
+        aria-live="polite" aria-label="Contexto de mercados">
+        <span class="market-ribbon-loading">Consultando mercados reales</span>
       </div>
-      <p id="attention-detail">Esperando el snapshot inicial.</p>
-      <button class="icon-button" id="resync-button" type="button"
-        title="Sincronizar de nuevo" aria-label="Sincronizar de nuevo">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M20 7v5h-5M4 17v-5h5M6.1 9a7 7 0 0 1 11.5-2.4L20 9M4 15l2.4 2.4A7 7 0 0 0 17.9 15"/>
-        </svg>
-      </button>
     </section>
 
     <main class="workspace">
@@ -51,11 +52,13 @@
         <header class="region-header">
           <div>
             <span class="eyebrow">Mercado</span>
-            <h1 id="market-title">BTCUSDT <span>· 1H</span></h1>
+            <h1 id="market-title"><span id="market-symbol-title">BTCUSDT.P</span>
+              <span id="market-interval-title">· 1H</span></h1>
           </div>
           <div class="chart-actions">
             <span class="source-label">TradingView · contexto</span>
-            <a class="external-action" href="https://www.tradingview.com/chart/"
+            <a class="external-action" id="full-analysis-link"
+              href="https://www.tradingview.com/chart/?symbol=BINANCE%3ABTCUSDT.P"
               target="_blank" rel="noopener noreferrer">
               <span>Análisis completo</span>
               <svg viewBox="0 0 24 24" aria-hidden="true">

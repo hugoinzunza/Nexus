@@ -1,7 +1,7 @@
 # RFC: NEXUX Command Center
 
-- **Estado:** Aceptado; Línea A cerrada, Fase A.5 activa, Sprint B1 aprobado y
-  Sprint B2 autorizado
+- **Estado:** Aceptado; Línea A cerrada, Fase A.5 activa, B2 aprobado, B3
+  técnicamente aprobado y B4 autorizado
 - **Versión:** 1.2.2
 - **Fecha:** 2026-07-30
 - **Autoría:** Codex, a partir del Product Vision Document, el repositorio actual
@@ -108,6 +108,39 @@ equivale a estar conectado.
 La lectura usa `GET /health` y el estado contractual existente. No agrega
 endpoints, topics, envelopes, comandos ni factories. VAL-0019 debe validar
 perceptualmente que ocho estados compactos no aumenten la carga cognitiva.
+
+### Línea B — Sprint B4
+
+B4 incorpora un único módulo: **Market Ribbon**. Reutiliza la banda superior de
+58 px que antes duplicaba el estado operacional; no agrega filas, paneles ni
+tracks y no modifica la composición principal del gráfico y el contexto derecho.
+
+La banda responde cinco preguntas de contexto mediante ocho referentes en orden
+fijo: SPX, VIX, DXY, CRYPTOCAP:TOTAL, BTCUSDT.P, ETHUSDT.P, SOLUSDT.P y XRPUSDT.P.
+Cada referente muestra exclusivamente símbolo, precio, variación diaria y un
+indicador de frescura. No publica volumen, señales, indicadores ni gráficos
+pequeños.
+
+Las fuentes son explícitas:
+
+- Yahoo Finance para SPX, VIX y DXY;
+- CoinGecko Global para capitalización total cripto;
+- Binance USD-M Futures para los cuatro perpetuos.
+
+Cada proveedor conserva de forma independiente su último valor bueno. Una caída
+no borra el contexto anterior: conserva el timestamp y cambia la frescura. Los
+índices distinguen una lectura `live` de un `close` todavía utilizable; una
+lectura antigua nunca se presenta como live. La API es autenticada, read-only y
+queda fuera del Wire ABI congelado.
+
+Seleccionar un referente actualiza el gráfico integrado. Como el widget público
+no ofrece mutación runtime, el cliente destruye y remonta serialmente el
+`TradingViewWidgetAdapter`; no simula `set_symbol`. El enlace `Análisis completo`
+apunta al mismo símbolo dentro del TradingView autenticado.
+
+VAL-0020 debe comprobar en el Arzopa que ocho referentes se entiendan sin lectura
+secuencial, que la banda no compita con el gráfico y que la frescura sea
+reconocible. VAL-0019 permanece abierto y no se cierra por comenzar B4.
 
 ### Fase A.5 — Integraciones headless
 

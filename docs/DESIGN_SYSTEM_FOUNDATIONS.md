@@ -1,6 +1,7 @@
 # NEXUX Command Center — Design System Foundations
 
-- **Estado:** Base B2 perceptualmente aprobada; Sprint B3 candidato técnico
+- **Estado:** Base B2 perceptualmente aprobada; B3 aprobado técnicamente; B4
+  candidato técnico
 - **Versión:** 0.2
 - **Fecha:** 2026-07-30
 - **Superficie objetivo:** ARZOPA 1920 × 1080, luminancia relativa limitada
@@ -113,3 +114,20 @@ escritos.
 
 El panel ocupa el mismo track de B2 y distribuye ocho servicios en dos columnas.
 Esta densidad queda como candidata hasta la validación perceptual VAL-0019.
+
+## 9. Extensión B4
+
+El Market Ribbon reutiliza la fila superior existente y no modifica las cuatro
+filas de la shell. Distribuye ocho referentes en columnas estables para que
+precio, variación y selección no provoquen movimiento del layout.
+
+La variación usa texto con signo y color semántico. La frescura usa un punto de
+8 px con nombre accesible y tooltip que conserva fuente y timestamp; el color no
+es la única representación disponible. La selección activa usa `--info` y no
+altera la jerarquía de alertas del panel operacional.
+
+En el Arzopa objetivo los ocho referentes ocupan una sola fila. Los breakpoints
+de cuatro y dos columnas son únicamente adaptaciones funcionales para viewports
+menores y no constituyen una nueva composición aprobada.
+
+La densidad y la lectura en dos segundos quedan pendientes de VAL-0020.
