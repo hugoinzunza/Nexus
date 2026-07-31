@@ -80,8 +80,9 @@ def test_b2_agrega_un_contexto_macro_y_salto_honesto_a_tradingview() -> None:
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
 
-    assert page.count('class="macro-panel"') == 1
-    assert 'id="macro-event"' in page
+    assert 'class="macro-panel"' not in page
+    assert 'id="macro-event"' not in page
+    assert 'rel="manifest" href="./manifest.webmanifest"' in page
     assert 'id="module-list"' not in page
     assert 'id="full-analysis-link"' in page
     assert "https://www.tradingview.com/chart/?symbol=" in page
@@ -94,6 +95,19 @@ def test_b2_agrega_un_contexto_macro_y_salto_honesto_a_tradingview() -> None:
     assert "formatMacroCountdown" in script
     assert script.count('method: "POST"') == 1
     assert '"/m/command-center/api/media-command"' in script
+
+
+def test_shell_declara_modo_aplicacion_y_lanzador_sin_barra() -> None:
+    page = (PUBLIC / "index.html").read_text(encoding="utf-8")
+    manifest = (PUBLIC / "manifest.webmanifest").read_text(encoding="utf-8")
+    launcher = (ROOT / "tools" / "open_command_center.command").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'rel="manifest" href="./manifest.webmanifest"' in page
+    assert '"display": "standalone"' in manifest
+    assert '--app="$URL"' in launcher
+    assert "--start-fullscreen" in launcher
 
 
 def test_b2_seleccion_macro_es_causal_y_no_inventa_impacto() -> None:

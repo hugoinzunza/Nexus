@@ -52,6 +52,7 @@ def test_b8_prioriza_solo_alertas_operacionales_verificables() -> None:
 
     assert payload["normal"]["state"] == "normal"
     assert payload["normal"]["count"] == 0
+    assert payload["normal"]["detail"] == "Macro: sin eventos próximos"
     assert payload["macroAlert"]["state"] == "critical"
     assert payload["macroAlert"]["summary"] == "FOMC · 10 min."
     assert payload["failed"]["state"] == "critical"
@@ -73,6 +74,7 @@ def test_b8_reutiliza_superficie_y_no_agrega_controles() -> None:
     assert "<button" not in panel
     assert "<a " not in panel
     assert "deriveImmediateAttention" in script
+    assert "Macro: sin eventos próximos" in script
     assert "totalPnl" not in script.split(
         "export function deriveImmediateAttention", 1
     )[1].split("export class BotContextClient", 1)[0]

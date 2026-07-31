@@ -166,8 +166,8 @@ del gráfico propio justifican la inversión, pero todavía no justifican una pr
 
 ## Integridad arquitectónica
 
-- Pruebas Command Center: `262 passed`.
-- Suite verificable: `826 passed`, con una prueba de research deseleccionada por
+- Pruebas Command Center: `263 passed`.
+- Suite verificable: `827 passed`, con una prueba de research deseleccionada por
   la alerta V1/V2 descrita arriba.
 - Agente macOS Release: build correcto y `48 checks passed`.
 - Wire ABI v1: intacto.
@@ -186,3 +186,26 @@ del gráfico propio justifican la inversión, pero todavía no justifican una pr
 2. Observar progreso real en Apple Music, Qobuz y TIDAL durante una sesión normal.
 3. Ajustar únicamente hallazgos perceptuales, sin agregar módulos.
 4. Autorizar por separado el spike `NexuxChartProvider` si se decide avanzar.
+
+## Iteración perceptual posterior
+
+La revisión de Hugo confirmó que el gráfico y el Market Ribbon tienen la
+jerarquía correcta, pero detectó tres problemas: la barra del navegador impedía
+percibir una aplicación, Música seguía siendo secundaria y Macro duplicaba la
+pregunta ya resuelta por Atención inmediata.
+
+Se aplicaron estas correcciones sin agregar módulos:
+
+- manifiesto standalone y lanzador macOS para abrir Chrome como aplicación en
+  pantalla completa, sin pestañas ni barra de direcciones;
+- Música ocupa ahora toda la columna derecha, con carátula de `240 x 240 px` en
+  el viewport objetivo, título reforzado, controles mayores y progreso visible;
+- Macro deja de ocupar una superficie propia y se integra causalmente en
+  Atención inmediata; solo se muestra cuando existe un evento relevante o como
+  contexto secundario discreto;
+- Posiciones abiertas permanece debajo de Atención y conserva las dos cuentas
+  separadas.
+
+La prueba visual a `1280 x 720` confirmó que la carátula conserva `190 x 190 px`
+incluso en el breakpoint compacto. La validación definitiva sigue siendo el
+Arzopa a `1920 x 992` mediante el lanzador de modo aplicación.

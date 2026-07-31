@@ -552,10 +552,18 @@ export function deriveImmediateAttention({
 
   alerts.sort((left, right) => ATTENTION_RANK[right.state] - ATTENTION_RANK[left.state]);
   if (!alerts.length) {
+    const macroDetail = macro.status === "ready" && macro.event
+      ? `Macro: ${macro.event.title || "evento"} · ${formatMacroCountdown(
+          macro.event.ts,
+          now,
+        )}`
+      : macro.status === "empty"
+        ? "Macro: sin eventos próximos"
+        : "4 fuentes verificadas";
     return {
       state: "normal",
       summary: "Sin intervención inmediata.",
-      detail: "4 fuentes verificadas",
+      detail: macroDetail,
       count: 0,
       evaluatedAtMs: now,
     };
@@ -1622,6 +1630,7 @@ function renderOperationalReadiness(readiness) {
 
 function renderMacro(state) {
   const badge = document.querySelector("#macro-impact");
+  if (!badge) return;
   badge.dataset.state = state.status;
   const event = state.event;
   if (state.status === "ready" && event) {

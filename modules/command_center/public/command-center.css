@@ -147,8 +147,7 @@ a:focus-visible {
 
 .mode-flag,
 .connection-state,
-.source-label,
-.impact-badge {
+.source-label {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
@@ -503,14 +502,13 @@ a:focus-visible {
   display: grid;
   grid-template-areas:
     "attention music"
-    "positions macro";
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  grid-template-rows: minmax(290px, 1.16fr) minmax(220px, 0.84fr);
+    "positions music";
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+  grid-template-rows: minmax(250px, 0.74fr) minmax(300px, 1.26fr);
   gap: 10px;
   background: transparent;
 }
 
-.macro-panel,
 .ai-panel,
 .positions-panel,
 .attention-panel,
@@ -539,10 +537,6 @@ a:focus-visible {
 
 .positions-panel {
   grid-area: positions;
-}
-
-.macro-panel {
-  grid-area: macro;
 }
 
 .readiness-overall {
@@ -637,64 +631,6 @@ a:focus-visible {
 
 .readiness-state[data-state="failed"] {
   color: var(--danger);
-}
-
-.impact-badge {
-  color: var(--warning);
-}
-
-.impact-badge[data-state="ready"] {
-  color: var(--warning);
-  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
-}
-
-.impact-badge[data-state="degraded"] {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
-}
-
-.impact-badge[data-state="empty"] {
-  color: var(--unknown);
-}
-
-.macro-reading {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin: 26px 0 var(--space-3);
-}
-
-.macro-reading strong {
-  font-size: 40px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-.macro-reading span {
-  color: var(--warning);
-  font-size: var(--font-sm);
-  font-weight: 720;
-}
-
-.macro-event {
-  min-height: 48px;
-  margin: 0;
-  color: var(--text-1);
-  font-size: var(--font-md);
-  font-weight: 680;
-  line-height: 1.45;
-}
-
-.macro-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border);
-  color: var(--text-3);
-  font-size: var(--font-xs);
 }
 
 .context-badge {
@@ -880,16 +816,21 @@ a:focus-visible {
 }
 
 .music-panel {
-  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface-1));
+  box-shadow: 0 0 34px color-mix(in srgb, var(--accent) 11%, transparent);
 }
 
 .media-provider-selector {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
-  width: 210px;
+  width: min(300px, 100%);
   padding: 3px;
-  margin: 10px 0 0 auto;
+  margin: 14px auto 0;
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
   border-radius: 7px;
   background: color-mix(in srgb, var(--surface-3) 62%, transparent);
@@ -914,24 +855,33 @@ a:focus-visible {
 }
 
 .music-content {
-  display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-4);
-  margin-top: 12px;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 16px;
+  text-align: center;
 }
 
 .music-artwork {
   display: grid;
-  width: 112px;
-  height: 112px;
+  width: 240px;
+  height: 240px;
+  max-width: min(72%, 240px);
+  flex: 0 0 auto;
+  aspect-ratio: 1;
   overflow: hidden;
   place-items: center;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-2);
   color: var(--accent);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.48),
+    0 0 26px color-mix(in srgb, var(--accent) 17%, transparent);
 }
 
 .music-artwork img {
@@ -952,7 +902,9 @@ a:focus-visible {
 .music-now {
   display: grid;
   gap: 6px;
+  width: 100%;
   min-width: 0;
+  justify-items: center;
 }
 
 .music-now strong,
@@ -963,13 +915,13 @@ a:focus-visible {
 }
 
 .music-now strong {
-  font-size: 21px;
+  font-size: 24px;
   line-height: 1.18;
 }
 
 .music-now span {
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .music-now .music-provider-label {
@@ -987,18 +939,18 @@ a:focus-visible {
 .music-controls {
   display: flex;
   position: relative;
-  min-height: 48px;
+  min-height: 68px;
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  margin-top: 12px;
+  margin-top: 18px;
 }
 
 .music-control,
 .music-open {
   display: inline-grid;
-  width: 42px;
-  height: 42px;
+  width: 50px;
+  height: 50px;
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--border);
@@ -1033,7 +985,7 @@ a:focus-visible {
 .music-controls > span {
   overflow: hidden;
   position: absolute;
-  right: 16px;
+  right: 0;
   color: var(--text-3);
   font-size: var(--font-xs);
   text-overflow: ellipsis;
@@ -1041,8 +993,8 @@ a:focus-visible {
 }
 
 .music-toggle {
-  width: 54px;
-  height: 54px;
+  width: 68px;
+  height: 68px;
   border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
   border-radius: 50%;
   background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
@@ -1050,7 +1002,8 @@ a:focus-visible {
 }
 
 .music-progress {
-  margin-top: 11px;
+  margin-top: 18px;
+  padding: 0 8px 4px;
 }
 
 .music-progress-track {
@@ -1222,7 +1175,12 @@ a:focus-visible {
   }
 
   .context-rail {
-    grid-template-rows: minmax(300px, 1fr) minmax(320px, 1fr);
+    grid-template-rows: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
+  }
+
+  .music-artwork {
+    width: 190px;
+    height: 190px;
   }
 }
 
@@ -1264,7 +1222,7 @@ a:focus-visible {
   .context-rail {
     grid-template-areas:
       "attention music"
-      "positions macro";
+      "positions music";
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: repeat(2, minmax(250px, auto));
   }
@@ -1287,7 +1245,6 @@ a:focus-visible {
   .market-ribbon,
   .chart-region,
   .status-panel,
-  .macro-panel,
   .ai-panel,
   .positions-panel,
   .attention-panel,

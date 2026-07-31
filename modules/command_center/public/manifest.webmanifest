@@ -1,0 +1,17 @@
+{
+  "name": "NexUX Command Center",
+  "short_name": "NexUX",
+  "description": "Centro de conciencia situacional NexUX",
+  "start_url": "/m/command-center/",
+  "scope": "/m/command-center/",
+  "display": "standalone",
+  "background_color": "#050a11",
+  "theme_color": "#070d16",
+  "icons": [
+    {
+      "src": "/static/icons/nexux-favicon-64.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    }
+  ]
+}
