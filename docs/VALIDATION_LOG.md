@@ -722,6 +722,43 @@ VAL-0019 continúa abierto de forma independiente.
 
 ---
 
+## VAL-0021 — Línea B Sprint B5 · Contexto de IA
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-31 |
+| Hardware objetivo | ARZOPA, 1920 × 1080 @ 60 Hz |
+| Pregunta | ¿Existe una observación de IA que merezca atención ahora? |
+| Superficies nuevas | 1 módulo compacto en el rail de contexto |
+
+### Evidencia técnica
+
+- La proyección acepta únicamente evidencia contractual inyectada.
+- El estado real no llama Anthropic, `claude_brief` ni `claude_grader`.
+- Con el graduador apagado comunica `disabled`, resumen nulo y frescura
+  `unknown`.
+- Estados, severidades, timestamps, fuentes y resúmenes inválidos fallan
+  cerrados.
+- El resumen contractual queda limitado a 180 caracteres.
+- La API es autenticada, exclusivamente GET y permanece fuera del Wire ABI.
+- No existen botones, comandos, recomendaciones ni acciones automáticas.
+- Cero factories productivas.
+- Viewport técnico 1920 × 907 sin overflow horizontal ni vertical.
+
+### Evidencia visual
+
+- `docs/evidence/command-center-b5-arzopa-technical.png`
+
+### Conclusión
+
+**TÉCNICAMENTE COMPLETO** y **PENDIENTE perceptualmente**. Hugo debe confirmar
+desde 80–90 cm que el estado neutral no agrega ruido y que una severidad de
+fixture se reconoce sin lectura sostenida.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

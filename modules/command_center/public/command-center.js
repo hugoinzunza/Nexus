@@ -7,6 +7,7 @@ export const CONTRACT_FINGERPRINT =
 const SNAPSHOT_URL = "/m/command-center/api/snapshot";
 const MACRO_URL = "/m/trading/api/dashboard?translate=0";
 const MARKET_RIBBON_URL = "/m/command-center/api/market-ribbon";
+const AI_CONTEXT_URL = "/m/command-center/api/ai-context";
 const HEALTH_URL = "/health";
 const WS_PATH = "/m/command-center/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 15000];
@@ -269,6 +270,80 @@ export class MarketRibbonClient {
       this.error = error?.message || "market ribbon no disponible";
     }
     this.onChange(this.state());
+  }
+}
+
+export function normalizeAiContext(payload) {
+  const allowedStates = new Set([
+    "ready",
+    "disabled",
+    "degraded",
+    "unknown",
+  ]);
+  const allowedSeverities = new Set([
+    "normal",
+    "info",
+    "warning",
+    "critical",
+  ]);
+  const state = allowedStates.has(payload?.state)
+    ? payload.state
+    : "unknown";
+  const severity = allowedSeverities.has(payload?.severity)
+    ? payload.severity
+    : "normal";
+  return {
+    state,
+    severity,
+    summary:
+      typeof payload?.summary === "string" && payload.summary.trim()
+        ? payload.summary.trim().slice(0, 180)
+        : null,
+    lastEvaluationMs: Number.isFinite(Number(payload?.last_evaluation_ms))
+      ? Number(payload.last_evaluation_ms)
+      : null,
+    freshness: String(payload?.freshness || "unknown"),
+    source: payload?.source ? String(payload.source) : null,
+  };
+}
+
+export class AiContextClient {
+  constructor({
+    contextUrl = AI_CONTEXT_URL,
+    fetcher = (...args) => fetch(...args),
+    onChange = () => {},
+  } = {}) {
+    this.contextUrl = contextUrl;
+    this.fetcher = fetcher;
+    this.onChange = onChange;
+    this.context = normalizeAiContext(null);
+    this.refreshTimer = null;
+  }
+
+  async start() {
+    await this.refresh();
+    this.refreshTimer = setInterval(() => {
+      this.refresh().catch(() => {});
+    }, 60_000);
+  }
+
+  stop() {
+    clearInterval(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+
+  async refresh() {
+    try {
+      const response = await this.fetcher(this.contextUrl, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`ai context HTTP ${response.status}`);
+      this.context = normalizeAiContext(await response.json());
+    } catch {
+      this.context = normalizeAiContext({ state: "degraded" });
+    }
+    this.onChange(this.context);
   }
 }
 
@@ -833,6 +908,17 @@ function fixtureMacroState() {
   };
 }
 
+function fixtureAiContext() {
+  return {
+    state: "ready",
+    severity: "warning",
+    summary: "La observación contractual requiere revisión manual.",
+    lastEvaluationMs: Date.now() - 4 * 60_000,
+    freshness: "current",
+    source: "Fixture contractual",
+  };
+}
+
 function fixtureMarketRibbonState() {
   const now = Date.now();
   const definitions = [
@@ -1031,6 +1117,44 @@ function renderMacro(state) {
         minute: "2-digit",
       })}`
     : "Sin lectura";
+}
+
+function renderAiContext(context) {
+  const badge = document.querySelector("#ai-severity");
+  const summary = document.querySelector("#ai-summary");
+  const visualState =
+    context.state === "ready" ? context.severity : context.state;
+  badge.dataset.state = visualState;
+  const labels = {
+    normal: "Normal",
+    info: "Info",
+    warning: "Atención",
+    critical: "Crítica",
+    disabled: "Inactiva",
+    degraded: "Degradada",
+    unknown: "Unknown",
+  };
+  badge.textContent = labels[visualState] || "Unknown";
+  summary.dataset.state = context.state;
+  summary.textContent =
+    context.summary || (
+      context.state === "disabled"
+        ? "La IA está inactiva y no existe una observación vigente."
+        : context.state === "degraded"
+          ? "No fue posible verificar una observación de IA."
+          : "Sin observación contractual vigente."
+    );
+  document.querySelector("#ai-source").textContent =
+    context.source || (
+      context.state === "disabled" ? "IA inactiva" : "Sin proveedor"
+    );
+  document.querySelector("#ai-updated").textContent =
+    context.lastEvaluationMs
+      ? `Evaluado ${new Date(context.lastEvaluationMs).toLocaleTimeString(
+          "es-CL",
+          { hour: "2-digit", minute: "2-digit" },
+        )}`
+      : "Sin evaluación";
 }
 
 const FRESHNESS_LABELS = {
@@ -1240,6 +1364,7 @@ export function bootstrap() {
     render(state);
     renderMacro(fixtureMacroState());
     renderMarketRibbon(fixtureMarketRibbonState());
+    renderAiContext(fixtureAiContext());
     renderOperationalReadiness(
       deriveOperationalReadiness({
         commandState: state,
@@ -1278,6 +1403,9 @@ export function bootstrap() {
   const marketRibbonClient = new MarketRibbonClient({
     onChange: renderMarketRibbon,
   });
+  const aiContextClient = new AiContextClient({
+    onChange: renderAiContext,
+  });
   const healthClient = new OperationalHealthClient({
     onChange: (state) => {
       operationalHealthState = state;
@@ -1287,6 +1415,7 @@ export function bootstrap() {
   window.__nexuxCommandCenter = client;
   window.__nexuxCommandCenterMacro = macroClient;
   window.__nexuxCommandCenterMarketRibbon = marketRibbonClient;
+  window.__nexuxCommandCenterAi = aiContextClient;
   window.__nexuxCommandCenterHealth = healthClient;
   document
     .querySelector("#resync-button")
@@ -1294,6 +1423,7 @@ export function bootstrap() {
   client.start().catch(() => {});
   macroClient.start().catch(() => {});
   marketRibbonClient.start().catch(() => {});
+  aiContextClient.start().catch(() => {});
   healthClient.start().catch(() => {});
   setInterval(() => {
     commandState = client.state();
@@ -1306,6 +1436,7 @@ export function bootstrap() {
     client.stop();
     macroClient.stop();
     marketRibbonClient.stop();
+    aiContextClient.stop();
     healthClient.stop();
   });
 }

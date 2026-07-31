@@ -148,6 +148,25 @@ VAL-0020 debe comprobar en el Arzopa que ocho referentes se entiendan sin lectur
 secuencial, que la banda no compita con el gráfico y que la frescura sea
 reconocible. VAL-0019 permanece abierto y no se cierra por comenzar B4.
 
+### Línea B — Sprint B5
+
+B5 incorpora un único módulo: **Contexto de IA**. Responde únicamente si existe
+una observación contractual que merezca atención. La proyección publica estado,
+última evaluación, severidad, resumen breve, frescura y fuente.
+
+El módulo no llama modelos, no importa Anthropic, no reutiliza el graduador y no
+consulta el brief de Home. Cuando no existe evidencia, el resumen queda vacío y
+la UI muestra de forma neutral que no hay observación vigente. `unknown` y
+`disabled` nunca se presentan como recomendaciones.
+
+La API es autenticada, read-only y externa al Wire ABI. Una observación futura
+debe usar severidades y estados cerrados, incluir timestamp causal, fuente y un
+resumen máximo de 180 caracteres. No existen controles ni acciones automáticas.
+
+VAL-0021 debe comprobar en el Arzopa que el estado sin observación no compita con
+el contexto macro y que una severidad de fixture pueda reconocerse sin leer el
+resumen completo. Su aprobación técnica no cierra la validación perceptual.
+
 ### Fase A.5 — Integraciones headless
 
 Línea A arquitectónicamente completa permanece cerrada. A.5 incorpora

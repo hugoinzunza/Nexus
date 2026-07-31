@@ -466,13 +466,23 @@ a:focus-visible {
 
 .context-rail {
   display: grid;
-  grid-template-rows: minmax(260px, 1.2fr) minmax(220px, 1fr) minmax(130px, 0.55fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows:
+    minmax(260px, 1.2fr)
+    minmax(220px, 1fr)
+    minmax(130px, 0.55fr);
   gap: 1px;
   background: var(--border);
 }
 
 .status-panel,
+.telemetry-panel {
+  grid-column: 1 / -1;
+}
+
+.status-panel,
 .macro-panel,
+.ai-panel,
 .telemetry-panel {
   min-height: 0;
   overflow: hidden;
@@ -632,6 +642,53 @@ a:focus-visible {
   font-size: var(--font-xs);
 }
 
+.context-badge {
+  color: var(--unknown);
+  font-size: var(--font-xs);
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.context-badge[data-state="info"],
+.context-badge[data-state="ready"] {
+  color: var(--info);
+}
+
+.context-badge[data-state="warning"],
+.context-badge[data-state="degraded"] {
+  color: var(--warning);
+}
+
+.context-badge[data-state="critical"],
+.context-badge[data-state="failed"] {
+  color: var(--danger);
+}
+
+.context-summary {
+  min-height: 42px;
+  margin: var(--space-4) 0 0;
+  color: var(--text-1);
+  font-size: var(--font-sm);
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.context-summary[data-state="unknown"],
+.context-summary[data-state="disabled"] {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.context-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  color: var(--text-3);
+  font-size: var(--font-xs);
+}
+
 .viewport-reading {
   display: flex;
   align-items: baseline;
@@ -707,9 +764,10 @@ a:focus-visible {
 
   .context-rail {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
   }
 
+  .status-panel,
   .telemetry-panel {
     grid-column: 1 / -1;
   }
@@ -721,6 +779,7 @@ a:focus-visible {
   .chart-region,
   .status-panel,
   .macro-panel,
+  .ai-panel,
   .telemetry-panel,
   .status-footer {
     padding-inline: var(--space-4);

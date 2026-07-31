@@ -15,6 +15,7 @@ from .contracts import (
     error_document,
 )
 from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
+from .ai_context import AiContextService
 from .event_bus import InMemoryEventBus
 from .gateway import CommandCenterGateway
 from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION
@@ -50,6 +51,15 @@ class CommandCenterModule(NexusModule):
         )
         self.module_registry = command_center_module_registry()
         self.market_ribbon = MarketRibbonService()
+        self.ai_context = AiContextService(
+            enabled_loader=self._ai_enabled,
+        )
+
+    @staticmethod
+    def _ai_enabled() -> bool:
+        config = load_config()
+        trading = (config.get("modules") or {}).get("trading") or {}
+        return bool(trading.get("claude_grader_enabled", False))
 
     def _provider_error(self, topic: str, exc: Exception) -> None:
         self.context.log(
@@ -90,6 +100,23 @@ class CommandCenterModule(NexusModule):
                 self.context.log(
                     "command-center: market ribbon fallo "
                     f"({type(exc).__name__})"
+                )
+        if subpath == "ai-context":
+            try:
+                return self._json(200, self.ai_context.snapshot())
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(
+                    "command-center: contexto IA fallo "
+                    f"({type(exc).__name__})"
+                )
+                return self._json(
+                    502,
+                    error_document(
+                        "ai-context.unavailable",
+                        "No fue posible leer el contexto de IA.",
+                        502,
+                        retryable=True,
+                    ),
                 )
                 return self._json(
                     502,
