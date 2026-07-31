@@ -173,7 +173,7 @@ def test_b5_historico_sale_del_viewport_y_lo_reemplaza_posiciones() -> None:
     assert "/m/command-center/api/positions-context" in script
     assert "new PositionsContextClient" in script
     positions_markup = page.split('class="positions-panel"', 1)[1].split(
-        '<section class="bot-context-panel"', 1
+        '<section class="attention-panel"', 1
     )[0]
     assert "<button" not in positions_markup
     assert "<a " not in positions_markup

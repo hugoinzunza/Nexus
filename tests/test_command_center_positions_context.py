@@ -175,7 +175,7 @@ def test_panel_no_contiene_controles_de_ordenes_ni_credenciales() -> None:
         ROOT / "modules" / "command_center" / "positions_context.py"
     ).read_text(encoding="utf-8")
     panel = page.split('class="positions-panel"', 1)[1].split(
-        '<section class="bot-context-panel"', 1
+        '<section class="attention-panel"', 1
     )[0]
 
     assert "<button" not in panel

@@ -483,7 +483,7 @@ a:focus-visible {
 .macro-panel,
 .ai-panel,
 .positions-panel,
-.bot-context-panel,
+.attention-panel,
 .music-panel {
   min-height: 0;
   overflow: hidden;
@@ -651,7 +651,8 @@ a:focus-visible {
 }
 
 .context-badge[data-state="info"],
-.context-badge[data-state="ready"] {
+.context-badge[data-state="ready"],
+.context-badge[data-state="normal"] {
   color: var(--info);
 }
 
@@ -1022,7 +1023,7 @@ a:focus-visible {
   }
 
   .status-panel,
-  .bot-context-panel {
+  .attention-panel {
     grid-column: 1 / -1;
   }
 }
@@ -1035,7 +1036,7 @@ a:focus-visible {
   .macro-panel,
   .ai-panel,
   .positions-panel,
-  .bot-context-panel,
+  .attention-panel,
   .music-panel,
   .status-footer {
     padding-inline: var(--space-4);

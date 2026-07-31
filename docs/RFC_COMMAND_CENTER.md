@@ -236,6 +236,28 @@ VAL-0023 debe comprobar en el Arzopa que pista, proveedor y controles se
 reconocen sin competir con Atención del Bot. La aprobación técnica no autoriza
 factories ni cierra la validación perceptual.
 
+### Línea B — Sprint B8
+
+B8 sustituye la superficie de **Atención del Bot** por **Atención inmediata**.
+Responde únicamente si existe una condición operacional verificable que requiera
+intervención ahora. No agrega un panel ni aumenta la densidad.
+
+La proyección se deriva en el cliente desde cuatro lecturas existentes:
+preparación operacional, contexto macro, posiciones abiertas y estado del Bot.
+Prioriza servicios esenciales fallidos, fuentes de posiciones no confirmables,
+eventos macro de alto impacto dentro de una hora y degradación explícita del Bot.
+Cuando varias condiciones coinciden muestra la de mayor severidad y el conteo
+total; nunca rota mensajes ni obliga a leer una lista.
+
+El PnL, ROE, dirección y tamaño de una posición no producen alertas. NexUX no
+dispone todavía de una política contractual que convierta rendimiento flotante
+en intervención, por lo que hacerlo sería una recomendación implícita. B8 no
+crea endpoints, no escribe estado y no incorpora acciones.
+
+VAL-0028 debe comprobar en el Arzopa que el estado normal desaparece visualmente,
+que una alerta crítica se reconoce en aproximadamente dos segundos y que la
+consolidación reduce carga frente al panel exclusivo del Bot.
+
 ### Fase A.5 — Integraciones headless
 
 Línea A arquitectónicamente completa permanece cerrada. A.5 incorpora

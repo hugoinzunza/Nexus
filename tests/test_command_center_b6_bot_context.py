@@ -170,12 +170,13 @@ def test_frontend_normaliza_y_no_inventa_una_senal() -> None:
     assert payload["valid"]["latestSignal"]["pair"] == "ETH"
 
 
-def test_b6_agrega_un_panel_read_only_sin_controles() -> None:
+def test_b6_alimenta_atencion_inmediata_sin_recuperar_su_panel() -> None:
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
 
-    assert page.count('class="bot-context-panel"') == 1
-    panel = page.split('class="bot-context-panel"', 1)[1].split(
+    assert 'class="bot-context-panel"' not in page
+    assert page.count('class="attention-panel"') == 1
+    panel = page.split('class="attention-panel"', 1)[1].split(
         "</section>", 1
     )[0]
     assert "solo lectura" in panel

@@ -475,6 +475,103 @@ export function normalizeBotContext(payload) {
   };
 }
 
+const ATTENTION_RANK = { critical: 3, warning: 2, info: 1 };
+
+export function deriveImmediateAttention({
+  readiness = null,
+  macro = null,
+  positions = null,
+  bot = null,
+  now = Date.now(),
+} = {}) {
+  const available = [readiness, macro, positions, bot].filter(Boolean).length;
+  if (available < 4) {
+    return {
+      state: "unknown",
+      summary: "Reuniendo contexto operacional.",
+      detail: `${available}/4 fuentes`,
+      count: 0,
+      evaluatedAtMs: now,
+    };
+  }
+
+  const alerts = [];
+  if (readiness.overall === "failed") {
+    alerts.push({
+      state: "critical",
+      summary: "La plataforma no está preparada para trabajar.",
+      source: "Sistema",
+    });
+  } else if (readiness.overall === "degraded") {
+    alerts.push({
+      state: "warning",
+      summary: "Hay servicios esenciales degradados.",
+      source: "Sistema",
+    });
+  }
+
+  const unavailableAccounts = positions.accounts.filter((account) =>
+    ["stale", "failed", "unavailable"].includes(account.state),
+  );
+  if (unavailableAccounts.length) {
+    alerts.push({
+      state: "warning",
+      summary: "No se pueden confirmar todas las posiciones abiertas.",
+      source: "Binance",
+    });
+  }
+
+  if (macro.status === "ready" && macro.event) {
+    const remaining = Number(macro.event.ts) * 1000 - now;
+    if (Number.isFinite(remaining) && remaining >= 0 && remaining <= 60 * 60_000) {
+      const critical = remaining <= 15 * 60_000;
+      alerts.push({
+        state: critical ? "critical" : "warning",
+        summary: `${macro.event.title || "Evento macro"} · ${formatMacroCountdown(
+          macro.event.ts,
+          now,
+        )}.`,
+        source: "Macro",
+      });
+    }
+  }
+
+  if (bot.state === "degraded" || bot.severity === "critical") {
+    alerts.push({
+      state: bot.severity === "critical" ? "critical" : "warning",
+      summary: "El estado del Bot requiere revisión.",
+      source: "Bot",
+    });
+  } else if (bot.severity === "warning") {
+    alerts.push({
+      state: "warning",
+      summary: "El Bot reportó una observación que requiere revisión.",
+      source: "Bot",
+    });
+  }
+
+  alerts.sort((left, right) => ATTENTION_RANK[right.state] - ATTENTION_RANK[left.state]);
+  if (!alerts.length) {
+    return {
+      state: "normal",
+      summary: "Sin intervención inmediata.",
+      detail: "4 fuentes verificadas",
+      count: 0,
+      evaluatedAtMs: now,
+    };
+  }
+  const first = alerts[0];
+  return {
+    state: first.state,
+    summary: first.summary,
+    detail: alerts.length === 1
+      ? first.source
+      : `${first.source} · ${alerts.length} alertas`,
+    count: alerts.length,
+    evaluatedAtMs: now,
+  };
+}
+
 export class BotContextClient {
   constructor({
     contextUrl = BOT_CONTEXT_URL,
@@ -1662,55 +1759,28 @@ function renderPositionsContext(context) {
     : "Sin lectura";
 }
 
-function renderBotContext(context) {
-  const badge = document.querySelector("#bot-context-state");
-  const visualState =
-    context.state === "ready" ? context.severity : context.state;
-  badge.dataset.state = visualState;
+function renderImmediateAttention(attention) {
+  const badge = document.querySelector("#attention-state");
+  badge.dataset.state = attention.state;
   const labels = {
-    normal: "Ready",
-    info: "Observando",
+    normal: "Sin alertas",
+    info: "Información",
     warning: "Atención",
     critical: "Crítico",
-    paused: "Pausado",
-    degraded: "Degradado",
-    unknown: "Unknown",
+    unknown: "Esperando",
   };
-  badge.textContent = labels[visualState] || "Unknown";
-  const signal = context.latestSignal;
-  const summary = document.querySelector("#bot-context-summary");
-  summary.dataset.state = context.state;
-  if (signal) {
-    const direction =
-      signal.direction === "long"
-        ? "Long"
-        : signal.direction === "short"
-          ? "Short"
-          : "Sin dirección";
-    summary.textContent =
-      `${signal.pair} · ${direction} · ${signal.status}`;
-  } else {
-    summary.textContent =
-      context.state === "degraded"
-        ? "El estado del Bot no está actualizado."
-        : "No hay una señal reciente que requiera atención.";
-  }
-  const modeLabels = {
-    live: "LIVE · solo lectura",
-    "dry-run": "DRY-RUN · solo lectura",
-    unknown: "Modo desconocido · solo lectura",
-  };
-  document.querySelector("#bot-context-mode").textContent =
-    modeLabels[context.mode] || modeLabels.unknown;
-  document.querySelector("#bot-context-updated").textContent =
-    signal?.occurredAtMs
-      ? `Señal ${new Date(signal.occurredAtMs).toLocaleTimeString("es-CL", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}`
-      : context.sourceAgeSeconds !== null
-        ? `Leído hace ${Math.round(context.sourceAgeSeconds)} s`
-        : "Sin lectura";
+  badge.textContent = labels[attention.state] || labels.unknown;
+  const summary = document.querySelector("#attention-summary");
+  summary.dataset.state = attention.state;
+  summary.textContent = attention.summary;
+  document.querySelector("#attention-detail").textContent = attention.detail;
+  document.querySelector("#attention-updated").textContent =
+    attention.evaluatedAtMs
+      ? `Evaluado ${new Date(attention.evaluatedAtMs).toLocaleTimeString(
+          "es-CL",
+          { hour: "2-digit", minute: "2-digit" },
+        )}`
+      : "Sin lectura";
 }
 
 function renderMediaContext(context) {
@@ -2048,11 +2118,24 @@ export function bootstrap() {
     origin.textContent = "Fixture contractual";
     origin.classList.add("fixture");
     const state = fixtureState(fixture);
+    const macroState = fixtureMacroState();
+    const positionsState = fixturePositionsContext();
+    const botState = fixtureBotContext();
+    const readinessState = deriveOperationalReadiness({
+      commandState: state,
+      healthState: fixtureHealthState(fixture),
+      online: fixture !== "disconnected",
+    });
     render(state);
-    renderMacro(fixtureMacroState());
+    renderMacro(macroState);
     renderMarketRibbon(fixtureMarketRibbonState());
-    renderPositionsContext(fixturePositionsContext());
-    renderBotContext(fixtureBotContext());
+    renderPositionsContext(positionsState);
+    renderImmediateAttention(deriveImmediateAttention({
+      readiness: readinessState,
+      macro: macroState,
+      positions: positionsState,
+      bot: botState,
+    }));
     renderMediaContext(fixtureMediaContext());
     wireMediaControls((action) => {
       document.querySelector("#music-feedback").textContent =
@@ -2062,13 +2145,7 @@ export function bootstrap() {
       document.querySelector("#music-feedback").textContent =
         `${provider} · fixture`;
     });
-    renderOperationalReadiness(
-      deriveOperationalReadiness({
-        commandState: state,
-        healthState: fixtureHealthState(fixture),
-        online: fixture !== "disconnected",
-      }),
-    );
+    renderOperationalReadiness(readinessState);
     document.querySelector("#resync-button").disabled = true;
     return;
   }
@@ -2080,14 +2157,23 @@ export function bootstrap() {
     checkedAt: null,
     error: null,
   };
+  const attentionInputs = {
+    readiness: null,
+    macro: null,
+    positions: null,
+    bot: null,
+  };
+  const paintAttention = () => {
+    renderImmediateAttention(deriveImmediateAttention(attentionInputs));
+  };
   const paintReadiness = () => {
-    renderOperationalReadiness(
-      deriveOperationalReadiness({
-        commandState,
-        healthState: operationalHealthState,
-        online: navigator.onLine,
-      }),
-    );
+    attentionInputs.readiness = deriveOperationalReadiness({
+      commandState,
+      healthState: operationalHealthState,
+      online: navigator.onLine,
+    });
+    renderOperationalReadiness(attentionInputs.readiness);
+    paintAttention();
   };
   const client = new CommandCenterClient({
     onChange: (state) => {
@@ -2096,15 +2182,28 @@ export function bootstrap() {
       paintReadiness();
     },
   });
-  const macroClient = new MacroContextClient({ onChange: renderMacro });
+  const macroClient = new MacroContextClient({
+    onChange: (state) => {
+      attentionInputs.macro = state;
+      renderMacro(state);
+      paintAttention();
+    },
+  });
   const marketRibbonClient = new MarketRibbonClient({
     onChange: renderMarketRibbon,
   });
   const positionsContextClient = new PositionsContextClient({
-    onChange: renderPositionsContext,
+    onChange: (state) => {
+      attentionInputs.positions = state;
+      renderPositionsContext(state);
+      paintAttention();
+    },
   });
   const botContextClient = new BotContextClient({
-    onChange: renderBotContext,
+    onChange: (state) => {
+      attentionInputs.bot = state;
+      paintAttention();
+    },
   });
   const mediaContextClient = new MediaContextClient({
     onChange: renderMediaContext,

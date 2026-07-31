@@ -753,9 +753,9 @@ VAL-0019 continúa abierto de forma independiente.
 
 ### Conclusión
 
-**TÉCNICAMENTE COMPLETO** y **PENDIENTE perceptualmente**. Hugo debe confirmar
-desde 80–90 cm que el estado neutral no agrega ruido y que una severidad de
-fixture se reconoce sin lectura sostenida.
+**SUSTITUIDO antes de validación perceptual.** La superficie de Contexto de IA
+fue reemplazada por Posiciones abiertas en VAL-0027. El endpoint contractual se
+conserva como conocimiento histórico, pero ya no ocupa el viewport.
 
 ---
 
@@ -993,11 +993,51 @@ del usuario y en la cuenta secundaria del Bot.
 - Wire ABI, EventBus, Gateway, registro, factories, Bot y producción permanecen
   intactos.
 
+### Evidencia visual
+
+- `docs/evidence/command-center-positions-real-technical.png`
+
 ### Resolución
 
 **APROBADO técnicamente en local** y **PENDIENTE perceptualmente** en el Arzopa
 con posiciones reales. La frescura en local depende de recibir snapshots del
 VPS; sin ellos, el panel lo declara de forma explícita.
+
+---
+
+## VAL-0028 — Línea B Sprint B8 · Atención inmediata
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-31 |
+| Hardware objetivo | ARZOPA, 1920 × 1080 @ 60 Hz |
+| Pregunta | ¿Existe algo que requiera mi intervención ahora? |
+| Superficies nuevas | 0; sustituye Atención del Bot |
+
+### Evidencia técnica
+
+- Consolida preparación operacional, macro, posiciones y Bot sin consultas nuevas.
+- Prioridad determinista: crítico, atención, información y normal.
+- FOMC u otro evento alto dentro de 15 minutos es crítico; entre 15 y 60 minutos
+  requiere atención.
+- Una cuenta `stale`, `failed` o `unavailable` alerta que las posiciones no se
+  pueden confirmar; nunca asume que está plana.
+- El PnL, ROE, dirección, tamaño y apalancamiento no participan en la decisión.
+- Reutiliza el panel de B6 y no agrega controles, enlaces, endpoints ni acciones.
+- Wire ABI, EventBus, Gateway, registro, factories, Bot y producción permanecen
+  intactos.
+
+### Evidencia visual
+
+- `docs/evidence/command-center-b8-arzopa-technical.png`
+
+### Resolución
+
+**APROBADO técnicamente** y **PENDIENTE perceptualmente**. Debe comprobarse en el
+Arzopa que el estado normal no compita con el resto y que una condición crítica
+se reconozca en aproximadamente dos segundos.
 
 ---
 
