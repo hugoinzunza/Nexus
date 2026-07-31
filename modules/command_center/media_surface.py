@@ -53,6 +53,7 @@ class MediaSurfaceService:
             "track": None,
             "artist": None,
             "album": None,
+            "artwork_url": None,
             "item_ref": None,
             "capabilities": [],
             "commands_enabled": False,
@@ -76,6 +77,7 @@ class MediaSurfaceService:
             "track": None,
             "artist": None,
             "album": None,
+            "artwork_url": None,
             "item_ref": None,
             "capabilities": sorted(item.value for item in capabilities),
             "commands_enabled": self._commands_enabled,
@@ -99,10 +101,10 @@ class MediaSurfaceService:
         if state.item_ref:
             metadata = self._metadata_resolver(state.item_ref)
             if isinstance(metadata, Mapping):
-                for field in ("track", "artist", "album"):
+                for field in ("track", "artist", "album", "artwork_url"):
                     value = metadata.get(field)
                     if isinstance(value, str) and value.strip():
-                        result[field] = value.strip()[:160]
+                        result[field] = value.strip()[:240]
         return result
 
     async def execute(

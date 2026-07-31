@@ -49,6 +49,7 @@ class RecordingPort:
         self.probe_error = None
         self.probe_calls = 0
         self.execute_delay = 0
+        self.artwork = (b"\xff\xd8\xffcover", "image/jpeg")
 
     async def is_running(self, context):
         if self.error:
@@ -78,6 +79,10 @@ class RecordingPort:
         self.open_calls += 1
         self.running = True
 
+    async def current_artwork(self, persistent_id, context):
+        assert persistent_id == "ABC123"
+        return self.artwork
+
 
 def _command(
     command_id="cmd-1",
@@ -93,6 +98,37 @@ def test_adapter_publico_declara_capacidades_reales():
     adapter = AppleMusicAdapter(RecordingPort(), clock_ms=lambda: NOW)
     assert PublicAdapter is AppleMusicAdapter
     assert adapter.capabilities() == frozenset(MediaCapability)
+
+
+def test_metadata_y_caratula_se_exponen_fuera_de_media_controller():
+    async def scenario():
+        port = RecordingPort()
+        port.snapshot = AppleMusicSnapshot(
+            "playing",
+            0.42,
+            12.5,
+            "ABC123",
+            "Song",
+            "Artist",
+            "Album",
+            True,
+        )
+        adapter = AppleMusicAdapter(port, clock_ms=lambda: NOW)
+
+        state = await adapter.current_state(OperationContext())
+        metadata = adapter.metadata(state.item_ref)
+        artwork = await adapter.artwork(OperationContext())
+
+        assert metadata == {
+            "item_ref": "music:ABC123",
+            "track": "Song",
+            "artist": "Artist",
+            "album": "Album",
+            "has_artwork": True,
+        }
+        assert artwork == (b"\xff\xd8\xffcover", "image/jpeg")
+
+    _run(scenario())
 
 
 def test_health_distingue_ready_unavailable_revoked_y_closed():
@@ -343,16 +379,25 @@ def test_registro_conserva_runtime_degradado_y_observa_recuperacion():
     ("raw", "expected"),
     [
         (
-            "playing\x1f42\x1f12.5\x1fABC123\n",
-            AppleMusicSnapshot("playing", 0.42, 12.5, "ABC123"),
+            "playing\x1f42\x1f12.5\x1fABC123\x1fSong\x1fArtist\x1fAlbum\x1f1\n",
+            AppleMusicSnapshot(
+                "playing", 0.42, 12.5, "ABC123",
+                "Song", "Artist", "Album", True,
+            ),
         ),
         (
-            "fast forwarding\x1f100\x1f0\x1f\n",
+            "fast forwarding\x1f100\x1f0\x1f\x1f\x1f\x1f\x1f0\n",
             AppleMusicSnapshot("fast_forwarding", 1.0, 0.0, None),
         ),
         (
-            "stopped\x1f70\x1fmissing value\x1f\n",
+            "stopped\x1f70\x1fmissing value\x1f\x1f\x1f\x1f\x1f0\n",
             AppleMusicSnapshot("stopped", 0.7, None, None),
+        ),
+        (
+            "paused\x1f70\x1f12,5\x1fID\x1fSong\x1fArtist\x1fAlbum\x1f0\n",
+            AppleMusicSnapshot(
+                "paused", 0.7, 12.5, "ID", "Song", "Artist", "Album",
+            ),
         ),
     ],
 )
@@ -364,9 +409,9 @@ def test_parser_del_snapshot_real_es_determinista(raw, expected):
     "raw",
     [
         "playing\x1f42\x1f12.5\n",
-        "unknown\x1f42\x1f12.5\x1fABC\n",
-        "playing\x1f101\x1f12.5\x1fABC\n",
-        "playing\x1f42\x1f-1\x1fABC\n",
+        "unknown\x1f42\x1f12.5\x1fABC\x1fS\x1fA\x1fL\x1f1\n",
+        "playing\x1f101\x1f12.5\x1fABC\x1fS\x1fA\x1fL\x1f1\n",
+        "playing\x1f42\x1f-1\x1fABC\x1fS\x1fA\x1fL\x1f1\n",
     ],
 )
 def test_parser_rechaza_snapshots_incompletos_o_fuera_de_rango(raw):

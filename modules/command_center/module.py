@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import json
 import os
 
@@ -26,12 +27,17 @@ from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION, MediaAction
 from .media_surface import MediaCommandsDisabled, MediaSurfaceService
 from .market_ribbon import MarketRibbonService
 from .module_registry import command_center_module_registry
+from .operations import OperationContext
+from .qobuz_adapter import QobuzAdapter
 from .snapshot import (
     ConfiguredModulesProjection,
     IdentityError,
     SessionProjection,
     SnapshotComposer,
 )
+from .tidal_adapter import TidalAdapter
+
+_MEDIA_PROVIDERS = ("apple-music", "qobuz", "tidal")
 
 
 class CommandCenterModule(NexusModule):
@@ -60,18 +66,54 @@ class CommandCenterModule(NexusModule):
             enabled_loader=self._ai_enabled,
         )
         self.bot_context = BotContextService()
-        self._local_media_enabled = (
-            os.environ.get("NEXUX_COMMAND_CENTER_MEDIA") == "apple-music"
+        self._local_media_enabled = os.environ.get(
+            "NEXUX_COMMAND_CENTER_MEDIA"
+        ) in {"apple-music", "local"}
+        self._apple_music = (
+            AppleMusicAdapter() if self._local_media_enabled else None
         )
-        local_media = (
-            AppleMusicAdapter()
-            if self._local_media_enabled
-            else None
-        )
-        self.media_surface = MediaSurfaceService(
-            local_media,
-            commands_enabled=local_media is not None,
-        )
+        controllers = {
+            "apple-music": self._apple_music,
+            "qobuz": QobuzAdapter() if self._local_media_enabled else None,
+            "tidal": TidalAdapter() if self._local_media_enabled else None,
+        }
+        self.media_surfaces = {
+            provider: MediaSurfaceService(
+                controller,
+                commands_enabled=controller is not None,
+                metadata_resolver=(
+                    self._apple_metadata
+                    if provider == "apple-music" and controller is not None
+                    else None
+                ),
+            )
+            for provider, controller in controllers.items()
+        }
+        # Compatibilidad para consumidores internos anteriores a la selección.
+        self.media_surface = self.media_surfaces["apple-music"]
+
+    def _apple_metadata(self, item_ref: str) -> dict | None:
+        if self._apple_music is None:
+            return None
+        source = self._apple_music.metadata(item_ref)
+        if not source:
+            return None
+        result = dict(source)
+        if result.pop("has_artwork", False):
+            version = hashlib.sha256(item_ref.encode("utf-8")).hexdigest()[:16]
+            result["artwork_url"] = (
+                "/m/command-center/api/media-artwork?v=" + version
+            )
+        result.pop("item_ref", None)
+        return result
+
+    def _media_surface_for(self, provider: str):
+        surfaces = getattr(self, "media_surfaces", None)
+        if isinstance(surfaces, dict):
+            return surfaces.get(provider)
+        if provider == "apple-music":
+            return getattr(self, "media_surface", None)
+        return None
 
     @staticmethod
     def _ai_enabled() -> bool:
@@ -183,12 +225,66 @@ class CommandCenterModule(NexusModule):
                         retryable=True,
                     ),
                 )
-        if subpath == "media-context":
-            try:
+        if subpath == "media-artwork":
+            if self._apple_music is None:
                 return self._json(
-                    200,
-                    asyncio.run(self.media_surface.snapshot()),
+                    404,
+                    error_document(
+                        "media-artwork.unavailable",
+                        "No existe una caratula local disponible.",
+                        404,
+                    ),
                 )
+            try:
+                version = query.get("v", "")
+                item_ref = self._apple_music.current_item_ref
+                expected_version = (
+                    hashlib.sha256(item_ref.encode("utf-8")).hexdigest()[:16]
+                    if isinstance(item_ref, str)
+                    else ""
+                )
+                if version != expected_version:
+                    raise LookupError("artwork version mismatch")
+                artwork = asyncio.run(
+                    self._apple_music.artwork(
+                        OperationContext.with_timeout(1.5),
+                        expected_item_ref=item_ref,
+                    )
+                )
+                if artwork is None:
+                    raise LookupError("artwork unavailable")
+                data, content_type = artwork
+                return 200, content_type, data
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(
+                    "command-center: caratula multimedia no disponible "
+                    f"({type(exc).__name__})"
+                )
+                return self._json(
+                    404,
+                    error_document(
+                        "media-artwork.unavailable",
+                        "No existe una caratula local disponible.",
+                        404,
+                    ),
+                )
+        if subpath == "media-context":
+            provider = query.get("provider", "apple-music")
+            surface = self._media_surface_for(provider)
+            if surface is None:
+                return self._json(
+                    400,
+                    error_document(
+                        "media-context.provider-invalid",
+                        "El proveedor multimedia no es valido.",
+                        400,
+                    ),
+                )
+            try:
+                snapshot = asyncio.run(surface.snapshot())
+                snapshot["selected_provider"] = provider
+                snapshot["available_providers"] = list(_MEDIA_PROVIDERS)
+                return self._json(200, snapshot)
             except Exception as exc:  # noqa: BLE001
                 self.context.log(
                     "command-center: contexto multimedia fallo "
@@ -263,10 +359,17 @@ class CommandCenterModule(NexusModule):
             "pause": MediaAction.PAUSE,
             "next": MediaAction.NEXT,
             "previous": MediaAction.PREVIOUS,
+            "open_app": MediaAction.OPEN_APP,
         }
         action = allowed.get(body.get("action"))
         command_id = body.get("command_id")
-        if action is None or not isinstance(command_id, str):
+        provider = body.get("provider", "apple-music")
+        surface = self._media_surface_for(provider)
+        if (
+            action is None
+            or not isinstance(command_id, str)
+            or surface is None
+        ):
             return self._json(
                 400,
                 error_document(
@@ -276,7 +379,7 @@ class CommandCenterModule(NexusModule):
                 ),
             )
         try:
-            result = await self.media_surface.execute(
+            result = await surface.execute(
                 command_id=command_id,
                 action=action,
             )

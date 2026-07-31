@@ -7,6 +7,7 @@ from .fake_adapters import FakeChartProvider, FakeMediaController
 from .media_controller import MediaController, MediaControllerRouter
 from .module_registry import StaticModuleRegistry
 from .qobuz_adapter import QobuzAdapter
+from .tidal_adapter import TidalAdapter
 from .tradingview_adapter import TradingViewWidgetAdapter
 
 __all__ = (
@@ -20,5 +21,6 @@ __all__ = (
     "MediaControllerRouter",
     "QobuzAdapter",
     "StaticModuleRegistry",
+    "TidalAdapter",
     "TradingViewWidgetAdapter",
 )

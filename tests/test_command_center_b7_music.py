@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -213,6 +214,9 @@ def test_frontend_normaliza_capacidades_y_no_habilita_comandos_por_defecto() -> 
           empty: module.normalizeMediaContext(null),
           qobuz: module.normalizeMediaContext({{
             provider: "qobuz", lifecycle: "ready",
+            selected_provider: "qobuz",
+            available_providers: ["apple-music", "qobuz", "tidal"],
+            artwork_url: "/m/command-center/api/media-artwork?v=abc",
             capabilities: ["open_app", "invented"],
             commands_enabled: false
           }})
@@ -230,6 +234,11 @@ def test_frontend_normaliza_capacidades_y_no_habilita_comandos_por_defecto() -> 
     assert payload["empty"]["commandsEnabled"] is False
     assert payload["empty"]["lifecycle"] == "unknown"
     assert payload["qobuz"]["capabilities"] == ["open_app"]
+    assert payload["qobuz"]["selectedProvider"] == "qobuz"
+    assert payload["qobuz"]["availableProviders"] == [
+        "apple-music", "qobuz", "tidal"
+    ]
+    assert payload["qobuz"]["artworkUrl"].endswith("?v=abc")
 
 
 def test_b7_expone_solo_el_post_multimedia_acotado() -> None:
@@ -239,6 +248,9 @@ def test_b7_expone_solo_el_post_multimedia_acotado() -> None:
     assert page.count('class="music-panel"') == 1
     assert 'class="telemetry-panel"' not in page
     assert page.count('class="music-control"') == 3
+    assert page.count('data-media-provider=') == 3
+    assert 'id="music-open"' in page
+    assert 'id="music-artwork-image"' in page
     assert "/m/command-center/api/media-context" in script
     assert "/m/command-center/api/media-command" in script
     assert script.count('method: "POST"') == 1
@@ -255,6 +267,19 @@ def test_comando_http_usa_surface_y_rechaza_acciones_fuera_del_alcance() -> None
             commands_enabled=True,
             clock_ms=lambda: NOW,
         )
+        qobuz = FakeMediaController(
+            controller_id="qobuz",
+            capabilities={MediaCapability.OPEN_APP},
+            clock_ms=lambda: NOW,
+        )
+        module.media_surfaces = {
+            "apple-music": module.media_surface,
+            "qobuz": MediaSurfaceService(
+                qobuz,
+                commands_enabled=True,
+                clock_ms=lambda: NOW,
+            ),
+        }
         module.context = type("Context", (), {"log": lambda *_args: None})()
 
         applied = await module.api_post(
@@ -269,13 +294,76 @@ def test_comando_http_usa_surface_y_rechaza_acciones_fuera_del_alcance() -> None
             {},
             user={"uid": 1},
         )
+        opened = await module.api_post(
+            "media-command",
+            {
+                "command_id": "web-open-qobuz",
+                "action": "open_app",
+                "provider": "qobuz",
+            },
+            {},
+            user={"uid": 1},
+        )
 
         assert applied[0] == 200
         assert json.loads(applied[2])["status"] == "applied"
         assert forbidden[0] == 400
+        assert opened[0] == 200
         assert controller.effects == [("web-play", MediaAction.PLAY)]
+        assert qobuz.effects == [("web-open-qobuz", MediaAction.OPEN_APP)]
 
     _run(scenario())
+
+
+def test_selector_lee_cada_proveedor_sin_cambiar_estado_global() -> None:
+    module = object.__new__(CommandCenterModule)
+    module.context = type("Context", (), {"log": lambda *_args: None})()
+    module.media_surfaces = {
+        provider: MediaSurfaceService(
+            FakeMediaController(
+                controller_id=provider,
+                capabilities={MediaCapability.OPEN_APP},
+                clock_ms=lambda: NOW,
+            ),
+            commands_enabled=True,
+            clock_ms=lambda: NOW,
+        )
+        for provider in ("apple-music", "qobuz", "tidal")
+    }
+
+    qobuz = module.api(
+        "media-context", {"provider": "qobuz"}, user={"id": 1}
+    )
+    tidal = module.api(
+        "media-context", {"provider": "tidal"}, user={"id": 1}
+    )
+
+    assert json.loads(qobuz[2])["selected_provider"] == "qobuz"
+    assert json.loads(tidal[2])["selected_provider"] == "tidal"
+
+
+def test_endpoint_de_caratula_entrega_solo_imagen_local_acotada() -> None:
+    class Apple:
+        current_item_ref = "music:TRACK"
+
+        async def artwork(self, context, expected_item_ref=None):
+            assert expected_item_ref == self.current_item_ref
+            return b"\x89PNG\r\n\x1a\ncover", "image/png"
+
+    module = object.__new__(CommandCenterModule)
+    module._apple_music = Apple()
+    module.context = type("Context", (), {"log": lambda *_args: None})()
+
+    version = hashlib.sha256(b"music:TRACK").hexdigest()[:16]
+    response = module.api(
+        "media-artwork", {"v": version}, user={"id": 1}
+    )
+    stale = module.api(
+        "media-artwork", {"v": "0000000000000000"}, user={"id": 1}
+    )
+
+    assert response == (200, "image/png", b"\x89PNG\r\n\x1a\ncover")
+    assert stale[0] == 404
 
 
 def test_fixture_antiguo_no_congela_el_carrusel_live() -> None:

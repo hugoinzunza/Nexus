@@ -868,6 +868,43 @@ proveedores ofrezcan streaming continuo.
 
 ---
 
+## VAL-0025 — Selector multimedia y metadatos locales
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-31 |
+| Hardware objetivo | ARZOPA, 1920 × 1080 @ 60 Hz |
+| Pregunta | ¿Qué aplicación quiero abrir y qué está reproduciendo? |
+| Proveedores | Apple Music, Qobuz y TIDAL |
+
+### Evidencia técnica
+
+- Selector segmentado de tres proveedores sin modificar el layout general.
+- Apple Music: salud, apertura, play/pausa, anterior, siguiente, título, artista,
+  álbum y carátula local cuando la pista la entrega.
+- Qobuz y TIDAL: salud, versión y apertura; playback y metadatos permanecen
+  deshabilitados porque las aplicaciones Desktop no los exponen de forma
+  soportada.
+- TIDAL instalado `2.43.0` fue detectado cerrado; Qobuz fue detectado `ready` y
+  Apple Music `ready` durante el smoke read-only.
+- Carátulas limitadas a 5 MB y aceptadas solo como PNG o JPEG.
+- El parser de Apple Music acepta el separador decimal regional de macOS sin
+  degradar el estado.
+- Viewport 1920 × 992: panel de 399 × 167 px, controles completamente visibles,
+  sin overflow interno ni desbordamiento de página.
+- El registro conserva cero factories; el opt-in es exclusivamente local.
+- Suite completa: 806 pruebas aprobadas.
+
+### Conclusión
+
+**APROBADO técnicamente** y **PENDIENTE perceptualmente**. La carátula real debe
+validarse cuando Apple Music tenga una pista con artwork cargada; durante el
+smoke no existía `current track`, por lo que se verificó el placeholder honesto.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

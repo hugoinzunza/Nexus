@@ -204,14 +204,23 @@ son metadatos opcionales externos al contrato; si el proveedor no los entrega,
 la UI no los inventa. Apple Music puede declarar lectura y reproducción. Qobuz
 conserva únicamente `open_app` y no presenta controles inexistentes.
 
+La superficie local ofrece un selector explícito entre Apple Music, Qobuz y
+TIDAL. Apple Music obtiene título, artista, álbum y, cuando existe, carátula
+directamente de la aplicación macOS. La imagen se limita a 5 MB, se valida como
+PNG o JPEG y se sirve desde una ruta autenticada sin caché persistente. Qobuz y
+TIDAL Desktop conservan únicamente salud, versión y `open_app`: sus aplicaciones
+no entregan reproducción ni metadatos mediante una interfaz soportada, por lo
+que el panel deshabilita anterior, play/pausa y siguiente al seleccionarlas.
+
 Los comandos conservan `command_id`, idempotencia, ACK `applied`, `rejected` o
 `unknown`, deadline y reconciliación por lectura. Producción permanece inactiva:
 sin configuración, `commands_enabled` es falso y los botones quedan
 deshabilitados. Para validación local existe un opt-in explícito mediante
-`NEXUX_COMMAND_CENTER_MEDIA=apple-music`; habilita exclusivamente play, pausa,
-anterior y siguiente en un único endpoint autenticado. Play puede abrir Music,
-espera disponibilidad sin repetir el efecto y reconcilia el estado observado.
-No se añadió factory productiva, LaunchAgent ni control remoto.
+`NEXUX_COMMAND_CENTER_MEDIA=local` (con compatibilidad para `apple-music`);
+habilita `open_app` en los tres proveedores y, exclusivamente para Apple Music,
+play, pausa, anterior y siguiente en un único endpoint autenticado. Play puede
+abrir Music, espera disponibilidad sin repetir el efecto y reconcilia el estado
+observado. No se añadió factory productiva, LaunchAgent ni control remoto.
 
 VAL-0023 debe comprobar en el Arzopa que pista, proveedor y controles se
 reconocen sin competir con Atención del Bot. La aprobación técnica no autoriza

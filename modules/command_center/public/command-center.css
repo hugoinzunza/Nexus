@@ -690,14 +690,77 @@ a:focus-visible {
 }
 
 .music-panel {
-  padding: var(--space-4);
+  padding: var(--space-3);
+}
+
+.media-provider-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+}
+
+.media-provider-selector button {
+  min-width: 0;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-xs);
+}
+
+.media-provider-selector button[aria-pressed="true"] {
+  background: var(--surface-3);
+  color: var(--text-1);
+}
+
+.music-content {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 4px;
+}
+
+.music-artwork {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+.music-artwork img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.music-artwork svg {
+  width: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
 }
 
 .music-now {
   display: grid;
   gap: 2px;
   min-width: 0;
-  margin-top: var(--space-2);
 }
 
 .music-now strong,
@@ -718,16 +781,17 @@ a:focus-visible {
 
 .music-controls {
   display: flex;
-  min-height: 32px;
+  min-height: 28px;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  margin-top: 4px;
 }
 
-.music-control {
+.music-control,
+.music-open {
   display: inline-grid;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--border);
@@ -737,18 +801,21 @@ a:focus-visible {
   cursor: pointer;
 }
 
-.music-control:hover:not(:disabled) {
+.music-control:hover:not(:disabled),
+.music-open:hover:not(:disabled) {
   border-color: var(--info);
   color: var(--info);
 }
 
-.music-control:disabled {
+.music-control:disabled,
+.music-open:disabled {
   cursor: not-allowed;
   opacity: 0.36;
 }
 
-.music-control svg {
-  width: 17px;
+.music-control svg,
+.music-open svg {
+  width: 15px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;

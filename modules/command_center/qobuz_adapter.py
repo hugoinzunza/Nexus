@@ -64,6 +64,9 @@ class QobuzPort(Protocol):
 class OsaScriptQobuzPort:
     """Puerto real sin shell, API privada ni automatizacion de playback."""
 
+    provider_name = "Qobuz"
+    code_prefix = "qobuz"
+
     async def is_running(self, context: OperationContext) -> bool:
         output = await self._run(
             (OSASCRIPT, "-l", "AppleScript", "-e", _IS_RUNNING_SCRIPT),
@@ -103,8 +106,9 @@ class OsaScriptQobuzPort:
     async def open_app(self, context: OperationContext) -> None:
         await self._run((OPEN, "-gj", "-a", QOBUZ_APP), context)
 
-    @staticmethod
+    @classmethod
     async def _run(
+        cls,
         command: tuple[str, ...],
         context: OperationContext,
     ) -> str:
@@ -129,33 +133,33 @@ class OsaScriptQobuzPort:
                 process.kill()
                 await process.wait()
             raise QobuzPortError(
-                "qobuz.timeout",
-                "la automatizacion de Qobuz excedio el deadline",
+                f"{cls.code_prefix}.timeout",
+                f"la automatizacion de {cls.provider_name} excedio el deadline",
                 retryable=True,
                 ambiguous=True,
             ) from exc
         if process.returncode != 0:
             detail = stderr.decode("utf-8", errors="replace").strip()
             if "-1743" in detail:
-                code = "qobuz.permission-denied"
+                code = f"{cls.code_prefix}.permission-denied"
                 retryable = False
             elif "-600" in detail:
-                code = "qobuz.not-running"
+                code = f"{cls.code_prefix}.not-running"
                 retryable = True
             else:
-                code = "qobuz.probe-failed"
+                code = f"{cls.code_prefix}.probe-failed"
                 retryable = True
             raise QobuzPortError(
                 code,
-                detail or "fallo la automatizacion local de Qobuz",
+                detail or f"fallo la automatizacion local de {cls.provider_name}",
                 retryable=retryable,
             )
         try:
             return stdout.decode("utf-8", errors="strict")
         except UnicodeDecodeError as exc:
             raise QobuzPortError(
-                "qobuz.invalid-output",
-                "Qobuz devolvio una salida no UTF-8",
+                f"{cls.code_prefix}.invalid-output",
+                f"{cls.provider_name} devolvio una salida no UTF-8",
                 retryable=True,
             ) from exc
 
@@ -164,6 +168,8 @@ class QobuzAdapter:
     """MediaController real, limitado a salud y apertura de la app."""
 
     controller_id = "qobuz"
+    provider_name = "Qobuz"
+    code_prefix = "qobuz"
 
     def __init__(
         self,
@@ -198,7 +204,10 @@ class QobuzAdapter:
     async def health(self, context: OperationContext) -> MediaHealth:
         self._metrics["health_checks"] += 1
         if self._closed:
-            return self._health(MediaLifecycle.CLOSED, "qobuz.closed")
+            return self._health(
+                MediaLifecycle.CLOSED,
+                f"{self.code_prefix}.closed",
+            )
         try:
             running = await self._port.is_running(context)
             if not running:
@@ -206,7 +215,7 @@ class QobuzAdapter:
                 self._metrics["app_version"] = None
                 return self._health(
                     MediaLifecycle.UNAVAILABLE,
-                    "qobuz.not-running",
+                f"{self.code_prefix}.not-running",
                     retryable=True,
                 )
             self._metrics["app_probes"] += 1
@@ -216,7 +225,7 @@ class QobuzAdapter:
             self._metrics["app_version"] = None
             lifecycle = (
                 MediaLifecycle.REVOKED
-                if exc.code == "qobuz.permission-denied"
+                if exc.code == f"{self.code_prefix}.permission-denied"
                 else MediaLifecycle.DEGRADED
             )
             return self._health(
@@ -233,7 +242,7 @@ class QobuzAdapter:
         self._require_open()
         context.raise_if_cancelled()
         raise MediaCapabilityError(
-            "Qobuz Desktop no expone current_state a terceros"
+            f"{self.provider_name} Desktop no expone current_state a terceros"
         )
 
     async def execute(
@@ -244,7 +253,8 @@ class QobuzAdapter:
         self._require_open()
         if command.action is not MediaAction.OPEN_APP:
             raise MediaCapabilityError(
-                f"Qobuz no expone {command.action.value} a terceros"
+                f"{self.provider_name} no expone "
+                f"{command.action.value} a terceros"
             )
         lock = self._get_command_lock()
         await await_operation(lock.acquire(), context)
@@ -302,7 +312,7 @@ class QobuzAdapter:
             self._ack(
                 command,
                 MediaAckStatus.APPLIED,
-                "qobuz.applied",
+                f"{self.code_prefix}.applied",
                 retryable=False,
             )
         )
@@ -372,7 +382,9 @@ class QobuzAdapter:
 
     def _require_open(self) -> None:
         if self._closed:
-            raise MediaLifecycleError("QobuzAdapter esta cerrado")
+            raise MediaLifecycleError(
+                f"{self.provider_name}Adapter esta cerrado"
+            )
 
     def _get_command_lock(self) -> asyncio.Lock:
         if self._command_lock is None:

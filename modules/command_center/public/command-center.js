@@ -446,6 +446,10 @@ export function normalizeMediaContext(payload) {
   const capabilities = Array.isArray(payload?.capabilities)
     ? payload.capabilities.filter((item) => MEDIA_CAPABILITIES.has(item))
     : [];
+  const providerIds = new Set(["apple-music", "qobuz", "tidal"]);
+  const selectedProvider = providerIds.has(payload?.selected_provider)
+    ? payload.selected_provider
+    : "apple-music";
   return {
     provider: payload?.provider ? String(payload.provider) : null,
     lifecycle: lifecycle.has(payload?.lifecycle)
@@ -461,12 +465,19 @@ export function normalizeMediaContext(payload) {
     track: payload?.track ? String(payload.track).slice(0, 160) : null,
     artist: payload?.artist ? String(payload.artist).slice(0, 160) : null,
     album: payload?.album ? String(payload.album).slice(0, 160) : null,
+    artworkUrl: payload?.artwork_url
+      ? String(payload.artwork_url).slice(0, 240)
+      : null,
     itemRef: payload?.item_ref ? String(payload.item_ref) : null,
     capabilities,
     commandsEnabled: payload?.commands_enabled === true,
     readOnly: payload?.read_only !== false,
     code: payload?.code ? String(payload.code) : null,
     simulated: payload?.simulated === true,
+    selectedProvider,
+    availableProviders: Array.isArray(payload?.available_providers)
+      ? payload.available_providers.filter((item) => providerIds.has(item))
+      : [],
   };
 }
 
@@ -480,6 +491,7 @@ export class MediaContextClient {
     this.fetcher = fetcher;
     this.onChange = onChange;
     this.context = normalizeMediaContext(null);
+    this.provider = "apple-music";
     this.feedback = null;
     this.busy = false;
     this.refreshTimer = null;
@@ -499,7 +511,9 @@ export class MediaContextClient {
 
   async refresh() {
     try {
-      const response = await this.fetcher(this.contextUrl, {
+      const url = new URL(this.contextUrl, location.origin);
+      url.searchParams.set("provider", this.provider);
+      const response = await this.fetcher(url, {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
@@ -529,6 +543,7 @@ export class MediaContextClient {
         body: JSON.stringify({
           command_id: `cc-media-${suffix}`,
           action,
+          provider: this.provider,
         }),
       });
       const payload = await response.json();
@@ -556,6 +571,13 @@ export class MediaContextClient {
         busy: false,
       });
     }
+  }
+
+  async selectProvider(provider) {
+    if (!["apple-music", "qobuz", "tidal"].includes(provider)) return;
+    this.provider = provider;
+    this.feedback = null;
+    await this.refresh();
   }
 }
 
@@ -1464,6 +1486,17 @@ function renderBotContext(context) {
 }
 
 function renderMediaContext(context) {
+  const providerLabels = {
+    "apple-music": "Apple Music",
+    qobuz: "Qobuz",
+    tidal: "TIDAL",
+  };
+  document.querySelectorAll("[data-media-provider]").forEach((button) => {
+    button.setAttribute(
+      "aria-pressed",
+      String(button.dataset.mediaProvider === context.selectedProvider),
+    );
+  });
   const badge = document.querySelector("#music-state");
   const stateLabels = {
     ready: "Ready",
@@ -1476,17 +1509,34 @@ function renderMediaContext(context) {
   badge.dataset.state =
     context.lifecycle === "ready" ? "ready" : context.lifecycle;
   badge.textContent = stateLabels[context.lifecycle] || "Unknown";
+  const selectedLabel = providerLabels[context.selectedProvider] || "Música";
   document.querySelector("#music-track").textContent =
     context.track || (
       context.itemRef
         ? "Pista identificada"
-        : "Sin reproducción disponible"
+        : context.selectedProvider === "apple-music"
+          ? "Sin reproducción disponible"
+          : `Abre ${selectedLabel} para reproducir`
     );
   const details = [context.artist, context.album].filter(Boolean);
   document.querySelector("#music-detail").textContent =
     details.length
       ? details.join(" · ")
-      : context.provider || "Factory inactiva";
+      : context.provider || `${selectedLabel} · integración local inactiva`;
+
+  const artworkImage = document.querySelector("#music-artwork-image");
+  const artworkPlaceholder = document.querySelector(
+    "#music-artwork-placeholder",
+  );
+  if (context.artworkUrl) {
+    artworkImage.src = context.artworkUrl;
+    artworkImage.hidden = false;
+    artworkPlaceholder.hidden = true;
+  } else {
+    artworkImage.removeAttribute("src");
+    artworkImage.hidden = true;
+    artworkPlaceholder.hidden = false;
+  }
 
   const capabilities = new Set(context.capabilities);
   const canControl =
@@ -1500,10 +1550,15 @@ function renderMediaContext(context) {
     capabilities.has("play") &&
     capabilities.has("open_app");
   const controls = {
+    open: document.querySelector("#music-open"),
     previous: document.querySelector("#music-previous"),
     toggle: document.querySelector("#music-toggle"),
     next: document.querySelector("#music-next"),
   };
+  controls.open.disabled =
+    !context.commandsEnabled ||
+    context.busy === true ||
+    !capabilities.has("open_app");
   controls.previous.disabled =
     !canControl || !capabilities.has("previous");
   controls.next.disabled = !canControl || !capabilities.has("next");
@@ -1530,12 +1585,22 @@ function renderMediaContext(context) {
 }
 
 function wireMediaControls(onAction) {
-  document.querySelectorAll(".music-control").forEach((button) => {
+  document.querySelectorAll(".music-control, .music-open").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.id === "music-toggle"
         ? button.dataset.action
-        : button.id.replace("music-", "");
+        : button.id === "music-open"
+          ? "open_app"
+          : button.id.replace("music-", "");
       onAction(action);
+    });
+  });
+}
+
+function wireMediaProviderSelector(onSelect) {
+  document.querySelectorAll("[data-media-provider]").forEach((button) => {
+    button.addEventListener("click", () => {
+      onSelect(button.dataset.mediaProvider);
     });
   });
 }
@@ -1722,6 +1787,10 @@ function startClock() {
 
 export function bootstrap() {
   startClock();
+  document.querySelector("#music-artwork-image").addEventListener("error", (event) => {
+    event.currentTarget.hidden = true;
+    document.querySelector("#music-artwork-placeholder").hidden = false;
+  });
   remountChart({
     id: "btcusdt",
     symbol: "BTCUSDT.P",
@@ -1748,6 +1817,10 @@ export function bootstrap() {
     wireMediaControls((action) => {
       document.querySelector("#music-feedback").textContent =
         `${action} · fake ACK`;
+    });
+    wireMediaProviderSelector((provider) => {
+      document.querySelector("#music-feedback").textContent =
+        `${provider} · fixture`;
     });
     renderOperationalReadiness(
       deriveOperationalReadiness({
@@ -1811,6 +1884,9 @@ export function bootstrap() {
   window.__nexuxCommandCenterHealth = healthClient;
   wireMediaControls((action) => {
     mediaContextClient.execute(action).catch(() => {});
+  });
+  wireMediaProviderSelector((provider) => {
+    mediaContextClient.selectProvider(provider).catch(() => {});
   });
   document
     .querySelector("#resync-button")

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import tempfile
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -42,13 +44,54 @@ tell application "Music"
     set volumeValue to sound volume
     set positionValue to player position
     set trackId to ""
+    set trackName to ""
+    set artistName to ""
+    set albumName to ""
+    set artworkCount to 0
     try
-        set trackId to persistent ID of current track
+        set activeTrack to current track
+        set trackId to persistent ID of activeTrack
+        set trackName to name of activeTrack
+        set artistName to artist of activeTrack
+        set albumName to album of activeTrack
+        set artworkCount to count of artworks of activeTrack
     end try
     return stateValue & (ASCII character 31) & (volumeValue as text) & ¬
         (ASCII character 31) & (positionValue as text) & ¬
-        (ASCII character 31) & trackId
+        (ASCII character 31) & trackId & ¬
+        (ASCII character 31) & trackName & ¬
+        (ASCII character 31) & artistName & ¬
+        (ASCII character 31) & albumName & ¬
+        (ASCII character 31) & (artworkCount as text)
 end tell
+""".strip()
+
+_ARTWORK_SCRIPT = """
+on run argv
+    set outputPath to item 1 of argv
+    set expectedId to item 2 of argv
+    tell application "Music"
+        try
+            set activeTrack to current track
+            if persistent ID of activeTrack is not expectedId then return "stale"
+            set artworkData to raw data of artwork 1 of activeTrack
+        on error
+            return "none"
+        end try
+    end tell
+    set outputFile to open for access (POSIX file outputPath) with write permission
+    try
+        set eof outputFile to 0
+        write artworkData to outputFile starting at 0
+        close access outputFile
+    on error
+        try
+            close access outputFile
+        end try
+        error
+    end try
+    return "written"
+end run
 """.strip()
 
 _ACTION_SCRIPTS = {
@@ -82,6 +125,10 @@ class AppleMusicSnapshot:
     volume: float
     position_seconds: float | None
     persistent_id: str | None
+    track: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    has_artwork: bool = False
 
 
 class AppleMusicPort(Protocol):
@@ -103,6 +150,10 @@ class AppleMusicPort(Protocol):
     ) -> None: ...
 
     async def open_app(self, context: OperationContext) -> None: ...
+
+    async def current_artwork(
+        self, persistent_id: str, context: OperationContext
+    ) -> tuple[bytes, str] | None: ...
 
 
 class OsaScriptAppleMusicPort:
@@ -186,23 +237,68 @@ class OsaScriptAppleMusicPort:
     async def open_app(self, context: OperationContext) -> None:
         await self._run((OPEN, "-gj", "-a", MUSIC_APP), context)
 
+    async def current_artwork(
+        self, persistent_id: str, context: OperationContext
+    ) -> tuple[bytes, str] | None:
+        descriptor, path = tempfile.mkstemp(prefix="nexux-artwork-")
+        os.close(descriptor)
+        try:
+            result = await self._run(
+                (
+                    OSASCRIPT,
+                    "-l",
+                    "AppleScript",
+                    "-e",
+                    _ARTWORK_SCRIPT,
+                    path,
+                    persistent_id,
+                ),
+                context,
+            )
+            if result.strip() != "written":
+                return None
+            with open(path, "rb") as artwork_file:
+                data = artwork_file.read(5_000_001)
+            if not data or len(data) > 5_000_000:
+                return None
+            if data.startswith(b"\xff\xd8\xff"):
+                return data, "image/jpeg"
+            if data.startswith(b"\x89PNG\r\n\x1a\n"):
+                return data, "image/png"
+            return None
+        finally:
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+
     @staticmethod
     def _parse_snapshot(output: str) -> AppleMusicSnapshot:
         fields = output.rstrip("\r\n").split(_FIELD_SEPARATOR)
-        if len(fields) != 4:
+        if len(fields) != 8:
             raise AppleMusicPortError(
                 "apple-music.invalid-snapshot",
                 "Apple Music devolvio un snapshot incompleto",
                 retryable=True,
             )
-        playback, volume_text, position_text, persistent_id = fields
+        (
+            playback,
+            volume_text,
+            position_text,
+            persistent_id,
+            track,
+            artist,
+            album,
+            artwork_count_text,
+        ) = fields
         try:
             volume = int(volume_text) / 100
             position = (
                 None
                 if position_text == "missing value"
-                else float(position_text)
+                else float(position_text.replace(",", "."))
             )
+            artwork_count = int(artwork_count_text)
         except ValueError as exc:
             raise AppleMusicPortError(
                 "apple-music.invalid-snapshot",
@@ -221,7 +317,7 @@ class OsaScriptAppleMusicPort:
                 "Apple Music devolvio un estado de reproduccion invalido",
                 retryable=True,
             )
-        if not 0 <= volume <= 1 or (
+        if not 0 <= volume <= 1 or artwork_count < 0 or (
             position is not None and position < 0
         ):
             raise AppleMusicPortError(
@@ -234,6 +330,10 @@ class OsaScriptAppleMusicPort:
             volume,
             position,
             persistent_id or None,
+            track or None,
+            artist or None,
+            album or None,
+            artwork_count > 0,
         )
 
     @staticmethod
@@ -308,6 +408,7 @@ class AppleMusicAdapter:
         self._command_lock: asyncio.Lock | None = None
         self._fingerprints: OrderedDict[str, tuple[Any, ...]] = OrderedDict()
         self._results: OrderedDict[str, MediaAck] = OrderedDict()
+        self._metadata: dict[str, str | bool] | None = None
         self._metrics = {
             "health_checks": 0,
             "permission_probes": 0,
@@ -394,6 +495,17 @@ class AppleMusicAdapter:
             if snapshot.persistent_id
             else None
         )
+        self._metadata = (
+            {
+                "item_ref": item_ref,
+                "track": snapshot.track or "",
+                "artist": snapshot.artist or "",
+                "album": snapshot.album or "",
+                "has_artwork": snapshot.has_artwork,
+            }
+            if item_ref
+            else None
+        )
         return MediaState(
             self.controller_id,
             MediaLifecycle.READY,
@@ -402,6 +514,34 @@ class AppleMusicAdapter:
             snapshot.volume,
             item_ref,
         )
+
+    def metadata(self, item_ref: str) -> Mapping[str, str | bool] | None:
+        if not self._metadata or self._metadata.get("item_ref") != item_ref:
+            return None
+        return dict(self._metadata)
+
+    @property
+    def current_item_ref(self) -> str | None:
+        if not self._metadata:
+            return None
+        item_ref = self._metadata.get("item_ref")
+        return item_ref if isinstance(item_ref, str) else None
+
+    async def artwork(
+        self,
+        context: OperationContext,
+        expected_item_ref: str | None = None,
+    ) -> tuple[bytes, str] | None:
+        if not self._metadata or not self._metadata.get("has_artwork"):
+            return None
+        item_ref = self._metadata.get("item_ref")
+        if (
+            not isinstance(item_ref, str)
+            or not item_ref.startswith("music:")
+            or (expected_item_ref is not None and item_ref != expected_item_ref)
+        ):
+            return None
+        return await self._port.current_artwork(item_ref[6:], context)
 
     async def execute(
         self,
