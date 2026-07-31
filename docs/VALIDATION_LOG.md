@@ -694,7 +694,9 @@ honestamente el último cierre de un índice sin llamarlo live.
 - API autenticada y exclusivamente GET.
 - Los símbolos externos no aparecen en el mapa estático del adaptador, por lo que
   una regresión no puede volver a montarlos accidentalmente.
-- Símbolo y variación usan 13 px; precio 16 px.
+- Símbolo usa 13 px, variación 15 px y precio 16 px.
+- Los colores semánticos aumentan saturación sin modificar fondos, densidad ni
+  composición.
 - Viewport 1920 × 936 sin overflow; banda 1920 × 58 px.
 - Suite completa: 768 pruebas aprobadas.
 - Wire ABI, fingerprint, EventBus, Gateway, runtime y factories preservados.

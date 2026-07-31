@@ -218,6 +218,10 @@ def test_b4_reutiliza_banda_superior_y_seleccion_remonta_chart_provider() -> Non
     assert 'button.dataset.destination' in script
     assert 'asset.chartMode === "external_only"' in script
     assert "font-size: var(--font-md);" in css
+    assert ".market-change {" in css
+    assert "font-size: 15px;" in css
+    for color in ("#38d7f0", "#2ee6a6", "#ffc44d", "#ff536e"):
+        assert color in css
 
 
 def test_b4_documenta_val_0020_sin_cerrar_val_0019() -> None:

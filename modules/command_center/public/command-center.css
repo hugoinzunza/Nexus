@@ -9,12 +9,12 @@
   --text-3: #929da5;
   --border: #46515a;
   --border-strong: #5a6670;
-  --info: #65d2e8;
-  --success: #56d99a;
-  --warning: #f2bd50;
-  --danger: #ff7272;
+  --info: #38d7f0;
+  --success: #2ee6a6;
+  --warning: #ffc44d;
+  --danger: #ff536e;
   --unknown: #aab4bb;
-  --focus: #8ed9e7;
+  --focus: #79e8f7;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -335,7 +335,7 @@ a:focus-visible {
 .market-change {
   align-self: start;
   color: var(--unknown);
-  font-size: 13px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
   font-weight: 720;
 }

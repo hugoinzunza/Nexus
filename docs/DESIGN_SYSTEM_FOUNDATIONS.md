@@ -126,9 +126,14 @@ La variación usa texto con signo y color semántico. La frescura usa un punto d
 es la única representación disponible. La selección activa usa `--info` y no
 altera la jerarquía de alertas del panel operacional.
 
-Símbolo y variación usan 13 px; precio usa 16 px. Las cápsulas externas no
+Símbolo usa 13 px, variación 15 px y precio 16 px. Las cápsulas externas no
 adoptan estado seleccionado: su hover indica que abren una superficie nueva y
 el gráfico integrado permanece en el último perpetuo elegido.
+
+La calibración Arzopa aumenta moderadamente la saturación de los cuatro colores
+semánticos (`info`, `success`, `warning`, `danger`) sin aclarar fondos ni ampliar
+superficies coloreadas. La intensidad comunica estado; la luminancia general
+permanece contenida para uso prolongado.
 
 En el Arzopa objetivo los ocho referentes ocupan una sola fila. Los breakpoints
 de cuatro y dos columnas son únicamente adaptaciones funcionales para viewports
