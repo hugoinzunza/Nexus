@@ -10,6 +10,7 @@ const MARKET_RIBBON_URL = "/m/command-center/api/market-ribbon";
 const AI_CONTEXT_URL = "/m/command-center/api/ai-context";
 const BOT_CONTEXT_URL = "/m/command-center/api/bot-context";
 const MEDIA_CONTEXT_URL = "/m/command-center/api/media-context";
+const MEDIA_COMMAND_URL = "/m/command-center/api/media-command";
 const HEALTH_URL = "/health";
 const WS_PATH = "/m/command-center/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 15000];
@@ -479,6 +480,8 @@ export class MediaContextClient {
     this.fetcher = fetcher;
     this.onChange = onChange;
     this.context = normalizeMediaContext(null);
+    this.feedback = null;
+    this.busy = false;
     this.refreshTimer = null;
   }
 
@@ -505,7 +508,54 @@ export class MediaContextClient {
     } catch {
       this.context = normalizeMediaContext({ lifecycle: "degraded" });
     }
-    this.onChange(this.context);
+    this.onChange({ ...this.context, feedback: this.feedback, busy: this.busy });
+  }
+
+  async execute(action) {
+    if (this.busy) return;
+    this.busy = true;
+    this.feedback = "Enviando";
+    this.onChange({ ...this.context, feedback: this.feedback, busy: true });
+    const suffix =
+      globalThis.crypto?.randomUUID?.() ||
+      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    try {
+      const response = await this.fetcher(MEDIA_COMMAND_URL, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          command_id: `cc-media-${suffix}`,
+          action,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.code || `HTTP ${response.status}`);
+      const labels = {
+        applied: "Aplicado",
+        rejected: "Rechazado",
+        unknown: "Resultado incierto",
+      };
+      const reconciledPlayback = payload?.reconciled_state?.playback;
+      this.feedback =
+        action === "play" &&
+        payload.status === "applied" &&
+        reconciledPlayback !== "playing"
+          ? "Sin pista cargada"
+          : labels[payload.status] || "Confirmado";
+      await this.refresh();
+    } catch (error) {
+      this.feedback = error?.message || "No disponible";
+    } finally {
+      this.busy = false;
+      this.onChange({
+        ...this.context,
+        feedback: this.feedback,
+        busy: false,
+      });
+    }
   }
 }
 
@@ -1439,7 +1489,16 @@ function renderMediaContext(context) {
       : context.provider || "Factory inactiva";
 
   const capabilities = new Set(context.capabilities);
-  const canControl = context.commandsEnabled && context.lifecycle === "ready";
+  const canControl =
+    context.commandsEnabled &&
+    context.lifecycle === "ready" &&
+    context.busy !== true;
+  const canStart =
+    context.commandsEnabled &&
+    context.lifecycle === "unavailable" &&
+    context.busy !== true &&
+    capabilities.has("play") &&
+    capabilities.has("open_app");
   const controls = {
     previous: document.querySelector("#music-previous"),
     toggle: document.querySelector("#music-toggle"),
@@ -1451,7 +1510,7 @@ function renderMediaContext(context) {
   const toggleAction =
     context.playback === "playing" ? "pause" : "play";
   controls.toggle.disabled =
-    !canControl || !capabilities.has(toggleAction);
+    !(canStart || (canControl && capabilities.has(toggleAction)));
   controls.toggle.dataset.action = toggleAction;
   controls.toggle.title =
     toggleAction === "pause" ? "Pausar" : "Reproducir";
@@ -1461,21 +1520,22 @@ function renderMediaContext(context) {
     toggleAction === "pause" ? "M8 5v14M16 5v14" : "M8 5v14l11-7z",
   );
   document.querySelector("#music-feedback").textContent =
-    context.simulated
+    context.feedback || (
+      context.simulated
       ? "Fixture sin efectos"
       : context.commandsEnabled
         ? FRESHNESS_LABELS[context.freshness] || "Estado leído"
-        : "Solo lectura";
+        : "Solo lectura"
+    );
 }
 
-function wireMediaFixtureControls() {
+function wireMediaControls(onAction) {
   document.querySelectorAll(".music-control").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.id === "music-toggle"
         ? button.dataset.action
         : button.id.replace("music-", "");
-      document.querySelector("#music-feedback").textContent =
-        `${action} · fake ACK`;
+      onAction(action);
     });
   });
 }
@@ -1669,8 +1729,12 @@ export function bootstrap() {
     tvSymbol: "BINANCE:BTCUSDT.P",
   });
 
-  const fixture = new URLSearchParams(location.search).get("fixture");
-  if (FIXTURE_STATES.has(fixture)) {
+  const parameters = new URLSearchParams(location.search);
+  const fixture = parameters.get("fixture");
+  if (
+    FIXTURE_STATES.has(fixture) &&
+    parameters.get("fixture_mode") === "1"
+  ) {
     const origin = document.querySelector("#data-origin");
     origin.textContent = "Fixture contractual";
     origin.classList.add("fixture");
@@ -1681,7 +1745,10 @@ export function bootstrap() {
     renderAiContext(fixtureAiContext());
     renderBotContext(fixtureBotContext());
     renderMediaContext(fixtureMediaContext());
-    wireMediaFixtureControls();
+    wireMediaControls((action) => {
+      document.querySelector("#music-feedback").textContent =
+        `${action} · fake ACK`;
+    });
     renderOperationalReadiness(
       deriveOperationalReadiness({
         commandState: state,
@@ -1742,6 +1809,9 @@ export function bootstrap() {
   window.__nexuxCommandCenterBot = botContextClient;
   window.__nexuxCommandCenterMedia = mediaContextClient;
   window.__nexuxCommandCenterHealth = healthClient;
+  wireMediaControls((action) => {
+    mediaContextClient.execute(action).catch(() => {});
+  });
   document
     .querySelector("#resync-button")
     .addEventListener("click", () => client.resync());

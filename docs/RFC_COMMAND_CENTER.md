@@ -133,6 +133,12 @@ no borra el contexto anterior: conserva el timestamp y cambia la frescura. Los
 lectura antigua nunca se presenta como live. La API es autenticada, read-only y
 queda fuera del Wire ABI congelado.
 
+El cliente renueva la banda cada 30 segundos con `cache: no-store`; el servicio
+mantiene un TTL corto y vuelve a calcular la frescura en cada lectura. Esto es
+polling observable, no un WebSocket disfrazado. Los fixtures solo se activan con
+`fixture_mode=1`, por lo que una URL histórica con `fixture=ready` no puede
+congelar accidentalmente el carrusel real.
+
 La selección distingue dos destinos. BTC, ETH, SOL y XRP actualizan el gráfico
 integrado con el perpetuo exacto de Binance disponible en TradingView. SPX, VIX,
 DXY y TOTAL conservan precio y variación en la banda, pero nunca intentan montar
@@ -199,10 +205,13 @@ la UI no los inventa. Apple Music puede declarar lectura y reproducción. Qobuz
 conserva únicamente `open_app` y no presenta controles inexistentes.
 
 Los comandos conservan `command_id`, idempotencia, ACK `applied`, `rejected` o
-`unknown`, deadline y reconciliación por lectura. Se prueban solo con
-`FakeMediaController`. En la aplicación real no existe controller activo,
-`commands_enabled` es falso, el endpoint es GET y los botones permanecen
-deshabilitados. No se añadió factory ni se ejecutó un efecto multimedia real.
+`unknown`, deadline y reconciliación por lectura. Producción permanece inactiva:
+sin configuración, `commands_enabled` es falso y los botones quedan
+deshabilitados. Para validación local existe un opt-in explícito mediante
+`NEXUX_COMMAND_CENTER_MEDIA=apple-music`; habilita exclusivamente play, pausa,
+anterior y siguiente en un único endpoint autenticado. Play puede abrir Music,
+espera disponibilidad sin repetir el efecto y reconcilia el estado observado.
+No se añadió factory productiva, LaunchAgent ni control remoto.
 
 VAL-0023 debe comprobar en el Arzopa que pista, proveedor y controles se
 reconocen sin competir con Atención del Bot. La aprobación técnica no autoriza

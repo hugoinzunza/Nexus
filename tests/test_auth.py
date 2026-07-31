@@ -122,3 +122,27 @@ def test_ingesta_token_no_exige_cookie_pero_comandos_si(monkeypatch):
         json={"research_only": True},
     ).status_code == 200
     assert client.post("/m/bot/api/command", json={"action": "kill"}).status_code == 401
+
+
+def test_router_de_modulos_acepta_api_post_async(monkeypatch):
+    from core import app
+
+    class AsyncModule:
+        async def api_post(self, subpath, body, headers, user=None):
+            return 200, "application/json", b'{"async":true}'
+
+    monkeypatch.setitem(app.hub.modules_by_slug, "command-center", AsyncModule())
+    monkeypatch.setattr(app.auth, "enabled", lambda: True)
+    monkeypatch.setattr(
+        app.auth,
+        "current_user",
+        lambda request: {"uid": 1, "email": "hugo@example.com"},
+    )
+
+    response = TestClient(app.app).post(
+        "/m/command-center/api/media-command",
+        json={"command_id": "test", "action": "play"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"async": True}

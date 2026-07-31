@@ -18,6 +18,7 @@ Se ejecuta con:  uvicorn core.app:app --host 0.0.0.0 --port $PORT
 
 from __future__ import annotations
 
+import inspect
 import mimetypes
 import os
 import posixpath
@@ -530,6 +531,8 @@ async def module_api_post(slug: str, subpath: str, request: Request):
     user = auth.current_user(request)
 
     result = module.api_post(subpath, data, headers, user=user)
+    if inspect.isawaitable(result):
+        result = await result
     if result is not None:
         status, ctype, body = result
         return Response(content=body, status_code=status, media_type=ctype)

@@ -182,4 +182,5 @@ def test_b6_agrega_un_panel_read_only_sin_controles() -> None:
     assert "<button" not in panel
     assert "<a " not in panel
     assert "/m/command-center/api/bot-context" in script
-    assert "method: \"POST\"" not in script
+    assert '"/m/bot/' not in script
+    assert '"bot/api/' not in script

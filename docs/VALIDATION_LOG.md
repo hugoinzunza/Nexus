@@ -830,6 +830,44 @@ con Atención del Bot.
 
 ---
 
+## VAL-0024 — Activación local · Carrusel y Apple Music
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-31 |
+| Superficie | Command Center local en `127.0.0.1:8812` |
+| Pregunta 1 | ¿El Market Ribbon permanece conectado a datos reales? |
+| Pregunta 2 | ¿Play puede iniciar la aplicación local sin inventar estado? |
+
+### Evidencia técnica
+
+- El carrusel consulta su API autenticada al cargar y cada 30 segundos con
+  `cache: no-store`.
+- Binance Futures entregó BTC, ETH, SOL y XRP con frescura `live`; DXY y TOTAL
+  también resultaron `live`. SPX se presentó honestamente como `close` y VIX
+  como `current` según sus timestamps.
+- La URL antigua `?fixture=ready` entregó los mismos proveedores reales. Un
+  fixture solo puede activarse ahora con `fixture_mode=1` explícito.
+- Apple Music permanece deshabilitado por defecto. El opt-in local
+  `NEXUX_COMMAND_CENTER_MEDIA=apple-music` habilita solo play, pausa, anterior y
+  siguiente mediante un endpoint autenticado.
+- Play abre Music si está cerrada, espera su disponibilidad, ejecuta el comando
+  una sola vez y reconcilia la lectura. Si no existe pista o cola, la interfaz
+  informa `Sin pista cargada` en vez de afirmar reproducción.
+- No se añadieron factories al registro, LaunchAgent, control remoto, cambios al
+  Bot ni despliegues.
+- Suite completa: 800 pruebas aprobadas.
+
+### Conclusión
+
+**APROBADO técnicamente en local** y **PENDIENTE perceptualmente** en el Arzopa.
+El polling se denomina live por frescura de cada activo, no porque todos los
+proveedores ofrezcan streaming continuo.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

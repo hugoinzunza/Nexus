@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
+import os
 
 from core.hub import load_config
 from core.module_base import NexusModule
@@ -16,11 +18,12 @@ from .contracts import (
 )
 from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
 from .ai_context import AiContextService
+from .apple_music_adapter import AppleMusicAdapter
 from .bot_context import BotContextService
 from .event_bus import InMemoryEventBus
 from .gateway import CommandCenterGateway
-from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION
-from .media_surface import MediaSurfaceService
+from .media_controller import MEDIA_CONTROLLER_INTERFACE_VERSION, MediaAction
+from .media_surface import MediaCommandsDisabled, MediaSurfaceService
 from .market_ribbon import MarketRibbonService
 from .module_registry import command_center_module_registry
 from .snapshot import (
@@ -57,8 +60,18 @@ class CommandCenterModule(NexusModule):
             enabled_loader=self._ai_enabled,
         )
         self.bot_context = BotContextService()
-        # Sin controller hasta que una factory productiva sea autorizada.
-        self.media_surface = MediaSurfaceService()
+        self._local_media_enabled = (
+            os.environ.get("NEXUX_COMMAND_CENTER_MEDIA") == "apple-music"
+        )
+        local_media = (
+            AppleMusicAdapter()
+            if self._local_media_enabled
+            else None
+        )
+        self.media_surface = MediaSurfaceService(
+            local_media,
+            commands_enabled=local_media is not None,
+        )
 
     @staticmethod
     def _ai_enabled() -> bool:
@@ -171,7 +184,25 @@ class CommandCenterModule(NexusModule):
                     ),
                 )
         if subpath == "media-context":
-            return self._json(200, self.media_surface.inactive_snapshot())
+            try:
+                return self._json(
+                    200,
+                    asyncio.run(self.media_surface.snapshot()),
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(
+                    "command-center: contexto multimedia fallo "
+                    f"({type(exc).__name__})"
+                )
+                return self._json(
+                    502,
+                    error_document(
+                        "media-context.unavailable",
+                        "No fue posible leer el reproductor local.",
+                        502,
+                        retryable=True,
+                    ),
+                )
         if subpath != "snapshot":
             return self._json(
                 404,
@@ -206,6 +237,83 @@ class CommandCenterModule(NexusModule):
                 ),
             )
 
+    async def api_post(self, subpath, body, headers, user=None):
+        if subpath != "media-command":
+            return None
+        if not user:
+            return self._json(
+                401,
+                error_document(
+                    "auth.required",
+                    "Se requiere una sesion autenticada.",
+                    401,
+                ),
+            )
+        if not isinstance(body, dict):
+            return self._json(
+                400,
+                error_document(
+                    "media-command.invalid",
+                    "El comando multimedia no es valido.",
+                    400,
+                ),
+            )
+        allowed = {
+            "play": MediaAction.PLAY,
+            "pause": MediaAction.PAUSE,
+            "next": MediaAction.NEXT,
+            "previous": MediaAction.PREVIOUS,
+        }
+        action = allowed.get(body.get("action"))
+        command_id = body.get("command_id")
+        if action is None or not isinstance(command_id, str):
+            return self._json(
+                400,
+                error_document(
+                    "media-command.invalid",
+                    "Accion o command_id invalido.",
+                    400,
+                ),
+            )
+        try:
+            result = await self.media_surface.execute(
+                command_id=command_id,
+                action=action,
+            )
+            return self._json(200, result)
+        except MediaCommandsDisabled:
+            return self._json(
+                409,
+                error_document(
+                    "media-command.disabled",
+                    "El controlador multimedia local no esta habilitado.",
+                    409,
+                ),
+            )
+        except ValueError:
+            return self._json(
+                400,
+                error_document(
+                    "media-command.invalid",
+                    "El comando multimedia no cumple el contrato.",
+                    400,
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.context.log(
+                "command-center: comando multimedia fallo "
+                f"({type(exc).__name__})"
+            )
+            return self._json(
+                502,
+                error_document(
+                    "media-command.unavailable",
+                    "No fue posible confirmar el comando multimedia.",
+                    502,
+                    retryable=True,
+                ),
+            )
+
     def health(self) -> dict:
         return {
             "slug": self.slug,
@@ -223,7 +331,11 @@ class CommandCenterModule(NexusModule):
                 },
                 "media_controller": {
                     "version": MEDIA_CONTROLLER_INTERFACE_VERSION,
-                    "status": "contract-only",
+                    "status": (
+                        "local-opt-in"
+                        if self._local_media_enabled
+                        else "contract-only"
+                    ),
                 },
             },
             "surface": "visual-experimental",

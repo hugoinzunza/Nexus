@@ -276,7 +276,8 @@ def test_b4_reutiliza_banda_superior_y_seleccion_remonta_chart_provider() -> Non
     assert "grid-template-columns: repeat(8, minmax(0, 1fr));" in css
     assert "setChartLabels" in script
     assert "activeChartAdapter.destroy()" in script
-    assert "method: \"POST\"" not in script
+    assert script.count('method: "POST"') == 1
+    assert '"/m/command-center/api/media-command"' in script
     for symbol in ("SP:SPX", "TVC:VIX", "TVC:DXY", "CRYPTOCAP:TOTAL"):
         assert symbol not in adapter
     assert 'document.createElement(external ? "a" : "button")' in script

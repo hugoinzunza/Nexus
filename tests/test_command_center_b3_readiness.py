@@ -100,7 +100,8 @@ def test_b3_consume_salud_solo_lectura_y_no_inventa_integraciones() -> None:
 
     assert 'const HEALTH_URL = "/health"' in script
     assert "OperationalHealthClient" in script
-    assert "method: \"POST\"" not in script
+    assert script.count('method: "POST"') == 1
+    assert '"/m/command-center/api/media-command"' in script
     assert '{ id: "agent", name: "Agente macOS", state: "unknown" }' in script
     assert '{ id: "ai", name: "IA", state: "unknown" }' in script
     assert "media?.factory_attached" in script

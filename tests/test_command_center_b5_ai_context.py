@@ -173,7 +173,8 @@ def test_b5_agrega_un_solo_modulo_compacto_sin_controles() -> None:
     ai_markup = page.split('class="ai-panel"', 1)[1].split("</section>", 1)[0]
     assert "<button" not in ai_markup
     assert "<a " not in ai_markup
-    assert "method: \"POST\"" not in script
+    assert script.count('method: "POST"') == 1
+    assert '"/m/command-center/api/media-command"' in script
     assert ".status-panel {\n  grid-column: 1 / -1;" in (
         PUBLIC / "command-center.css"
     ).read_text(encoding="utf-8")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Callable, Mapping
 
@@ -11,6 +12,7 @@ from .media_controller import (
     MediaCapability,
     MediaCommand,
     MediaController,
+    MediaLifecycle,
 )
 from .operations import OperationContext
 
@@ -121,6 +123,34 @@ class MediaSurfaceService:
             self._clock_ms() if issued_at_ms is None else issued_at_ms,
             arguments,
         )
+        if (
+            action is MediaAction.PLAY
+            and MediaCapability.OPEN_APP in self._controller.capabilities()
+        ):
+            health = await self._controller.health(
+                OperationContext.with_timeout(self._timeout_seconds)
+            )
+            if health.lifecycle is MediaLifecycle.UNAVAILABLE:
+                open_ack = await self._controller.execute(
+                    MediaCommand(
+                        f"{command_id}.open",
+                        MediaAction.OPEN_APP,
+                        command.issued_at_ms,
+                    ),
+                    OperationContext.with_timeout(self._timeout_seconds),
+                )
+                if open_ack.status is not MediaAckStatus.APPLIED:
+                    return {
+                        "command_id": command_id,
+                        "provider": open_ack.controller_id,
+                        "action": action.value,
+                        "status": open_ack.status.value,
+                        "completed_at_ms": open_ack.completed_at_ms,
+                        "code": open_ack.code,
+                        "retryable": open_ack.retryable,
+                        "reconciled_state": await self.snapshot(),
+                    }
+                await self._wait_until_available()
         ack = await self._controller.execute(
             command,
             OperationContext.with_timeout(self._timeout_seconds),
@@ -135,9 +165,22 @@ class MediaSurfaceService:
             "retryable": ack.retryable,
             "reconciled_state": None,
         }
-        if ack.status is MediaAckStatus.UNKNOWN:
+        if ack.status is MediaAckStatus.UNKNOWN or action in {
+            MediaAction.PLAY,
+            MediaAction.PAUSE,
+        }:
             result["reconciled_state"] = await self.snapshot()
         return result
+
+    async def _wait_until_available(self) -> None:
+        """Da tiempo al proceso recién abierto sin repetir el comando Play."""
+        for _attempt in range(10):
+            health = await self._controller.health(
+                OperationContext.with_timeout(self._timeout_seconds)
+            )
+            if health.lifecycle is not MediaLifecycle.UNAVAILABLE:
+                return
+            await asyncio.sleep(0.15)
 
     def _freshness(self, observed_at_ms: int) -> str:
         age_ms = max(0, self._clock_ms() - observed_at_ms)

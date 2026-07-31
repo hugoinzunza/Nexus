@@ -68,7 +68,8 @@ def test_shell_fija_el_abi_y_no_agrega_superficie_de_comandos() -> None:
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
 
     assert CONTRACT_V1_FINGERPRINT in script
-    assert "method: \"POST\"" not in script
+    assert script.count('method: "POST"') == 1
+    assert '"/m/command-center/api/media-command"' in script
     assert '"/m/bot/' not in script
     assert '"bot/api/' not in script
     assert "market_order" not in script
@@ -91,7 +92,8 @@ def test_b2_agrega_un_contexto_macro_y_salto_honesto_a_tradingview() -> None:
     )
     assert "selectNextHighImpact" in script
     assert "formatMacroCountdown" in script
-    assert "method: \"POST\"" not in script
+    assert script.count('method: "POST"') == 1
+    assert '"/m/command-center/api/media-command"' in script
 
 
 def test_b2_seleccion_macro_es_causal_y_no_inventa_impacto() -> None:
