@@ -1035,9 +1035,10 @@ VPS; sin ellos, el panel lo declara de forma explícita.
 
 ### Resolución
 
-**APROBADO técnicamente** y **PENDIENTE perceptualmente**. Debe comprobarse en el
-Arzopa que el estado normal no compita con el resto y que una condición crítica
-se reconozca en aproximadamente dos segundos.
+**APROBADO.** La revisión confirma que la consolidación aumenta el valor
+informativo sin aumentar la carga cognitiva. Atención inmediata queda consolidada
+y Línea B continúa. Se adopta como regla permanente preferir la sustitución de
+contexto de menor valor antes que agregar otro bloque al viewport.
 
 ---
 

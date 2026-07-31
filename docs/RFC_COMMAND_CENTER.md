@@ -258,6 +258,11 @@ VAL-0028 debe comprobar en el Arzopa que el estado normal desaparece visualmente
 que una alerta crítica se reconoce en aproximadamente dos segundos y que la
 consolidación reduce carga frente al panel exclusivo del Bot.
 
+La aprobación de B8 establece una regla permanente para Línea B: antes de sumar
+una superficie al viewport se debe evaluar si puede sustituirse otra de menor
+valor. Agregar un bloque requiere justificar por qué ninguna sustitución conserva
+la pregunta operacional y reduce mejor la carga cognitiva.
+
 ### Fase A.5 — Integraciones headless
 
 Línea A arquitectónicamente completa permanece cerrada. A.5 incorpora

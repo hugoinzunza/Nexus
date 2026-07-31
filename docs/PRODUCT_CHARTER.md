@@ -1,7 +1,7 @@
 # NEXUX Command Center — Product Charter
 
 - **Estado:** Aprobado
-- **Versión:** 1.0
+- **Versión:** 1.1
 - **Fecha:** 2026-07-30
 - **Propósito:** gobernar la identidad y las decisiones de producto
 
@@ -105,6 +105,8 @@ deliberada, limitada y auditable.
 13. Toda información crítica se comprende en menos de dos segundos.
 14. El sistema comunica incertidumbre y degradación.
 15. El objetivo final es permitir mejores decisiones con menos esfuerzo.
+16. Antes de agregar una superficie, sustituir una existente por contexto de
+    mayor valor siempre que sea posible.
 
 ## Regla de los dos segundos
 
@@ -161,6 +163,7 @@ define su composición inicial.
 - Las acciones sensibles no aparecen por conveniencia.
 - La personalización no puede ocultar riesgos críticos.
 - El crecimiento del ecosistema no justifica aumentar la carga cognitiva.
+- El espacio permanente se gana por valor operacional, no por disponibilidad.
 - El usuario mantiene control sobre sus datos, dispositivos y conexiones.
 
 ## Filtro de decisión
@@ -173,6 +176,7 @@ Antes de aceptar una funcionalidad, diseño o integración, responder:
 4. ¿Comunica correctamente frescura e incertidumbre?
 5. ¿Respeta la seguridad y la calma del instrumento?
 6. ¿Pertenece a la vista principal o a una vista de detalle?
+7. ¿Puede sustituir contexto de menor valor en vez de agregar otro bloque?
 
 Si no supera este filtro, no pertenece al Command Center.
 
