@@ -1,6 +1,6 @@
 # Command Center — Sprint B1 Findings
 
-- **Estado:** técnicamente aprobado; gate perceptual pendiente
+- **Estado:** aprobado técnica y perceptualmente
 - **Fecha:** 2026-07-30
 - **Rama:** `codex/command-center-contract-v1`
 
@@ -56,18 +56,29 @@ confundirse con datos reales.
 - Los estados warning y expired son visualmente inequívocos en captura; su
   reconocimiento físico aún debe medirse.
 
-## Gate pendiente
+## Validación perceptual
 
-No se declara B1 completamente aprobado hasta registrar:
+Hugo evaluó la shell a 80–90 cm, de noche y únicamente con iluminación de barra
+Quntis:
 
-- distancia ojo–pantalla;
+- legibilidad cómoda;
+- brillo suficiente para operar, aunque mejorable por diseño;
+- jerarquía clara;
+- densidad adecuada;
+- regla de los dos segundos cumplida.
+
+La validación estuvo limitada a TradingView y contexto de sistema. Debe repetirse
+cuando B2 incorpore varias fuentes simultáneas.
+
+## Validaciones posteriores
+
 - ángulo e inclinación;
-- lectura de 12/14/16/20 px;
-- brillo y reflejos de día y noche;
-- prueba de dos segundos en ready, warning y expired.
+- brillo y reflejos diurnos;
+- regla de los dos segundos con composición multimódulo.
 
 ## Recomendación B2
 
-No agregar módulos de dominio todavía. Primero completar el gate perceptual con la
-shell actual. Después, incorporar una sola proyección de mercado read-only y
-repetir la prueba de dos segundos antes de aumentar densidad.
+Incorporar una sola proyección read-only por vez y repetir la prueba de dos
+segundos antes de aumentar densidad. El widget público de TradingView no puede
+mostrar LuxAlgo privado; B2 debe conservarlo como contexto general o abrir el
+layout autenticado como superficie externa.

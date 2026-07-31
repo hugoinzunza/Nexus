@@ -1,7 +1,7 @@
 # RFC: NEXUX Command Center
 
-- **Estado:** Aceptado; Línea A cerrada, Fase A.5 activa y Línea B Sprint B1
-  técnicamente aprobado, con validación perceptual pendiente
+- **Estado:** Aceptado; Línea A cerrada, Fase A.5 activa, Sprint B1 aprobado y
+  Sprint B2 autorizado
 - **Versión:** 1.2.2
 - **Fecha:** 2026-07-30
 - **Autoría:** Codex, a partir del Product Vision Document, el repositorio actual
@@ -43,9 +43,23 @@ el snapshot HTTP antes de `stale_at` y reconcilia de forma monotónica: mayor
 secuencia prevalece y, a igual secuencia, prevalece el `observed_at` más reciente.
 Los huecos de secuencia continúan usando el resync contractual del Gateway.
 
-La shell B1 no constituye diseño definitivo. Distancia, ángulo, brillo
-diurno/nocturno, legibilidad y regla de los dos segundos siguen siendo gates
-físicos pendientes.
+La validación nocturna a 80–90 cm aprobó legibilidad, jerarquía, densidad y regla
+de los dos segundos. El brillo es suficiente, aunque B2 debe estudiar mayor
+contraste percibido sin usar grandes superficies claras. La validación deberá
+repetirse cuando existan varias fuentes de contexto simultáneas.
+
+### Línea B — Sprint B2
+
+B2 queda autorizado para mejorar contraste percibido y validar composición
+multimódulo. No puede inventar datos ni introducir lógica de dominio en la UI.
+
+LuxAlgo no puede prometerse dentro del widget público actual: ese embed no usa la
+sesión ni los indicadores privados del usuario. Advanced Charts tampoco soporta
+Pine Script; sus indicadores personalizados se implementan en JavaScript:
+<https://www.tradingview.com/charting-library-docs/latest/resources/Frequently-Asked-Questions/>.
+Por ello B2 debe elegir explícitamente entre conservar el widget como contexto
+general o abrir el layout autenticado de TradingView como superficie externa.
+Reimplementar LuxAlgo dentro de NexUX no está autorizado.
 
 ### Fase A.5 — Integraciones headless
 

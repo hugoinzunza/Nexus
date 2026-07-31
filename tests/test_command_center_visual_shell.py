@@ -91,7 +91,7 @@ def test_documentacion_registra_hardware_y_tokens_sin_inventar_ergonomia() -> No
 
     assert "1920 × 1080" in viewport
     assert "60 Hz" in viewport
-    assert "Distancia de observación | Pendiente" in viewport
+    assert "Distancia de observación | 80–90 cm" in viewport
     assert "Ángulo de mirada | Pendiente" in viewport
     assert "Superficie objetivo" in foundations
     assert "`loading`" in foundations
@@ -99,10 +99,16 @@ def test_documentacion_registra_hardware_y_tokens_sin_inventar_ergonomia() -> No
     findings = (ROOT / "docs" / "COMMAND_CENTER_B1_FINDINGS.md").read_text(
         encoding="utf-8"
     )
-    assert "técnicamente aprobado; gate perceptual pendiente" in findings
+    assert "aprobado técnica y perceptualmente" in findings
     assert "VAL-0017" in (
         ROOT / "docs" / "VALIDATION_LOG.md"
     ).read_text(encoding="utf-8")
+    validation = (ROOT / "docs" / "VALIDATION_LOG.md").read_text(
+        encoding="utf-8"
+    )
+    assert "VAL-0017 APROBADO" in validation
+    assert "Distancia | 80–90 cm" in validation
+    assert "Sprint B2 autorizado" in validation
 
 
 def test_modulo_declara_superficie_visual_experimental() -> None:

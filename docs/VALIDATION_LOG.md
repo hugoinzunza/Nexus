@@ -494,6 +494,32 @@ La ejecución en el hardware real está demostrada. Distancia, ángulo, inclinac
 brillo día/noche, tamaños legibles y regla de los dos segundos requieren
 observación física del usuario antes de iniciar B2.
 
+### Cierre perceptual — evidencia posterior
+
+| Campo | Resultado |
+|---|---|
+| Evaluador | Hugo |
+| Distancia | 80–90 cm |
+| Iluminación | Noche, únicamente barra Quntis |
+| Legibilidad | Cómoda |
+| Brillo | Suficiente para operar; mejorable por contraste y calibración |
+| Jerarquía | Clara |
+| Densidad | Adecuada |
+| Regla de dos segundos | Cumplida |
+
+No fue necesaria búsqueda visual consciente para identificar el estado principal.
+La menor luminancia del Arzopa frente al TCL MiniLED no bloquea el uso. B2 deberá
+probar superficies ligeramente más claras y color de estado más intenso sin
+introducir grandes áreas blancas.
+
+La prueba se realizó con TradingView como única fuente de contenido de mercado.
+La jerarquía y regla de dos segundos deberán repetirse con composición
+multimódulo. El resultado anterior `INCONCLUSO` se conserva como evidencia
+histórica; esta observación posterior lo resuelve.
+
+**Resolución final:** `VAL-0017 APROBADO`, Sprint B1 perceptualmente aprobado y
+Sprint B2 autorizado.
+
 ---
 
 ## Próximas validaciones

@@ -1,6 +1,6 @@
 # NEXUX Command Center — Viewport Specification
 
-- **Estado:** Fase -1B activa; inventario y B1 técnico verificados, percepción pendiente
+- **Estado:** Fase -1B nocturna aprobada; calibración diurna pendiente
 - **Versión:** 0.2
 - **Fecha:** 2026-07-30
 - **Propósito:** definir y validar el entorno físico donde vivirá el Command Center
@@ -241,15 +241,15 @@ No se aprueba ni promueve la shell experimental hasta que:
 | Viewport CSS útil | 1920 × 992 en Chrome sobre el Arzopa; 1920 × 1080 en harness sin chrome |
 | `devicePixelRatio` | 1.00, medido por la shell |
 | Frecuencia | 60 Hz |
-| Distancia de observación | Pendiente |
+| Distancia de observación | 80–90 cm |
 | Ángulo de mirada | Pendiente |
 | Inclinación del panel | Pendiente |
-| Tamaño mínimo legible | Pendiente |
-| Tamaño operacional aprobado | Pendiente |
-| Contraste | Pendiente |
-| Brillo diurno/nocturno | Pendiente |
-| Densidad máxima provisional | Pendiente |
-| Regla neutral de dos segundos | Pendiente |
+| Tamaño mínimo legible | 12 px visible en metadatos actuales; no aprobado para información crítica |
+| Tamaño operacional aprobado | 14–16 px en la shell B1 |
+| Contraste | Aprobado en condición nocturna |
+| Brillo diurno/nocturno | Noche suficiente con barra Quntis; día pendiente |
+| Densidad máxima provisional | B1 actual, TradingView + contexto del sistema |
+| Regla neutral de dos segundos | Aprobada para B1; repetir con composición multimódulo |
 
 El inventario se obtuvo mediante `system_profiler` y CoreGraphics. Las mediciones
 ergonómicas y perceptuales permanecen pendientes porque requieren observación
