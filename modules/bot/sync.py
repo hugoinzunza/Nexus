@@ -139,7 +139,7 @@ class BotSync:
             positions = cli.positions() if cli else []
         except Exception:  # noqa: BLE001
             pass
-        return {
+        snapshot = {
             "active": ex.active,
             "live_virtual": ex.live,
             "kill": os.path.exists(ex.kill_file),
@@ -149,6 +149,34 @@ class BotSync:
             "trades": sorted(
                 ex.store.all(), key=lambda t: t.get("opened_at", 0), reverse=True
             )[:50],
+        }
+        readiness = self._testnet_readiness(ex)
+        if readiness:
+            snapshot["readiness"] = readiness
+        return snapshot
+
+    @staticmethod
+    def _testnet_readiness(ex) -> dict | None:
+        path = os.path.join(ex.data_dir, "live_readiness.json")
+        try:
+            with open(path, encoding="utf-8") as fh:
+                marker = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return None
+        started = int(marker.get("started_at") or 0)
+        required = int(marker.get("required_new_closed") or 5)
+        candidates = [t for t in ex.store.all()
+                      if int(t.get("opened_at") or 0) >= started]
+        closed = [t for t in candidates if t.get("status") == "cerrada"]
+        return {
+            "phase": marker.get("phase"),
+            "started_at": started,
+            "deployed_commit": marker.get("deployed_commit"),
+            "required": required,
+            "closed_candidates": len(closed),
+            "open_candidates": len(candidates) - len(closed),
+            "status": "review" if len(closed) >= required else "collecting",
+            "automatic_live": False,
         }
 
     def _watching(self) -> list:

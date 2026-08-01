@@ -118,6 +118,7 @@ function testnet(data) {
   const a = t.account || {};
   const s = t.summary || {};
   const positions = t.positions || [];
+  const readiness = t.readiness || null;
   const recent = (t.trades || []).slice(0, 5);
   const state = t.kill ? "Detenido" : t.active && t.live_virtual ? "Operando virtual" : "Inerte";
   const rows = recent.map((trade) => `<tr>
@@ -137,6 +138,7 @@ function testnet(data) {
       <div><span>P&L virtual</span><b class="${Number(s.pnl_usd || 0) >= 0 ? "pos" : "neg"}">${signed(Number(s.pnl_usd || 0))}</b></div>
       <div><span>Operaciones</span><b>${s.total || 0}</b></div>
     </div>
+    ${readiness ? `<div class="phase-note"><strong>Validación live: ${readiness.closed_candidates}/${readiness.required}</strong> operaciones nuevas cerradas · ${readiness.open_candidates} abiertas · inicio ${dt(readiness.started_at)} · commit ${readiness.deployed_commit || "—"}. Llegar al objetivo exige revisión manual y no activa live automáticamente.</div>` : ""}
     ${rows ? `<div class="phase-table"><table><thead><tr><th>Fecha</th><th>Par</th><th>Dir</th><th>Estado</th><th>P&L virtual</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="phase-note">Esperando la próxima activación válida del Diario.</p>`}`;
 }
 
