@@ -4,6 +4,19 @@ Fundación reproducible y estrictamente research-only para experimentos pre-regi
 
 `HYP-EXIT-002` compara salidas híbridas que conservan el target original: parciales pequeños en 2R/3R, runner estructural y protección a break-even después de 3R. El export v3 conserva la fuente causal del target original y el Lab rechaza un pivote o rango que no estuviera confirmado en la vela de decisión.
 
+`HYP-EXIT-003-SHADOW` observa hacia adelante `protect_3r_runner_original` sin
+intervenir ninguna operación. La cohorte comienza después del preregistro y
+registra todas las operaciones activadas, no solo las que posteriormente llegan
+a 3R. El proceso local lee `data/setups.json`, usa GET públicos de Binance y
+escribe exclusivamente en
+`data/hypothesis_lab/shadow/protect_3r_runner_original.json`.
+
+`HYP-COST-001` compara stops de 1,00x, 0,75x, 0,50x y 0,35x manteniendo fija la
+entrada, la activación y el precio del target original. Como el export v3 no
+contiene spread ni slippage observados, la primera ejecución usa escenarios
+pre-registrados y los identifica como tales; no los presenta como costos reales
+medidos.
+
 ## Flujo
 
 ```bash
@@ -13,6 +26,9 @@ python3 -m modules.trading.run_setup_backtest  # genera export enriquecido gitig
 python3 -m research.hypothesis_lab.cli run
 python3 -m research.hypothesis_lab.cli run \
   --spec research/hypothesis_lab/specs/v1/HYP-EXIT-002.frozen.json
+python3 -m research.hypothesis_lab.shadow_exit
+./tools/start_exit_shadow.command
+python3 -m research.hypothesis_lab.cost_study
 ```
 
 El preregistro queda inmutable por `hypothesis_id + spec SHA-256` en SQLite antes de cualquier ensayo. Cada ejecución guarda commit, hashes de spec/datasets/código, semilla, timestamp y conteo de ensayos. Los 210 ensayos y todos sus candidatos —incluidos descartados— quedan en `data/hypothesis_lab/lab.sqlite3`.

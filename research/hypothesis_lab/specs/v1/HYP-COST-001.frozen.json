@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "hypothesis_id": "HYP-COST-001",
+  "title": "Stops mas estrechos con costos reales o escenarios de friccion declarados",
+  "frozen": true,
+  "research_only": true,
+  "notice": "Research only - No signal - No bot",
+  "seed": 20260801,
+  "dataset": {
+    "classification": "recycled_causal_research_export",
+    "setup_export": "data/setup_backtest_trades.json",
+    "candle_pattern": "data/klines_{pair}_{timeframe}.json",
+    "pairs": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "XRPUSDT"],
+    "timeframes": ["1h", "4h"],
+    "required_export_version": "setup-backtest-research-v3"
+  },
+  "design": {
+    "paired_on": "setup_id",
+    "same_entry_and_activation": true,
+    "stop_multipliers": [1.0, 0.75, 0.5, 0.35],
+    "baseline_multiplier": 1.0,
+    "target_policy": "original_fixed_price",
+    "activation_bar_tp_credit": false,
+    "same_bar_precedence_after_activation": "stop_loss_first",
+    "timeout": "close_at_exported_max_forward_bar",
+    "exit_liquidity": {
+      "target": "maker",
+      "stop": "taker",
+      "timeout": "taker"
+    }
+  },
+  "costs": {
+    "rate_unit": "decimal_fraction_of_entry_notional",
+    "observed_export_fields": [
+      "observed_roundtrip_spread_rate",
+      "observed_entry_slippage_rate",
+      "observed_maker_exit_slippage_rate",
+      "observed_taker_exit_slippage_rate",
+      "observed_exit_slippage_rate"
+    ],
+    "fallback_rule": "use and label the declared scenario whenever any required observed component is absent",
+    "scenarios": [
+      {
+        "id": "base",
+        "entry_maker_fee_rate": 0.0002,
+        "exit_maker_fee_rate": 0.0002,
+        "exit_taker_fee_rate": 0.0005,
+        "roundtrip_spread_rate": 0.0002,
+        "entry_slippage_rate": 0.0001,
+        "exit_maker_slippage_rate": 0.00005,
+        "exit_taker_slippage_rate": 0.0002
+      },
+      {
+        "id": "hard",
+        "entry_maker_fee_rate": 0.0002,
+        "exit_maker_fee_rate": 0.0002,
+        "exit_taker_fee_rate": 0.0005,
+        "roundtrip_spread_rate": 0.0004,
+        "entry_slippage_rate": 0.0002,
+        "exit_maker_slippage_rate": 0.0001,
+        "exit_taker_slippage_rate": 0.0004
+      },
+      {
+        "id": "extreme",
+        "entry_maker_fee_rate": 0.0002,
+        "exit_maker_fee_rate": 0.0002,
+        "exit_taker_fee_rate": 0.0005,
+        "roundtrip_spread_rate": 0.0008,
+        "entry_slippage_rate": 0.0004,
+        "exit_maker_slippage_rate": 0.0002,
+        "exit_taker_slippage_rate": 0.0008
+      }
+    ]
+  },
+  "statistics": {
+    "estimand": "paired_difference_in_net_R_vs_multiplier_1.0",
+    "bootstrap_unit": "calendar_month",
+    "bootstrap_iterations": 5000,
+    "primary_cost_scenario": "base",
+    "multiple_testing": "holm",
+    "primary_family": ["base:0.75_vs_1", "base:0.5_vs_1", "base:0.35_vs_1"],
+    "alpha": 0.05,
+    "sensitivity_scenarios_are_descriptive": true
+  },
+  "dependence": {
+    "iid_assumption": false,
+    "month_blocks_preserve_within_month_overlap": true,
+    "cross_pair_correlation_remains_a_limitation": true,
+    "concurrent_account_heat_modeled": false
+  },
+  "governance": {
+    "automatic_winner_selection": false,
+    "automatic_promotion": false,
+    "execution_enabled": false,
+    "bot_changes_allowed": false
+  }
+}
