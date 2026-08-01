@@ -20,6 +20,7 @@ en el Diario como referencia). Correr:  python3 -m modules.trading.run_setup_bac
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 import os
 import time
@@ -28,6 +29,7 @@ from . import smc_live
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setup_backtest_results.json")
+RESEARCH_EXPORT_VERSION = "setup-backtest-research-v2"
 
 # (nombre live, símbolo Binance). TODOS los pares con klines persistidos: así el
 # veredicto dice si el edge generaliza o es solo de BTC/ETH.
@@ -70,6 +72,12 @@ def _load(symbol: str, tf: str):
         data = json.load(fh)
     data.sort(key=lambda c: c["t"])
     return data
+
+
+def _setup_id(symbol, sel_tf, poi_tf, direction, decision_ts, entry, sl, tp):
+    """ID estable para parear experimentos de research sin afectar la señal."""
+    raw = f"{symbol}|{sel_tf}|{poi_tf}|{direction}|{decision_ts}|{entry:.12g}|{sl:.12g}|{tp:.12g}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
 def _htf_slice(series, ts, htf_ms, close_time, n):
@@ -224,9 +232,29 @@ def _run_pass(symbol, sel_tf, htf_series, htf_ts):
         status, r, res_idx, act_idx = _simulate(setup, sel, i, MAX_FWD.get(sel_tf, 200))
         last_res[key] = res_idx
         sl_pct = abs(entry - plan["sl"]) / entry if entry else None   # distancia al SL
-        rec = {"pair": symbol, "sel_tf": sel_tf, "poi_tf": plan["tf"],
-               "dir": plan["dir"], "t": sel[i]["t"], "rr": plan["rr"],
-               "status": status, "r": r, "sl_pct": sl_pct}
+        # El bloque siguiente sólo enriquece el artefacto gitignored de research. No
+        # participa en `smc_live.analyze`, la detección ni la resolución existente.
+        # Conserva lo necesario para re-simular exits causalmente y auditar el dataset.
+        rec = {
+            "research_export_version": RESEARCH_EXPORT_VERSION,
+            "setup_id": _setup_id(symbol, sel_tf, plan["tf"], plan["dir"],
+                                  sel[i]["t"], entry, plan["sl"], plan["tp"]),
+            "pair": symbol, "sel_tf": sel_tf, "poi_tf": plan["tf"],
+            "dir": plan["dir"], "t": sel[i]["t"], "rr": plan["rr"],
+            "status": status, "r": r, "sl_pct": sl_pct,
+            "entry": entry, "entry_lo": plan["entry_lo"], "entry_hi": plan["entry_hi"],
+            "sl": plan["sl"], "original_tp": plan["tp"],
+            "decision_index": i, "decision_timestamp": sel[i]["t"],
+            "activation_index": act_idx,
+            "activation_timestamp": sel[act_idx]["t"] if act_idx is not None else None,
+            "resolution_index": res_idx,
+            "resolution_timestamp": sel[res_idx]["t"] if res_idx is not None else None,
+            "max_forward_bars": MAX_FWD.get(sel_tf, 200),
+            "dataset_refs": [
+                f"data/klines_{symbol}_{FILE_TF[tf]}.json"
+                for tf in sorted(set(POI_TFS) | {sel_tf})
+            ],
+        }
         # Variantes de scale-out SOLO sobre trades que se activaron y resolvieron
         # (mismo universo que el baseline ganada/perdida) → comparación apples-to-apples.
         if status in ("ganada", "perdida") and act_idx is not None:

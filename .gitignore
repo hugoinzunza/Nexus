@@ -28,6 +28,8 @@ logs/
 # tenga años de estructura para los POIs profundos es traerla en el deploy.
 data/*
 !data/klines_*.json
+# Estado operacional reproducible del Hypothesis Lab (manifests pequeños van en research/).
+data/hypothesis_lab/
 
 # Worktrees temporales de agentes Claude
 .claude/worktrees/
