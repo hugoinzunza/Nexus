@@ -17,6 +17,12 @@ contiene spread ni slippage observados, la primera ejecución usa escenarios
 pre-registrados y los identifica como tales; no los presenta como costos reales
 medidos.
 
+`HYP-COST-002` audita la viabilidad operacional de esas mismas variantes sin
+buscar una ganadora. Separa el retorno por nocional de la amplificación mecánica
+de la unidad R y simula capacidad con riesgo fijo, account heat y límites de
+nocional. Reutiliza la muestra histórica, por lo que todo resultado sigue siendo
+exploratorio y no puede promover cambios.
+
 ## Flujo
 
 ```bash
@@ -29,6 +35,7 @@ python3 -m research.hypothesis_lab.cli run \
 python3 -m research.hypothesis_lab.shadow_exit
 ./tools/start_exit_shadow.command
 python3 -m research.hypothesis_lab.cost_study
+python3 -m research.hypothesis_lab.cost_viability
 ```
 
 El preregistro queda inmutable por `hypothesis_id + spec SHA-256` en SQLite antes de cualquier ensayo. Cada ejecución guarda commit, hashes de spec/datasets/código, semilla, timestamp y conteo de ensayos. Los 210 ensayos y todos sus candidatos —incluidos descartados— quedan en `data/hypothesis_lab/lab.sqlite3`.

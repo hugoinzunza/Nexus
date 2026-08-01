@@ -1,0 +1,1557 @@
+{
+  "capacity_constrained_portfolios": {
+    "fixed_dollar:all_activated:0.35:cap1": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 4633,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "single_trade_notional_cap": 4633
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:0.35:cap3": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 4633,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "single_trade_notional_cap": 4633
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:0.35:cap5": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 4633,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "single_trade_notional_cap": 4633
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:0.5:cap1": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 4633,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 1526,
+        "single_trade_notional_cap": 3107
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:0.5:cap3": {
+      "acceptance_rate": 0.9665443557090438,
+      "accepted": 4478,
+      "candidate_trades": 4633,
+      "closed": 4478,
+      "ending_equity_usd": 5704250.465818003,
+      "max_drawdown_pct_of_peak_close_only": 6.798053374098595,
+      "max_drawdown_usd_close_only": 75308.92711592373,
+      "max_gross_notional_multiple": 2.981316711024202,
+      "max_reserved_heat_fraction": 0.025492433556391185,
+      "max_simultaneous_positions": 18,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 153,
+        "single_trade_notional_cap": 2
+      },
+      "total_return_pct": 5604.250465818003,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:0.5:cap5": {
+      "acceptance_rate": 0.9879127994819771,
+      "accepted": 4577,
+      "candidate_trades": 4633,
+      "closed": 4577,
+      "ending_equity_usd": 5787043.540780902,
+      "max_drawdown_pct_of_peak_close_only": 10.067820982132746,
+      "max_drawdown_usd_close_only": 75308.92711592373,
+      "max_gross_notional_multiple": 4.986801001791497,
+      "max_reserved_heat_fraction": 0.04081632653061224,
+      "max_simultaneous_positions": 18,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 54,
+        "single_trade_notional_cap": 2
+      },
+      "total_return_pct": 5687.043540780902,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:0.75:cap1": {
+      "acceptance_rate": 0.6930714439887762,
+      "accepted": 3211,
+      "candidate_trades": 4633,
+      "closed": 3211,
+      "ending_equity_usd": 3040525.385048129,
+      "max_drawdown_pct_of_peak_close_only": 8.273580931401618,
+      "max_drawdown_usd_close_only": 68734.07033247687,
+      "max_gross_notional_multiple": 0.9999121083421278,
+      "max_reserved_heat_fraction": 0.012396063836776538,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 1383,
+        "single_trade_notional_cap": 39
+      },
+      "total_return_pct": 2940.525385048129,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:0.75:cap3": {
+      "acceptance_rate": 0.962659184113965,
+      "accepted": 4460,
+      "candidate_trades": 4633,
+      "closed": 4460,
+      "ending_equity_usd": 3967292.7756532724,
+      "max_drawdown_pct_of_peak_close_only": 9.549383795185012,
+      "max_drawdown_usd_close_only": 68734.07033247687,
+      "max_gross_notional_multiple": 2.996828356810375,
+      "max_reserved_heat_fraction": 0.0338618679583496,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 173
+      },
+      "total_return_pct": 3867.292775653272,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:0.75:cap5": {
+      "acceptance_rate": 0.9885603280811569,
+      "accepted": 4580,
+      "candidate_trades": 4633,
+      "closed": 4580,
+      "ending_equity_usd": 4045100.5939787566,
+      "max_drawdown_pct_of_peak_close_only": 11.834767460501562,
+      "max_drawdown_usd_close_only": 68734.07033247687,
+      "max_gross_notional_multiple": 4.942680661122528,
+      "max_reserved_heat_fraction": 0.04972459854671394,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "account_heat_cap": 9,
+        "gross_notional_cap": 44
+      },
+      "total_return_pct": 3945.1005939787565,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:1:cap1": {
+      "acceptance_rate": 0.6749406432117419,
+      "accepted": 3127,
+      "candidate_trades": 4633,
+      "closed": 3127,
+      "ending_equity_usd": 2458946.5554909105,
+      "max_drawdown_pct_of_peak_close_only": 11.037127227529691,
+      "max_drawdown_usd_close_only": 50000.0,
+      "max_gross_notional_multiple": 0.999955942149198,
+      "max_reserved_heat_fraction": 0.016079732621609156,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 1490,
+        "single_trade_notional_cap": 16
+      },
+      "total_return_pct": 2358.94655549091,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:1:cap3": {
+      "acceptance_rate": 0.9671918843082236,
+      "accepted": 4481,
+      "candidate_trades": 4633,
+      "closed": 4481,
+      "ending_equity_usd": 3158557.040800713,
+      "max_drawdown_pct_of_peak_close_only": 12.01106237305504,
+      "max_drawdown_usd_close_only": 50000.0,
+      "max_gross_notional_multiple": 2.9912104890251263,
+      "max_reserved_heat_fraction": 0.04435153752127473,
+      "max_simultaneous_positions": 21,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 152
+      },
+      "total_return_pct": 3058.557040800713,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:all_activated:1:cap5": {
+      "acceptance_rate": 0.9853226850852579,
+      "accepted": 4565,
+      "candidate_trades": 4633,
+      "closed": 4565,
+      "ending_equity_usd": 3199571.894049319,
+      "max_drawdown_pct_of_peak_close_only": 18.164584422881116,
+      "max_drawdown_usd_close_only": 50000.0,
+      "max_gross_notional_multiple": 4.959640320907368,
+      "max_reserved_heat_fraction": 0.04969571011045834,
+      "max_simultaneous_positions": 21,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "account_heat_cap": 60,
+        "gross_notional_cap": 8
+      },
+      "total_return_pct": 3099.571894049319,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:0.35:cap1": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 3936,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "single_trade_notional_cap": 3936
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:0.35:cap3": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 3936,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "single_trade_notional_cap": 3936
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:0.35:cap5": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 3936,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "single_trade_notional_cap": 3936
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:0.5:cap1": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 3936,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 1259,
+        "single_trade_notional_cap": 2677
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:0.5:cap3": {
+      "acceptance_rate": 0.9679878048780488,
+      "accepted": 3810,
+      "candidate_trades": 3936,
+      "closed": 3810,
+      "ending_equity_usd": 5101606.18391415,
+      "max_drawdown_pct_of_peak_close_only": 9.838160667243308,
+      "max_drawdown_usd_close_only": 72711.12325418647,
+      "max_gross_notional_multiple": 2.9992797182231925,
+      "max_reserved_heat_fraction": 0.02536312002598216,
+      "max_simultaneous_positions": 17,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 124,
+        "single_trade_notional_cap": 2
+      },
+      "total_return_pct": 5001.60618391415,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:0.5:cap5": {
+      "acceptance_rate": 0.989329268292683,
+      "accepted": 3894,
+      "candidate_trades": 3936,
+      "closed": 3894,
+      "ending_equity_usd": 5086560.725474672,
+      "max_drawdown_pct_of_peak_close_only": 13.144861947786163,
+      "max_drawdown_usd_close_only": 72711.12325418647,
+      "max_gross_notional_multiple": 4.991604432651898,
+      "max_reserved_heat_fraction": 0.04081632653061224,
+      "max_simultaneous_positions": 17,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 40,
+        "single_trade_notional_cap": 2
+      },
+      "total_return_pct": 4986.560725474672,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:0.75:cap1": {
+      "acceptance_rate": 0.6915650406504065,
+      "accepted": 2722,
+      "candidate_trades": 3936,
+      "closed": 2722,
+      "ending_equity_usd": 2830678.709800658,
+      "max_drawdown_pct_of_peak_close_only": 8.76940106450572,
+      "max_drawdown_usd_close_only": 61132.149436007254,
+      "max_gross_notional_multiple": 0.9997600224700351,
+      "max_reserved_heat_fraction": 0.01231134404380976,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 1180,
+        "single_trade_notional_cap": 34
+      },
+      "total_return_pct": 2730.6787098006575,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:0.75:cap3": {
+      "acceptance_rate": 0.9613821138211383,
+      "accepted": 3784,
+      "candidate_trades": 3936,
+      "closed": 3784,
+      "ending_equity_usd": 3526861.555073943,
+      "max_drawdown_pct_of_peak_close_only": 13.20374171020729,
+      "max_drawdown_usd_close_only": 68248.68228375044,
+      "max_gross_notional_multiple": 2.987106628697918,
+      "max_reserved_heat_fraction": 0.03444200145843757,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 152
+      },
+      "total_return_pct": 3426.8615550739432,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:0.75:cap5": {
+      "acceptance_rate": 0.9865345528455285,
+      "accepted": 3883,
+      "candidate_trades": 3936,
+      "closed": 3883,
+      "ending_equity_usd": 3574946.6873865137,
+      "max_drawdown_pct_of_peak_close_only": 13.962116388730909,
+      "max_drawdown_usd_close_only": 68248.6822837505,
+      "max_gross_notional_multiple": 4.987978563425589,
+      "max_reserved_heat_fraction": 0.049897090324595314,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "account_heat_cap": 16,
+        "gross_notional_cap": 37
+      },
+      "total_return_pct": 3474.946687386514,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:1:cap1": {
+      "acceptance_rate": 0.6516768292682927,
+      "accepted": 2565,
+      "candidate_trades": 3936,
+      "closed": 2565,
+      "ending_equity_usd": 2224604.4488401124,
+      "max_drawdown_pct_of_peak_close_only": 11.426405698772776,
+      "max_drawdown_usd_close_only": 55000.0,
+      "max_gross_notional_multiple": 0.9997592100804467,
+      "max_reserved_heat_fraction": 0.01612175556050763,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 1355,
+        "single_trade_notional_cap": 16
+      },
+      "total_return_pct": 2124.6044488401126,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:1:cap3": {
+      "acceptance_rate": 0.9667174796747967,
+      "accepted": 3805,
+      "candidate_trades": 3936,
+      "closed": 3805,
+      "ending_equity_usd": 2837868.7293120325,
+      "max_drawdown_pct_of_peak_close_only": 17.355011332914813,
+      "max_drawdown_usd_close_only": 71335.21129883692,
+      "max_gross_notional_multiple": 2.9972823662280623,
+      "max_reserved_heat_fraction": 0.044275852887249334,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "gross_notional_cap": 131
+      },
+      "total_return_pct": 2737.8687293120324,
+      "unresolved_active": 0
+    },
+    "fixed_dollar:original_rr_gte_5:1:cap5": {
+      "acceptance_rate": 0.985010162601626,
+      "accepted": 3877,
+      "candidate_trades": 3936,
+      "closed": 3877,
+      "ending_equity_usd": 2860192.1615064167,
+      "max_drawdown_pct_of_peak_close_only": 22.783194602173275,
+      "max_drawdown_usd_close_only": 74335.21129883692,
+      "max_gross_notional_multiple": 4.970573810553892,
+      "max_reserved_heat_fraction": 0.04899202379283084,
+      "max_simultaneous_positions": 20,
+      "sizing_mode": "fixed_dollar",
+      "skipped": {
+        "account_heat_cap": 49,
+        "gross_notional_cap": 10
+      },
+      "total_return_pct": 2760.1921615064166,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:0.35:cap1": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 4633,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "single_trade_notional_cap": 4633
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:0.35:cap3": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 4633,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "single_trade_notional_cap": 4633
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:0.35:cap5": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 4633,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "single_trade_notional_cap": 4633
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:0.5:cap1": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 4633,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 1526,
+        "single_trade_notional_cap": 3107
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:0.5:cap3": {
+      "acceptance_rate": 0.15713360673429744,
+      "accepted": 728,
+      "candidate_trades": 4633,
+      "closed": 728,
+      "ending_equity_usd": 6342803983.539853,
+      "max_drawdown_pct_of_peak_close_only": 23.83957168120248,
+      "max_drawdown_usd_close_only": 815530464.0266838,
+      "max_gross_notional_multiple": 2.9755529527351303,
+      "max_reserved_heat_fraction": 0.020621572856700507,
+      "max_simultaneous_positions": 2,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 798,
+        "single_trade_notional_cap": 3107
+      },
+      "total_return_pct": 6342703.983539853,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:0.5:cap5": {
+      "acceptance_rate": 0.24843513921864882,
+      "accepted": 1151,
+      "candidate_trades": 4633,
+      "closed": 1151,
+      "ending_equity_usd": 2163662566993.883,
+      "max_drawdown_pct_of_peak_close_only": 23.552143959825877,
+      "max_drawdown_usd_close_only": 312015440283.7844,
+      "max_gross_notional_multiple": 4.996042496596109,
+      "max_reserved_heat_fraction": 0.04263064041031997,
+      "max_simultaneous_positions": 5,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 375,
+        "single_trade_notional_cap": 3107
+      },
+      "total_return_pct": 2163662466.9938827,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:0.75:cap1": {
+      "acceptance_rate": 0.07511331750485646,
+      "accepted": 348,
+      "candidate_trades": 4633,
+      "closed": 348,
+      "ending_equity_usd": 4985105.001510123,
+      "max_drawdown_pct_of_peak_close_only": 18.33064247805461,
+      "max_drawdown_usd_close_only": 291603.6730692098,
+      "max_gross_notional_multiple": 0.9979487242040286,
+      "max_reserved_heat_fraction": 0.010000000000000002,
+      "max_simultaneous_positions": 1,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 2379,
+        "single_trade_notional_cap": 1906
+      },
+      "total_return_pct": 4885.105001510123,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:0.75:cap3": {
+      "acceptance_rate": 0.2719620116555148,
+      "accepted": 1260,
+      "candidate_trades": 4633,
+      "closed": 1260,
+      "ending_equity_usd": 7709861442.44844,
+      "max_drawdown_pct_of_peak_close_only": 36.00906772254101,
+      "max_drawdown_usd_close_only": 2473275948.496916,
+      "max_gross_notional_multiple": 2.9998002185172106,
+      "max_reserved_heat_fraction": 0.037096913305316774,
+      "max_simultaneous_positions": 4,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 1467,
+        "single_trade_notional_cap": 1906
+      },
+      "total_return_pct": 7709761.442448439,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:0.75:cap5": {
+      "acceptance_rate": 0.4008202028922944,
+      "accepted": 1857,
+      "candidate_trades": 4633,
+      "closed": 1857,
+      "ending_equity_usd": 513973545810.41266,
+      "max_drawdown_pct_of_peak_close_only": 45.303625177324534,
+      "max_drawdown_usd_close_only": 280674250278.2319,
+      "max_gross_notional_multiple": 4.99163709913451,
+      "max_reserved_heat_fraction": 0.05,
+      "max_simultaneous_positions": 5,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "account_heat_cap": 349,
+        "gross_notional_cap": 521,
+        "single_trade_notional_cap": 1906
+      },
+      "total_return_pct": 513973445.81041265,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:1:cap1": {
+      "acceptance_rate": 0.09561838981221671,
+      "accepted": 443,
+      "candidate_trades": 4633,
+      "closed": 443,
+      "ending_equity_usd": 2272006.768513611,
+      "max_drawdown_pct_of_peak_close_only": 17.302548845506415,
+      "max_drawdown_usd_close_only": 318542.61480338685,
+      "max_gross_notional_multiple": 0.9998627754015064,
+      "max_reserved_heat_fraction": 0.010000000000000002,
+      "max_simultaneous_positions": 1,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 3100,
+        "single_trade_notional_cap": 1090
+      },
+      "total_return_pct": 2172.006768513611,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:1:cap3": {
+      "acceptance_rate": 0.3494496006906972,
+      "accepted": 1619,
+      "candidate_trades": 4633,
+      "closed": 1619,
+      "ending_equity_usd": 8725458045.096916,
+      "max_drawdown_pct_of_peak_close_only": 23.160301141244624,
+      "max_drawdown_usd_close_only": 1496694762.483799,
+      "max_gross_notional_multiple": 2.99968392402563,
+      "max_reserved_heat_fraction": 0.04848944156535059,
+      "max_simultaneous_positions": 5,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 1924,
+        "single_trade_notional_cap": 1090
+      },
+      "total_return_pct": 8725358.045096917,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:all_activated:1:cap5": {
+      "acceptance_rate": 0.47226419166846534,
+      "accepted": 2188,
+      "candidate_trades": 4633,
+      "closed": 2188,
+      "ending_equity_usd": 14559641075.570312,
+      "max_drawdown_pct_of_peak_close_only": 32.14148475034249,
+      "max_drawdown_usd_close_only": 4928384330.119661,
+      "max_gross_notional_multiple": 4.999546233141425,
+      "max_reserved_heat_fraction": 0.05000000000000001,
+      "max_simultaneous_positions": 5,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "account_heat_cap": 888,
+        "gross_notional_cap": 467,
+        "single_trade_notional_cap": 1090
+      },
+      "total_return_pct": 14559541.075570313,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:0.35:cap1": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 3936,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "single_trade_notional_cap": 3936
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:0.35:cap3": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 3936,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "single_trade_notional_cap": 3936
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:0.35:cap5": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 3936,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "single_trade_notional_cap": 3936
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:0.5:cap1": {
+      "acceptance_rate": 0.0,
+      "accepted": 0,
+      "candidate_trades": 3936,
+      "closed": 0,
+      "ending_equity_usd": 100000.0,
+      "max_drawdown_pct_of_peak_close_only": 0.0,
+      "max_drawdown_usd_close_only": 0.0,
+      "max_gross_notional_multiple": 0.0,
+      "max_reserved_heat_fraction": 0.0,
+      "max_simultaneous_positions": 0,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 1259,
+        "single_trade_notional_cap": 2677
+      },
+      "total_return_pct": 0.0,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:0.5:cap3": {
+      "acceptance_rate": 0.16463414634146342,
+      "accepted": 648,
+      "candidate_trades": 3936,
+      "closed": 648,
+      "ending_equity_usd": 1058805727.2223923,
+      "max_drawdown_pct_of_peak_close_only": 28.202341794705127,
+      "max_drawdown_usd_close_only": 129197247.64376473,
+      "max_gross_notional_multiple": 2.999924526754826,
+      "max_reserved_heat_fraction": 0.020621572856700503,
+      "max_simultaneous_positions": 2,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 611,
+        "single_trade_notional_cap": 2677
+      },
+      "total_return_pct": 1058705.7272223923,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:0.5:cap5": {
+      "acceptance_rate": 0.24949186991869918,
+      "accepted": 982,
+      "candidate_trades": 3936,
+      "closed": 982,
+      "ending_equity_usd": 220177277064.19095,
+      "max_drawdown_pct_of_peak_close_only": 32.34053065455502,
+      "max_drawdown_usd_close_only": 27548908790.878662,
+      "max_gross_notional_multiple": 4.997306933790954,
+      "max_reserved_heat_fraction": 0.04199536392954856,
+      "max_simultaneous_positions": 5,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 277,
+        "single_trade_notional_cap": 2677
+      },
+      "total_return_pct": 220177177.06419095,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:0.75:cap1": {
+      "acceptance_rate": 0.08180894308943089,
+      "accepted": 322,
+      "candidate_trades": 3936,
+      "closed": 322,
+      "ending_equity_usd": 3251891.5122921793,
+      "max_drawdown_pct_of_peak_close_only": 21.574781738628694,
+      "max_drawdown_usd_close_only": 190219.36531321425,
+      "max_gross_notional_multiple": 0.9956692027916382,
+      "max_reserved_heat_fraction": 0.010000000000000002,
+      "max_simultaneous_positions": 1,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 1952,
+        "single_trade_notional_cap": 1662
+      },
+      "total_return_pct": 3151.891512292179,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:0.75:cap3": {
+      "acceptance_rate": 0.28734756097560976,
+      "accepted": 1131,
+      "candidate_trades": 3936,
+      "closed": 1131,
+      "ending_equity_usd": 2395583709.4354835,
+      "max_drawdown_pct_of_peak_close_only": 45.44727784591522,
+      "max_drawdown_usd_close_only": 617496402.1369133,
+      "max_gross_notional_multiple": 2.99980021851721,
+      "max_reserved_heat_fraction": 0.037216306582131355,
+      "max_simultaneous_positions": 4,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 1143,
+        "single_trade_notional_cap": 1662
+      },
+      "total_return_pct": 2395483.7094354834,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:0.75:cap5": {
+      "acceptance_rate": 0.4115853658536585,
+      "accepted": 1620,
+      "candidate_trades": 3936,
+      "closed": 1620,
+      "ending_equity_usd": 104342404867.592,
+      "max_drawdown_pct_of_peak_close_only": 48.39326545365983,
+      "max_drawdown_usd_close_only": 43372421537.29196,
+      "max_gross_notional_multiple": 4.983691187904892,
+      "max_reserved_heat_fraction": 0.05000000000000001,
+      "max_simultaneous_positions": 5,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "account_heat_cap": 259,
+        "gross_notional_cap": 395,
+        "single_trade_notional_cap": 1662
+      },
+      "total_return_pct": 104342304.867592,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:1:cap1": {
+      "acceptance_rate": 0.10289634146341463,
+      "accepted": 405,
+      "candidate_trades": 3936,
+      "closed": 405,
+      "ending_equity_usd": 1802864.12469252,
+      "max_drawdown_pct_of_peak_close_only": 20.58677149125,
+      "max_drawdown_usd_close_only": 234422.0057624376,
+      "max_gross_notional_multiple": 0.9998627754015065,
+      "max_reserved_heat_fraction": 0.010000000000000002,
+      "max_simultaneous_positions": 1,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 2583,
+        "single_trade_notional_cap": 948
+      },
+      "total_return_pct": 1702.8641246925201,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:1:cap3": {
+      "acceptance_rate": 0.36509146341463417,
+      "accepted": 1437,
+      "candidate_trades": 3936,
+      "closed": 1437,
+      "ending_equity_usd": 2339917734.5243125,
+      "max_drawdown_pct_of_peak_close_only": 25.66862564497129,
+      "max_drawdown_usd_close_only": 428728735.44374156,
+      "max_gross_notional_multiple": 2.9991282765309397,
+      "max_reserved_heat_fraction": 0.04823454612329545,
+      "max_simultaneous_positions": 5,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "gross_notional_cap": 1551,
+        "single_trade_notional_cap": 948
+      },
+      "total_return_pct": 2339817.7345243124,
+      "unresolved_active": 0
+    },
+    "fixed_fraction_current_equity:original_rr_gte_5:1:cap5": {
+      "acceptance_rate": 0.4928861788617886,
+      "accepted": 1940,
+      "candidate_trades": 3936,
+      "closed": 1940,
+      "ending_equity_usd": 5313333373.176452,
+      "max_drawdown_pct_of_peak_close_only": 38.05938028024987,
+      "max_drawdown_usd_close_only": 2138194977.8771954,
+      "max_gross_notional_multiple": 4.999586802758754,
+      "max_reserved_heat_fraction": 0.05,
+      "max_simultaneous_positions": 5,
+      "sizing_mode": "fixed_fraction_current_equity",
+      "skipped": {
+        "account_heat_cap": 695,
+        "gross_notional_cap": 353,
+        "single_trade_notional_cap": 948
+      },
+      "total_return_pct": 5313233.373176452,
+      "unresolved_active": 0
+    }
+  },
+  "code_sha256": "8db79e7ca6647b4ba2b22f60dc8bd5d00b8557976f5a643ebd52b5c34eaae886",
+  "cost_spec_sha256": "3d232764ff367654551a0df9775e5a164df2164ba0b9ef366eed2b25f5f9f608",
+  "datasets": [
+    {
+      "bytes": 3149160,
+      "path": "data/klines_ADAUSDT_1h.json",
+      "sha256": "84c8606a77522b419e2feff17a6548d4d22b7e88034721a982d3d8aee9064bdd"
+    },
+    {
+      "bytes": 851095,
+      "path": "data/klines_ADAUSDT_4h.json",
+      "sha256": "d3e97c30fba8a05a2f6a54be065011af3338efc143c6a91b0c1ed709bee652e5"
+    },
+    {
+      "bytes": 3447771,
+      "path": "data/klines_BTCUSDT_1h.json",
+      "sha256": "a0de165d16929791c6ad64659ec9c0956a9661fa663b68359d1c9a69e45d0769"
+    },
+    {
+      "bytes": 931639,
+      "path": "data/klines_BTCUSDT_4h.json",
+      "sha256": "53969509001dffa62b3d0ecc7b97d7b3af691863ea0953c0f6b4789b64878cbc"
+    },
+    {
+      "bytes": 3295085,
+      "path": "data/klines_ETHUSDT_1h.json",
+      "sha256": "d884f041a5df6664f966b10710f98d816e7f29aed5fde154f3828e9157107e80"
+    },
+    {
+      "bytes": 890753,
+      "path": "data/klines_ETHUSDT_4h.json",
+      "sha256": "e12060a86dbc26e1eada3d118ccba922196ebb00c841361306f14dcbb535f74c"
+    },
+    {
+      "bytes": 3077044,
+      "path": "data/klines_SOLUSDT_1h.json",
+      "sha256": "250d7fc8954e0127d22b81faae96ece8404419a2be86faf53a0a69dce93af5a3"
+    },
+    {
+      "bytes": 831264,
+      "path": "data/klines_SOLUSDT_4h.json",
+      "sha256": "fcf96548efc6441c807f44cb83175f77cc387f3bc303f3c69ae14d1a14440408"
+    },
+    {
+      "bytes": 3158526,
+      "path": "data/klines_XRPUSDT_1h.json",
+      "sha256": "6706ef64975346dc7959581084f713a3797f1368bfb857df0ff6baea39580724"
+    },
+    {
+      "bytes": 854371,
+      "path": "data/klines_XRPUSDT_4h.json",
+      "sha256": "8f02b45e65fda24e6e1812815f76dab2f7201fe279b5211e22adf78e6f468af8"
+    },
+    {
+      "bytes": 10517604,
+      "path": "data/setup_backtest_trades.json",
+      "sha256": "5e42ec281c800d56b11ed9b38607873cc2a514121421004e99dee92a01310ea1"
+    }
+  ],
+  "exit_transition_decomposition": {
+    "base:0.35_vs_1": {
+      "sl->sl": {
+        "mean_delta_notional_pct": 0.5793234253548698,
+        "mean_delta_r": -0.3148459132426439,
+        "n": 3665,
+        "total_delta_notional_pct": 2123.2203539255897
+      },
+      "timeout->sl": {
+        "mean_delta_notional_pct": -5.790995252418001,
+        "mean_delta_r": -6.191454226738897,
+        "n": 54,
+        "total_delta_notional_pct": -312.713743630572
+      },
+      "timeout->timeout": {
+        "mean_delta_notional_pct": -3.025680481354896e-17,
+        "mean_delta_r": 13.192174717179833,
+        "n": 86,
+        "total_delta_notional_pct": -2.6020852139652106e-15
+      },
+      "tp->sl": {
+        "mean_delta_notional_pct": -8.05519333314411,
+        "mean_delta_r": -10.296285796571535,
+        "n": 225,
+        "total_delta_notional_pct": -1812.4184999574247
+      },
+      "tp->tp": {
+        "mean_delta_notional_pct": -3.998782141969755e-17,
+        "mean_delta_r": 15.3297805963799,
+        "n": 603,
+        "total_delta_notional_pct": -2.411265631607762e-14
+      }
+    },
+    "base:0.5_vs_1": {
+      "sl->sl": {
+        "mean_delta_notional_pct": 0.4456334041191302,
+        "mean_delta_r": -0.1695324148229617,
+        "n": 3665,
+        "total_delta_notional_pct": 1633.246426096612
+      },
+      "timeout->sl": {
+        "mean_delta_notional_pct": -6.1201666913894375,
+        "mean_delta_r": -5.8290488149221185,
+        "n": 40,
+        "total_delta_notional_pct": -244.80666765557757
+      },
+      "timeout->timeout": {
+        "mean_delta_notional_pct": -9.034114602235466e-17,
+        "mean_delta_r": 6.887452647862897,
+        "n": 100,
+        "total_delta_notional_pct": -9.034114602235466e-15
+      },
+      "tp->sl": {
+        "mean_delta_notional_pct": -8.052129044784923,
+        "mean_delta_r": -10.193363566406303,
+        "n": 162,
+        "total_delta_notional_pct": -1304.4449052551581
+      },
+      "tp->tp": {
+        "mean_delta_notional_pct": -8.230820096226293e-17,
+        "mean_delta_r": 8.301588350911981,
+        "n": 666,
+        "total_delta_notional_pct": -5.4817261840867104e-14
+      }
+    },
+    "base:0.75_vs_1": {
+      "sl->sl": {
+        "mean_delta_notional_pct": 0.22281670205956502,
+        "mean_delta_r": -0.05651080494098715,
+        "n": 3665,
+        "total_delta_notional_pct": 816.6232130483053
+      },
+      "timeout->sl": {
+        "mean_delta_notional_pct": -7.1372114878702835,
+        "mean_delta_r": -6.476783729818867,
+        "n": 21,
+        "total_delta_notional_pct": -149.881441245276
+      },
+      "timeout->timeout": {
+        "mean_delta_notional_pct": 1.6673025005449355e-17,
+        "mean_delta_r": 2.1335592452603436,
+        "n": 119,
+        "total_delta_notional_pct": 1.984089975648473e-15
+      },
+      "tp->sl": {
+        "mean_delta_notional_pct": -8.29990343447081,
+        "mean_delta_r": -10.369871816569306,
+        "n": 84,
+        "total_delta_notional_pct": -697.1918884955479
+      },
+      "tp->tp": {
+        "mean_delta_notional_pct": -2.238352872228138e-17,
+        "mean_delta_r": 2.7761273664867714,
+        "n": 744,
+        "total_delta_notional_pct": -1.6653345369377348e-14
+      }
+    },
+    "extreme:0.35_vs_1": {
+      "sl->sl": {
+        "mean_delta_notional_pct": 0.5793234253548698,
+        "mean_delta_r": -0.7084033047959488,
+        "n": 3665,
+        "total_delta_notional_pct": 2123.2203539255897
+      },
+      "timeout->sl": {
+        "mean_delta_notional_pct": -5.790995252418001,
+        "mean_delta_r": -6.453829792266551,
+        "n": 54,
+        "total_delta_notional_pct": -312.713743630572
+      },
+      "timeout->timeout": {
+        "mean_delta_notional_pct": 4.034240641806528e-18,
+        "mean_delta_r": 12.9441420991217,
+        "n": 86,
+        "total_delta_notional_pct": 3.469446951953614e-16
+      },
+      "tp->sl": {
+        "mean_delta_notional_pct": -8.100193333144109,
+        "mean_delta_r": -10.738025645387857,
+        "n": 225,
+        "total_delta_notional_pct": -1822.5434999574252
+      },
+      "tp->tp": {
+        "mean_delta_notional_pct": 3.596027106087909e-17,
+        "mean_delta_r": 15.062507158834757,
+        "n": 603,
+        "total_delta_notional_pct": 2.168404344971009e-14
+      }
+    },
+    "extreme:0.5_vs_1": {
+      "sl->sl": {
+        "mean_delta_notional_pct": 0.4456334041191302,
+        "mean_delta_r": -0.3814479333516638,
+        "n": 3665,
+        "total_delta_notional_pct": 1633.2464260966124
+      },
+      "timeout->sl": {
+        "mean_delta_notional_pct": -6.1201666913894375,
+        "mean_delta_r": -5.955789521273346,
+        "n": 40,
+        "total_delta_notional_pct": -244.8066676555775
+      },
+      "timeout->timeout": {
+        "mean_delta_notional_pct": -5.2475385148298415e-17,
+        "mean_delta_r": 6.747000007449197,
+        "n": 100,
+        "total_delta_notional_pct": -5.2475385148298415e-15
+      },
+      "tp->sl": {
+        "mean_delta_notional_pct": -8.097129044784923,
+        "mean_delta_r": -10.466060421784587,
+        "n": 162,
+        "total_delta_notional_pct": -1311.734905255157
+      },
+      "tp->tp": {
+        "mean_delta_notional_pct": -5.756364687550666e-17,
+        "mean_delta_r": 8.158574938626026,
+        "n": 666,
+        "total_delta_notional_pct": -3.8337388819087437e-14
+      }
+    },
+    "extreme:0.75_vs_1": {
+      "sl->sl": {
+        "mean_delta_notional_pct": 0.22281670205956502,
+        "mean_delta_r": -0.12714931111722108,
+        "n": 3665,
+        "total_delta_notional_pct": 816.6232130483053
+      },
+      "timeout->sl": {
+        "mean_delta_notional_pct": -7.1372114878702835,
+        "mean_delta_r": -6.519875942727132,
+        "n": 21,
+        "total_delta_notional_pct": -149.881441245276
+      },
+      "timeout->timeout": {
+        "mean_delta_notional_pct": -8.108738937076462e-17,
+        "mean_delta_r": 2.087620637747182,
+        "n": 119,
+        "total_delta_notional_pct": -9.64939933512099e-15
+      },
+      "tp->sl": {
+        "mean_delta_notional_pct": -8.34490343447081,
+        "mean_delta_r": -10.508260329320535,
+        "n": 84,
+        "total_delta_notional_pct": -700.9718884955481
+      },
+      "tp->tp": {
+        "mean_delta_notional_pct": -1.119176436114069e-17,
+        "mean_delta_r": 2.7285529004581686,
+        "n": 744,
+        "total_delta_notional_pct": -8.326672684688674e-15
+      }
+    },
+    "hard:0.35_vs_1": {
+      "sl->sl": {
+        "mean_delta_notional_pct": 0.5793234253548698,
+        "mean_delta_r": -0.4460317104270789,
+        "n": 3665,
+        "total_delta_notional_pct": 2123.2203539255897
+      },
+      "timeout->sl": {
+        "mean_delta_notional_pct": -5.790995252418001,
+        "mean_delta_r": -6.278912748581448,
+        "n": 54,
+        "total_delta_notional_pct": -312.713743630572
+      },
+      "timeout->timeout": {
+        "mean_delta_notional_pct": -1.0123422610533256e-16,
+        "mean_delta_r": 13.109497177827123,
+        "n": 86,
+        "total_delta_notional_pct": -8.7061434450586e-15
+      },
+      "tp->sl": {
+        "mean_delta_notional_pct": -8.07019333314411,
+        "mean_delta_r": -10.443532412843643,
+        "n": 225,
+        "total_delta_notional_pct": -1815.7934999574245
+      },
+      "tp->tp": {
+        "mean_delta_notional_pct": -2.1576162636527453e-18,
+        "mean_delta_r": 15.24068945053152,
+        "n": 603,
+        "total_delta_notional_pct": -1.3010426069826053e-15
+      }
+    },
+    "hard:0.5_vs_1": {
+      "sl->sl": {
+        "mean_delta_notional_pct": 0.4456334041191302,
+        "mean_delta_r": -0.24017092099919574,
+        "n": 3665,
+        "total_delta_notional_pct": 1633.2464260966124
+      },
+      "timeout->sl": {
+        "mean_delta_notional_pct": -6.1201666913894375,
+        "mean_delta_r": -5.871295717039194,
+        "n": 40,
+        "total_delta_notional_pct": -244.80666765557757
+      },
+      "timeout->timeout": {
+        "mean_delta_notional_pct": -1.0706496453294356e-16,
+        "mean_delta_r": 6.8406351010583295,
+        "n": 100,
+        "total_delta_notional_pct": -1.0706496453294356e-14
+      },
+      "tp->sl": {
+        "mean_delta_notional_pct": -8.067129044784924,
+        "mean_delta_r": -10.284262518199064,
+        "n": 162,
+        "total_delta_notional_pct": -1306.8749052551575
+      },
+      "tp->tp": {
+        "mean_delta_notional_pct": -6.251255769285792e-17,
+        "mean_delta_r": 8.253917213483328,
+        "n": 666,
+        "total_delta_notional_pct": -4.163336342344337e-14
+      }
+    },
+    "hard:0.75_vs_1": {
+      "sl->sl": {
+        "mean_delta_notional_pct": 0.22281670205956502,
+        "mean_delta_r": -0.08005697366639845,
+        "n": 3665,
+        "total_delta_notional_pct": 816.6232130483053
+      },
+      "timeout->sl": {
+        "mean_delta_notional_pct": -7.1372114878702835,
+        "mean_delta_r": -6.491147800788288,
+        "n": 21,
+        "total_delta_notional_pct": -149.881441245276
+      },
+      "timeout->timeout": {
+        "mean_delta_notional_pct": 9.247606765317538e-18,
+        "mean_delta_r": 2.1182463760892896,
+        "n": 119,
+        "total_delta_notional_pct": 1.100465205072787e-15
+      },
+      "tp->sl": {
+        "mean_delta_notional_pct": -8.314903434470809,
+        "mean_delta_r": -10.416001320819715,
+        "n": 84,
+        "total_delta_notional_pct": -698.4518884955479
+      },
+      "tp->tp": {
+        "mean_delta_notional_pct": -4.511680008084841e-17,
+        "mean_delta_r": 2.760269211143904,
+        "n": 744,
+        "total_delta_notional_pct": -3.356689926015122e-14
+      }
+    }
+  },
+  "fixed_notional_metrics": {
+    "base:0.35": {
+      "aggregate_cost_to_absolute_gross_return": 0.08047616564835347,
+      "avg_net_return_pct_of_notional": 0.7702115966582007,
+      "max_drawdown_pct_of_one_notional_unit": 33.433912776319374,
+      "mean_roundtrip_cost_pct_of_notional": 0.11417890297556413,
+      "n": 4633,
+      "profit_factor_fixed_notional": 3.0852255016428893,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 5.53314696762277,
+        "p50": 2.443293867293982,
+        "p95": 4.0989968327318556
+      }
+    },
+    "base:0.5": {
+      "aggregate_cost_to_absolute_gross_return": 0.06884782907126609,
+      "avg_net_return_pct_of_notional": 0.7887539542770818,
+      "max_drawdown_pct_of_one_notional_unit": 46.6277004199533,
+      "mean_roundtrip_cost_pct_of_notional": 0.11356618543038961,
+      "n": 4633,
+      "profit_factor_fixed_notional": 2.664634378221051,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 4.836626408102544,
+        "p50": 1.8752500359554913,
+        "p95": 3.365997446278269
+      }
+    },
+    "base:0.75": {
+      "aggregate_cost_to_absolute_gross_return": 0.05735515497278463,
+      "avg_net_return_pct_of_notional": 0.7640518239342382,
+      "max_drawdown_pct_of_one_notional_unit": 64.31546162722555,
+      "mean_roundtrip_cost_pct_of_notional": 0.11282358817927618,
+      "n": 4633,
+      "profit_factor_fixed_notional": 2.1885046831196124,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 3.99786473070358,
+        "p50": 1.3515461708567929,
+        "p95": 2.5931381536387237
+      }
+    },
+    "base:1": {
+      "aggregate_cost_to_absolute_gross_return": 0.048845836473650775,
+      "avg_net_return_pct_of_notional": 0.7706242644031606,
+      "max_drawdown_pct_of_one_notional_unit": 61.899168338914734,
+      "mean_roundtrip_cost_pct_of_notional": 0.11201986179332829,
+      "n": 4633,
+      "profit_factor_fixed_notional": 1.9627807189467679,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 3.4070230689489764,
+        "p50": 1.0564967523473294,
+        "p95": 2.108914841366711
+      }
+    },
+    "extreme:0.35": {
+      "aggregate_cost_to_absolute_gross_return": 0.18207185449993105,
+      "avg_net_return_pct_of_notional": 0.626068492837782,
+      "max_drawdown_pct_of_one_notional_unit": 52.731278253944325,
+      "mean_roundtrip_cost_pct_of_notional": 0.2583220067959829,
+      "n": 4633,
+      "profit_factor_fixed_notional": 2.259472668907017,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 3.0236237664434573,
+        "p50": 1.7880017944356819,
+        "p95": 2.538315037718989
+      }
+    },
+    "extreme:0.5": {
+      "aggregate_cost_to_absolute_gross_return": 0.15586150087394524,
+      "avg_net_return_pct_of_notional": 0.645222764982888,
+      "max_drawdown_pct_of_one_notional_unit": 73.1177004199516,
+      "mean_roundtrip_cost_pct_of_notional": 0.25709737472458344,
+      "n": 4633,
+      "profit_factor_fixed_notional": 2.076944297899459,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 2.8030387337292,
+        "p50": 1.4635669418939943,
+        "p95": 2.2366923403958694
+      }
+    },
+    "extreme:0.75": {
+      "aggregate_cost_to_absolute_gross_return": 0.12993572953927443,
+      "avg_net_return_pct_of_notional": 0.6212782431010846,
+      "max_drawdown_pct_of_one_notional_unit": 83.34568325725122,
+      "mean_roundtrip_cost_pct_of_notional": 0.2555971690124296,
+      "n": 4633,
+      "profit_factor_fixed_notional": 1.8120372682766035,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 2.4991657434283567,
+        "p50": 1.1237301863010807,
+        "p95": 1.866949468850109
+      }
+    },
+    "extreme:1": {
+      "aggregate_cost_to_absolute_gross_return": 0.11074595164324083,
+      "avg_net_return_pct_of_notional": 0.6286665696049737,
+      "max_drawdown_pct_of_one_notional_unit": 76.72665635518186,
+      "mean_roundtrip_cost_pct_of_notional": 0.2539775565915152,
+      "n": 4633,
+      "profit_factor_fixed_notional": 1.6838782483114516,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 2.2547336400507474,
+        "p50": 0.9119723745551324,
+        "p95": 1.6021083346907246
+      }
+    },
+    "hard:0.35": {
+      "aggregate_cost_to_absolute_gross_return": 0.11434139526554599,
+      "avg_net_return_pct_of_notional": 0.7221638953847277,
+      "max_drawdown_pct_of_one_notional_unit": 37.38391277631621,
+      "mean_roundtrip_cost_pct_of_notional": 0.16222660424903704,
+      "n": 4633,
+      "profit_factor_fixed_notional": 2.753089718143147,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 4.334089311152331,
+        "p50": 2.1773041708949235,
+        "p95": 3.4017987231439415
+      }
+    },
+    "hard:0.5": {
+      "aggregate_cost_to_absolute_gross_return": 0.09785238633882645,
+      "avg_net_return_pct_of_notional": 0.7409102245123507,
+      "max_drawdown_pct_of_one_notional_unit": 55.45770041994942,
+      "mean_roundtrip_cost_pct_of_notional": 0.16140991519512088,
+      "n": 4633,
+      "profit_factor_fixed_notional": 2.4370075705922707,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 3.8947531187445605,
+        "p50": 1.7144947215444086,
+        "p95": 2.881107433155527
+      }
+    },
+    "hard:0.75": {
+      "aggregate_cost_to_absolute_gross_return": 0.08154867982828076,
+      "avg_net_return_pct_of_notional": 0.7164606303231869,
+      "max_drawdown_pct_of_one_notional_unit": 69.05046162723067,
+      "mean_roundtrip_cost_pct_of_notional": 0.16041478179032734,
+      "n": 4633,
+      "profit_factor_fixed_notional": 2.0480620083033045,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 3.3318503754949447,
+        "p50": 1.265993722460764,
+        "p95": 2.2955094914259067
+      }
+    },
+    "hard:1": {
+      "aggregate_cost_to_absolute_gross_return": 0.06947920819684734,
+      "avg_net_return_pct_of_notional": 0.723305032803765,
+      "max_drawdown_pct_of_one_notional_unit": 65.286656355182,
+      "mean_roundtrip_cost_pct_of_notional": 0.15933909339272392,
+      "n": 4633,
+      "profit_factor_fixed_notional": 1.8610468885588005,
+      "requested_notional_multiple_at_1pct_risk": {
+        "max": 2.911111813674953,
+        "p50": 1.0034876786705305,
+        "p95": 1.907750657595227
+      }
+    }
+  },
+  "holm_primary_family": [
+    {
+      "holm_threshold": 0.016666666666666666,
+      "id": "base:0.5_vs_1",
+      "p": 0.6404719056188762,
+      "rank": 1,
+      "reject_null": false
+    },
+    {
+      "holm_threshold": 0.025,
+      "id": "base:0.75_vs_1",
+      "p": 0.7986402719456108,
+      "rank": 2,
+      "reject_null": false
+    },
+    {
+      "holm_threshold": 0.05,
+      "id": "base:0.35_vs_1",
+      "p": 0.9928014397120576,
+      "rank": 3,
+      "reject_null": false
+    }
+  ],
+  "hypothesis_id": "HYP-COST-002",
+  "interpretation": {
+    "automatic_selection": false,
+    "fixed_notional_removes_pure_R_rescaling": true,
+    "portfolio_paths_are_descriptive": true,
+    "promotion": false,
+    "same_dataset_reused": true
+  },
+  "limitations": [
+    "The same historical export used in HYP-COST-001 is reused, so every result is exploratory.",
+    "Spread and slippage are declared scenarios because the export contains no observed fields.",
+    "The portfolio uses close-only equity and does not model intrabar mark-to-market or liquidation.",
+    "Compounded ending equity over thousands of recycled setups is numerically path-dependent and is retained only as a diagnostic, not a decision metric.",
+    "Historical exchange filters, leverage brackets, margin mode and funding are not reconstructed.",
+    "The all-setup portfolio is a capacity stress test, not the exact current bot selection policy.",
+    "The rr>=5 universe is a pre-existing policy-aligned diagnostic, not an independent confirmation sample."
+  ],
+  "notice": "Research only - No signal - No bot",
+  "paired_month_bootstrap_fixed_notional": {
+    "base:0.35_vs_1": {
+      "ci95_notional_pct": [
+        -0.0868710433014733,
+        0.07977511518670206
+      ],
+      "mean_difference_notional_pct": -0.0004126677449599117,
+      "months": 51,
+      "n_paired": 4633,
+      "p_two_sided_centered_block_bootstrap": 0.9928014397120576,
+      "status": "computed"
+    },
+    "base:0.5_vs_1": {
+      "ci95_notional_pct": [
+        -0.05808085731155545,
+        0.08821584309842234
+      ],
+      "mean_difference_notional_pct": 0.01812968987392126,
+      "months": 51,
+      "n_paired": 4633,
+      "p_two_sided_centered_block_bootstrap": 0.6404719056188762,
+      "status": "computed"
+    },
+    "base:0.75_vs_1": {
+      "ci95_notional_pct": [
+        -0.060062395691730865,
+        0.04367468623935874
+      ],
+      "mean_difference_notional_pct": -0.006572440468922542,
+      "months": 51,
+      "n_paired": 4633,
+      "p_two_sided_centered_block_bootstrap": 0.7986402719456108,
+      "status": "computed"
+    },
+    "extreme:0.35_vs_1": {
+      "ci95_notional_pct": [
+        -0.08923451387016836,
+        0.07785101696530944
+      ],
+      "mean_difference_notional_pct": -0.0025980767671917137,
+      "months": 51,
+      "n_paired": 4633,
+      "p_two_sided_centered_block_bootstrap": 0.948010397920416,
+      "status": "computed"
+    },
+    "extreme:0.5_vs_1": {
+      "ci95_notional_pct": [
+        -0.06006298753019123,
+        0.08702115283293561
+      ],
+      "mean_difference_notional_pct": 0.01655619537791436,
+      "months": 51,
+      "n_paired": 4633,
+      "p_two_sided_centered_block_bootstrap": 0.671865626874625,
+      "status": "computed"
+    },
+    "extreme:0.75_vs_1": {
+      "ci95_notional_pct": [
+        -0.06113493668031938,
+        0.043073263518944846
+      ],
+      "mean_difference_notional_pct": -0.007388326503889081,
+      "months": 51,
+      "n_paired": 4633,
+      "p_two_sided_centered_block_bootstrap": 0.7764447110577885,
+      "status": "computed"
+    },
+    "hard:0.35_vs_1": {
+      "ci95_notional_pct": [
+        -0.08765418024418067,
+        0.07917395787851518
+      ],
+      "mean_difference_notional_pct": -0.0011411374190371775,
+      "months": 51,
+      "n_paired": 4633,
+      "p_two_sided_centered_block_bootstrap": 0.9758048390321936,
+      "status": "computed"
+    },
+    "hard:0.5_vs_1": {
+      "ci95_notional_pct": [
+        -0.05874633250079011,
+        0.08781761300992676
+      ],
+      "mean_difference_notional_pct": 0.01760519170858563,
+      "months": 51,
+      "n_paired": 4633,
+      "p_two_sided_centered_block_bootstrap": 0.6520695860827834,
+      "status": "computed"
+    },
+    "hard:0.75_vs_1": {
+      "ci95_notional_pct": [
+        -0.06042547637632742,
+        0.043474211999220774
+      ],
+      "mean_difference_notional_pct": -0.006844402480578054,
+      "months": 51,
+      "n_paired": 4633,
+      "p_two_sided_centered_block_bootstrap": 0.7920415916816637,
+      "status": "computed"
+    }
+  },
+  "research_only": true,
+  "schema_version": 1,
+  "selected_setups": 8640,
+  "spec_sha256": "c354b84aa3d364d313dc6d79f4a39919bd1057ced62e127377efffa493fd4697"
+}
