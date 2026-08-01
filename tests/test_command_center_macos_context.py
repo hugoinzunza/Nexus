@@ -90,6 +90,17 @@ def test_lanzador_kiosco_no_abre_fixture():
     )
     assert "fixture=ready" not in launcher
     assert 'open -na "$APP" --args "$URL"' in launcher
+    assert 'HEALTH_URL=' in launcher
+    assert 'SERVICE_LABEL="com.hugo.nexux-command-center"' in launcher
+    assert 'launchctl bootstrap "$SERVICE_DOMAIN" "$SERVICE_TARGET"' in launcher
+    assert 'launchctl kickstart -k "$SERVICE_DOMAIN/$SERVICE_LABEL"' in launcher
+    assert 'command-center-local.log' in launcher
+    service = (
+        ROOT / "deploy" / "com.hugo.nexux-command-center.plist"
+    ).read_text(encoding="utf-8")
+    assert "<string>8812</string>" in service
+    assert "<key>KeepAlive</key>" in service
+    assert "<key>NEXUX_COMMAND_CENTER_MEDIA</key>" in service
     native = (
         ROOT / "agents" / "macos" / "CommandCenterShell" / "main.swift"
     ).read_text(encoding="utf-8")

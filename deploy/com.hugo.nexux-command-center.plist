@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.hugo.nexux-command-center</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/hugh/crisol/nexux/.venv/bin/python</string>
+        <string>-m</string>
+        <string>uvicorn</string>
+        <string>core.app:app</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>8812</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/hugh/crisol/nexux</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>8812</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+        <key>NEXUX_COMMAND_CENTER_MEDIA</key>
+        <string>local</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/hugh/crisol/nexux/logs/command-center-local.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/hugh/crisol/nexux/logs/command-center-local.err.log</string>
+</dict>
+</plist>
