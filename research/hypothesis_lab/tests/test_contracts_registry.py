@@ -24,6 +24,14 @@ def test_frozen_spec_has_exact_authorized_factorial():
     assert spec.raw["statistics"]["multiple_testing_family"].startswith("unique_target")
     assert spec.raw["notice"] == NOTICE
 
+    second = load_spec(SPEC_PATH.parent / "HYP-EXIT-002.frozen.json")
+    assert second.trial_budget == 180
+    assert [x["id"] for x in second.targets] == [
+        "original", "fixed_5r", "take_2r_25_runner_original",
+        "take_3r_25_runner_original", "take_3r_50_runner_original",
+        "protect_3r_runner_original",
+    ]
+
 
 def test_preregistration_is_immutable_and_precedes_runs(tmp_path):
     spec = load_spec(SPEC_PATH)

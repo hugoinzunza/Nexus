@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from research.hypothesis_lab.simulator import simulate
+from research.hypothesis_lab.simulator import simulate, simulate_exit_variant
 
 
 def candle(t, high, low, close=100.0):
@@ -51,3 +51,35 @@ def test_unactivated_candidate_is_kept_as_discarded():
     assert result["discarded_reason"] == "not_activated"
     assert result["setup_id"] == "s1"
 
+
+def test_hybrid_partial_preserves_runner_and_accounts_realized_r():
+    bars = [candle(0, 100, 99), candle(1, 105, 95),
+            candle(2, 121, 95), candle(3, 105, 89)]
+    variant = {"id": "hybrid", "kind": "scale_out", "legs": [
+        {"rr": 2.0, "fraction": 0.25}, {"target": "original", "fraction": 0.75}
+    ]}
+    result = simulate_exit_variant(setup(original_tp=150.0), bars, variant, 0.0)
+    assert result["status"] == "sl"
+    assert result["gross_r"] == pytest.approx(-0.25)
+
+
+def test_protection_at_3r_only_changes_stop_on_following_bar():
+    variant = {"id": "protect", "kind": "protect_runner", "trigger_rr": 3.0,
+               "new_stop_rr": 0.0, "target": "original"}
+    later_be = [candle(0, 100, 99), candle(1, 105, 95),
+                candle(2, 131, 95), candle(3, 105, 89)]
+    result = simulate_exit_variant(setup(original_tp=150.0), later_be, variant, 0.0)
+    assert result["status"] == "sl" and result["gross_r"] == 0.0
+
+    ambiguous_trigger = [candle(0, 100, 99), candle(1, 105, 95), candle(2, 131, 89)]
+    result = simulate_exit_variant(setup(original_tp=150.0), ambiguous_trigger, variant, 0.0)
+    assert result["status"] == "sl" and result["gross_r"] == -1.0
+
+
+def test_partial_beyond_original_collapses_to_original_target():
+    bars = [candle(0, 100, 99), candle(1, 105, 95), candle(2, 121, 95)]
+    variant = {"id": "collapsed", "kind": "scale_out", "legs": [
+        {"rr": 3.0, "fraction": 0.5}, {"target": "original", "fraction": 0.5}
+    ]}
+    result = simulate_exit_variant(setup(original_tp=120.0), bars, variant, 0.0)
+    assert result["status"] == "tp" and result["gross_r"] == pytest.approx(2.0)

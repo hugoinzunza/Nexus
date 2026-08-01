@@ -363,16 +363,23 @@ def _range(candles) -> Dict:
     if not sh or not sl:
         # Respaldo: extremos de las últimas velas.
         window = candles[-60:]
-        h = max(c["h"] for c in window)
-        l = min(c["l"] for c in window)
+        high_candle = max(window, key=lambda c: c["h"])
+        low_candle = min(window, key=lambda c: c["l"])
+        h, l = high_candle["h"], low_candle["l"]
         return {"strong_high": h, "weak_low": l, "eq": (h + l) / 2,
-                "strong_high_t": window[-1]["t"], "weak_low_t": window[0]["t"]}
+                "strong_high_t": high_candle["t"], "weak_low_t": low_candle["t"],
+                "strong_high_confirm_t": high_candle["t"],
+                "weak_low_confirm_t": low_candle["t"],
+                "source_kind": "rolling_extreme"}
     hi = max(sh, key=lambda x: x["price"])
     lo = min(sl, key=lambda x: x["price"])
     return {"strong_high": hi["price"], "weak_low": lo["price"],
             "eq": (hi["price"] + lo["price"]) / 2,
             "strong_high_t": candles[hi["idx"]]["t"],
-            "weak_low_t": candles[lo["idx"]]["t"]}
+            "weak_low_t": candles[lo["idx"]]["t"],
+            "strong_high_confirm_t": candles[hi["confirm_idx"]]["t"],
+            "weak_low_confirm_t": candles[lo["confirm_idx"]]["t"],
+            "source_kind": "confirmed_swing"}
 
 
 def _fvgs(candles, lookback=80) -> List[Dict]:
@@ -494,12 +501,14 @@ def _levels(sel_candles, rng, n) -> List[Dict]:
         price, idx = s["price"], s["idx"]
         swept = any(sel_candles[k]["h"] > price for k in range(idx + 1, n))
         out.append({"type": "high", "price": _q(price), "t": sel_candles[idx]["t"],
+                    "confirm_t": sel_candles[s["confirm_idx"]]["t"],
                     "kind": "strong" if swept else "weak",
                     "label": ("Strong" if swept else "Weak") + " High", "pct": pct(price)})
     for s in sorted(sl, key=lambda x: x["confirm_idx"])[-LEVELS_PER_SIDE:]:
         price, idx = s["price"], s["idx"]
         swept = any(sel_candles[k]["l"] < price for k in range(idx + 1, n))
         out.append({"type": "low", "price": _q(price), "t": sel_candles[idx]["t"],
+                    "confirm_t": sel_candles[s["confirm_idx"]]["t"],
                     "kind": "strong" if swept else "weak",
                     "label": ("Strong" if swept else "Weak") + " Low", "pct": pct(price)})
     return out
@@ -529,19 +538,33 @@ def _opposite_liquidity(levels, long, ref, rhi, rlo):
     Apuntar a liquidez weak (no barrida) evita el bug de tomar un nivel ya barrido o
     por detrás del precio, que daba un R:R falso."""
     if long:
-        weak = [l["price"] for l in levels
+        weak = [l for l in levels
                 if l["type"] == "high" and l["kind"] == "weak" and l["price"] > ref]
         if weak:
-            return _q(min(weak)), "Weak High"
+            level = min(weak, key=lambda x: x["price"])
+            return _q(level["price"]), "Weak High", {
+                "kind": "confirmed_swing_level", "type": level["type"],
+                "price": _q(level["price"]),
+                "source_t": level["t"], "confirm_t": level["confirm_t"],
+            }
         if rhi and rhi > ref:
-            return _q(rhi), "Strong High"   # respaldo: techo del rango
+            return _q(rhi), "Strong High", {
+                "kind": "dealing_range", "type": "high", "price": _q(rhi),
+            }
         return None
-    weak = [l["price"] for l in levels
+    weak = [l for l in levels
             if l["type"] == "low" and l["kind"] == "weak" and l["price"] < ref]
     if weak:
-        return _q(max(weak)), "Weak Low"
+        level = max(weak, key=lambda x: x["price"])
+        return _q(level["price"]), "Weak Low", {
+            "kind": "confirmed_swing_level", "type": level["type"],
+            "price": _q(level["price"]),
+            "source_t": level["t"], "confirm_t": level["confirm_t"],
+        }
     if rlo and rlo < ref:
-        return _q(rlo), "Weak Low"          # respaldo: piso del rango
+        return _q(rlo), "Weak Low", {
+            "kind": "dealing_range", "type": "low", "price": _q(rlo),
+        }
     return None
 
 
@@ -616,7 +639,14 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
         target = _opposite_liquidity(levels, long, ref, rhi, rlo)
         if not target:
             continue
-        tp, tp_label = target
+        tp, tp_label, tp_source = target
+        if tp_source["kind"] == "dealing_range":
+            side = tp_source["type"]
+            tp_source.update({
+                "source_kind": rng.get("source_kind"),
+                "source_t": rng.get("strong_high_t" if side == "high" else "weak_low_t"),
+                "confirm_t": rng.get("strong_high_confirm_t" if side == "high" else "weak_low_confirm_t"),
+            })
         rr = abs(tp - entry) / risk
         if rr < MIN_RR:
             continue                       # no llega a 2R con el SL real → no vale
@@ -639,6 +669,7 @@ def _tpsl(pois, levels, last_price, rng) -> Dict:
             "dir": p["dir"], "tf": p["tf"], "state": "activo" if active else "pendiente",
             "entry": entry, "entry_lo": _q(p["lo"]), "entry_hi": _q(p["hi"]),
             "sl": sl, "tp": tp, "rr": round(rr, 1), "tp_label": tp_label,
+            "tp_source": tp_source,
             "sl_pct": round(risk / entry * 100, 2), "sl_capped": sl_capped,
             "dist_pct": p.get("dist_pct", 0.0), "disc_ok": disc_ok,
         }

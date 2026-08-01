@@ -23,7 +23,7 @@ from .datasets import load_inputs
 from .metrics import EXPLICIT_BLOCKS, basic_metrics, block_bootstrap_mean, holm, paired_block_bootstrap
 from .registry import Registry
 from .report import write_reports
-from .simulator import simulate
+from .simulator import simulate_exit_variant
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -95,7 +95,7 @@ def execute(spec: Spec, db_path: Path, report_dir: Path) -> str:
                 for cost in spec.costs:
                     for target in spec.targets:
                         trial_no += 1
-                        rows = [simulate(s, candles[(pair, timeframe)], target, float(cost["total_rate"]))
+                        rows = [simulate_exit_variant(s, candles[(pair, timeframe)], target, float(cost["total_rate"]))
                                 for s in source]
                         for row in rows:
                             row.update({"pair": pair, "timeframe": timeframe,

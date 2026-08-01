@@ -54,7 +54,7 @@ class Spec:
 
     @property
     def targets(self) -> tuple[dict[str, Any], ...]:
-        return tuple(self.raw["design"]["targets"])
+        return tuple(self.raw["design"].get("targets") or self.raw["design"].get("exit_variants", ()))
 
     @property
     def costs(self) -> tuple[dict[str, Any], ...]:
@@ -79,7 +79,7 @@ def load_spec(path: str | Path) -> Spec:
     if raw["research_only"] is not True or raw["notice"] != NOTICE:
         raise ContractError("research-only notice is mandatory")
     pairs, tfs = raw["dataset"].get("pairs", []), raw["dataset"].get("timeframes", [])
-    targets = raw["design"].get("targets", [])
+    targets = raw["design"].get("targets") or raw["design"].get("exit_variants", [])
     costs = raw["design"].get("cost_scenarios", [])
     expected = len(pairs) * len(tfs) * len(targets) * len(costs)
     if raw["trial_budget"] != expected:

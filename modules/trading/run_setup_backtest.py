@@ -29,7 +29,7 @@ from . import smc_live
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setup_backtest_results.json")
-RESEARCH_EXPORT_VERSION = "setup-backtest-research-v2"
+RESEARCH_EXPORT_VERSION = "setup-backtest-research-v3"
 
 # (nombre live, símbolo Binance). TODOS los pares con klines persistidos: así el
 # veredicto dice si el edge generaliza o es solo de BTC/ETH.
@@ -244,6 +244,7 @@ def _run_pass(symbol, sel_tf, htf_series, htf_ts):
             "status": status, "r": r, "sl_pct": sl_pct,
             "entry": entry, "entry_lo": plan["entry_lo"], "entry_hi": plan["entry_hi"],
             "sl": plan["sl"], "original_tp": plan["tp"],
+            "original_tp_source": plan.get("tp_source"),
             "decision_index": i, "decision_timestamp": sel[i]["t"],
             "activation_index": act_idx,
             "activation_timestamp": sel[act_idx]["t"] if act_idx is not None else None,
