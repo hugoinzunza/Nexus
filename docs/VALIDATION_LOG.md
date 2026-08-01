@@ -1080,10 +1080,11 @@ consolidación de las capacidades visibles.
 
 ### Resolución
 
-**APROBADO técnicamente** y **PENDIENTE de confirmación perceptual de Hugo**.
-No se justifican módulos nuevos ni una nueva composición. La confirmación final
-debe verificar desde 80–90 cm: lectura cómoda del footer, protagonismo correcto
-de Música y reconocimiento de Atención inmediata en aproximadamente dos segundos.
+**APROBADO técnica y perceptualmente.** Hugo confirmó desde la posición real de
+uso que el footer se lee cómodamente, Música tiene el protagonismo correcto y
+Atención inmediata se comprende en aproximadamente dos segundos. No se justifican
+módulos nuevos ni una nueva composición; esta versión queda como referencia
+visual vigente del Command Center.
 
 ---
 
