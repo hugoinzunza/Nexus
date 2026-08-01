@@ -1047,6 +1047,46 @@ consolidación de las capacidades visibles.
 
 ---
 
+## VAL-0029 — Refinamiento visual premium en hardware real
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-07-31 |
+| Hardware | ARZOPA, 1920 × 1080 @ 60 Hz |
+| Disposición | Pantalla extendida, centrada bajo la pantalla principal |
+| Pregunta | ¿La jerarquía usa el espacio según la importancia operacional? |
+
+### Evidencia técnica visual
+
+- TradingView ocupa aproximadamente el 67% del ancho útil y conserva toda la
+  altura de trabajo bajo el Market Ribbon.
+- Atención inmediata resume Sistema, Binance, Macro y Bot en cuatro lecturas
+  compactas; el estado normal no deja una superficie vacía.
+- Música conserva selector, carátula de 200 × 200 px, metadatos, controles y
+  progreso sin superposición. El selector pertenece estructuralmente al
+  encabezado y no puede quedar detrás de la carátula.
+- Posiciones muestra las cuentas principal y Bot sin scroll interno en el estado
+  real observado.
+- macOS queda reducido a telemetría secundaria en el footer.
+- La shell nativa ocupa exactamente 1920 × 1080, sin pestañas, barra de dirección,
+  scroll de página ni elementos fuera del viewport.
+- La prueba específica del Command Center conserva 267 pruebas aprobadas.
+
+### Evidencia visual
+
+- `docs/evidence/command-center-val-0029-arzopa.png`
+
+### Resolución
+
+**APROBADO técnicamente** y **PENDIENTE de confirmación perceptual de Hugo**.
+No se justifican módulos nuevos ni una nueva composición. La confirmación final
+debe verificar desde 80–90 cm: lectura cómoda del footer, protagonismo correcto
+de Música y reconocimiento de Atención inmediata en aproximadamente dos segundos.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario
