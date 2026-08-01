@@ -1072,9 +1072,9 @@ def test_el_stop_nuevo_se_pone_antes_de_retirar_el_viejo():
     from pathlib import Path
     src = (Path(__file__).resolve().parents[1] / "modules/bot/executor.py").read_text()
     i = src.index("ORDEN IMPORTANTE")
-    bloque = src[i:i + 1400]
+    bloque = src[i:i + 1800]
     proteger = bloque.index("_proteger(")
-    cancelar = bloque.index("cancel_algo_order")
+    cancelar = bloque.index("_cancelar_stops_anteriores(")
     assert proteger < cancelar, "sigue cancelando antes de confirmar el reemplazo"
     ex = BotExecutor(store=None, log=lambda _m: None, config={})
     assert ex._aid("s:1", 0) != ex._aid("s:1", 1), "las generaciones deben poder coexistir"
@@ -1088,8 +1088,118 @@ def test_proteger_verifica_lado_cantidad_y_precio_no_solo_el_id():
     i = src.index("def _proteger")
     j = src.index("_EQUITY_TTL_S")
     cuerpo = src[i:j]
-    for señal in ('o.get("side") != lado', "position_side", "cubre < qty", "trigger_price"):
+    for señal in ('o.get("side") != lado', "position_side", "abs(cubre - qty)", "trigger_price"):
         assert señal in cuerpo, f"_proteger no verifica {señal}"
+
+
+def test_proteger_rechaza_stop_sobredimensionado():
+    class Client:
+        def algo_stop_market(self, *_args, **_kwargs):
+            return {}
+
+        def get_algo_order(self, client_id):
+            return {
+                "client_algo_id": client_id,
+                "status": "NEW",
+                "side": "SELL",
+                "position_side": "LONG",
+                "qty": 2.0,
+                "trigger_price": 90.0,
+            }
+
+    logs = []
+    ex = BotExecutor(store=None, log=logs.append, config={})
+
+    assert not ex._proteger(Client(), "BTCUSDT", "long", 90.0, 1.0,
+                            "setup:oversized", "LONG")
+    assert any("cantidad no coincide" in line for line in logs)
+
+
+def test_parcial_con_be_invalido_deja_stop_exacto_en_sl_original(tmp_path):
+    sid = "setup:partial:1"
+    store = BotStore(path=str(tmp_path / "bot_trades.json"))
+    store.open_trade({
+        **_trade_rec(),
+        "setup_id": sid,
+        "mode": "live",
+        "qty": 2.0,
+        "entry_price": 100.0,
+        "sl": 90.0,
+    })
+
+    class Client:
+        def __init__(self):
+            self.orders = {
+                BotExecutor._aid(sid): {
+                    "client_algo_id": BotExecutor._aid(sid),
+                    "algo_id": 1,
+                    "status": "NEW",
+                    "side": "SELL",
+                    "position_side": "LONG",
+                    "qty": 2.0,
+                    "trigger_price": 90.0,
+                }
+            }
+            self.cancelled = []
+
+        def mark_price(self, _symbol):
+            return 99.0
+
+        def round_qty(self, _symbol, qty):
+            return qty
+
+        def algo_stop_market(self, _symbol, side, trigger, *, qty,
+                             position_side, client_algo_id):
+            if trigger == 100.0:
+                raise RuntimeError("Order would immediately trigger")
+            self.orders[client_algo_id] = {
+                "client_algo_id": client_algo_id,
+                "algo_id": 2,
+                "status": "NEW",
+                "side": side,
+                "position_side": position_side,
+                "qty": qty,
+                "trigger_price": trigger,
+            }
+
+        def get_algo_order(self, client_id):
+            return self.orders.get(client_id)
+
+        def algo_open_orders(self, _symbol):
+            return list(self.orders.values())
+
+        def cancel_algo_order(self, *, algo_id=None, client_algo_id=None):
+            target = client_algo_id
+            if algo_id is not None:
+                target = next((cid for cid, order in self.orders.items()
+                               if order.get("algo_id") == algo_id), None)
+            self.cancelled.append(target)
+            if target:
+                self.orders.pop(target, None)
+
+    client = Client()
+    logs = []
+    ex = BotExecutor(store, logs.append, config={"live": True, "hedge": True},
+                     client=client)
+    ex._ordenar = lambda *_args, **_kwargs: {"executed_qty": 1.0, "avg_price": 99.0}
+
+    ex._reduce({
+        "key": "setup:partial",
+        "ts_created": 1,
+        "leg": "TP1",
+        "frac_closed": 0.5,
+        "realized_r": 0.5,
+        "be": True,
+    }, 99.0)
+
+    trade = store.get_open(sid)
+    assert trade["qty_open"] == 1.0
+    assert len(client.orders) == 1
+    stop = next(iter(client.orders.values()))
+    assert stop["qty"] == 1.0
+    assert stop["trigger_price"] == 90.0
+    assert BotExecutor._aid(sid) in client.cancelled
+    assert any("respaldo exacto" in line for line in logs)
 
 
 def test_ajustar_qty_corrige_sin_inventar_una_salida(tmp_path):
@@ -1131,6 +1241,58 @@ def test_real_mayor_que_libro_amplia_el_stop():
     bloque = src[i:i + 2400]
     assert "_proteger(" in bloque, "no amplía el stop a la cantidad real"
     assert "ajustar_qty(" in bloque, "no corrige el libro"
+
+
+def test_reconciliacion_repara_stop_sobredimensionado(tmp_path):
+    sid = "setup:reconcile"
+    store = BotStore(path=str(tmp_path / "bot_trades.json"))
+    store.open_trade({
+        **_trade_rec(), "setup_id": sid, "mode": "live", "qty": 2.0,
+        "entry_price": 100.0, "sl": 90.0,
+    })
+    store.add_partial(sid, "TP1", 1.0, 105.0)
+
+    class Client:
+        def __init__(self):
+            self.orders = [{
+                "client_algo_id": BotExecutor._aid(sid), "algo_id": 1,
+                "status": "NEW", "side": "SELL", "position_side": "LONG",
+                "qty": 2.0, "trigger_price": 90.0,
+            }]
+
+        def algo_open_orders(self, _symbol):
+            return list(self.orders)
+
+        def round_qty(self, _symbol, qty):
+            return qty
+
+        def algo_stop_market(self, _symbol, side, trigger, *, qty,
+                             position_side, client_algo_id):
+            self.orders.append({
+                "client_algo_id": client_algo_id, "algo_id": 2,
+                "status": "NEW", "side": side, "position_side": position_side,
+                "qty": qty, "trigger_price": trigger,
+            })
+
+        def get_algo_order(self, client_id):
+            return next((o for o in self.orders
+                         if o["client_algo_id"] == client_id), None)
+
+        def cancel_algo_order(self, *, algo_id=None, client_algo_id=None):
+            self.orders = [o for o in self.orders
+                           if not ((algo_id and o.get("algo_id") == algo_id)
+                                  or (client_algo_id and
+                                      o.get("client_algo_id") == client_algo_id))]
+
+    client = Client()
+    ex = BotExecutor(store, lambda _msg: None,
+                     config={"live": True, "hedge": True}, client=client)
+    sync = BotSync(ex, lambda _msg: None)
+
+    assert sync._asegurar_stop_exacto(client, store.get_open(sid), 1.0, True)
+    assert len(client.orders) == 1
+    assert client.orders[0]["qty"] == 1.0
+    assert client.orders[0]["trigger_price"] == 90.0
 
 
 def test_el_path_de_los_algo_orders_es_el_que_responde_no_el_de_la_doc():

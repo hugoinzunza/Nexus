@@ -185,7 +185,10 @@ class TradingModule(NexusModule):
 
     def _make_bot_sync(self):
         """Sincronizador VPS→Railway (espejo + comandos). None si no hay ejecutor."""
-        if not self._bot_executor:
+        # Solo la instancia con credenciales de trading puede publicar el estado del
+        # bot. Un servidor local inerte seguía teniendo BotSync y sobrescribía en
+        # Railway el snapshot del VPS con su libro local incompleto.
+        if not self._bot_executor or not self._bot_executor.active:
             return None
         try:
             from modules.bot.sync import BotSync

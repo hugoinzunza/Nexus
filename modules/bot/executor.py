@@ -646,9 +646,9 @@ class BotExecutor:
                 return False
             if not o.get("close_position"):
                 cubre = float(o.get("qty") or 0)
-                if cubre < qty * 0.99:
+                if abs(cubre - qty) > max(abs(qty) * 0.01, 1e-12):
                     self.log(f"bot: ⛔ stop de {symbol} cubre {cubre} de {qty}: "
-                             f"el resto queda descubierto")
+                             "la cantidad no coincide con la posición")
                     return False
             disparo = float(o.get("trigger_price") or 0)
             if disparo and abs(disparo - sl) > max(abs(sl) * 0.002, 1e-9):
@@ -658,6 +658,27 @@ class BotExecutor:
                      f"por {qty}")
             return True
         return False
+
+    def _cancelar_stops_anteriores(self, cli, symbol: str, sid: str,
+                                   conservar: str) -> None:
+        """Retira stops generacionales del setup solo después de confirmar el nuevo."""
+        prefijo = self._aid(sid)
+        try:
+            ordenes = cli.algo_open_orders(symbol)
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"bot: no se pudieron listar stops anteriores de {symbol}: {exc}")
+            return
+        for order in ordenes:
+            cid = order.get("client_algo_id") or ""
+            if not cid.startswith(prefijo) or cid == conservar:
+                continue
+            try:
+                cli.cancel_algo_order(
+                    algo_id=order.get("algo_id"),
+                    client_algo_id=None if order.get("algo_id") else cid,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     # Cada cuánto se re-lee el balance real. No hace falta más: el sizing tolera de
     # sobra que la base tenga unos minutos, y así una caída de la API no deja al bot
@@ -799,18 +820,30 @@ class BotExecutor:
                                   cli.round_qty(symbol, rem), sid, be_pos, gen=gen):
                     self.log(f"bot: stop nativo re-puesto en {symbol} @ {nivel} "
                              f"por {rem} (tras {t.get('leg')})")
-                    for viejo in range(gen):
-                        try:
-                            cli.cancel_algo_order(client_algo_id=self._aid(sid, viejo))
-                        except Exception:  # noqa: BLE001
-                            pass  # ya disparado, ya cancelado, o nunca existió
+                    self._cancelar_stops_anteriores(
+                        cli, symbol, sid, conservar=self._aid(sid, gen)
+                    )
                 else:
-                    # El reemplazo no quedó: se CONSERVA el viejo. Cubre más cantidad de
-                    # la que hay, que en un stop es el lado seguro —cierra lo que
-                    # encuentre— y es infinitamente mejor que quedarse sin ninguno.
-                    self.log(f"bot: ⚠️ no se pudo re-poner el stop de {symbol} tras el "
-                             f"parcial; se CONSERVA el anterior (cubre {trade.get('qty')} "
-                             f"de {rem} reales)")
+                    # Si BE ya quedó detrás del precio, Binance lo rechaza como disparo
+                    # inmediato. No conservamos indefinidamente el stop sobredimensionado:
+                    # instalamos primero uno por la cantidad exacta en el SL original.
+                    respaldo = trade.get("sl")
+                    gen_respaldo = gen + 50
+                    if (respaldo and abs(float(respaldo) - float(nivel)) > 1e-12
+                            and self._proteger(
+                                cli, symbol, trade["dir"], float(respaldo),
+                                cli.round_qty(symbol, rem), sid, be_pos,
+                                gen=gen_respaldo,
+                            )):
+                        self.log(f"bot: stop BE rechazado en {symbol}; respaldo exacto "
+                                 f"en SL {respaldo} por {rem}")
+                        self._cancelar_stops_anteriores(
+                            cli, symbol, sid,
+                            conservar=self._aid(sid, gen_respaldo),
+                        )
+                    else:
+                        self.log(f"bot: ⛔ no se pudo dejar un stop exacto en {symbol} "
+                                 f"tras el parcial ({rem} reales). Revisar YA.")
 
     def _close(self, t: dict, ref_price: float) -> None:
         sid = self._setup_id(t)
