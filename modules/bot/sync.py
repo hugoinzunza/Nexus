@@ -316,6 +316,56 @@ class BotSync:
         except OSError:
             pass
 
+    def _asegurar_stop_exacto(self, cli, trade: dict, real_qty: float,
+                             hedge: bool) -> bool:
+        """Garantiza que una posición viva tenga un stop del tamaño real actual."""
+        ex = self.executor
+        if not all(hasattr(ex, name) for name in
+                   ("_aid", "_proteger", "_cancelar_stops_anteriores")):
+            return False
+        if not hasattr(cli, "algo_open_orders"):
+            return False
+        symbol = trade["symbol"]
+        prefijo = ex._aid(trade["setup_id"])
+        lado = "SELL" if trade["dir"] == "long" else "BUY"
+        pos_side = ("LONG" if trade["dir"] == "long" else "SHORT") if hedge else None
+        try:
+            ordenes = cli.algo_open_orders(symbol)
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"bot: no se pudo auditar el stop de {symbol}: {exc}")
+            return False
+        for order in ordenes:
+            cid = order.get("client_algo_id") or ""
+            if not cid.startswith(prefijo) or order.get("status") not in (None, "NEW"):
+                continue
+            if order.get("side") != lado:
+                continue
+            if pos_side and order.get("position_side") not in (None, pos_side):
+                continue
+            if order.get("close_position"):
+                return True
+            qty = float(order.get("qty") or 0)
+            if abs(qty - real_qty) <= max(abs(real_qty) * 0.01, 1e-12):
+                return True
+
+        sl = trade.get("sl")
+        if not sl:
+            self.log(f"bot: ⛔ {symbol} no tiene SL para reparar su protección")
+            return False
+        gen = len(trade.get("partials", [])) + 150
+        qty = cli.round_qty(symbol, real_qty)
+        if not ex._proteger(
+            cli, symbol, trade["dir"], float(sl), qty,
+            trade["setup_id"], pos_side, gen=gen,
+        ):
+            self.log(f"bot: ⛔ no se pudo reparar el stop exacto de {symbol}")
+            return False
+        ex._cancelar_stops_anteriores(
+            cli, symbol, trade["setup_id"], conservar=ex._aid(trade["setup_id"], gen)
+        )
+        self.log(f"bot: 🔧 stop de {symbol} reparado a {qty} @ {sl}")
+        return True
+
     def _reconciliar_fantasmas(self, cli, hedge: bool) -> None:
         """El sentido inverso: trades ABIERTOS en el libro que ya no existen en Binance.
 
@@ -389,6 +439,7 @@ class BotSync:
                     else:
                         self.log(f"bot: ⛔ NO se pudo cubrir {descubierto} de "
                                  f"{t['symbol']}. Revisar a mano YA.")
+                self._asegurar_stop_exacto(cli, t, real_qty, hedge)
                 continue
 
             # No hay posición. ¿Se ejecutó nuestra orden de cierre?
@@ -435,6 +486,10 @@ class BotSync:
 
     # --- ciclo ---------------------------------------------------------
     def push_and_pull(self) -> None:
+        # Defensa adicional a TradingModule._make_bot_sync: una instancia sin cliente
+        # de trading no es una fuente autorizada del estado operacional.
+        if not self.executor.active or not self.executor.client():
+            return
         try:
             self.reconcile()
         except Exception as exc:  # noqa: BLE001

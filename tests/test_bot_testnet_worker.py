@@ -88,6 +88,13 @@ def test_dispatch_envia_una_vez_a_cada_ejecutor():
     assert all(call[2] is transitions for call in calls)
 
 
+def test_instancia_inerte_no_crea_sync_que_sobrescriba_al_vps():
+    module = _bare_trading([])
+    module._bot_executor = SimpleNamespace(active=False)
+
+    assert module._make_bot_sync() is None
+
+
 def test_comando_testnet_toca_solo_su_kill(monkeypatch, tmp_path):
     production_kill = tmp_path / "bot_kill"
     testnet_dir = tmp_path / "testnet"
