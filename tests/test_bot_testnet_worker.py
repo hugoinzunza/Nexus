@@ -157,6 +157,32 @@ def test_snapshot_publica_testnet_separado(monkeypatch, tmp_path):
     assert snapshot["testnet"]["trades"] == []
 
 
+def test_snapshot_testnet_publica_progreso_live_sin_autorizarlo(tmp_path):
+    data_dir = tmp_path / "testnet"
+    data_dir.mkdir()
+    marker = {
+        "phase": "testnet_live_readiness_v1",
+        "started_at": 100,
+        "deployed_commit": "abc1234",
+        "required_new_closed": 5,
+    }
+    (data_dir / "live_readiness.json").write_text(__import__("json").dumps(marker))
+    store = BotStore(path=str(data_dir / "bot_trades.json"))
+    store.open_trade({
+        "setup_id": "new:1", "symbol": "BTCUSDT", "pair": "BTC_USDT",
+        "dir": "long", "mode": "live", "qty": 1.0, "entry_price": 100.0,
+        "ts": 101,
+    })
+    ex = SimpleNamespace(store=store, data_dir=str(data_dir))
+
+    readiness = BotSync._testnet_readiness(ex)
+
+    assert readiness["closed_candidates"] == 0
+    assert readiness["open_candidates"] == 1
+    assert readiness["required"] == 5
+    assert readiness["automatic_live"] is False
+
+
 def test_panel_identifica_testnet_como_fondos_virtuales():
     root = Path(__file__).parents[1]
     html = (root / "modules/bot/public/index.html").read_text()
@@ -165,3 +191,5 @@ def test_panel_identifica_testnet_como_fondos_virtuales():
     assert "Binance Demo, fondos virtuales" in html
     assert "Órdenes reales contra saldo virtual" in js
     assert "function testnet(data)" in js
+    assert "Validación live" in js
+    assert "no activa live automáticamente" in js
