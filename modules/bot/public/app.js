@@ -1,6 +1,11 @@
 // NexUX BOT — espejo en vivo + control. Lee /m/bot/api/state; comandos a /api/command.
 const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 2) => (n === null || n === undefined || n === "") ? "—" : Number(n).toLocaleString("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
+const priceFmt = (n) => {
+  if (n === null || n === undefined || n === "" || !Number.isFinite(Number(n))) return "—";
+  const value = Math.abs(Number(n));
+  return fmt(n, value >= 1000 ? 2 : value >= 1 ? 4 : 6);
+};
 const pairLabel = (p) => (p || "").replace("_USDT", "").replace("USDT", "") || p;
 const signed = (n) => (n >= 0 ? "+" : "") + fmt(n);
 const PHASE1_V2 = "phase1_v2_2026-07-18";
@@ -119,13 +124,61 @@ function testnet(data) {
   const s = t.summary || {};
   const positions = t.positions || [];
   const readiness = t.readiness || null;
-  const recent = (t.trades || []).slice(0, 5);
+  const recent = (t.trades || []).slice(0, 10);
   const state = t.kill ? "Detenido" : t.active && t.live_virtual ? "Operando virtual" : "Inerte";
+  const openPositions = positions.map((p) => {
+    const pnl = Number(p.unrealized_pnl || 0);
+    const margin = Number(p.margin || 0);
+    const roe = margin ? pnl / margin * 100 : null;
+    const entry = Number(p.entry || p.entry_fill || 0);
+    const mark = Number(p.mark || 0);
+    const initialSl = Number(p.sl_initial || p.sl || 0);
+    const risk = Math.abs(Number(p.setup_entry || entry) - initialSl);
+    const sign = p.side === "LONG" ? 1 : -1;
+    const liveR = risk && mark ? sign * (mark - entry) / risk : null;
+    const partials = p.partials || [];
+    const statusText = partials.length
+      ? `Abierta · ${partials.map((part) => part.leg).join(" + ")}`
+      : "Abierta";
+    const protectedText = p.sl_source === "binance_native"
+      ? "SL confirmado en Binance"
+      : p.sl ? "SL del plan; confirmación no visible" : "Sin SL visible";
+    const protectedClass = p.sl_source === "binance_native" ? "ok" : "warn";
+    return `<article class="demo-position">
+      <header class="demo-position-head">
+        <div>
+          <span class="pill ${(p.side || "").toLowerCase()}">${p.side || "—"}</span>
+          <strong>${pairLabel(p.symbol)}</strong>
+          <span class="demo-lev">${p.leverage ? p.leverage + "x" : "—"}</span>
+        </div>
+        <div class="demo-position-state"><strong>${statusText}</strong><span class="${protectedClass}">${protectedText}</span></div>
+      </header>
+      <div class="demo-live-grid">
+        <div><span>Entrada</span><b>${priceFmt(entry)}</b></div>
+        <div><span>Precio actual</span><b>${priceFmt(mark)}</b></div>
+        <div><span>uPnL</span><b class="${pnl >= 0 ? "pos" : "neg"}">${signed(pnl)} USDT</b></div>
+        <div><span>ROE</span><b class="${roe === null ? "" : roe >= 0 ? "pos" : "neg"}">${roe === null ? "—" : signed(roe) + "%"}</b></div>
+        <div><span>Resultado vivo</span><b class="${liveR === null ? "" : liveR >= 0 ? "pos" : "neg"}">${liveR === null ? "—" : signed(liveR) + "R"}</b></div>
+        <div><span>Qty viva</span><b>${fmt(p.qty, 4)}</b></div>
+      </div>
+      <div class="demo-levels">
+        <div class="sl"><span>SL ${p.sl_source === "binance_native" ? "vigente" : "plan"}</span><b>${priceFmt(p.sl)}</b></div>
+        <div><span>TP1 · 1R</span><b>${priceFmt(p.tp1)}</b></div>
+        <div><span>TP2 · 2R</span><b>${priceFmt(p.tp2)}</b></div>
+        <div><span>TP final</span><b>${priceFmt(p.tp)}</b></div>
+      </div>
+      <footer>Abierta ${dt(p.opened_at)} · notional ${p.notional == null ? "—" : fmt(p.notional) + " USDT"} · liq. ${priceFmt(p.liq_price)}</footer>
+    </article>`;
+  }).join("");
   const rows = recent.map((trade) => `<tr>
     <td>${dt(trade.opened_at)}</td>
     <td>${pairLabel(trade.pair || trade.symbol)}</td>
     <td><span class="pill ${trade.dir}">${trade.dir === "long" ? "LONG" : "SHORT"}</span></td>
-    <td>${trade.status}</td>
+    <td><span class="pill ${trade.status}">${trade.status}</span></td>
+    <td>${priceFmt(trade.entry_price)}</td>
+    <td class="neg">${priceFmt(trade.sl)}</td>
+    <td class="pos">${priceFmt(trade.tp)}</td>
+    <td>${priceFmt(trade.exit_price)}</td>
     <td class="${Number(trade.pnl_usd || 0) >= 0 ? "pos" : "neg"}">${trade.pnl_usd == null ? "—" : signed(trade.pnl_usd)}</td>
   </tr>`).join("");
   el.innerHTML = `<div class="testnet-head">
@@ -134,12 +187,17 @@ function testnet(data) {
     </div>
     <div class="testnet-grid">
       <div><span>Balance virtual</span><b>${a.balance == null ? "—" : fmt(a.balance)} USDT</b></div>
+      <div><span>Disponible</span><b>${a.available == null ? "—" : fmt(a.available)} USDT</b></div>
       <div><span>Posiciones abiertas</span><b>${positions.length}</b></div>
-      <div><span>P&L virtual</span><b class="${Number(s.pnl_usd || 0) >= 0 ? "pos" : "neg"}">${signed(Number(s.pnl_usd || 0))}</b></div>
+      <div><span>uPnL abierto</span><b class="${Number(a.unrealized_pnl || 0) >= 0 ? "pos" : "neg"}">${signed(Number(a.unrealized_pnl || 0))}</b></div>
+      <div><span>P&L cerrado</span><b class="${Number(s.pnl_usd || 0) >= 0 ? "pos" : "neg"}">${signed(Number(s.pnl_usd || 0))}</b></div>
       <div><span>Operaciones</span><b>${s.total || 0}</b></div>
     </div>
     ${readiness ? `<div class="phase-note"><strong>Validación live: ${readiness.closed_candidates}/${readiness.required}</strong> operaciones nuevas cerradas · ${readiness.open_candidates} abiertas · inicio ${dt(readiness.started_at)} · commit ${readiness.deployed_commit || "—"}. Llegar al objetivo exige revisión manual y no activa live automáticamente.</div>` : ""}
-    ${rows ? `<div class="phase-table"><table><thead><tr><th>Fecha</th><th>Par</th><th>Dir</th><th>Estado</th><th>P&L virtual</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="phase-note">Esperando la próxima activación válida del Diario.</p>`}`;
+    <div class="demo-section-title"><strong>Operaciones abiertas</strong><span>actualizadas desde Binance Demo</span></div>
+    ${openPositions || `<p class="phase-note">Sin posiciones abiertas en Binance Demo.</p>`}
+    <div class="demo-section-title"><strong>Historial reciente</strong><span>últimas ${recent.length} operaciones del libro Demo</span></div>
+    ${rows ? `<div class="phase-table demo-history"><table><thead><tr><th>Fecha</th><th>Par</th><th>Dir</th><th>Estado</th><th>Entrada</th><th>SL</th><th>TP</th><th>Salida</th><th>P&L</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="phase-note">Esperando la próxima activación válida del Diario.</p>`}`;
 }
 
 function phase1(data) {

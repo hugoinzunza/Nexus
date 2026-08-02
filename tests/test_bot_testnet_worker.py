@@ -157,6 +157,102 @@ def test_snapshot_publica_testnet_separado(monkeypatch, tmp_path):
     assert snapshot["testnet"]["trades"] == []
 
 
+def test_snapshot_testnet_enriquece_posicion_con_plan_stop_nativo_y_parciales(tmp_path):
+    data_dir = tmp_path / "testnet"
+    data_dir.mkdir()
+    store = BotStore(path=str(data_dir / "bot_trades.json"))
+    opened = store.open_trade({
+        "setup_id": "ada:demo:1", "symbol": "ADAUSDT", "pair": "ADA_USDT",
+        "dir": "long", "mode": "live", "qty": 1000.0, "entry_price": 0.20,
+        "setup_entry": 0.20, "sl": 0.19, "tp": 0.25, "leverage": 5,
+        "risk_usd_est": 10.0, "ts": 200,
+    })
+    store.add_partial(opened["setup_id"], "TP1", 500.0, 0.21, realized_r=0.5)
+
+    class _Client:
+        def balance_usdt(self):
+            return {"balance": 5000.0, "available": 4900.0, "unrealized_pnl": 7.0}
+
+        def positions(self):
+            return [{
+                "symbol": "ADAUSDT", "side": "LONG", "position_side": "LONG",
+                "qty": 500.0, "entry": 0.20, "mark": 0.214, "notional": 107.0,
+                "margin": 21.4, "leverage": 5, "unrealized_pnl": 7.0,
+                "liq_price": 0.12,
+            }]
+
+        def algo_open_orders(self, symbol):
+            assert symbol == "ADAUSDT"
+            return [
+                {
+                    "symbol": symbol, "side": "SELL", "position_side": "LONG",
+                    "type": "STOP_MARKET", "trigger_price": 0.20,
+                    "status": "NEW", "qty": 500.0,
+                },
+                {
+                    "symbol": symbol, "side": "SELL", "position_side": "LONG",
+                    "type": "TAKE_PROFIT_MARKET", "trigger_price": 0.24,
+                    "status": "NEW", "qty": 500.0,
+                },
+            ]
+
+    executor = SimpleNamespace(
+        store=store, live=True, active=True, kill_file=str(data_dir / "kill"),
+        data_dir=str(data_dir), client=lambda: _Client(),
+    )
+
+    snapshot = BotSync(executor, lambda _message: None, testnet_executor=executor)._testnet_snapshot()
+    position = snapshot["positions"][0]
+
+    assert position["tracking_status"] == "tracked"
+    assert position["sl"] == 0.20
+    assert position["sl_source"] == "binance_native"
+    assert position["tp1"] == 0.21
+    assert position["tp2"] == 0.22
+    assert position["tp"] == 0.25
+    assert position["partials"][0]["leg"] == "TP1"
+    assert position["unrealized_pnl"] == 7.0
+
+
+def test_snapshot_testnet_no_mezcla_lados_hedge_del_mismo_simbolo(tmp_path):
+    data_dir = tmp_path / "testnet"
+    data_dir.mkdir()
+    store = BotStore(path=str(data_dir / "bot_trades.json"))
+    store.open_trade({
+        "setup_id": "btc:long:1", "symbol": "BTCUSDT", "pair": "BTC_USDT",
+        "dir": "long", "mode": "live", "qty": 0.01, "entry_price": 60000,
+        "setup_entry": 60000, "sl": 59000, "tp": 65000, "ts": 200,
+    })
+
+    class _Client:
+        def balance_usdt(self):
+            return {"balance": 5000.0, "available": 4900.0, "unrealized_pnl": 2.0}
+
+        def positions(self):
+            return [{
+                "symbol": "BTCUSDT", "side": "SHORT", "position_side": "SHORT",
+                "qty": 0.01, "entry": 61000, "mark": 60800, "notional": 608,
+                "margin": 60.8, "leverage": 10, "unrealized_pnl": 2.0,
+                "liq_price": 67000,
+            }]
+
+        def algo_open_orders(self, _symbol):
+            return []
+
+    executor = SimpleNamespace(
+        store=store, live=True, active=True, kill_file=str(data_dir / "kill"),
+        data_dir=str(data_dir), client=lambda: _Client(),
+    )
+
+    position = BotSync(
+        executor, lambda _message: None, testnet_executor=executor
+    )._testnet_snapshot()["positions"][0]
+
+    assert position["tracking_status"] == "exchange_only"
+    assert "sl" not in position
+    assert "tp" not in position
+
+
 def test_snapshot_testnet_publica_progreso_live_sin_autorizarlo(tmp_path):
     data_dir = tmp_path / "testnet"
     data_dir.mkdir()
@@ -193,3 +289,7 @@ def test_panel_identifica_testnet_como_fondos_virtuales():
     assert "function testnet(data)" in js
     assert "Validación live" in js
     assert "no activa live automáticamente" in js
+    assert "Operaciones abiertas" in js
+    assert "uPnL abierto" in js
+    assert "SL confirmado en Binance" in js
+    assert "TP final" in js
