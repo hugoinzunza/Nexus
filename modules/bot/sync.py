@@ -251,12 +251,34 @@ class BotSync:
         candidates = [t for t in ex.store.all()
                       if int(t.get("opened_at") or 0) >= started]
         closed = [t for t in candidates if t.get("status") == "cerrada"]
-        incidents = [t for t in candidates if t.get("critical_execution_error")]
+        # Los incidentes se cuentan sobre TODO el libro, no solo sobre la cohorte.
+        # `candidates` filtra por opened_at >= started, así que un incidente en una
+        # operación abierta antes del inicio quedaba invisible y la cohorte podía
+        # aprobarse con una falla real adentro.
+        incidents = [t for t in ex.store.all() if t.get("critical_execution_error")]
+        # Invariantes que tienen que valer para que los 5 cierres signifiquen algo.
+        # Un conteo sobre un libro que puede mentir no es evidencia de nada.
+        sospechosos = []
+        for t in closed:
+            if t.get("pnl_pendiente") or t.get("pnl_usd") is None:
+                sospechosos.append((t.get("setup_id"), "P&L pendiente"))
+            elif (t.get("exit_price") is not None
+                  and t.get("entry_price") is not None
+                  and float(t["exit_price"]) == float(t["entry_price"])
+                  and not t.get("pnl_usd")):
+                sospechosos.append((t.get("setup_id"), "salida = entrada y P&L 0"))
+            if float(t.get("qty_open") or 0) > 0:
+                sospechosos.append((t.get("setup_id"), "cerrada con cantidad viva"))
+            if t.get("mode") == "live" and not t.get("pnl_confirmed"):
+                sospechosos.append((t.get("setup_id"), "sin reconciliar con Binance"))
+        pendientes = [t for t in ex.store.all()
+                      if t.get("lifecycle") == "reconciliation_required"]
         expected_incidents = int(
             (marker.get("criteria") or {}).get("critical_execution_errors", 0)
         )
         enough = len(closed) >= required
-        execution_ok = len(incidents) <= expected_incidents
+        execution_ok = (len(incidents) <= expected_incidents
+                        and not sospechosos and not pendientes)
         return {
             "phase": marker.get("phase"),
             "started_at": started,
@@ -266,8 +288,10 @@ class BotSync:
             "open_candidates": len(candidates) - len(closed),
             "critical_execution_errors": len(incidents),
             "execution_ok": execution_ok,
+            "invariantes_rotos": [f"{sid}: {motivo}" for sid, motivo in sospechosos],
+            "reconciliacion_pendiente": len(pendientes),
             "status": "review" if enough and execution_ok else (
-                "failed" if incidents else "collecting"
+                "failed" if (incidents or sospechosos or pendientes) else "collecting"
             ),
             "automatic_live": False,
         }
@@ -399,6 +423,28 @@ class BotSync:
         for sid, info in (pendientes or {}).items():
             clave = (info.get("symbol"), info.get("dir"))
             pos = reales.get(clave)
+            # Si el rastro trae el client_id —lo trae desde que la intención se escribe
+            # ANTES de mandar la orden— se le pregunta a Binance por esa orden exacta
+            # en vez de adivinar por símbolo y lado. Es lo que hace recuperable una
+            # caída del proceso entre el envío y el registro.
+            cid = info.get("client_id")
+            if cid and not pos:
+                try:
+                    orden = cli.get_order(info.get("symbol"), cid)
+                except Exception:  # noqa: BLE001
+                    orden = "?"
+                if orden == "?":
+                    quedan[sid] = info      # sin poder preguntar, no se descarta
+                    continue
+                if orden is None:
+                    self.log(f"bot: intención {sid} nunca llegó a Binance; se descarta")
+                    continue
+                if float(orden.get("executed_qty") or 0) > 0:
+                    self.log(f"bot: ⛔ la orden {cid} SÍ se ejecutó "
+                             f"({orden['executed_qty']}) y no hay posición ni registro. "
+                             f"Pudo cerrarse por otra vía. Revisar a mano.")
+                    quedan[sid] = info
+                    continue
             if not pos:
                 self.log(f"bot: apertura ambigua {sid} no llegó a existir; se descarta")
                 continue
@@ -583,8 +629,18 @@ class BotSync:
             # confirm_pnls reemplaza después este P&L estimado por el real de Binance.
 
     def confirm_pnls(self) -> None:
-        """Reemplaza el P&L estimado de las operaciones cerradas por el REAL de Binance
-        (income: realized pnl + comisiones). Honestidad: el libro reporta lo de verdad."""
+        """Reemplaza el P&L estimado por el REAL de Binance, reconciliando por orderId.
+
+        Antes se pedía `realized_pnl(symbol, start, end)`: filtrado por (símbolo,
+        ventana) y nada más. En HEDGE, con un LONG y un SHORT abiertos a la vez sobre
+        el mismo símbolo, eso le carga a la primera operación confirmada el resultado
+        de las dos. Y la ventana arrancaba en `opened_at`, que se estampa DESPUÉS del
+        fill, así que la comisión de ENTRADA quedaba fuera.
+
+        Con `userTrades` filtrado por los orderId de la operación, cada fill se asigna
+        a quien corresponde. El funding va aparte: no es comisión ni resultado del
+        trade, y sumarlo adentro esconde de dónde viene el número.
+        """
         cli = self.executor.client()
         if not cli:
             return
@@ -592,16 +648,52 @@ class BotSync:
             if t["status"] != "cerrada" or t.get("pnl_confirmed"):
                 continue
             if t.get("mode") != "live":
-                continue  # A6: no confirmar dry contra income real (0) → pisaba el P&L simulado
+                continue  # A6: no confirmar dry contra income real (0)
+            ids = [i for i in (t.get("order_ids") or []) if i]
             start = int(t.get("opened_at", 0)) * 1000
             end = (int(t.get("closed_at", 0)) + 5) * 1000 if t.get("closed_at") else None
             if not start:
                 continue
+            # Margen hacia atrás: `opened_at` se estampa después del fill, así que la
+            # comisión de entrada puede ser anterior. Con orderId el margen no hace
+            # daño —solo se toman los fills de esas órdenes—.
+            desde = start - 120_000
             try:
-                r = cli.realized_pnl(t["symbol"], start, end)
-                self.executor.store.confirm_pnl(t["setup_id"], r["neto"], r["commission"])
-                self.log(f"bot: P&L REAL {t['symbol']}: {r['neto']:+.4f} USD "
-                         f"(bruto {r['pnl_bruto']:+.4f}, comisión {r['commission']:.4f})")
+                if ids:
+                    fills = cli.user_trades(t["symbol"], order_ids=ids,
+                                            start_ms=desde, end_ms=end)
+                    if not fills:
+                        continue  # aún no visibles; se reintenta el próximo ciclo
+                    bruto = sum(f["realized_pnl"] for f in fills)
+                    comision = sum(f["commission"] for f in fills)
+                    salida = ([f for f in fills if f["order_id"] == ids[-1]] or fills)
+                    vwap = (sum(f["price"] * f["qty"] for f in salida)
+                            / sum(f["qty"] for f in salida)) if salida else None
+                    neto = bruto - abs(comision)
+                else:
+                    # Respaldo cuando no se conocen los orderId (operaciones viejas).
+                    r = cli.realized_pnl(t["symbol"], desde, end)
+                    neto, comision, vwap = r["neto"], r["commission"], None
+                    self.log(f"bot: ⚠️ {t['symbol']} reconciliado por ventana, sin "
+                             f"orderId: en HEDGE puede mezclar los dos lados")
+                funding = None
+                try:
+                    funding = cli.funding_fees(t["symbol"], desde, end)
+                except Exception:  # noqa: BLE001
+                    pass
+                r_real = None
+                if vwap and t.get("entry_price") and t.get("sl"):
+                    unidad = abs(float(t["entry_price"]) - float(t["sl"]))
+                    if unidad > 0:
+                        signo = 1.0 if t["dir"] == "long" else -1.0
+                        r_real = signo * (vwap - float(t["entry_price"])) / unidad
+                self.executor.store.confirm_pnl(
+                    t["setup_id"], neto, comision, funding=funding,
+                    exit_price=vwap if t.get("exit_price") is None else None,
+                    result_r=r_real if t.get("result_r") is None else None)
+                self.log(f"bot: P&L REAL {t['symbol']}: {neto:+.4f} USD "
+                         f"(comisión {abs(comision):.4f}"
+                         f"{f', funding {funding:+.4f}' if funding else ''})")
             except Exception as exc:  # noqa: BLE001
                 self.log(f"bot: no se pudo confirmar P&L real de {t['symbol']}: {exc}")
 

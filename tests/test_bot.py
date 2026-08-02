@@ -1060,10 +1060,14 @@ def test_si_el_cierre_de_emergencia_no_sale_la_posicion_se_REGISTRA():
     from pathlib import Path
     src = (Path(__file__).resolve().parents[1] / "modules/bot/executor.py").read_text()
     i = src.index("abierto SIN stop confirmado")
-    bloque = src[i:i + 3200]
+    bloque = src[i:i + 4600]
     assert "cerrada = bool(resp_c)" in bloque, "no se mira si el cierre realmente salió"
-    assert "sin_stop = True" in bloque, "debe registrarse marcada, no descartarse"
     assert '"sin_stop_nativo": sin_stop' in src
+    # La operación se REGISTRA antes de decidir si cerró del todo: registrarla después
+    # deja una ventana en la que un fallo la abandona viva y fuera del libro.
+    assert bloque.index("open_trade(registro_apertura(") < bloque.index("_qty_real("), \
+        "el registro tiene que existir antes de consultar el estado real"
+    assert "_qty_real(" in bloque, "la verdad la tiene Binance, no la respuesta de la orden"
 
 
 def test_el_stop_nuevo_se_pone_antes_de_retirar_el_viejo():
@@ -1165,6 +1169,16 @@ def test_cierre_fail_closed_queda_en_el_libro_como_incidente(tmp_path):
 
         def set_leverage(self, _symbol, _leverage):
             return None
+
+        # Binance en cero: es la unica forma de que el cierre se declare cerrado.
+        def positions(self, _symbols=None):
+            return []
+
+        def algo_open_orders(self, _symbol):
+            return []
+
+        def cancel_algo_order(self, **_kw):
+            return {}
 
     ex = BotExecutor(store, lambda _line: None, config={
         "live": True, "hedge": True, "pairs": ["BTCUSDT"],
@@ -1307,7 +1321,7 @@ def test_adoptar_ambiguas_adopta_en_vez_de_borrar_la_evidencia():
     from pathlib import Path
     src = (Path(__file__).resolve().parents[1] / "modules/bot/sync.py").read_text()
     i = src.index("def _adoptar_ambiguas")
-    cuerpo = src[i:i + 3000]
+    cuerpo = src[i:i + 4800]
     assert "open_trade(" in cuerpo, "no crea el trade"
     assert "_proteger(" in cuerpo, "no le pone stop"
     assert "quedan[sid] = info" in cuerpo, "borra el rastro aunque no se resuelva"
@@ -1396,3 +1410,210 @@ def test_proteger_pregunta_por_el_id_exacto():
     cuerpo = src[i:i + 2600]
     assert "get_algo_order(aid)" in cuerpo
     assert "algo_open_orders" in cuerpo, "debe quedar el listado como respaldo"
+
+
+# --- reparación de los 5 P0 de la auditoría (2026-07-29) --------------------
+
+class _CliPanico:
+    """Cliente con posición residual y stops programables."""
+
+    def __init__(self, restante=0.0, stops_vivos=None, positions_rompe=False):
+        self.restante = restante
+        self.stops_vivos = list(stops_vivos or [])
+        self.positions_rompe = positions_rompe
+        self.cancelados = []
+
+    def mark_price(self, _s): return 100.0
+    def round_qty(self, _s, q): return q
+    def symbol_filters(self, _s): return {"min_qty": 0.0, "min_notional": 0.0,
+                                          "price_precision": 2, "qty_step": 0.001}
+    def balance_usdt(self): return {"balance": 50000.0, "available": 50000.0}
+    def set_leverage(self, _s, _l): return None
+
+    def positions(self, _symbols=None):
+        if self.positions_rompe:
+            raise RuntimeError("sin respuesta")
+        if self.restante <= 0:
+            return []
+        return [{"symbol": "BTCUSDT", "side": "LONG", "qty": self.restante,
+                 "position_side": "LONG"}]
+
+    def algo_open_orders(self, _s): return list(self.stops_vivos)
+
+    def cancel_algo_order(self, algo_id=None, client_algo_id=None):
+        self.cancelados.append(client_algo_id)
+        self.stops_vivos = [o for o in self.stops_vivos
+                            if o.get("client_algo_id") != client_algo_id]
+        return {}
+
+    def algo_stop_market(self, *_a, **_k): return {}
+
+
+def _ex_panico(store, cli):
+    ex = BotExecutor(store, lambda _l: None, config={
+        "live": True, "hedge": True, "pairs": ["BTCUSDT"], "risk_pct": 0.02,
+        "max_positions": 1, "quality_filter": False, "fee_rate": 0.0005,
+        "fundamental_guard_enabled": False, "base_equity_auto": False,
+        "base_equity": 1000.0, "max_margin_pct": 0.0,
+    }, client=cli)
+    ex._proteger = lambda *_a, **_k: False       # el stop nunca se confirma
+    return ex
+
+
+def _setup():
+    return {"key": "BTC_USDT:1", "pair": "BTC_USDT", "dir": "long",
+            "entry": 100.0, "sl": 99.0, "tp": 104.0, "ts_created": 1,
+            "source": "indicador", "rr": 5.0, "poi_tf": "1h"}
+
+
+def test_cierre_de_panico_PARCIAL_no_declara_cerrada_la_operacion(tmp_path):
+    """`_ordenar` devuelve dict con fill total O PARCIAL, así que `bool(resp_c)` daba
+    por cerrada una posición que seguía viva en parte: libro cerrado y exchange con el
+    remanente abierto, sin stop y sin registro — invisible incluso para el watchdog,
+    que lee el libro."""
+    store = BotStore(path=str(tmp_path / "b.json"))
+    cli = _CliPanico(restante=0.8)          # Binance todavía tiene 0.8
+    ex = _ex_panico(store, cli)
+    ex._ordenar = lambda *_a, **_k: {"executed_qty": 1.2, "avg_price": 99.0,
+                                     "order_id": "77"}
+    ex._open(_setup(), 100.0)
+    t = store.all()[0]
+    assert t["status"] == "abierta", "el exchange sigue expuesto: no puede figurar cerrada"
+    assert t["lifecycle"] == "reconciliation_required"
+    assert t["qty_open"] == 0.8
+    assert t["critical_execution_error"] is True
+
+
+def test_sin_lectura_confiable_el_panico_no_declara_cerrada(tmp_path):
+    """None no es cero. Si no se puede leer la posición, no se declara nada."""
+    store = BotStore(path=str(tmp_path / "b.json"))
+    cli = _CliPanico(positions_rompe=True)
+    ex = _ex_panico(store, cli)
+    ex._ordenar = lambda *_a, **_k: {"executed_qty": 2.0, "avg_price": 99.0,
+                                     "order_id": "77"}
+    ex._open(_setup(), 100.0)
+    assert store.all()[0]["status"] == "abierta"
+
+
+def test_el_panico_retira_el_stop_y_avisa_si_queda_huerfano(tmp_path):
+    """Si el stop sí se creó y solo no era visible —el incidente del ETH— quedaba VIVO
+    tras cerrar la posición. En HEDGE un STOP_MARKET con quantity permanece NEW hasta
+    dispararse, así que puede activarse contra una posición FUTURA al nivel viejo."""
+    store = BotStore(path=str(tmp_path / "b.json"))
+    ex_tmp = BotExecutor(None, lambda _l: None, config={})
+    aid = ex_tmp._aid("BTC_USDT:1:1", 0)
+    cli = _CliPanico(restante=0.0, stops_vivos=[{"client_algo_id": aid,
+                                                 "status": "NEW"}])
+    ex = _ex_panico(store, cli)
+    ex._ordenar = lambda *_a, **_k: {"executed_qty": 2.0, "avg_price": 99.0,
+                                     "order_id": "77"}
+    ex._open(_setup(), 100.0)
+    assert aid in cli.cancelados, "el stop del setup no se canceló"
+    assert store.all()[0]["status"] == "cerrada"
+
+
+def test_sin_precio_de_salida_el_resultado_queda_PENDIENTE_no_en_cero(tmp_path):
+    """El fallback a entry_price producía 0R y P&L ~0 para una operación que perdió
+    40 USD: un registro plausible y falso. Un resultado ausente se reconcilia."""
+    store = BotStore(path=str(tmp_path / "b.json"))
+    cli = _CliPanico(restante=0.0)
+    ex = _ex_panico(store, cli)
+    ex._ordenar = lambda *_a, **_k: {"executed_qty": 2.0, "avg_price": 0.0,
+                                     "order_id": "77"}
+    ex._open(_setup(), 100.0)
+    t = store.all()[0]
+    assert t["status"] == "cerrada"
+    assert t["exit_price"] is None and t["pnl_usd"] is None
+    assert t["pnl_pendiente"] is True
+    assert t["result_r"] is None, "0R sería una mentira, no un dato"
+
+
+def test_la_intencion_se_persiste_ANTES_de_mandar_la_orden():
+    """Si el proceso muere entre el market_order y el registro, nadie sobrevive para
+    leer el fill. El rastro con el client_id es lo único recuperable."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "modules/bot/executor.py").read_text()
+    i = src.index('cli.set_leverage(symbol, leverage)')
+    bloque = src[i:i + 1400]
+    assert bloque.index('_marcar_ambigua(') < bloque.index('self._ordenar('), \
+        "la intención debe escribirse antes de enviar la orden"
+    assert 'estado="intent"' in bloque and "client_id=" in bloque
+
+
+def test_la_reconciliacion_usa_orderId_y_separa_el_funding():
+    """Filtrar por (símbolo, ventana) mezcla LONG y SHORT simultáneos en HEDGE."""
+    from pathlib import Path
+    cli_src = (Path(__file__).resolve().parents[1]
+               / "modules/trading/binance_account.py").read_text()
+    assert "def user_trades" in cli_src and "/fapi/v1/userTrades" in cli_src
+    assert '"position_side": r.get("positionSide")' in cli_src
+    assert "def funding_fees" in cli_src and '"incomeType": "FUNDING_FEE"' in cli_src
+
+
+def test_reabrir_remanente_no_inventa_una_salida(tmp_path):
+    store = BotStore(path=str(tmp_path / "b.json"))
+    r = _trade_rec(); r["setup_id"] = "s:p"; r["qty"] = 2.0; r["mode"] = "live"
+    store.open_trade(r)
+    store.close_trade("s:p", 99.0)
+    assert store.all()[0]["status"] == "cerrada"
+    assert store.reabrir_remanente("s:p", 0.8, "cierre parcial")
+    t = store.all()[0]
+    assert t["status"] == "abierta" and t["qty_open"] == 0.8
+    assert t["pnl_usd"] is None and t["pnl_pendiente"] is True
+    assert t["partials"] == [], "no puede inventar un parcial que no ocurrió"
+
+
+def test_readiness_es_un_gate_de_invariantes_no_un_contador(tmp_path):
+    """Cinco cierres sobre un libro que puede mentir no son evidencia de nada."""
+    import json as _json
+    from modules.bot.sync import BotSync
+    store = BotStore(path=str(tmp_path / "b.json"))
+    marker = tmp_path / "live_readiness.json"
+    marker.write_text(_json.dumps({
+        "phase": "testnet", "started_at": 0, "required_new_closed": 2,
+        "deployed_commit": "abc", "criteria": {"critical_execution_errors": 0}}))
+
+    class _Ex:
+        def __init__(self): self.store = store; self.data_dir = str(tmp_path)
+
+    def _cerrar(sid, **extra):
+        r = _trade_rec(); r["setup_id"] = sid; r["mode"] = "live"; r.update(extra)
+        store.open_trade(r)
+        store.close_trade(sid, extra.pop("exit", 110.0))
+        for k, v in extra.items():
+            store.set_lifecycle(sid, "closed", **{k: v})
+
+    _cerrar("s:1"); _cerrar("s:2")
+    for t in store.all():
+        store.confirm_pnl(t["setup_id"], 5.0, 0.5)
+    r = BotSync._testnet_readiness(_Ex())
+    assert r["status"] == "review", f"dos cierres limpios deben pasar: {r}"
+
+    # una operación con el P&L pendiente rompe el gate aunque el conteo alcance
+    _cerrar("s:3")
+    store.set_lifecycle("s:3", "closed", pnl_pendiente=True)
+    r = BotSync._testnet_readiness(_Ex())
+    assert r["status"] == "failed", "un P&L pendiente no puede pasar como cierre válido"
+    assert r["invariantes_rotos"], "debe decir cuál invariante se rompió"
+
+
+def test_readiness_ve_incidentes_anteriores_al_inicio_de_la_cohorte(tmp_path):
+    """`candidates` filtra por opened_at >= started; contar incidentes ahí dejaba
+    invisible una falla en una operación abierta antes del inicio."""
+    import json as _json
+    from modules.bot.sync import BotSync
+    store = BotStore(path=str(tmp_path / "b.json"))
+    (tmp_path / "live_readiness.json").write_text(_json.dumps({
+        "phase": "testnet", "started_at": 9_000_000_000, "required_new_closed": 1,
+        "criteria": {"critical_execution_errors": 0}}))
+    r = _trade_rec(); r["setup_id"] = "viejo"; r["mode"] = "live"
+    r["ts"] = 1_000_000            # MUY anterior al inicio de la cohorte
+    r["critical_execution_error"] = True
+    store.open_trade(r)
+
+    class _Ex:
+        def __init__(self): self.store = store; self.data_dir = str(tmp_path)
+
+    res = BotSync._testnet_readiness(_Ex())
+    assert res["critical_execution_errors"] == 1, "el incidente viejo debe contarse"
+    assert res["status"] == "failed"
