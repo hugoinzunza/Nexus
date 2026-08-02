@@ -319,6 +319,7 @@ class BinanceFutures:
             raise
         return {
             "status": r.get("status"),  # NEW/PARTIALLY_FILLED/FILLED/CANCELED/EXPIRED
+            "order_id": str(r.get("orderId") or ""),
             "executed_qty": float(r.get("executedQty") or 0),
             "orig_qty": float(r.get("origQty") or 0),
             "avg_price": float(r.get("avgPrice") or 0),
@@ -429,9 +430,61 @@ class BinanceFutures:
         return self._request("DELETE", "/fapi/v1/allOpenOrders",
                              {"symbol": symbol}, signed=True)
 
+    def user_trades(self, symbol: str, order_ids: list | None = None,
+                    start_ms: int | None = None, end_ms: int | None = None) -> list[dict]:
+        """Fills REALES del símbolo, con su orderId, comisión y P&L realizado.
+
+        Es la fuente exacta para reconciliar: cada fill trae `orderId`, `positionSide`,
+        `realizedPnl` y `commission`. Filtrar por (símbolo, ventana) como hacía
+        `realized_pnl` mezcla el income de un LONG y un SHORT simultáneos del mismo
+        símbolo en HEDGE, y le carga a uno el resultado de los dos.
+        """
+        params = {"symbol": symbol, "limit": 1000}
+        if start_ms:
+            params["startTime"] = int(start_ms)
+        if end_ms:
+            params["endTime"] = int(end_ms)
+        rows = self._request("GET", "/fapi/v1/userTrades", params, signed=True)
+        querer = {str(o) for o in (order_ids or [])}
+        out = []
+        for r in rows or []:
+            if querer and str(r.get("orderId")) not in querer:
+                continue
+            out.append({
+                "order_id": str(r.get("orderId")),
+                "trade_id": str(r.get("id")),
+                "symbol": r.get("symbol"),
+                "side": r.get("side"),
+                "position_side": r.get("positionSide"),
+                "qty": float(r.get("qty") or 0),
+                "price": float(r.get("price") or 0),
+                "realized_pnl": float(r.get("realizedPnl") or 0),
+                "commission": float(r.get("commission") or 0),
+                "commission_asset": r.get("commissionAsset"),
+                "time": int(r.get("time") or 0),
+                "maker": bool(r.get("maker")),
+            })
+        return out
+
+    def funding_fees(self, symbol: str, start_ms: int, end_ms: int | None = None) -> float:
+        """Funding pagado/cobrado del símbolo en la ventana. Componente contable
+        SEPARADO: no es comisión ni P&L de la operación, y mezclarlo esconde de dónde
+        viene el resultado."""
+        params = {"symbol": symbol, "incomeType": "FUNDING_FEE",
+                  "startTime": int(start_ms), "limit": 500}
+        if end_ms:
+            params["endTime"] = int(end_ms)
+        rows = self._request("GET", "/fapi/v1/income", params, signed=True)
+        return round(sum(float(r.get("income") or 0) for r in (rows or [])), 8)
+
     def realized_pnl(self, symbol: str, start_ms: int, end_ms: int | None = None) -> dict:
-        """P&L realizado REAL + comisiones de Binance (income) para el símbolo en la
-        ventana dada. Para que el libro reporte lo real, no una estimación."""
+        """P&L realizado + comisiones por (símbolo, ventana).
+
+        ⚠️ NO distingue positionSide ni orderId. En HEDGE con los dos lados abiertos a
+        la vez, esto le carga a una operación el resultado de ambas. Se conserva solo
+        como respaldo cuando no se conocen los orderId; la reconciliación buena es
+        `user_trades`. Excluye FUNDING_FEE a propósito: va aparte.
+        """
         params = {"symbol": symbol, "startTime": int(start_ms), "limit": 500}
         if end_ms:
             params["endTime"] = int(end_ms)

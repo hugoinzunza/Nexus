@@ -125,6 +125,12 @@ class BotStore:
                     rec.get("critical_execution_error", False)
                 ),
                 "exit_reason": rec.get("exit_reason"),
+                # Estado explícito del camino, aparte de `status`. Ver set_lifecycle().
+                "lifecycle": rec.get("lifecycle", "unprotected"),
+                # orderIds de Binance atados a esta operación: la llave para
+                # reconciliar por `userTrades` en vez de por (símbolo, ventana).
+                "order_ids": list(rec.get("order_ids") or []),
+                "funding_usd": None,
             }
             self._trades.append(t)
             self._save()
@@ -181,40 +187,119 @@ class BotStore:
             self._save()
             return True
 
-    def close_trade(self, setup_id: str, exit_price: float, result_r=None,
-                    fee_usd: float = 0.0, reason: str | None = None) -> dict | None:
-        """Cierra la operación: calcula P&L con los parciales + el remanente."""
+    def close_trade(self, setup_id: str, exit_price: float | None, result_r=None,
+                    fee_usd: float = 0.0, reason: str | None = None,
+                    lifecycle: str | None = None,
+                    order_ids: list | None = None) -> dict | None:
+        """Cierra la operación: calcula P&L con los parciales + el remanente.
+
+        `exit_price=None` significa PRECIO DESCONOCIDO, y entonces el P&L queda
+        **pendiente** (None) en vez de fabricado. Antes el ejecutor tapaba un
+        `avg_price=0` con el precio de entrada, y eso producía un registro plausible y
+        falso: 0R y P&L ~0 para una operación que perdió 40 USD. Un resultado ausente
+        se nota y se reconcilia; uno inventado no.
+        """
         with self._lock:
             t = self.get_open(setup_id)
             if not t:
                 return None
-            sign = 1.0 if t["dir"] == "long" else -1.0
-            entry = t["entry_price"]
-            # P&L bruto = suma de (precio - entry)*qty por cada tramo cerrado.
-            gross = 0.0
-            for p in t["partials"]:
-                gross += sign * (p["price"] - entry) * p["qty"]
-            gross += sign * (exit_price - entry) * t["qty_open"]
             t["fees_usd"] = round(t["fees_usd"] + fee_usd, 4)
-            t["exit_price"] = exit_price
-            t["result_r"] = result_r
-            t["pnl_usd"] = round(gross - t["fees_usd"], 4)
+            if order_ids:
+                t["order_ids"] = sorted(set((t.get("order_ids") or []) + list(order_ids)))
+            if exit_price is None:
+                t["exit_price"] = None
+                t["result_r"] = None
+                t["pnl_usd"] = None
+                t["pnl_pendiente"] = True
+            else:
+                sign = 1.0 if t["dir"] == "long" else -1.0
+                entry = t["entry_price"]
+                # P&L bruto = suma de (precio - entry)*qty por cada tramo cerrado.
+                gross = 0.0
+                for p in t["partials"]:
+                    gross += sign * (p["price"] - entry) * p["qty"]
+                gross += sign * (exit_price - entry) * t["qty_open"]
+                t["exit_price"] = exit_price
+                t["result_r"] = result_r
+                t["pnl_usd"] = round(gross - t["fees_usd"], 4)
             if reason:
                 t["exit_reason"] = reason
             t["qty_open"] = 0.0
             t["status"] = _CLOSED
+            t["lifecycle"] = lifecycle or "closed"
             t["closed_at"] = int(time.time())
             self._save()
             return t
 
-    def confirm_pnl(self, setup_id: str, pnl_neto: float, commission: float) -> bool:
-        """Reemplaza el P&L/comisiones ESTIMADOS por los REALES de Binance (income).
-        Marca pnl_confirmed para no volver a consultarlo."""
+    def set_lifecycle(self, setup_id: str, lifecycle: str, **campos) -> bool:
+        """Estado explícito del ciclo de vida, independiente de `status`.
+
+        `status` (abierta/cerrada) es el contrato del libro y de la UI. `lifecycle`
+        dice DÓNDE del camino está: intent / opening / unprotected / protected /
+        panic_closing / closed / reconciliation_required. Sin esto, "abierta" tapaba
+        por igual una posición protegida y una que no se pudo cerrar.
+        """
+        with self._lock:
+            for t in self._trades:
+                if t["setup_id"] == setup_id:
+                    t["lifecycle"] = lifecycle
+                    t.update(campos)
+                    self._save()
+                    return True
+        return False
+
+    def reabrir_remanente(self, setup_id: str, qty_restante: float,
+                          motivo: str) -> bool:
+        """Un cierre salió PARCIAL: el libro vuelve a reflejar lo que queda vivo.
+
+        El camino de pánico daba por cerrada la operación en cuanto la orden devolvía
+        algo, y `_ordenar` devuelve dict tanto con fill total como parcial. Resultado:
+        libro cerrado y exchange con el remanente abierto, sin stop y sin registro —
+        invisible incluso para el watchdog, que lee el libro.
+        """
+        with self._lock:
+            for t in self._trades:
+                if t["setup_id"] != setup_id:
+                    continue
+                qty_restante = round(float(qty_restante or 0.0), 8)
+                if qty_restante <= 0:
+                    return False
+                t["status"] = _OPEN
+                t["lifecycle"] = "reconciliation_required"
+                t["qty_open"] = qty_restante
+                t["closed_at"] = None
+                t["exit_price"] = None
+                t["pnl_usd"] = None
+                t["result_r"] = None
+                t["pnl_pendiente"] = True
+                t.setdefault("ajustes", []).append(
+                    {"qty_open": qty_restante, "ts": int(time.time()), "motivo": motivo})
+                self._save()
+                return True
+        return False
+
+    def confirm_pnl(self, setup_id: str, pnl_neto: float, commission: float,
+                    funding: float | None = None, exit_price: float | None = None,
+                    result_r=None) -> bool:
+        """Reemplaza el P&L/comisiones ESTIMADOS por los REALES de Binance.
+
+        `funding` va SEPARADO: no es comisión ni resultado de la operación, y sumarlo
+        adentro esconde de dónde viene el número. Si la operación había quedado con el
+        precio de salida desconocido, esta es la que lo completa y levanta el
+        `pnl_pendiente`.
+        """
         with self._lock:
             for t in self._trades:
                 if t["setup_id"] == setup_id and t["status"] == _CLOSED:
                     t["pnl_usd"] = round(pnl_neto, 4)
                     t["fees_usd"] = round(abs(commission), 4)
+                    if funding is not None:
+                        t["funding_usd"] = round(funding, 6)
+                    if exit_price is not None:
+                        t["exit_price"] = exit_price
+                    if result_r is not None:
+                        t["result_r"] = result_r
+                    t["pnl_pendiente"] = False
                     t["pnl_confirmed"] = True
                     self._save()
                     return True

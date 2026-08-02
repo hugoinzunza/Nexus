@@ -97,6 +97,10 @@ market_order pelado. Duplicar esto es cómo se desincronizan.
                         executed = float(real["executed_qty"])
                         avg_price = float(real.get("avg_price") or 0)
             return {"status": resp.get("status") or "FILLED",
+                    # El orderId es la llave para reconciliar por `userTrades`. Sin él
+                    # solo queda filtrar por (símbolo, ventana), y eso en HEDGE mezcla
+                    # el resultado de los dos lados.
+                    "order_id": str(resp.get("orderId") or ""),
                     "executed_qty": executed, "avg_price": avg_price}
         except Exception as exc:  # noqa: BLE001
             ultimo = exc
@@ -518,6 +522,18 @@ class BotExecutor:
                 pass
             cli.set_leverage(symbol, leverage)
             pos_side = ("LONG" if t["dir"] == "long" else "SHORT") if self.hedge else None
+            # LA INTENCIÓN SE PERSISTE ANTES DE MANDAR NADA.
+            #
+            # Registrar después del fill deja una ventana: si el proceso muere entre el
+            # market_order y el registro, nadie sobrevive para leer el fill y la posición
+            # queda viva y fuera del libro. Escribiendo primero, cualquier caída en
+            # cualquier punto deja un rastro con el client_id, y al arrancar la
+            # reconciliación le pregunta a Binance qué pasó con ese id.
+            #
+            # Es el mismo principio de `_ordenar` —preguntar por un id que generamos
+            # nosotros— aplicado al ciclo de vida completo y no a una sola llamada.
+            self._marcar_ambigua(sid, symbol, t["dir"], qty, leverage, sl=sl,
+                                 estado="intent", client_id=self._cid(sid, "o"))
             try:
                 resp = self._ordenar(cli, symbol, side, qty, self._cid(sid, "o"),
                                      position_side=pos_side)
@@ -582,24 +598,56 @@ class BotExecutor:
                 except BinanceOrdenAmbigua as exc:
                     self.log(f"bot: ⛔ {symbol} sin stop y cierre AMBIGUO ({exc})")
                 if cerrada:
-                    exit_price = float(resp_c.get("avg_price") or 0) or entry_price
-                    unit_risk = abs(entry_price - sl)
-                    gross_r = None
-                    if unit_risk > 0:
-                        sign = 1.0 if t["dir"] == "long" else -1.0
-                        gross_r = sign * (exit_price - entry_price) / unit_risk
+                    # El registro se crea SIEMPRE, antes de decidir si cerró del todo.
                     self.store.open_trade(registro_apertura(
                         sin_stop_nativo=True,
+                        lifecycle="panic_closing",
+                        order_ids=[i for i in (resp.get("order_id"),
+                                               resp_c.get("order_id")) if i],
                         execution_incident="native_stop_unconfirmed_fail_closed",
                         critical_execution_error=True,
                         note="Cierre fail-closed: el stop nativo no pudo confirmarse",
                     ))
+                    # LA VERDAD LA TIENE BINANCE, no la respuesta de la orden.
+                    # `_ordenar` devuelve dict con fill TOTAL o PARCIAL, así que
+                    # `bool(resp_c)` daba por cerrada una posición que seguía viva en
+                    # parte: libro cerrado, exchange expuesto, sin stop y sin registro.
+                    vivo = self._qty_real(cli, symbol, t["dir"])
+                    if vivo is None or vivo > 0:
+                        restante = vivo if vivo else qty
+                        self.log(f"bot: ⛔ {symbol} el cierre de pánico NO dejó la "
+                                 f"posición en cero (quedan {restante}); se mantiene "
+                                 f"ABIERTA y se intenta proteger el remanente")
+                        self.store.set_lifecycle(
+                            sid, "reconciliation_required", qty_open=restante,
+                            sin_stop_nativo=True)
+                        self._proteger(cli, symbol, t["dir"], sl,
+                                       cli.round_qty(symbol, restante), sid, pos_side,
+                                       gen=1)
+                        return
+                    # Cero confirmado. Recién ahora se retira el stop —que pudo haberse
+                    # creado sin que lo viéramos— y se verifica que no quede huérfano.
+                    limpio = self._retirar_stop(cli, sid, symbol)
+                    # Sin precio de salida NO se inventa uno. Antes se caía a
+                    # `entry_price` y eso producía 0R y P&L ~0 para una operación que
+                    # perdió 40 USD: un registro plausible y falso. `confirm_pnls` lo
+                    # completa con los fills reales.
+                    avg = float(resp_c.get("avg_price") or 0)
+                    gross_r = None
+                    unit_risk = abs(entry_price - sl)
+                    if avg > 0 and unit_risk > 0:
+                        sign = 1.0 if t["dir"] == "long" else -1.0
+                        gross_r = sign * (avg - entry_price) / unit_risk
                     self.store.close_trade(
-                        sid, round(exit_price, 8), result_r=gross_r,
+                        sid, round(avg, 8) if avg > 0 else None, result_r=gross_r,
                         reason="native_stop_unconfirmed_fail_closed",
+                        lifecycle="closed" if limpio else "reconciliation_required",
+                        order_ids=[resp_c.get("order_id")] if resp_c.get("order_id") else None,
                     )
+                    self._olvidar_ambigua(sid)
                     self.log(f"bot: ⛔ {symbol} cerrado por falta de stop y "
-                             "REGISTRADO como incidente crítico")
+                             f"REGISTRADO como incidente crítico"
+                             f"{'' if avg > 0 else ' (precio de salida PENDIENTE)'}")
                     return
                 # El cierre de emergencia NO salió (o no se sabe). La posición puede estar
                 # viva. Dejarla fuera del libro sería lo peor posible: sin stop del
@@ -614,7 +662,17 @@ class BotExecutor:
                 self._marcar_ambigua(sid, symbol, t["dir"], qty, leverage, sl=sl)
                 sin_stop = True
 
-        self.store.open_trade(registro_apertura(sin_stop_nativo=sin_stop))
+        self.store.open_trade(registro_apertura(
+            sin_stop_nativo=sin_stop,
+            lifecycle="unprotected" if sin_stop else "protected",
+            order_ids=[locals().get("resp", {}).get("order_id")]
+            if isinstance(locals().get("resp"), dict) and locals().get("resp", {}).get("order_id")
+            else None,
+        ))
+        if mode == "live" and not sin_stop:
+            # Registrada Y protegida: recién acá el rastro de intención deja de hacer
+            # falta. Mientras exista, la reconciliación va a seguir preguntando por él.
+            self._olvidar_ambigua(sid)
         self.log(f"bot[{mode}]: ABRE {side} {symbol} qty={qty} @~{entry_price:.2f} "
                  f"lev={leverage}x notional≈{px*qty:.0f} SL={sl} calidad={quality['grade']}")
 
@@ -760,13 +818,83 @@ class BotExecutor:
         self._equity_cache = (ahora, valor)
         return valor
 
-    def _marcar_ambigua(self, sid: str, symbol: str, direccion: str, qty: float,
-                        leverage: int, sl: float | None = None) -> None:
-        """Deja constancia de una apertura que pudo quedar viva sin registro.
+    def _qty_real(self, cli, symbol: str, direccion: str) -> float | None:
+        """Cantidad viva en Binance para ese símbolo Y LADO. None si no se pudo leer.
 
-        Es el único rastro que queda de una posición que quizá existe en Binance y no
-        en el libro. La reconciliación lo lee para saber que un huérfano en ese símbolo
-        es NUESTRO y hay que adoptarlo, en vez de tratarlo como ajeno y dejarlo sin stop.
+        `None` no es cero: distinguirlos es lo que evita declarar cerrada una posición
+        que sigue abierta solo porque la lectura falló.
+        """
+        try:
+            for p in cli.positions([symbol]):
+                lado = "long" if p.get("side") == "LONG" else "short"
+                if lado == direccion:
+                    return abs(float(p.get("qty") or 0))
+            return 0.0
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _retirar_stop(self, cli, sid: str, symbol: str, gens: int = 8) -> bool:
+        """Cancela los stops de ESTE setup y verifica que no quede ninguno vivo.
+
+        El cierre de pánico no cancelaba nada. Si el stop sí se había creado y solo no
+        era visible dentro de la ventana de confirmación —exactamente el incidente del
+        ETH— quedaba VIVO después de cerrar la posición. Con `quantity` y positionSide
+        en HEDGE un STOP_MARKET permanece NEW hasta dispararse, así que ese huérfano
+        puede activarse contra una posición FUTURA del mismo símbolo y lado, al nivel
+        viejo. Nadie lo limpiaba: `_aid` es por setup y `cancel_all_orders` se retiró.
+        """
+        for gen in range(gens):
+            try:
+                cli.cancel_algo_order(client_algo_id=self._aid(sid, gen))
+            except Exception:  # noqa: BLE001
+                pass  # ya disparado, ya cancelado, o nunca existió
+        mios = {self._aid(sid, g) for g in range(gens)}
+        try:
+            quedan = [o for o in cli.algo_open_orders(symbol)
+                      if o.get("client_algo_id") in mios]
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"bot: no se pudo verificar stops huérfanos en {symbol}: "
+                     f"{str(exc)[-100:]}")
+            return False
+        if quedan:
+            ids = [o.get("client_algo_id") for o in quedan]
+            self.log(f"bot: ⛔ quedaron stops HUÉRFANOS en {symbol}: {ids}. "
+                     f"Pueden dispararse contra una posición futura. Revisar a mano.")
+            return False
+        return True
+
+    def _olvidar_ambigua(self, sid: str) -> None:
+        """Retira el rastro cuando la operación ya quedó registrada y protegida."""
+        ruta = os.path.join(self.data_dir, "bot_ambiguas.json")
+        try:
+            with open(ruta, encoding="utf-8") as fh:
+                datos = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return
+        if datos.pop(sid, None) is None:
+            return
+        try:
+            tmp = ruta + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(datos, fh, indent=1)
+            os.replace(tmp, ruta)
+        except OSError:
+            pass
+
+    def _marcar_ambigua(self, sid: str, symbol: str, direccion: str, qty: float,
+                        leverage: int, sl: float | None = None,
+                        estado: str = "ambigua",
+                        client_id: str | None = None) -> None:
+        """Rastro en disco de una posición que puede existir sin registro en el libro.
+
+        Se escribe en DOS momentos:
+          • `estado="intent"`, ANTES de mandar la orden. Si el proceso muere entre el
+            envío y el registro, este archivo es lo único que sabe que hay un
+            client_id que preguntarle a Binance.
+          • `estado="ambigua"`, cuando una respuesta quedó indeterminada.
+
+        Sin el `client_id` la reconciliación solo puede adivinar por símbolo y lado;
+        con él le pregunta al exchange por la orden exacta.
         """
         ruta = os.path.join(self.data_dir, "bot_ambiguas.json")
         try:
@@ -777,7 +905,8 @@ class BotExecutor:
         # El SL viaja con el rastro: sin él, quien adopte la posición no puede
         # ponerle stop y la adopción no sirve de nada.
         datos[sid] = {"symbol": symbol, "dir": direccion, "qty": qty,
-                      "leverage": leverage, "sl": sl, "ts": time.time()}
+                      "leverage": leverage, "sl": sl, "ts": time.time(),
+                      "estado": estado, "client_id": client_id}
         try:
             os.makedirs(self.data_dir, exist_ok=True)
             tmp = ruta + ".tmp"

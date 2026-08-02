@@ -47,3 +47,11 @@ research/tradingview_bta_night_2026-06-30/os_screenshots/
 # Apuntes privados de un curso pagado. Se conservan localmente como fuente de
 # estudio, pero no se publican ni viajan en clones/deploys.
 research/crecetrader/
+
+# Artefactos de compilacion y apps empaquetadas: nunca al repo.
+# Se ignoran los DIRECTORIOS DE BUILD, no `agents/` entero: fuente futura ahi si
+# debe versionarse. Un `git add -A` distraido metio 2.664 de estos archivos y un
+# binario de macOS en 5b88a0f, dejando el pack en 115 MiB.
+.build/
+**/.build/
+*.app/
