@@ -251,6 +251,12 @@ class BotSync:
         candidates = [t for t in ex.store.all()
                       if int(t.get("opened_at") or 0) >= started]
         closed = [t for t in candidates if t.get("status") == "cerrada"]
+        incidents = [t for t in candidates if t.get("critical_execution_error")]
+        expected_incidents = int(
+            (marker.get("criteria") or {}).get("critical_execution_errors", 0)
+        )
+        enough = len(closed) >= required
+        execution_ok = len(incidents) <= expected_incidents
         return {
             "phase": marker.get("phase"),
             "started_at": started,
@@ -258,7 +264,11 @@ class BotSync:
             "required": required,
             "closed_candidates": len(closed),
             "open_candidates": len(candidates) - len(closed),
-            "status": "review" if len(closed) >= required else "collecting",
+            "critical_execution_errors": len(incidents),
+            "execution_ok": execution_ok,
+            "status": "review" if enough and execution_ok else (
+                "failed" if incidents else "collecting"
+            ),
             "automatic_live": False,
         }
 

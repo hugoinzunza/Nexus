@@ -1060,7 +1060,7 @@ def test_si_el_cierre_de_emergencia_no_sale_la_posicion_se_REGISTRA():
     from pathlib import Path
     src = (Path(__file__).resolve().parents[1] / "modules/bot/executor.py").read_text()
     i = src.index("abierto SIN stop confirmado")
-    bloque = src[i:i + 1800]
+    bloque = src[i:i + 3200]
     assert "cerrada = bool(resp_c)" in bloque, "no se mira si el cierre realmente salió"
     assert "sin_stop = True" in bloque, "debe registrarse marcada, no descartarse"
     assert '"sin_stop_nativo": sin_stop' in src
@@ -1113,6 +1113,86 @@ def test_proteger_rechaza_stop_sobredimensionado():
     assert not ex._proteger(Client(), "BTCUSDT", "long", 90.0, 1.0,
                             "setup:oversized", "LONG")
     assert any("cantidad no coincide" in line for line in logs)
+
+
+def test_proteger_espera_consistencia_del_exchange_sin_reenviar_el_stop(monkeypatch):
+    class Client:
+        def __init__(self):
+            self.posts = 0
+            self.reads = 0
+
+        def algo_stop_market(self, *_args, **_kwargs):
+            self.posts += 1
+
+        def get_algo_order(self, client_id):
+            self.reads += 1
+            if self.reads < 3:
+                return None
+            return {
+                "client_algo_id": client_id,
+                "status": "NEW",
+                "side": "SELL",
+                "position_side": "LONG",
+                "qty": 1.0,
+                "trigger_price": 90.0,
+            }
+
+    monkeypatch.setattr("modules.bot.executor.time.sleep", lambda _seconds: None)
+    client = Client()
+    ex = BotExecutor(store=None, log=lambda _line: None, config={})
+
+    assert ex._proteger(client, "BTCUSDT", "long", 90.0, 1.0,
+                        "setup:eventual", "LONG")
+    assert client.posts == 1, "reintentar confirmación nunca debe duplicar el stop"
+    assert client.reads == 3
+
+
+def test_cierre_fail_closed_queda_en_el_libro_como_incidente(tmp_path):
+    store = BotStore(path=str(tmp_path / "bot_trades.json"))
+
+    class Client:
+        def mark_price(self, _symbol):
+            return 100.0
+
+        def round_qty(self, _symbol, qty):
+            return qty
+
+        def symbol_filters(self, _symbol):
+            return {"min_qty": 0.0, "min_notional": 0.0}
+
+        def balance_usdt(self):
+            return {"balance": 1000.0, "available": 1000.0}
+
+        def set_leverage(self, _symbol, _leverage):
+            return None
+
+    ex = BotExecutor(store, lambda _line: None, config={
+        "live": True, "hedge": True, "pairs": ["BTCUSDT"],
+        "risk_pct": 0.02, "max_positions": 1, "quality_filter": False,
+        "fee_rate": 0.0005, "fundamental_guard_enabled": False,
+        "base_equity_auto": False, "base_equity": 1000.0,
+    }, client=Client())
+    ex._proteger = lambda *_args, **_kwargs: False
+    responses = iter((
+        {"executed_qty": 2.0, "avg_price": 100.0},
+        {"executed_qty": 2.0, "avg_price": 99.0},
+    ))
+    ex._ordenar = lambda *_args, **_kwargs: next(responses)
+
+    ex._open({
+        "key": "btc:incident", "ts_created": 123, "pair": "BTC_USDT",
+        "dir": "long", "entry": 100.0, "sl": 90.0, "tp": 130.0,
+        "rr": 3.0,
+    }, 100.0)
+
+    trade = store.all()[0]
+    assert trade["status"] == "cerrada"
+    assert trade["critical_execution_error"] is True
+    assert trade["execution_incident"] == "native_stop_unconfirmed_fail_closed"
+    assert trade["exit_reason"] == "native_stop_unconfirmed_fail_closed"
+    assert trade["entry_price"] == 100.0
+    assert trade["exit_price"] == 99.0
+    assert trade["qty_open"] == 0.0
 
 
 def test_parcial_con_be_invalido_deja_stop_exacto_en_sl_original(tmp_path):

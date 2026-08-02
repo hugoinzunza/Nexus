@@ -398,6 +398,7 @@ class BinanceFutures:
             "qty": float(r.get("quantity") or 0),
             "close_position": close_position,
             "status": r.get("algoStatus"),
+            "reject_reason": r.get("rejectReason"),
         }
 
     def algo_open_orders(self, symbol: str) -> list[dict]:

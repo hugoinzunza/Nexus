@@ -473,6 +473,40 @@ class BotExecutor:
         entry_price = px
         sin_stop = False
         risk_drift_pct = 0.0
+
+        def registro_apertura(**extra) -> dict:
+            """Construye un único registro para la ruta normal y la fail-closed."""
+            entry_fee = entry_price * qty * float(self.cfg.get("fee_rate", 0.0005))
+            rec = {
+                "setup_id": sid, "key": t.get("key"), "symbol": symbol,
+                "pair": t["pair"], "dir": t["dir"], "source": t.get("source"),
+                "mode": mode, "phase_id": t.get("phase_id"),
+                "entry_model": t.get("entry_model"),
+                "activation_price": t.get("activation_price"),
+                "leverage": leverage, "qty": qty,
+                "entry_price": round(entry_price, 8),
+                "setup_entry": float(t.get("entry") or px),
+                "sl": sl, "tp": t.get("tp"), "risk_usd": round(risk_usd, 2),
+                "risk_usd_est": round(risk_usd_est, 2),
+                "risk_drift_pct": round(risk_drift_pct, 2),
+                "risk_pct_account": (
+                    round(risk_pct_account, 2)
+                    if risk_pct_account is not None else None
+                ),
+                "margin_used": round(margin_used, 2),
+                "notional": round(actual_notional, 2),
+                "fee_rate": float(self.cfg.get("fee_rate", 0.0005)),
+                "fee_est_roundtrip": round(fee_est_roundtrip, 4),
+                "entry_fee_usd": round(entry_fee, 4), "ts": time.time(),
+                "setup_created_at": t.get("ts_created"),
+                "quality": quality["grade"], "quality_reason": quality["reason"],
+                "poi_tf": quality["poi_tf"], "rr": quality["rr"],
+                "disc_ok": quality["disc_ok"], "sl_pct": round(sl_frac * 100, 3),
+                "sin_stop_nativo": sin_stop,
+            }
+            rec.update(extra)
+            return rec
+
         if mode == "live":
             margin_needed = margin_used
             try:
@@ -548,7 +582,24 @@ class BotExecutor:
                 except BinanceOrdenAmbigua as exc:
                     self.log(f"bot: ⛔ {symbol} sin stop y cierre AMBIGUO ({exc})")
                 if cerrada:
-                    self.log(f"bot: {symbol} cerrado por falta de stop; no se registra")
+                    exit_price = float(resp_c.get("avg_price") or 0) or entry_price
+                    unit_risk = abs(entry_price - sl)
+                    gross_r = None
+                    if unit_risk > 0:
+                        sign = 1.0 if t["dir"] == "long" else -1.0
+                        gross_r = sign * (exit_price - entry_price) / unit_risk
+                    self.store.open_trade(registro_apertura(
+                        sin_stop_nativo=True,
+                        execution_incident="native_stop_unconfirmed_fail_closed",
+                        critical_execution_error=True,
+                        note="Cierre fail-closed: el stop nativo no pudo confirmarse",
+                    ))
+                    self.store.close_trade(
+                        sid, round(exit_price, 8), result_r=gross_r,
+                        reason="native_stop_unconfirmed_fail_closed",
+                    )
+                    self.log(f"bot: ⛔ {symbol} cerrado por falta de stop y "
+                             "REGISTRADO como incidente crítico")
                     return
                 # El cierre de emergencia NO salió (o no se sabe). La posición puede estar
                 # viva. Dejarla fuera del libro sería lo peor posible: sin stop del
@@ -563,30 +614,7 @@ class BotExecutor:
                 self._marcar_ambigua(sid, symbol, t["dir"], qty, leverage, sl=sl)
                 sin_stop = True
 
-        entry_fee = entry_price * qty * float(self.cfg.get("fee_rate", 0.0005))
-        self.store.open_trade({
-            "setup_id": sid, "key": t.get("key"), "symbol": symbol, "pair": t["pair"],
-            "dir": t["dir"], "source": t.get("source"), "mode": mode,
-            "phase_id": t.get("phase_id"), "entry_model": t.get("entry_model"),
-            "activation_price": t.get("activation_price"),
-            "leverage": leverage, "qty": qty, "entry_price": round(entry_price, 8),
-            "setup_entry": float(t.get("entry") or px),
-            "sl": sl, "tp": t.get("tp"), "risk_usd": round(risk_usd, 2),
-            "risk_usd_est": round(risk_usd_est, 2),
-            "risk_drift_pct": round(risk_drift_pct, 2),
-            "risk_pct_account": round(risk_pct_account, 2) if risk_pct_account is not None else None,
-            "margin_used": round(margin_used, 2),
-            "notional": round(actual_notional, 2), "fee_rate": float(self.cfg.get("fee_rate", 0.0005)),
-            "fee_est_roundtrip": round(fee_est_roundtrip, 4),
-            "entry_fee_usd": round(entry_fee, 4), "ts": time.time(),
-            "setup_created_at": t.get("ts_created"),
-            "quality": quality["grade"], "quality_reason": quality["reason"],
-            "poi_tf": quality["poi_tf"], "rr": quality["rr"], "disc_ok": quality["disc_ok"],
-            "sl_pct": round(sl_frac * 100, 3),
-            # True = la posición quedó SIN stop del exchange. Solo la cubre el
-            # watchdog. Se reintenta el stop en el próximo ciclo.
-            "sin_stop_nativo": sin_stop,
-        })
+        self.store.open_trade(registro_apertura(sin_stop_nativo=sin_stop))
         self.log(f"bot[{mode}]: ABRE {side} {symbol} qty={qty} @~{entry_price:.2f} "
                  f"lev={leverage}x notional≈{px*qty:.0f} SL={sl} calidad={quality['grade']}")
 
@@ -622,20 +650,38 @@ class BotExecutor:
         # Se pregunta por el id EXACTO. Listar y buscar era más frágil y más caro; y
         # el path de listado que da la documentación (`algoOpenOrders`) ni siquiera
         # existe: devuelve 404. El real es `openAlgoOrders`, que queda de respaldo.
-        try:
-            o = cli.get_algo_order(aid)
-            vivos = [o] if o else []
-        except Exception:  # noqa: BLE001
+        vivos = []
+        # El POST y el GET de Algo Order no son fuertemente consistentes. Binance
+        # Demo llegó a devolver None inmediatamente después de aceptar el stop. Se
+        # reintenta SOLO la lectura del mismo clientAlgoId: nunca se reenvía el POST.
+        # El presupuesto total (1.2 s) sigue siendo fail-closed y acotado.
+        for intento, espera in enumerate((0.0, 0.2, 0.4, 0.6)):
+            if espera:
+                time.sleep(espera)
             try:
-                vivos = cli.algo_open_orders(symbol)
-            except Exception as exc:  # noqa: BLE001
-                self.log(f"bot: no se pudo confirmar el stop de {symbol}: {str(exc)[-120:]}")
-                return False
+                o = cli.get_algo_order(aid)
+                vivos = [o] if o else []
+            except Exception:  # noqa: BLE001
+                try:
+                    vivos = [
+                        order for order in cli.algo_open_orders(symbol)
+                        if order.get("client_algo_id") == aid
+                    ]
+                except Exception as exc:  # noqa: BLE001
+                    if intento == 3:
+                        self.log(f"bot: no se pudo confirmar el stop de {symbol}: "
+                                 f"{str(exc)[-120:]}")
+                    vivos = []
+            if vivos:
+                break
         for o in vivos:
             if o.get("client_algo_id") != aid:
                 continue
             if o.get("status") not in (None, "NEW"):
-                self.log(f"bot: stop {aid} en estado {o.get('status')}, no protege")
+                motivo = o.get("reject_reason")
+                detalle = f" ({motivo})" if motivo else ""
+                self.log(f"bot: stop {aid} en estado {o.get('status')}{detalle}, "
+                         "no protege")
                 return False
             if o.get("side") != lado:
                 self.log(f"bot: ⛔ stop de {symbol} con lado {o.get('side')}, esperado {lado}")

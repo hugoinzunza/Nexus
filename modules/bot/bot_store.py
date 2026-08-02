@@ -117,6 +117,14 @@ class BotStore:
                 "pnl_usd": None,
                 "note": rec.get("note", ""),
                 "sin_stop_nativo": bool(rec.get("sin_stop_nativo", False)),
+                # Incidentes de ejecución también son operaciones reales. Mantenerlos
+                # en el mismo libro permite reconciliar el P&L y evita que readiness
+                # declare éxito ocultando un fail-closed costoso.
+                "execution_incident": rec.get("execution_incident"),
+                "critical_execution_error": bool(
+                    rec.get("critical_execution_error", False)
+                ),
+                "exit_reason": rec.get("exit_reason"),
             }
             self._trades.append(t)
             self._save()
@@ -174,7 +182,7 @@ class BotStore:
             return True
 
     def close_trade(self, setup_id: str, exit_price: float, result_r=None,
-                    fee_usd: float = 0.0) -> dict | None:
+                    fee_usd: float = 0.0, reason: str | None = None) -> dict | None:
         """Cierra la operación: calcula P&L con los parciales + el remanente."""
         with self._lock:
             t = self.get_open(setup_id)
@@ -191,6 +199,8 @@ class BotStore:
             t["exit_price"] = exit_price
             t["result_r"] = result_r
             t["pnl_usd"] = round(gross - t["fees_usd"], 4)
+            if reason:
+                t["exit_reason"] = reason
             t["qty_open"] = 0.0
             t["status"] = _CLOSED
             t["closed_at"] = int(time.time())

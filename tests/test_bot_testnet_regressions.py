@@ -103,9 +103,8 @@ def test_executor_registra_hora_de_fill_no_hora_de_creacion():
     source = (
         Path(__file__).parents[1] / "modules/bot/executor.py"
     ).read_text()
-    block = source[source.index("self.store.open_trade({"):source.index(
-        "self.store.open_trade({"
-    ) + 2600]
+    start = source.index("def registro_apertura")
+    block = source[start:start + 2600]
 
     assert '"ts": time.time()' in block
     assert '"setup_created_at": t.get("ts_created")' in block

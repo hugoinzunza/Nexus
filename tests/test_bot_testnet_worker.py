@@ -279,6 +279,35 @@ def test_snapshot_testnet_publica_progreso_live_sin_autorizarlo(tmp_path):
     assert readiness["automatic_live"] is False
 
 
+def test_readiness_falla_si_hay_incidente_critico(tmp_path):
+    data_dir = tmp_path / "testnet"
+    data_dir.mkdir()
+    marker = {
+        "phase": "testnet_live_readiness_v1",
+        "started_at": 100,
+        "required_new_closed": 1,
+        "criteria": {"critical_execution_errors": 0},
+    }
+    (data_dir / "live_readiness.json").write_text(__import__("json").dumps(marker))
+    store = BotStore(path=str(data_dir / "bot_trades.json"))
+    store.open_trade({
+        "setup_id": "incident:1", "symbol": "ETHUSDT", "pair": "ETH_USDT",
+        "dir": "short", "mode": "live", "qty": 1.0, "entry_price": 100.0,
+        "ts": 101, "critical_execution_error": True,
+        "execution_incident": "native_stop_unconfirmed_fail_closed",
+    })
+    store.close_trade("incident:1", 101.0,
+                      reason="native_stop_unconfirmed_fail_closed")
+    ex = SimpleNamespace(store=store, data_dir=str(data_dir))
+
+    readiness = BotSync._testnet_readiness(ex)
+
+    assert readiness["closed_candidates"] == 1
+    assert readiness["critical_execution_errors"] == 1
+    assert readiness["execution_ok"] is False
+    assert readiness["status"] == "failed"
+
+
 def test_panel_identifica_testnet_como_fondos_virtuales():
     root = Path(__file__).parents[1]
     html = (root / "modules/bot/public/index.html").read_text()

@@ -121,6 +121,7 @@ tbody tr:hover { background: var(--panel); }
 .pill.live { background: rgba(52,211,153,.13); color: var(--green); }
 .pill.abierta { background: rgba(34,211,238,.13); color: var(--cyan); }
 .pill.cerrada { background: rgba(139,155,180,.13); color: var(--muted); }
+.pill.incidente { background: rgba(248,113,113,.18); color: var(--red); }
 .pos { color: var(--green); } .neg { color: var(--red); }
 
 .badges { display: flex; align-items: center; gap: 10px; }
