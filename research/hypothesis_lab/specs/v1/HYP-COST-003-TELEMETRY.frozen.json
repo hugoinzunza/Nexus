@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "hypothesis_id": "HYP-COST-003-TELEMETRY",
+  "title": "Telemetria forward de costos de ejecucion",
+  "frozen": true,
+  "research_only": true,
+  "notice": "Research only - No signal - No bot",
+  "cohort_start_ms": 1785634006230,
+  "inputs": {
+    "ledgers": [
+      {
+        "source_id": "main_ledger",
+        "path": "data/bot_trades.json",
+        "environment": "main",
+        "eligible_mode": "live",
+        "inferential_role": "primary_live_only"
+      },
+      {
+        "source_id": "testnet_ledger",
+        "path": "data/testnet/bot_trades.json",
+        "environment": "testnet",
+        "eligible_mode": "live",
+        "inferential_role": "diagnostic_only"
+      }
+    ],
+    "public_book_endpoint": "https://fapi.binance.com/fapi/v1/ticker/bookTicker",
+    "credentials_required": false
+  },
+  "observations": {
+    "entry_fill": "ledger.entry_price",
+    "activation_reference": "ledger.activation_price",
+    "setup_reference": "ledger.setup_entry",
+    "entry_slippage_sign": "positive_is_adverse_for_both_directions",
+    "spread": "public_bookTicker_first_detection_after_ledger_write",
+    "maximum_timely_spread_detection_lag_ms": 3000,
+    "commission": "ledger.fees_usd_only_when_pnl_confirmed_true",
+    "roundtrip_turnover": "entry_qty_plus_partial_exits_plus_final_exit",
+    "exit_slippage": "unavailable_without_intended_exit_reference",
+    "funding": "not_observed",
+    "missing_values": "remain_null"
+  },
+  "cohort": {
+    "include_only_opened_at_or_after_cohort_start": true,
+    "include_open_and_closed_trades": true,
+    "main_and_testnet_never_pooled": true,
+    "dry_trades_excluded": true,
+    "historical_trades_excluded_from_forward_metrics": true
+  },
+  "decision_protocol": {
+    "purpose": "decide_whether_declared_cost_scenarios_may_be_recalibrated",
+    "minimum_live_closed_with_confirmed_fees": 30,
+    "minimum_live_entries_with_activation_reference": 30,
+    "minimum_live_entries_with_timely_spread": 30,
+    "minimum_calendar_weeks": 4,
+    "testnet_can_satisfy_minimums": false,
+    "automatic_recalibration": false,
+    "automatic_strategy_change": false,
+    "rule_changes_after_start": "forbidden"
+  },
+  "governance": {
+    "http_methods_allowed": ["GET"],
+    "writes_allowed": ["data/hypothesis_lab/telemetry/execution_costs.json"],
+    "source_ledgers_are_read_only": true,
+    "execution_enabled": false,
+    "bot_changes_allowed": false,
+    "testnet_changes_allowed": false,
+    "live_changes_allowed": false,
+    "railway_changes_allowed": false,
+    "vps_changes_allowed": false
+  }
+}

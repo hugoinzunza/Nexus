@@ -23,6 +23,11 @@ de la unidad R y simula capacidad con riesgo fijo, account heat y límites de
 nocional. Reutiliza la muestra histórica, por lo que todo resultado sigue siendo
 exploratorio y no puede promover cambios.
 
+`HYP-COST-003-TELEMETRY` inicia una cohorte forward para medir fills, spread
+detectado y comisiones confirmadas sin completar datos ausentes con supuestos.
+Live principal y Testnet permanecen separados. El observador lee los ledgers y
+escribe exclusivamente en `data/hypothesis_lab/telemetry/`.
+
 ## Flujo
 
 ```bash
@@ -36,6 +41,8 @@ python3 -m research.hypothesis_lab.shadow_exit
 ./tools/start_exit_shadow.command
 python3 -m research.hypothesis_lab.cost_study
 python3 -m research.hypothesis_lab.cost_viability
+python3 -m research.hypothesis_lab.cost_telemetry
+./tools/start_cost_telemetry.command
 ```
 
 El preregistro queda inmutable por `hypothesis_id + spec SHA-256` en SQLite antes de cualquier ensayo. Cada ejecución guarda commit, hashes de spec/datasets/código, semilla, timestamp y conteo de ensayos. Los 210 ensayos y todos sus candidatos —incluidos descartados— quedan en `data/hypothesis_lab/lab.sqlite3`.
