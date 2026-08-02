@@ -139,6 +139,13 @@ class BotSync:
             positions = cli.positions() if cli else []
         except Exception:  # noqa: BLE001
             pass
+        try:
+            open_trades = [t for t in ex.store.all() if t.get("status") == "abierta"]
+            self._enrich_demo_positions(positions, open_trades, cli)
+        except Exception:  # noqa: BLE001
+            # La cuenta y las posiciones crudas siguen siendo más útiles que ocultar
+            # toda la sección si falla únicamente el contexto del libro o del stop.
+            pass
         snapshot = {
             "active": ex.active,
             "live_virtual": ex.live,
@@ -154,6 +161,82 @@ class BotSync:
         if readiness:
             snapshot["readiness"] = readiness
         return snapshot
+
+    @staticmethod
+    def _enrich_demo_positions(positions: list[dict], open_trades: list[dict], cli) -> None:
+        """Adjunta plan y protección real a posiciones Binance Demo.
+
+        `positions()` trae entrada/mark/uPnL pero no conoce el setup. El store conoce
+        SL/TP/parciales, mientras `algo_open_orders()` permite mostrar el stop que
+        realmente sigue vivo en el exchange. Ninguna lectura modifica órdenes.
+        """
+        by_symbol_side = {
+            (trade.get("symbol"), "LONG" if trade.get("dir") == "long" else "SHORT"): trade
+            for trade in open_trades
+        }
+        algo_by_symbol: dict[str, list[dict]] = {}
+        if cli and hasattr(cli, "algo_open_orders"):
+            for symbol in {p.get("symbol") for p in positions if p.get("symbol")}:
+                try:
+                    algo_by_symbol[symbol] = cli.algo_open_orders(symbol)
+                except Exception:  # noqa: BLE001
+                    algo_by_symbol[symbol] = []
+
+        for position in positions:
+            side = position.get("side")
+            symbol = position.get("symbol")
+            trade = by_symbol_side.get((symbol, side))
+            if not trade:
+                position["tracking_status"] = "exchange_only"
+                continue
+
+            setup_entry = trade.get("setup_entry") or trade.get("entry_price")
+            initial_sl = trade.get("sl")
+            current_sl = None
+            expected_order_side = "SELL" if trade.get("dir") == "long" else "BUY"
+            stops = []
+            for order in algo_by_symbol.get(symbol, []):
+                if order.get("status") not in (None, "NEW"):
+                    continue
+                if order.get("type") not in (None, "STOP_MARKET"):
+                    continue
+                if order.get("side") != expected_order_side:
+                    continue
+                order_position_side = order.get("position_side")
+                if side and order_position_side not in (None, side, "BOTH"):
+                    continue
+                trigger = float(order.get("trigger_price") or 0)
+                if trigger > 0:
+                    stops.append(trigger)
+            if stops:
+                current_sl = max(stops) if trade.get("dir") == "long" else min(stops)
+
+            position.update({
+                "tracking_status": "tracked",
+                "setup_id": trade.get("setup_id"),
+                "opened_at": trade.get("opened_at"),
+                "trade_status": trade.get("status"),
+                "initial_qty": trade.get("qty"),
+                "qty_open_book": trade.get("qty_open"),
+                "partials": trade.get("partials") or [],
+                "setup_entry": setup_entry,
+                "entry_fill": trade.get("entry_price"),
+                "sl_initial": initial_sl,
+                "sl": current_sl if current_sl is not None else initial_sl,
+                "sl_source": "binance_native" if current_sl is not None else "ledger_plan",
+                "tp": trade.get("tp"),
+                "risk_usd_est": trade.get("risk_usd_est"),
+                "fees_usd": trade.get("fees_usd"),
+            })
+            if setup_entry and initial_sl:
+                risk = abs(float(setup_entry) - float(initial_sl))
+                long = trade.get("dir") == "long"
+                position["tp1"] = round(
+                    float(setup_entry) + risk if long else float(setup_entry) - risk, 8
+                )
+                position["tp2"] = round(
+                    float(setup_entry) + 2 * risk if long else float(setup_entry) - 2 * risk, 8
+                )
 
     @staticmethod
     def _testnet_readiness(ex) -> dict | None:
