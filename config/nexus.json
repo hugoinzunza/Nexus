@@ -140,6 +140,10 @@
         "1d"
       ],
       "_nota": "Laboratorio Bot2 de Accion del precio. Solo simulacion causal; no importa ejecutor, credenciales ni ordenes."
+    },
+    "hypothesis_lab": {
+      "enabled": true,
+      "_nota": "Vista de solo lectura para estudios causales y observadores forward. No importa ejecutores ni expone endpoints de escritura."
     }
   }
 }

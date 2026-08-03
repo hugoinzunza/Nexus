@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "hypothesis_id": "HYP-EXIT-003-SHADOW",
+  "title": "Validacion forward pareada de protect_3r_runner_original",
+  "frozen": true,
+  "frozen_at": "2026-08-01T14:07:28Z",
+  "cohort_start_ms": 1785593248000,
+  "research_only": true,
+  "notice": "Research only - No señal - No bot",
+  "candidate": {
+    "id": "protect_3r_runner_original",
+    "trigger_rr": 3.0,
+    "protected_stop_rr": 0.0,
+    "target": "original",
+    "stop_change_effective": "next_1m_bar"
+  },
+  "cohort": {
+    "unit": "every_activated_setup_after_preregistration",
+    "paired_on": "operation_id",
+    "include_non_triggered_operations": true,
+    "allowed_timeframes": ["15m", "1h", "4h", "1D"],
+    "pre_registration_excluded": true,
+    "maximum_observation_days_per_operation": 90
+  },
+  "causality": {
+    "observation_bars": "closed Binance Futures 1m public klines",
+    "activation_bar_tp_credit": false,
+    "same_bar_precedence": "stop_first",
+    "trigger_timestamp_precision_ms": 60000,
+    "no_future_data": true
+  },
+  "costs": {
+    "entry_order": "maker",
+    "target_exit": "maker",
+    "stop_or_timeout_exit": "taker",
+    "maker_fee_rate": 0.0002,
+    "taker_fee_rate": 0.0005,
+    "modeled_market_slippage_rate": 0.0002,
+    "spread_component": "half_observed_book_ticker_spread_at_detection",
+    "missing_spread_policy": "record_missing_and_do_not_resolve_net_r"
+  },
+  "decision_protocol": {
+    "minimum_paired_closed_operations": 100,
+    "minimum_operations_reaching_3r": 25,
+    "minimum_calendar_weeks": 12,
+    "maximum_paired_closed_operations": 200,
+    "maximum_calendar_weeks": 26,
+    "primary_effect": "paired_delta_avg_net_r",
+    "confidence": {
+      "method": "paired_calendar_week_block_bootstrap",
+      "iterations": 5000,
+      "level": 0.95,
+      "promotion_requires_lower_bound_above_r": 0.0
+    },
+    "promotion_requires_all": {
+      "absolute_profit_factor_improvement": 0.1,
+      "relative_profit_factor_improvement": 0.05,
+      "relative_max_drawdown_reduction": 0.1,
+      "minimum_avg_net_r_delta": 0.0,
+      "maximum_avg_net_r_loss": 0.0
+    },
+    "early_discard_after_minimum_sample_if_any": {
+      "ci95_upper_bound_at_or_below_r": 0.0,
+      "relative_profit_factor_deterioration": 0.05,
+      "relative_max_drawdown_increase": 0.1,
+      "avg_net_r_delta_at_or_below": -0.05
+    },
+    "terminal_rule": "At 200 paired closes or 26 weeks, failure to satisfy every promotion criterion means discard for production.",
+    "subgroup_policy": "Pair and timeframe cuts are diagnostics only and cannot override the primary paired decision.",
+    "rule_changes_after_start": "forbidden"
+  },
+  "governance": {
+    "automatic_promotion": false,
+    "execution_enabled": false,
+    "bot_imports_forbidden": true,
+    "writes_to_setup_store_forbidden": true,
+    "vps_railway_testnet_live_changes": false
+  }
+}

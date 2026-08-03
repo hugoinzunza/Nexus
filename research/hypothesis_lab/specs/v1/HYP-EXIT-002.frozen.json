@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "hypothesis_id": "HYP-EXIT-002",
+  "title": "Gestión híbrida para conservar cola positiva y reducir riesgo",
+  "frozen": true,
+  "research_only": true,
+  "notice": "Research only - No señal - No bot",
+  "trial_budget": 180,
+  "seed": 20260802,
+  "dataset": {
+    "classification": "recycled_research_data",
+    "setup_export": "data/setup_backtest_trades.json",
+    "candle_pattern": "data/klines_{pair}_{timeframe}.json",
+    "pairs": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "XRPUSDT"],
+    "timeframes": ["1h", "4h"]
+  },
+  "design": {
+    "paired_on": "setup_id",
+    "same_entry": true,
+    "same_stop_loss": true,
+    "activation_bar_tp_credit": false,
+    "same_bar_precedence_after_activation": "stop_loss_first",
+    "stop_changes_effective": "next_bar",
+    "timeout": "close_at_exported_max_forward_bar",
+    "exit_variants": [
+      {"id": "original", "kind": "single", "target": "original"},
+      {"id": "fixed_5r", "kind": "single", "rr": 5.0},
+      {"id": "take_2r_25_runner_original", "kind": "scale_out", "legs": [
+        {"rr": 2.0, "fraction": 0.25}, {"target": "original", "fraction": 0.75}
+      ]},
+      {"id": "take_3r_25_runner_original", "kind": "scale_out", "legs": [
+        {"rr": 3.0, "fraction": 0.25}, {"target": "original", "fraction": 0.75}
+      ]},
+      {"id": "take_3r_50_runner_original", "kind": "scale_out", "legs": [
+        {"rr": 3.0, "fraction": 0.50}, {"target": "original", "fraction": 0.50}
+      ]},
+      {"id": "protect_3r_runner_original", "kind": "protect_runner", "trigger_rr": 3.0,
+       "new_stop_rr": 0.0, "target": "original"}
+    ],
+    "cost_definition": "total_rate is the full entry-plus-exit fee and slippage fraction of entry notional; cost_R = total_rate / abs(entry-sl)/entry",
+    "cost_scenarios": [
+      {"id": "base", "total_rate": 0.0014, "label": "base"},
+      {"id": "hard", "total_rate": 0.0025, "label": "duros"},
+      {"id": "extreme", "total_rate": 0.004, "label": "extremos"}
+    ],
+    "collapsed_leg_rule": "if a partial RR is beyond the original target it executes at the original target"
+  },
+  "statistics": {
+    "bootstrap": {"unit": "calendar_month", "iterations": 2000},
+    "multiple_testing": "holm",
+    "multiple_testing_family": "unique_target_vs_original_paired_differences_cost_invariant",
+    "sample_sufficiency": "confidence_interval_and_minimum_detectable_effect",
+    "dsr": "explicitly_blocked_v1",
+    "pbo": "explicitly_blocked_v1"
+  },
+  "sizing": {
+    "primary": "fixed_nominal_risk",
+    "fixed_fraction_for_context": 0.01,
+    "mixing_forbidden": true
+  },
+  "dependence": {
+    "iid_assumption": false,
+    "document_overlap": true,
+    "document_cross_pair_correlation": true,
+    "document_account_heat": true,
+    "sequence_monte_carlo": "explicitly_blocked_until_regime_preserving_blocks_are_validated"
+  },
+  "governance": {
+    "automatic_winner_selection": false,
+    "promotion": false,
+    "execution_enabled": false
+  }
+}

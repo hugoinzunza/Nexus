@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nexux://hypothesis-lab/spec/v1",
+  "title": "NexUX Hypothesis Lab frozen experiment spec v1",
+  "type": "object",
+  "required": ["schema_version", "hypothesis_id", "frozen", "research_only", "notice", "trial_budget", "seed", "dataset", "design", "statistics", "sizing", "dependence", "governance"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "hypothesis_id": {"type": "string", "pattern": "^HYP-[A-Z]+-[0-9]{3}$"},
+    "title": {"type": "string"},
+    "frozen": {"const": true},
+    "research_only": {"const": true},
+    "notice": {"const": "Research only - No señal - No bot"},
+    "trial_budget": {"type": "integer", "minimum": 1},
+    "seed": {"type": "integer"},
+    "dataset": {"type": "object"},
+    "design": {"type": "object"},
+    "statistics": {"type": "object"},
+    "sizing": {"type": "object"},
+    "dependence": {"type": "object"},
+    "governance": {"type": "object"}
+  },
+  "additionalProperties": false
+}
