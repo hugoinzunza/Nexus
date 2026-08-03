@@ -28,6 +28,19 @@ detectado y comisiones confirmadas sin completar datos ausentes con supuestos.
 Live principal y Testnet permanecen separados. El observador lee los ledgers y
 escribe exclusivamente en `data/hypothesis_lab/telemetry/`.
 
+## Vista web y separacion de runtime
+
+La vista autenticada de solo lectura vive en `/m/hypothesis-lab/`. Presenta por
+separado los estudios historicos cerrados y los observadores forward, incluyendo
+la frescura de cada salida y de sus fuentes. No expone endpoints `POST`, no
+importa el bot y no permite promover una hipotesis.
+
+El codigo y los datos persistentes pueden vivir en arboles distintos. El shadow
+observer recibe `--setups` y `--output` explicitos; la telemetria recibe
+`--input-root` y `--output`. La web resuelve sus diagnosticos desde
+`NEXUX_RESEARCH_RUNTIME_ROOT`. Esta separacion evita que un cambio de rama deje
+procesos vivos leyendo rutas inexistentes.
+
 ## Flujo
 
 ```bash

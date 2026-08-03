@@ -141,6 +141,10 @@
       ],
       "_nota": "Laboratorio Bot2 de Accion del precio. Solo simulacion causal; no importa ejecutor, credenciales ni ordenes."
     },
+    "hypothesis_lab": {
+      "enabled": true,
+      "_nota": "Vista de solo lectura para estudios causales y observadores forward. No importa ejecutores ni expone endpoints de escritura."
+    },
     "command_center": {
       "enabled": true,
       "_nota": "Sprint B1 experimental sobre ABI v1 congelado. Shell visual sin factories, comandos ni despliegue productivo."

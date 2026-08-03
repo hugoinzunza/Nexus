@@ -9,6 +9,10 @@
         <string>/Users/hugh/crisol/nexux/.venv/bin/python</string>
         <string>-m</string>
         <string>research.hypothesis_lab.cost_telemetry</string>
+        <string>--input-root</string>
+        <string>/Users/hugh/crisol/nexux</string>
+        <string>--output</string>
+        <string>/Users/hugh/crisol/nexux/data/hypothesis_lab/telemetry/execution_costs.json</string>
         <string>--watch</string>
         <string>--interval</string>
         <string>1</string>

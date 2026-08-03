@@ -174,6 +174,24 @@ def test_atomicidad_y_aislamiento_de_ejecucion(tmp_path):
     assert 'method="POST"' not in source_text
 
 
+def test_input_root_separa_codigo_de_ledgers_persistentes(tmp_path):
+    input_root = tmp_path / "runtime"
+    main_path = input_root / "data" / "bot_trades.json"
+    testnet_path = input_root / "data" / "testnet" / "bot_trades.json"
+    main_path.parent.mkdir(parents=True)
+    testnet_path.parent.mkdir(parents=True)
+    main_path.write_text("[]", encoding="utf-8")
+    testnet_path.write_text("[]", encoding="utf-8")
+
+    output = tmp_path / "diagnostics" / "costs.json"
+    snapshot = telemetry.run_once(output, input_root)
+
+    assert snapshot["meta"]["load_errors"] == []
+    assert output.exists()
+    signature = telemetry.input_signature(input_root)
+    assert {row[0] for row in signature} == {"main_ledger", "testnet_ledger"}
+
+
 def test_protocolo_congela_minimos_y_prohibe_acciones():
     p, digest = protocol()
     assert p["decision_protocol"]["minimum_live_closed_with_confirmed_fees"] == 30

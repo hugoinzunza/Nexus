@@ -9,6 +9,10 @@
         <string>/Users/hugh/crisol/nexux/.venv/bin/python</string>
         <string>-m</string>
         <string>research.hypothesis_lab.shadow_exit</string>
+        <string>--setups</string>
+        <string>/Users/hugh/crisol/nexux/data/setups.json</string>
+        <string>--output</string>
+        <string>/Users/hugh/crisol/nexux/data/hypothesis_lab/shadow/protect_3r_runner_original.json</string>
         <string>--watch</string>
         <string>--interval</string>
         <string>60</string>

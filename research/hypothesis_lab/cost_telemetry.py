@@ -355,12 +355,12 @@ def write_atomic(path: Path, payload: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
-def run_once(output_path: Path = OUTPUT_PATH) -> dict[str, Any]:
+def run_once(output_path: Path = OUTPUT_PATH, input_root: Path = ROOT) -> dict[str, Any]:
     protocol, digest = load_protocol()
     ledgers = {}
     load_errors = []
     for source in protocol["inputs"]["ledgers"]:
-        path = ROOT / source["path"]
+        path = input_root / source["path"]
         try:
             value = _load_json(path)
             ledgers[source["source_id"]] = value if isinstance(value, list) else []
@@ -380,12 +380,12 @@ def run_once(output_path: Path = OUTPUT_PATH) -> dict[str, Any]:
     return snapshot
 
 
-def input_signature() -> tuple[tuple[str, int | None, int | None], ...]:
+def input_signature(input_root: Path = ROOT) -> tuple[tuple[str, int | None, int | None], ...]:
     """Detect ledger changes without polling the network or rewriting output."""
     protocol, _ = load_protocol()
     values = []
     for source in protocol["inputs"]["ledgers"]:
-        path = ROOT / source["path"]
+        path = input_root / source["path"]
         try:
             stat = path.stat()
             values.append((source["source_id"], stat.st_mtime_ns, stat.st_size))
@@ -397,6 +397,10 @@ def input_signature() -> tuple[tuple[str, int | None, int | None], ...]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
+    parser.add_argument(
+        "--input-root", type=Path, default=ROOT,
+        help="Raiz de solo lectura que contiene las rutas data/ declaradas en el protocolo.",
+    )
     parser.add_argument("--watch", action="store_true")
     parser.add_argument("--interval", type=float, default=1.0)
     args = parser.parse_args()
@@ -406,7 +410,7 @@ def main() -> None:
         should_run = True
         if args.watch:
             try:
-                signature = input_signature()
+                signature = input_signature(args.input_root)
                 should_run = (
                     signature != last_signature
                     or time.monotonic() - last_run_monotonic >= 60.0
@@ -417,7 +421,7 @@ def main() -> None:
             time.sleep(max(0.5, args.interval))
             continue
         try:
-            snapshot = run_once(args.output)
+            snapshot = run_once(args.output, args.input_root)
             print(json.dumps(snapshot["meta"], ensure_ascii=False, sort_keys=True), flush=True)
             last_signature = signature if args.watch else None
             last_run_monotonic = time.monotonic()

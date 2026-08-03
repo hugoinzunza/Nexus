@@ -28,6 +28,8 @@
         <string>1</string>
         <key>NEXUX_COMMAND_CENTER_MEDIA</key>
         <string>local</string>
+        <key>NEXUX_RESEARCH_RUNTIME_ROOT</key>
+        <string>/Users/hugh/crisol/nexux/data</string>
     </dict>
 
     <key>RunAtLoad</key>

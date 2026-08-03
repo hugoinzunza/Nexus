@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
+  <title>NexUX · Laboratorio de hipótesis</title>
+  <link rel="stylesheet" href="/static/nexux-shell.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="/static/nexux-shell.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="lab-head">
+    <div>
+      <p class="eyebrow">RESEARCH · EVIDENCIA CAUSAL</p>
+      <h1>Laboratorio de hipótesis</h1>
+      <p class="subtitle">Experimentos cerrados, cohortes forward y criterios pre-registrados.</p>
+    </div>
+    <div class="head-status"><span class="pulse"></span><span id="overall">Comprobando observadores</span></div>
+  </header>
+
+  <div class="research-lock"><strong>Research only</strong><span>No señal</span><span>No bot</span><span>Sin promoción automática</span></div>
+
+  <main>
+    <section class="observer-band" aria-labelledby="observer-title">
+      <div class="section-intro">
+        <p class="eyebrow">OBSERVACIÓN FORWARD</p>
+        <h2 id="observer-title">Colección en curso</h2>
+      </div>
+      <div id="observers" class="observer-grid"></div>
+    </section>
+
+    <nav class="tabs" aria-label="Vistas del laboratorio">
+      <button class="active" data-tab="studies" type="button">Estudios</button>
+      <button data-tab="protocol" type="button">Protocolo de decisión</button>
+      <button data-tab="sources" type="button">Fuentes</button>
+    </nav>
+
+    <section id="studies" class="tab-panel active">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Hipótesis</th><th>Familia</th><th>Estado</th><th>Evidencia</th><th>Resultado</th><th>Producción</th></tr></thead>
+          <tbody id="study-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="protocol" class="tab-panel">
+      <div class="protocol-head">
+        <div><p class="eyebrow">CONGELADO ANTES DE OBSERVAR</p><h2>Regla de promoción o descarte</h2></div>
+        <span class="badge neutral">Sin cambios post-hoc</span>
+      </div>
+      <div id="protocol-grid" class="metric-grid"></div>
+      <p class="protocol-note" id="terminal-rule"></p>
+    </section>
+
+    <section id="sources" class="tab-panel">
+      <div class="source-head"><div><p class="eyebrow">TRAZABILIDAD</p><h2>Datos que alimentan la observación</h2></div><span id="updated"></span></div>
+      <div id="source-list" class="source-list"></div>
+    </section>
+  </main>
+
+  <footer><span>Los observadores sólo leen copias locales y escriben diagnósticos separados.</span><span id="clock">—</span></footer>
+</body>
+</html>
