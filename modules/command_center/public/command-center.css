@@ -275,6 +275,12 @@ a:focus-visible {
   display: block;
   margin-top: 2px;
   font-size: var(--font-sm);
+  line-height: 1.25;
+}
+
+.market-ribbon-heading strong[data-state="unknown"] {
+  color: var(--text-2);
+  font-weight: 600;
 }
 
 .market-ribbon-list {

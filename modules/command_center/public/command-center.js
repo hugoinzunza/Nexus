@@ -215,6 +215,72 @@ export function formatMarketPrice(asset) {
   }).format(asset.price);
 }
 
+const CRYPTO_INSIGHT_IDS = new Set([
+  "btcusdt",
+  "ethusdt",
+  "solusdt",
+  "xrpusdt",
+]);
+const INSIGHT_FRESHNESS = new Set(["live", "current"]);
+
+function median(values) {
+  const ordered = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2
+    ? ordered[middle]
+    : (ordered[middle - 1] + ordered[middle]) / 2;
+}
+
+export function deriveMarketInsight(assets) {
+  const eligible = (Array.isArray(assets) ? assets : []).filter(
+    (asset) =>
+      CRYPTO_INSIGHT_IDS.has(asset?.id) &&
+      Number.isFinite(asset?.changePct) &&
+      INSIGHT_FRESHNESS.has(asset?.freshness),
+  );
+  if (eligible.length < 3) {
+    return Object.freeze({
+      state: "unknown",
+      text: "Contexto insuficiente",
+      evidence: `${eligible.length}/4 activos cripto con lectura vigente`,
+    });
+  }
+
+  const changes = eligible.map((asset) => asset.changePct);
+  const positive = changes.filter((change) => change > 0).length;
+  const negative = changes.filter((change) => change < 0).length;
+  const center = median(changes);
+  const evidence = `${positive} suben · ${negative} bajan · mediana ${formatMarketChange(center)}`;
+
+  if (positive >= 3) {
+    return Object.freeze({
+      state: "positive",
+      text: center >= 2
+        ? "Cripto avanza con fuerza"
+        : center >= 0.5
+          ? "Cripto mantiene tono alcista"
+          : "Cripto avanza con cautela",
+      evidence,
+    });
+  }
+  if (negative >= 3) {
+    return Object.freeze({
+      state: "negative",
+      text: center <= -2
+        ? "Cripto retrocede con fuerza"
+        : center <= -0.5
+          ? "Cripto mantiene tono bajista"
+          : "Cripto retrocede con cautela",
+      evidence,
+    });
+  }
+  return Object.freeze({
+    state: "neutral",
+    text: "Cripto opera sin dirección común",
+    evidence,
+  });
+}
+
 export class MarketRibbonClient {
   constructor({
     ribbonUrl = MARKET_RIBBON_URL,
@@ -2232,6 +2298,11 @@ function renderChartFallback(target, asset, detail = null) {
 
 function renderMarketRibbon(state) {
   lastMarketRibbonState = state;
+  const insight = deriveMarketInsight(state.assets);
+  const insightNode = document.querySelector("#market-ribbon-insight");
+  insightNode.dataset.state = insight.state;
+  insightNode.textContent = insight.text;
+  insightNode.title = insight.evidence;
   const selectedAsset = state.assets.find(
     (asset) => asset.id === selectedMarketAssetId,
   );

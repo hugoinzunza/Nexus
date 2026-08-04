@@ -263,6 +263,67 @@ def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:
     assert payload["spxUrl"].endswith("symbol=SP%3ASPX")
 
 
+def test_insight_layer_deriva_amplitud_y_se_abstiene_sin_cobertura() -> None:
+    script_uri = (PUBLIC / "command-center.js").resolve().as_uri()
+    node = f"""
+      import({json.dumps(script_uri)}).then((module) => {{
+        const asset = (id, changePct, freshness = "live") => ({{
+          id, changePct, freshness
+        }});
+        const result = {{
+          strong: module.deriveMarketInsight([
+            asset("btcusdt", 3.2), asset("ethusdt", 2.6),
+            asset("solusdt", 2.1), asset("xrpusdt", -0.2)
+          ]),
+          cautious: module.deriveMarketInsight([
+            asset("btcusdt", 0.2), asset("ethusdt", 0.1),
+            asset("solusdt", 0.3), asset("xrpusdt", -0.1)
+          ]),
+          bearish: module.deriveMarketInsight([
+            asset("btcusdt", -1.4), asset("ethusdt", -0.8),
+            asset("solusdt", -0.6), asset("xrpusdt", 0.2)
+          ]),
+          mixed: module.deriveMarketInsight([
+            asset("btcusdt", 1.4), asset("ethusdt", -0.8),
+            asset("solusdt", 0.6), asset("xrpusdt", -0.2)
+          ]),
+          absent: module.deriveMarketInsight([
+            asset("btcusdt", 3.2, "stale"), asset("ethusdt", 2.6, "unknown"),
+            asset("solusdt", 2.1), asset("xrpusdt", -0.2)
+          ])
+        }};
+        process.stdout.write(JSON.stringify(result));
+      }});
+    """
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", node],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+
+    assert payload["strong"]["text"] == "Cripto avanza con fuerza"
+    assert payload["cautious"]["text"] == "Cripto avanza con cautela"
+    assert payload["bearish"]["text"] == "Cripto mantiene tono bajista"
+    assert payload["mixed"]["text"] == "Cripto opera sin dirección común"
+    assert payload["absent"] == {
+        "state": "unknown",
+        "text": "Contexto insuficiente",
+        "evidence": "2/4 activos cripto con lectura vigente",
+    }
+
+
+def test_insight_layer_reutiliza_pulso_sin_agregar_modulos() -> None:
+    page = (PUBLIC / "index.html").read_text(encoding="utf-8")
+    script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
+
+    assert page.count('class="market-ribbon"') == 1
+    assert 'id="market-ribbon-insight"' in page
+    assert "deriveMarketInsight(state.assets)" in script
+    assert "desde hace" not in script
+
+
 def test_b4_reutiliza_banda_superior_y_seleccion_remonta_chart_provider() -> None:
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
