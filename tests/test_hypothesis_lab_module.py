@@ -33,6 +33,9 @@ def test_state_es_solo_lectura_y_separa_historico_de_forward(tmp_path):
     season = next(item for item in payload["studies"] if item["id"] == "HYP-SEASON-001")
     assert season["state"] == "exploratory"
     assert season["promotion"] is False
+    trend = next(item for item in payload["studies"] if item["id"] == "HYP-TREND-001")
+    assert trend["state"] == "exploratory"
+    assert trend["promotion"] is False
 
 
 def test_observador_con_error_no_puede_aparecer_sano(tmp_path):

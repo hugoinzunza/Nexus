@@ -73,6 +73,7 @@ class HypothesisLabModule(NexusModule):
         cost_1 = _latest("HYP-COST-001-*.summary.json")
         cost_2 = _latest("HYP-COST-002-*.summary.json")
         season_1 = _latest("HYP-SEASON-001-*.summary.json")
+        trend_1 = _latest("HYP-TREND-001-*.summary.json")
         shadow_path = self.runtime_root / "hypothesis_lab" / "shadow" / "protect_3r_runner_original.json"
         telemetry_path = self.runtime_root / "hypothesis_lab" / "telemetry" / "execution_costs.json"
         shadow = _read_json(shadow_path)
@@ -169,6 +170,22 @@ class HypothesisLabModule(NexusModule):
                     "baseline_rate": _number(season_1.get("july_baseline", {}).get("positive_rate")),
                     "ci95": season_1.get("conditioned_vs_other_julys", {}).get("ci95"),
                     "p_value": _number(season_1.get("conditioned_vs_other_julys", {}).get("fisher_exact_two_sided_p")),
+                    "promotion": False,
+                },
+                {
+                    "id": "HYP-TREND-001", "family": "Estructura", "state": "exploratory",
+                    "title": "Ruptura y retest causal de líneas por pivotes",
+                    "verdict": trend_1.get("verdict", {}).get("summary", "Estudio exploratorio pendiente."),
+                    "n": trend_1.get("event_count"),
+                    "bullish_excess_10d": _number(
+                        trend_1.get("groups", {}).get("bullish", {}).get("10", {})
+                        .get("matched_same_year_month", {}).get("avg_excess_return_pct")
+                    ),
+                    "bearish_excess_10d": _number(
+                        trend_1.get("groups", {}).get("bearish", {}).get("10", {})
+                        .get("matched_same_year_month", {}).get("avg_excess_return_pct")
+                    ),
+                    "july_events": trend_1.get("july_events", {}).get("n"),
                     "promotion": False,
                 },
             ],

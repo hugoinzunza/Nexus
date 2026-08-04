@@ -47,6 +47,9 @@
     if (Number.isFinite(study.delta_avg_r)) parts.push(`Δ ${study.delta_avg_r >= 0 ? "+" : ""}${num(study.delta_avg_r, 3)}R`);
     if (Array.isArray(study.ci95)) parts.push(`IC95 [${num(study.ci95[0], 3)}; ${num(study.ci95[1], 3)}]`);
     if (Number.isFinite(study.p_value)) parts.push(`p ${num(study.p_value, 2)}`);
+    if (Number.isFinite(study.bullish_excess_10d)) parts.push(`alcista 10d ${study.bullish_excess_10d >= 0 ? "+" : ""}${num(study.bullish_excess_10d, 2)} pp`);
+    if (Number.isFinite(study.bearish_excess_10d)) parts.push(`bajista 10d ${study.bearish_excess_10d >= 0 ? "+" : ""}${num(study.bearish_excess_10d, 2)} pp`);
+    if (Number.isFinite(study.july_events)) parts.push(`${num(study.july_events, 0)} eventos julio`);
     if (Number.isFinite(study.paired_closed)) parts.push(`${study.paired_closed} cerradas`);
     if (Number.isFinite(study.holm_rejections)) parts.push(`${study.holm_rejections} rechazos Holm`);
     return parts.join(" · ") || "Pendiente de datos";
