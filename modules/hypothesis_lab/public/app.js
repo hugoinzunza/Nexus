@@ -40,19 +40,24 @@
     const parts = [];
     if (Number.isFinite(study.n)) parts.push(`n ${num(study.n, 0)}`);
     if (Number.isFinite(study.avg_r)) parts.push(`avg ${num(study.avg_r, 3)}R`);
+    if (Number.isFinite(study.avg_pct)) parts.push(`avg ${study.avg_pct >= 0 ? "+" : ""}${num(study.avg_pct, 2)}%`);
     if (Number.isFinite(study.profit_factor)) parts.push(`PF ${num(study.profit_factor, 2)}`);
+    if (Number.isFinite(study.positive_rate)) parts.push(`${num(study.positive_rate * 100, 0)}% positivos`);
+    if (Number.isFinite(study.baseline_rate)) parts.push(`base ${num(study.baseline_rate * 100, 0)}%`);
     if (Number.isFinite(study.delta_avg_r)) parts.push(`Δ ${study.delta_avg_r >= 0 ? "+" : ""}${num(study.delta_avg_r, 3)}R`);
     if (Array.isArray(study.ci95)) parts.push(`IC95 [${num(study.ci95[0], 3)}; ${num(study.ci95[1], 3)}]`);
+    if (Number.isFinite(study.p_value)) parts.push(`p ${num(study.p_value, 2)}`);
     if (Number.isFinite(study.paired_closed)) parts.push(`${study.paired_closed} cerradas`);
     if (Number.isFinite(study.holm_rejections)) parts.push(`${study.holm_rejections} rechazos Holm`);
     return parts.join(" · ") || "Pendiente de datos";
   }
 
   function renderStudies(studies) {
+    const stateLabels = { closed: "cerrado", collecting: "recolectando", candidate: "candidato", exploratory: "exploratorio" };
     $("#study-rows").innerHTML = studies.map((study) => `<tr>
       <td><strong>${esc(study.title)}</strong><small>${esc(study.id)}</small></td>
       <td>${esc(study.family)}</td>
-      <td><span class="badge ${esc(study.state)}">${esc(study.state === "closed" ? "cerrado" : study.state === "collecting" ? "recolectando" : "candidato")}</span></td>
+      <td><span class="badge ${esc(study.state)}">${esc(stateLabels[study.state] || study.state)}</span></td>
       <td class="metric">${esc(evidence(study))}</td>
       <td>${esc(study.verdict)}</td>
       <td class="blocked">Bloqueada</td>

@@ -28,6 +28,11 @@ detectado y comisiones confirmadas sin completar datos ausentes con supuestos.
 Live principal y Testnet permanecen separados. El observador lee los ledgers y
 escribe exclusivamente en `data/hypothesis_lab/telemetry/`.
 
+`HYP-SEASON-001` separa la tasa base positiva de julio, la condicion post-hoc
+de mayo y junio negativos y un regimen de tendencia mensual causal. Usa velas
+mensuales cerradas de Binance Spot en UTC. La captura de CoinGlass origina la
+pregunta, pero sus valores 2013-2016 no entran en la inferencia reproducible.
+
 ## Vista web y separacion de runtime
 
 La vista autenticada de solo lectura vive en `/m/hypothesis-lab/`. Presenta por

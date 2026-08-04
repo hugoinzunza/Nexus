@@ -1,0 +1,225 @@
+{
+  "cases": [
+    {
+      "july_return_pct": 20.964375348141484,
+      "june_below_six_month_sma": true,
+      "june_return_pct": -14.628437370157165,
+      "may_june_both_negative": true,
+      "may_return_pct": -19.046053378700645,
+      "six_month_log_slope_pct_per_month": -8.361232796544426,
+      "year": 2018
+    },
+    {
+      "july_return_pct": -7.126984273223935,
+      "june_below_six_month_sma": false,
+      "june_return_pct": 26.874342489772076,
+      "may_june_both_negative": false,
+      "may_return_pct": 60.7496514428949,
+      "six_month_log_slope_pct_per_month": 27.260726798737856,
+      "year": 2019
+    },
+    {
+      "july_return_pct": 24.04640799817903,
+      "june_below_six_month_sma": false,
+      "june_return_pct": -3.278060427993712,
+      "may_june_both_negative": false,
+      "may_return_pct": 9.608700696055683,
+      "six_month_log_slope_pct_per_month": 1.4075684765059826,
+      "year": 2020
+    },
+    {
+      "july_return_pct": 18.310258239406487,
+      "june_below_six_month_sma": true,
+      "june_return_pct": -5.9291100885761505,
+      "may_june_both_negative": true,
+      "may_return_pct": -35.43226063633882,
+      "six_month_log_slope_pct_per_month": -0.8737851241166106,
+      "year": 2021
+    },
+    {
+      "july_return_pct": 16.804105462734565,
+      "june_below_six_month_sma": true,
+      "june_return_pct": -37.290718388229315,
+      "may_june_both_negative": true,
+      "may_return_pct": -15.491990603441863,
+      "six_month_log_slope_pct_per_month": -11.791046052876098,
+      "year": 2022
+    },
+    {
+      "july_return_pct": -4.068457622885813,
+      "june_below_six_month_sma": false,
+      "june_return_pct": 11.986757984826358,
+      "may_june_both_negative": false,
+      "may_return_pct": -6.9197008880314215,
+      "six_month_log_slope_pct_per_month": 5.554370033363165,
+      "year": 2023
+    },
+    {
+      "july_return_pct": 2.9567158993315523,
+      "june_below_six_month_sma": false,
+      "june_return_pct": -7.059519239040668,
+      "may_june_both_negative": false,
+      "may_return_pct": 11.319882100494105,
+      "six_month_log_slope_pct_per_month": 6.118731423355639,
+      "year": 2024
+    },
+    {
+      "july_return_pct": 8.042791127774485,
+      "june_below_six_month_sma": false,
+      "june_return_pct": 2.442464940873035,
+      "may_june_both_negative": false,
+      "may_return_pct": 11.06473261691374,
+      "six_month_log_slope_pct_per_month": 2.9045325572507164,
+      "year": 2025
+    },
+    {
+      "july_return_pct": 7.271967741929974,
+      "june_below_six_month_sma": true,
+      "june_return_pct": -20.42728823407971,
+      "may_june_both_negative": true,
+      "may_return_pct": -3.500078196037071,
+      "six_month_log_slope_pct_per_month": -3.0312731363376977,
+      "year": 2026
+    }
+  ],
+  "conditioned_vs_other_julys": {
+    "ci95": [
+      -0.5712972840356869,
+      21.077721033958063
+    ],
+    "fisher_exact_two_sided_p": 0.4444444444444444,
+    "iterations": 20000,
+    "mean_delta_pct_points": 11.067582072218064,
+    "method": "independent_year_bootstrap",
+    "seed": 20260803
+  },
+  "controls": {
+    "any_month_after_falling_six_month_trend": {
+      "avg_return_pct": 1.4504611397929437,
+      "median_return_pct": -3.0613423978048058,
+      "n": 46,
+      "positive": 22,
+      "positive_rate": 0.4782608695652174,
+      "positive_rate_wilson_ci95": [
+        0.34124689434045685,
+        0.6186258692719597
+      ]
+    },
+    "any_month_after_two_negative_months": {
+      "avg_return_pct": 2.757124055866057,
+      "median_return_pct": 3.938934734782351,
+      "n": 25,
+      "positive": 14,
+      "positive_rate": 0.56,
+      "positive_rate_wilson_ci95": [
+        0.3706733186979878,
+        0.7333436111893266
+      ]
+    },
+    "two_negative_and_falling_trend": {
+      "avg_return_pct": 4.041731236814384,
+      "median_return_pct": 4.719175053433378,
+      "n": 20,
+      "positive": 12,
+      "positive_rate": 0.6,
+      "positive_rate_wilson_ci95": [
+        0.3865815007622531,
+        0.781193467627183
+      ]
+    },
+    "two_negative_without_falling_trend": {
+      "avg_return_pct": -2.3813046679272514,
+      "median_return_pct": -5.9291100885761505,
+      "n": 5,
+      "positive": 2,
+      "positive_rate": 0.4,
+      "positive_rate_wilson_ci95": [
+        0.11762077423264783,
+        0.769275718723987
+      ]
+    }
+  },
+  "dataset": {
+    "path": "research/hypothesis_lab/data/BINANCE_BTCUSDT_MONTHLY_2017_2026.json",
+    "rows": 108,
+    "rows_sha256": "e7e21a033d3f381da67c390eea91c455821ceb82b37d5542b892e02770b54bd4",
+    "source": "Binance Spot public klines",
+    "timezone": "UTC"
+  },
+  "generated_at_ms": 1785802635454,
+  "hypothesis_id": "HYP-SEASON-001",
+  "july_2026": {
+    "july_return_pct": 7.271967741929974,
+    "june_below_six_month_sma": true,
+    "june_return_pct": -20.42728823407971,
+    "may_june_both_negative": true,
+    "may_return_pct": -3.500078196037071,
+    "six_month_log_slope_pct_per_month": -3.0312731363376977,
+    "year": 2026
+  },
+  "july_baseline": {
+    "avg_return_pct": 9.689019991265315,
+    "median_return_pct": 8.042791127774485,
+    "n": 9,
+    "positive": 7,
+    "positive_rate": 0.7777777777777778,
+    "positive_rate_wilson_ci95": [
+      0.45258896910698887,
+      0.9367748928821533
+    ]
+  },
+  "limitations": [
+    "The hypothesis was selected after viewing the CoinGlass heatmap and July 2026, so this is discovery, not confirmation.",
+    "Binance BTCUSDT monthly history begins after July 2017; the screenshot's 2013-2016 values are not used inferentially.",
+    "Only four conditioned Julys exist in the Binance sample.",
+    "The trend definition is deterministic and causal, but it is not independent of the two-month drawdown in the conditioned July sample.",
+    "No trading costs are applied because this study measures monthly context, not an executable strategy."
+  ],
+  "may_june_negative_then_july": {
+    "avg_return_pct": 15.837676698053128,
+    "median_return_pct": 17.557181851070524,
+    "n": 4,
+    "positive": 4,
+    "positive_rate": 1.0,
+    "positive_rate_wilson_ci95": [
+      0.5101091635454027,
+      1.0
+    ],
+    "years": [
+      2018,
+      2021,
+      2022,
+      2026
+    ]
+  },
+  "notice": "Research only - No signal - No bot",
+  "other_julys": {
+    "avg_return_pct": 4.770094625835064,
+    "median_return_pct": 2.9567158993315523,
+    "n": 5,
+    "positive": 3,
+    "positive_rate": 0.6,
+    "positive_rate_wilson_ci95": [
+      0.2307242812760128,
+      0.882379225767352
+    ]
+  },
+  "promotion_available": false,
+  "question": "Does a negative May and June increase BTC's July return beyond July's base rate?",
+  "research_only": true,
+  "schema_version": 1,
+  "status": "exploratory_post_hoc",
+  "trend_interaction": {
+    "conditioned_cases": 4,
+    "conditioned_cases_with_negative_slope": 4,
+    "definition": "OLS slope of log monthly closes from January through June, known at June close",
+    "independent_confirmation": false,
+    "reason": "Every conditioned July also has a negative six-month slope in this sample, so the trend feature is redundant with the drawdown condition."
+  },
+  "verdict": {
+    "classification": "interesting_but_insufficient",
+    "next_step": "Mantener como contexto de research y contrastar con historia independiente y julios futuros sin cambiar entradas.",
+    "production_change": false,
+    "summary": "El patrón 4/4 existe en Binance, pero julio ya tiene una tasa base positiva alta y la incertidumbre sigue siendo amplia."
+  }
+}

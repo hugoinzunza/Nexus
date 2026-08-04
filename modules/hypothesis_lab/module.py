@@ -72,6 +72,7 @@ class HypothesisLabModule(NexusModule):
         exit_2 = _latest("HYP-EXIT-002-*.summary.json")
         cost_1 = _latest("HYP-COST-001-*.summary.json")
         cost_2 = _latest("HYP-COST-002-*.summary.json")
+        season_1 = _latest("HYP-SEASON-001-*.summary.json")
         shadow_path = self.runtime_root / "hypothesis_lab" / "shadow" / "protect_3r_runner_original.json"
         telemetry_path = self.runtime_root / "hypothesis_lab" / "telemetry" / "execution_costs.json"
         shadow = _read_json(shadow_path)
@@ -157,6 +158,18 @@ class HypothesisLabModule(NexusModule):
                     "title": "Telemetria forward de ejecucion",
                     "verdict": "Espera operaciones live elegibles; Testnet es diagnostico y no satisface el minimo.",
                     "n": telemetry_meta.get("n_records", 0), "promotion": False,
+                },
+                {
+                    "id": "HYP-SEASON-001", "family": "Estacionalidad", "state": "exploratory",
+                    "title": "Julio después de mayo y junio negativos",
+                    "verdict": season_1.get("verdict", {}).get("summary", "Estudio exploratorio pendiente."),
+                    "n": season_1.get("may_june_negative_then_july", {}).get("n"),
+                    "avg_pct": _number(season_1.get("may_june_negative_then_july", {}).get("avg_return_pct")),
+                    "positive_rate": _number(season_1.get("may_june_negative_then_july", {}).get("positive_rate")),
+                    "baseline_rate": _number(season_1.get("july_baseline", {}).get("positive_rate")),
+                    "ci95": season_1.get("conditioned_vs_other_julys", {}).get("ci95"),
+                    "p_value": _number(season_1.get("conditioned_vs_other_julys", {}).get("fisher_exact_two_sided_p")),
+                    "promotion": False,
                 },
             ],
             "protocol": shadow.get("decision_protocol", {}),
