@@ -213,8 +213,19 @@ def test_tokens_cumplen_contraste_minimo_en_superficie_objetivo() -> None:
     assert _contrast(tokens["text-1"], tokens["bg"]) >= 7
     assert _contrast(tokens["text-2"], tokens["surface-1"]) >= 4.5
     assert _contrast(tokens["text-3"], tokens["surface-1"]) >= 4.5
+    assert _contrast(tokens["text-3"], tokens["surface-2"]) >= 4.5
     for state in ("info", "success", "warning", "danger", "unknown"):
         assert _contrast(tokens[state], tokens["surface-1"]) >= 4.5
+
+
+def test_experience_layer_unifica_rieles_y_reserva_color_para_prioridad() -> None:
+    css = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
+
+    assert ".positions-panel {\n  padding: var(--space-4);" in css
+    assert ".music-panel {\n  display: flex;\n  flex-direction: column;\n  padding: var(--space-4);" in css
+    assert '.positions-panel [data-account-pnl][data-sign="negative"]' in css
+    assert "var(--danger) 52%, var(--text-2)" in css
+    assert "var(--accent) 8%, transparent" in css
 
 
 def test_documentacion_registra_hardware_y_tokens_sin_inventar_ergonomia() -> None:

@@ -7,7 +7,7 @@
   --surface-raised: #1a293d;
   --text-1: #f5f8ff;
   --text-2: #b9c5d6;
-  --text-3: #718097;
+  --text-3: #8b9ab0;
   --border: #22354a;
   --border-strong: #36516d;
   --info: #19d9ff;
@@ -716,7 +716,7 @@ a:focus-visible {
 }
 
 .positions-panel {
-  padding: 12px;
+  padding: var(--space-4);
 }
 
 .positions-accounts {
@@ -852,10 +852,10 @@ a:focus-visible {
 .music-panel {
   display: flex;
   flex-direction: column;
-  padding: 18px;
-  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
-  background: color-mix(in srgb, var(--accent) 8%, var(--surface-1));
-  box-shadow: 0 0 34px color-mix(in srgb, var(--accent) 16%, transparent);
+  padding: var(--space-4);
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-1));
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .music-panel .panel-header {
@@ -920,7 +920,7 @@ a:focus-visible {
   color: var(--accent);
   box-shadow:
     0 18px 45px rgba(0, 0, 0, 0.48),
-    0 0 26px color-mix(in srgb, var(--accent) 17%, transparent);
+    0 0 22px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .music-artwork img {
@@ -1040,7 +1040,17 @@ a:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
   border-radius: 50%;
   background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
-  box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.positions-panel [data-account-pnl][data-sign="positive"],
+.positions-panel .position-performance [data-sign="positive"] {
+  color: color-mix(in srgb, var(--success) 48%, var(--text-2));
+}
+
+.positions-panel [data-account-pnl][data-sign="negative"],
+.positions-panel .position-performance [data-sign="negative"] {
+  color: color-mix(in srgb, var(--danger) 52%, var(--text-2));
 }
 
 .music-progress {
