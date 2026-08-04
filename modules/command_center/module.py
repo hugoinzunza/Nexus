@@ -20,6 +20,7 @@ from .contracts import (
     error_document,
 )
 from .context_recorder import MarketContextRecorder
+from .context_interpreter import MarketContextInterpreter
 from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
 from .ai_context import AiContextService
 from .apple_music_adapter import AppleMusicAdapter
@@ -72,12 +73,36 @@ class CommandCenterModule(NexusModule):
             "NEXUX_CONTEXT_RECORDER_PATH",
             os.path.join("data", "command_center", "context_market_v1.jsonl"),
         )
+        recorder_requested = os.environ.get(
+            "NEXUX_CONTEXT_RECORDER_ENABLED"
+        ) == "1"
+        persistence_confirmed = os.environ.get(
+            "NEXUX_CONTEXT_RECORDER_PERSISTENCE_CONFIRMED"
+        ) == "1"
+        backup_confirmed = os.environ.get(
+            "NEXUX_CONTEXT_RECORDER_BACKUP_CONFIRMED"
+        ) == "1"
+        self._context_recorder_blockers = [
+            name
+            for name, ready in (
+                ("not_requested", recorder_requested),
+                ("persistence_unconfirmed", persistence_confirmed),
+                ("backup_unconfirmed", backup_confirmed),
+            )
+            if not ready
+        ]
+        self._context_recorder_enabled = not self._context_recorder_blockers
         self.context_recorder = MarketContextRecorder(
             recorder_path,
             strict_existing=False,
         )
+        self.context_interpreter = MarketContextInterpreter(recorder_path)
         self.market_ribbon = MarketRibbonService(
-            snapshot_observer=self.context_recorder.record,
+            snapshot_observer=(
+                self.context_recorder.record
+                if self._context_recorder_enabled
+                else None
+            ),
         )
         self._context_recorder_stop = threading.Event()
         self._context_recorder_thread: threading.Thread | None = None
@@ -138,6 +163,8 @@ class CommandCenterModule(NexusModule):
         self.media_surface = self.media_surfaces["apple-music"]
 
     def start(self) -> None:
+        if not self._context_recorder_enabled:
+            return
         if (
             self._context_recorder_thread is not None
             and self._context_recorder_thread.is_alive()
@@ -717,12 +744,17 @@ class CommandCenterModule(NexusModule):
             "market_ribbon": self.market_ribbon.stats(),
             "context_recorder": {
                 **self.context_recorder.stats(),
+                "enabled": self._context_recorder_enabled,
+                "activation_blockers": list(
+                    self._context_recorder_blockers
+                ),
                 "collector_running": bool(
                     self._context_recorder_thread
                     and self._context_recorder_thread.is_alive()
                 ),
                 "poll_seconds": self._context_recorder_poll_seconds,
             },
+            "context_interpreter": self.context_interpreter.stats(),
             "interfaces": {
                 "chart_provider": {
                     "version": CHART_PROVIDER_INTERFACE_VERSION,

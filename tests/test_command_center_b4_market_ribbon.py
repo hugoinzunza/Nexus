@@ -216,8 +216,17 @@ def test_health_expone_telemetria_del_ribbon_sin_forzar_un_refresh(
     assert health["market_ribbon"]["cached_providers"] == []
     assert health["context_recorder"]["status"] == "idle"
     assert health["context_recorder"]["sequence"] == 0
+    assert health["context_recorder"]["enabled"] is False
+    assert health["context_recorder"]["activation_blockers"] == [
+        "not_requested",
+        "persistence_unconfirmed",
+        "backup_unconfirmed",
+    ]
     assert health["context_recorder"]["collector_running"] is False
     assert health["context_recorder"]["poll_seconds"] == 30.0
+    assert health["context_interpreter"]["status"] == "ready"
+    assert health["context_interpreter"]["claims"] == 0
+    assert health["context_interpreter"]["abstentions"] == 0
 
 
 def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:

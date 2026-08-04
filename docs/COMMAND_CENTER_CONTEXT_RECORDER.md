@@ -1,6 +1,7 @@
 # Command Center Context Recorder
 
-Estado: Sprint B implementado en rama, sin merge ni despliegue.
+Estado: Sprint B aprobado; implementado en rama, sin merge, activacion ni
+despliegue.
 
 ## Objetivo
 
@@ -74,6 +75,10 @@ estabilidad del mercado.
 La ruta debe apuntar a almacenamiento persistente y su retencion debe quedar
 definida. Desplegar sobre un filesystem efimero destruiria precisamente la
 evidencia que este componente busca construir.
+
+La activacion exige tres confirmaciones independientes: solicitud explicita,
+persistencia confirmada y respaldo confirmado. Sin las tres, el observador no se
+conecta al Market Ribbon y el hilo headless no arranca.
 
 ## Integridad arquitectonica
 

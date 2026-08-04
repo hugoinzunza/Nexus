@@ -68,6 +68,7 @@ requieren historia temporal causal que este sprint no posee.
 
 ## Frontera del siguiente sprint
 
-El futuro Context Engine debera comparar snapshots temporales causales y responder
-que cambio. No podra reutilizar esta frase de amplitud como filtro ni inventar una
-comparacion de una hora sin evidencia persistida.
+Sprint C agrega un interprete headless capaz de comparar snapshots temporales
+causales. La coleccion permanece bloqueada hasta aprobar persistencia y respaldo;
+por ello la interfaz no consume todavia sus resultados. Ninguna comparacion puede
+aparecer sin una ventana forward completa y verificable.

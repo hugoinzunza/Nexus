@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from core.module_base import ModuleContext
 from modules.command_center.context_recorder import (
     ContextRecorderIntegrityError,
     MarketContextRecorder,
@@ -139,6 +140,26 @@ def test_recorder_detecta_manipulacion_al_reiniciar(tmp_path):
         MarketContextRecorder(path, clock_ms=lambda: NOW)
 
 
+def test_recorder_rechaza_regresion_del_reloj_de_captura(tmp_path):
+    path = tmp_path / "context.jsonl"
+    now = [NOW]
+    recorder = MarketContextRecorder(path, clock_ms=lambda: now[0])
+    recorder.record(_snapshot())
+    now[0] -= 1
+
+    with pytest.raises(ValueError):
+        recorder.record(
+            _snapshot(
+                generated_at_ms=now[0],
+                observed_at_ms=now[0],
+                price=70_001,
+            )
+        )
+
+    assert len(_events(path)) == 1
+    assert recorder.stats()["rejected"] == 1
+
+
 def test_market_ribbon_observa_solo_refresh_y_aisla_fallo_del_recorder():
     calls = []
     clock = [NOW]
@@ -236,6 +257,7 @@ def test_colector_headless_no_depende_de_que_la_pagina_este_abierta():
     module._context_recorder_stop = __import__("threading").Event()
     module._context_recorder_thread = None
     module._context_recorder_poll_seconds = 0.01
+    module._context_recorder_enabled = True
 
     module.start()
     deadline = time.monotonic() + 0.3
@@ -245,3 +267,40 @@ def test_colector_headless_no_depende_de_que_la_pagina_este_abierta():
 
     assert len(calls) >= 2
     assert module._context_recorder_thread is None
+
+
+def test_colector_no_arranca_sin_persistencia_y_respaldo_confirmados():
+    module = object.__new__(CommandCenterModule)
+    module._context_recorder_enabled = False
+    module._context_recorder_thread = None
+
+    module.start()
+
+    assert module._context_recorder_thread is None
+
+
+def test_activacion_exige_solicitud_persistencia_y_respaldo(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "NEXUX_CONTEXT_RECORDER_PATH",
+        str(tmp_path / "context.jsonl"),
+    )
+    monkeypatch.setenv("NEXUX_CONTEXT_RECORDER_ENABLED", "1")
+    context = ModuleContext(
+        "command_center",
+        str(Path(__file__).parents[1] / "modules" / "command_center"),
+        {},
+        lambda _message: None,
+    )
+
+    blocked = CommandCenterModule(context)
+    assert blocked._context_recorder_enabled is False
+    assert blocked.market_ribbon._snapshot_observer is None
+
+    monkeypatch.setenv("NEXUX_CONTEXT_RECORDER_PERSISTENCE_CONFIRMED", "1")
+    monkeypatch.setenv("NEXUX_CONTEXT_RECORDER_BACKUP_CONFIRMED", "1")
+    authorized = CommandCenterModule(context)
+    assert authorized._context_recorder_enabled is True
+    assert authorized.market_ribbon._snapshot_observer is not None

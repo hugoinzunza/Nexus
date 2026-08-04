@@ -36,6 +36,44 @@ class ContextRecorderIntegrityError(RuntimeError):
     """El log no puede continuar sin romper su cadena causal."""
 
 
+def load_verified_events(path: str | Path) -> list[dict]:
+    """Lee una copia consistente del log y valida la cadena completa."""
+    source_path = Path(path)
+    if not source_path.exists() or source_path.stat().st_size == 0:
+        return []
+    descriptor = os.open(source_path, os.O_RDONLY)
+    try:
+        _lock_descriptor(descriptor, shared=True)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        payload = bytearray()
+        while True:
+            chunk = os.read(descriptor, 256 * 1024)
+            if not chunk:
+                break
+            payload.extend(chunk)
+    finally:
+        os.close(descriptor)
+
+    events = []
+    previous = None
+    try:
+        for line_number, line in enumerate(
+            payload.decode("utf-8").splitlines(),
+            start=1,
+        ):
+            if not line.strip():
+                continue
+            event = json.loads(line)
+            _validate_event(event, previous, line_number)
+            events.append(event)
+            previous = event
+    except Exception as exc:
+        raise ContextRecorderIntegrityError(
+            "context log failed validation"
+        ) from exc
+    return events
+
+
 class MarketContextRecorder:
     """Persiste observaciones nuevas sin reconstruir historia previa."""
 
@@ -102,6 +140,12 @@ class MarketContextRecorder:
                         self._status = "ready"
                         self._last_error = None
                         return False
+                    if (
+                        self._last_event
+                        and captured_at_ms
+                        < self._last_event["captured_at_ms"]
+                    ):
+                        raise ValueError("capture time cannot regress")
 
                     sequence = (
                         int(self._last_event["sequence"]) + 1
@@ -190,7 +234,11 @@ class MarketContextRecorder:
                     ),
                     "observed_at_ms": observed_at_ms,
                     "freshness": str(source.get("freshness") or "unknown"),
-                    "source": source.get("source"),
+                    "source": (
+                        str(source["source"])
+                        if source.get("source") is not None
+                        else None
+                    ),
                     "kind": str(source.get("kind") or "unknown"),
                 }
             )
@@ -217,19 +265,10 @@ class MarketContextRecorder:
         }
 
     def _load_existing(self) -> None:
-        if not self.path.exists() or self.path.stat().st_size == 0:
-            return
-        previous = None
         try:
-            with self.path.open("r", encoding="utf-8") as source:
-                for line_number, line in enumerate(source, start=1):
-                    if not line.strip():
-                        continue
-                    event = json.loads(line)
-                    self._validate_event(event, previous, line_number)
-                    previous = event
-            self._last_event = previous
-            self._status = "ready"
+            events = load_verified_events(self.path)
+            self._last_event = events[-1] if events else None
+            self._status = "ready" if events else "idle"
         except Exception as exc:
             self._status = "failed"
             self._last_error = type(exc).__name__
@@ -247,28 +286,13 @@ class MarketContextRecorder:
             raise ValueError("market value must be finite")
         return value
 
-    def _validate_event(
-        self,
-        event: dict,
-        previous: dict | None,
-        line_number: int,
-    ) -> None:
-        if not isinstance(event, dict) or event.get("schema") != SCHEMA:
-            raise ContextRecorderIntegrityError(f"invalid schema at line {line_number}")
-        expected_sequence = int(previous["sequence"]) + 1 if previous else 1
-        expected_previous = previous["event_hash"] if previous else _GENESIS_HASH
-        if event.get("sequence") != expected_sequence:
-            raise ContextRecorderIntegrityError(f"invalid sequence at line {line_number}")
-        if event.get("previous_hash") != expected_previous:
-            raise ContextRecorderIntegrityError(f"invalid link at line {line_number}")
-        unsigned = dict(event)
-        event_hash = unsigned.pop("event_hash", None)
-        if event_hash != _digest(unsigned):
-            raise ContextRecorderIntegrityError(f"invalid hash at line {line_number}")
-
     def _validate_link(self, event: dict) -> None:
         if self._last_event and event["sequence"] < self._last_event["sequence"]:
             raise ContextRecorderIntegrityError("context log sequence regressed")
+        if event.get("snapshot_fingerprint") != _digest(event.get("snapshot")):
+            raise ContextRecorderIntegrityError(
+                "last snapshot fingerprint is invalid"
+            )
         unsigned = dict(event)
         event_hash = unsigned.pop("event_hash", None)
         if event_hash != _digest(unsigned):
@@ -289,9 +313,46 @@ class MarketContextRecorder:
 
     @staticmethod
     def _lock_file(descriptor: int) -> None:
-        try:
-            import fcntl
+        _lock_descriptor(descriptor, shared=False)
 
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
-        except ImportError:
-            return
+
+def _validate_event(
+    event: dict,
+    previous: dict | None,
+    line_number: int,
+) -> None:
+    if not isinstance(event, dict) or event.get("schema") != SCHEMA:
+        raise ContextRecorderIntegrityError(f"invalid schema at line {line_number}")
+    expected_sequence = int(previous["sequence"]) + 1 if previous else 1
+    expected_previous = previous["event_hash"] if previous else _GENESIS_HASH
+    if event.get("sequence") != expected_sequence:
+        raise ContextRecorderIntegrityError(f"invalid sequence at line {line_number}")
+    if event.get("previous_hash") != expected_previous:
+        raise ContextRecorderIntegrityError(f"invalid link at line {line_number}")
+    captured_at_ms = event.get("captured_at_ms")
+    if not isinstance(captured_at_ms, int):
+        raise ContextRecorderIntegrityError(
+            f"invalid capture time at line {line_number}"
+        )
+    if previous and captured_at_ms < previous["captured_at_ms"]:
+        raise ContextRecorderIntegrityError(
+            f"capture time regressed at line {line_number}"
+        )
+    if event.get("snapshot_fingerprint") != _digest(event.get("snapshot")):
+        raise ContextRecorderIntegrityError(
+            f"invalid snapshot fingerprint at line {line_number}"
+        )
+    unsigned = dict(event)
+    event_hash = unsigned.pop("event_hash", None)
+    if event_hash != _digest(unsigned):
+        raise ContextRecorderIntegrityError(f"invalid hash at line {line_number}")
+
+
+def _lock_descriptor(descriptor: int, *, shared: bool) -> None:
+    try:
+        import fcntl
+
+        operation = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+        fcntl.flock(descriptor, operation)
+    except ImportError:
+        return
