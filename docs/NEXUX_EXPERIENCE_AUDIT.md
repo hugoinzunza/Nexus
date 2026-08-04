@@ -329,7 +329,47 @@ Una iteracion solo debe aprobarse si:
 
 ## 11. Resolucion recomendada
 
-**Experience Audit: COMPLETADA.**
+**Experience Audit: APROBADA el 4 de agosto de 2026.**
 
-No implementar todavia. La siguiente decision debe aprobar o corregir la jerarquia
-propuesta y seleccionar el alcance exacto de Sprint 2.
+La arquitectura visual principal queda congelada. Se autorizan exclusivamente los
+quick wins de reduccion de carga cognitiva, jerarquia, modo calma, contexto,
+legibilidad y consistencia documentados en esta auditoria.
+
+## 12. Implementacion autorizada
+
+### Bloque 1 - Modo calma y lenguaje
+
+- lenguaje operacional visible unificado en espanol;
+- `Market Ribbon` renombrado como `Pulso de mercado`;
+- filas normales retiradas de `Atencion inmediata`;
+- detalle duplicado del footer oculto cuando todo esta listo;
+- alertas warning y critical con titular de mayor jerarquia.
+
+### Bloque 2 - Consistencia visual
+
+- inset comun de 16 px en el riel derecho;
+- texto secundario elevado a contraste AA sobre ambas superficies;
+- PnL y acentos musicales persistentes con menor saturacion;
+- color intenso reservado para seleccion, cambio o atencion.
+
+### Bloque 3 - Degradacion util
+
+- el grafico indisponible explica la causa;
+- conserva simbolo, ultimo precio fiable, variacion, frescura y hora cuando existen;
+- nunca inventa una lectura ausente;
+- mantiene disponible el salto a `Analisis completo`.
+
+### Evidencia tecnica
+
+- viewport 1920 x 1080 sin overflow horizontal ni vertical;
+- proporcion 67/33, TradingView, shell y modulos preservados;
+- 270/270 pruebas del Command Center aprobadas;
+- 898 pruebas globales aprobadas y cuatro fallos preexistentes de datos de research:
+  tres por `research/vacio_disponible_trades.json` ausente y uno por cambio de cohorte
+  V1 en `data/setups.json`.
+
+### Validacion pendiente
+
+La aprobacion perceptual debe realizarse en el Arzopa a 80-90 cm, primero en estado
+normal y luego con una alerta o degradacion real. No habilita nuevos modulos ni un
+rediseño posterior.

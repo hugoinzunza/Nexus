@@ -510,6 +510,28 @@ a:focus-visible {
   font-size: var(--font-sm);
 }
 
+.chart-placeholder-context {
+  width: min(560px, calc(100% - 48px));
+  margin: auto;
+  place-content: center stretch;
+}
+
+.chart-placeholder-context span {
+  font-size: 24px;
+}
+
+.chart-placeholder-context strong {
+  margin-top: var(--space-4);
+  color: var(--text-1);
+  font-size: var(--font-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-placeholder-context small:last-child {
+  color: var(--text-3);
+  font-size: var(--font-xs);
+}
+
 .chart-footer {
   display: flex;
   align-items: center;

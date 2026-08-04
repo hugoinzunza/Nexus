@@ -2181,6 +2181,7 @@ let selectedMarketAssetId = "btcusdt";
 let lastMarketRibbonState = null;
 let activeChartAdapter = null;
 let chartQueue = Promise.resolve();
+let lastChartFailureDetail = null;
 
 function marketChangeDirection(change) {
   if (!Number.isFinite(change) || change === 0) return "flat";
@@ -2192,8 +2193,56 @@ function formatMarketChange(change) {
   return `${change > 0 ? "+" : ""}${change.toFixed(2)}%`;
 }
 
+export function describeChartFallback(asset, detail = null) {
+  const hasPrice = Number.isFinite(asset?.price);
+  return {
+    title: "Gráfico no disponible",
+    explanation: detail ||
+      "TradingView no respondió. El resto del Command Center continúa disponible.",
+    reading: hasPrice
+      ? `${asset.symbol} ${formatMarketPrice(asset)} · ${formatMarketChange(asset.changePct)}`
+      : "Sin una lectura de precio confirmada.",
+    provenance: hasPrice
+      ? `Última lectura fiable · ${FRESHNESS_LABELS[asset.freshness] || "Sin lectura"}${
+          asset.observedAt
+            ? ` · ${new Date(asset.observedAt).toLocaleTimeString("es-CL", {
+                hour: "2-digit", minute: "2-digit",
+              })}`
+            : ""
+        }`
+      : "Use Análisis completo para continuar en TradingView.",
+  };
+}
+
+function renderChartFallback(target, asset, detail = null) {
+  const copy = describeChartFallback(asset, detail);
+  const root = document.createElement("div");
+  root.className = "chart-placeholder chart-placeholder-context";
+  const title = document.createElement("span");
+  title.textContent = copy.title;
+  const explanation = document.createElement("small");
+  explanation.textContent = copy.explanation;
+  const reading = document.createElement("strong");
+  reading.textContent = copy.reading;
+  const provenance = document.createElement("small");
+  provenance.textContent = copy.provenance;
+  root.append(title, explanation, reading, provenance);
+  target.replaceChildren(root);
+}
+
 function renderMarketRibbon(state) {
   lastMarketRibbonState = state;
+  const selectedAsset = state.assets.find(
+    (asset) => asset.id === selectedMarketAssetId,
+  );
+  const chartTarget = document.querySelector("#chart-target");
+  if (
+    selectedAsset &&
+    (chartTarget?.dataset.chartState === "degraded" ||
+      chartTarget?.dataset.chartState === "omitted")
+  ) {
+    renderChartFallback(chartTarget, selectedAsset, lastChartFailureDetail);
+  }
   const list = document.querySelector("#market-ribbon-list");
   list.replaceChildren(
     ...state.assets.map((asset) => {
@@ -2281,15 +2330,16 @@ async function remountChart(asset) {
   const target = document.querySelector("#chart-target");
   setChartLabels(asset);
   if (new URLSearchParams(location.search).get("chart") === "0") {
-    target.innerHTML =
-      '<div class="chart-placeholder"><span>Proveedor omitido</span>' +
-      "<small>Validación sin red externa</small></div>";
+    target.dataset.chartState = "omitted";
+    lastChartFailureDetail = "Validación sin red externa.";
+    renderChartFallback(target, asset, lastChartFailureDetail);
     document.querySelector("#chart-health").textContent = "Proveedor omitido";
     document.querySelector("#chart-latency").textContent =
       "Validación sin red externa";
     return;
   }
   if (activeChartAdapter) await activeChartAdapter.destroy();
+  target.dataset.chartState = "mounting";
   target.innerHTML =
     '<div class="chart-placeholder"><span>TradingView</span>' +
     `<small>Montando ${asset.symbol}</small></div>`;
@@ -2304,11 +2354,20 @@ async function remountChart(asset) {
       themeRef: "dark",
     });
     const stats = adapter.stats();
+    target.dataset.chartState = "ready";
+    lastChartFailureDetail = null;
     document.querySelector("#chart-health").textContent =
       "Proveedor disponible";
     document.querySelector("#chart-latency").textContent =
       `Montaje ${stats.lastMountLatencyMs} ms`;
   } catch (error) {
+    target.dataset.chartState = "degraded";
+    lastChartFailureDetail =
+      "TradingView no respondió. El resto del Command Center continúa disponible.";
+    const latestAsset = lastMarketRibbonState?.assets?.find(
+      (candidate) => candidate.id === selectedMarketAssetId,
+    ) || asset;
+    renderChartFallback(target, latestAsset, lastChartFailureDetail);
     document.querySelector("#chart-health").textContent =
       "Proveedor degradado";
     document.querySelector("#chart-latency").textContent =

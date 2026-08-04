@@ -228,6 +228,36 @@ def test_experience_layer_unifica_rieles_y_reserva_color_para_prioridad() -> Non
     assert "var(--accent) 8%, transparent" in css
 
 
+def test_experience_layer_explica_degradacion_del_grafico_sin_inventar_precio() -> None:
+    script_uri = (PUBLIC / "command-center.js").resolve().as_uri()
+    node = f"""
+      import({json.dumps(script_uri)}).then((module) => {{
+        const observed = module.describeChartFallback({{
+          symbol: "BTCUSDT.P", price: 64123.4, changePct: 1.25,
+          freshness: "live", observedAt: 1800000000000
+        }}, "Proveedor temporalmente indisponible.");
+        const absent = module.describeChartFallback({{
+          symbol: "BTCUSDT.P", price: Number.NaN, freshness: "unknown"
+        }});
+        process.stdout.write(JSON.stringify({{ observed, absent }}));
+      }});
+    """
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", node],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+
+    assert payload["observed"]["title"] == "Gráfico no disponible"
+    assert "64.123,4" in payload["observed"]["reading"]
+    assert "+1.25%" in payload["observed"]["reading"]
+    assert "Última lectura fiable" in payload["observed"]["provenance"]
+    assert payload["absent"]["reading"] == "Sin una lectura de precio confirmada."
+    assert "Análisis completo" in payload["absent"]["provenance"]
+
+
 def test_documentacion_registra_hardware_y_tokens_sin_inventar_ergonomia() -> None:
     viewport = (ROOT / "docs" / "VIEWPORT_SPECIFICATION.md").read_text(
         encoding="utf-8"
