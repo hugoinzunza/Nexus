@@ -80,10 +80,12 @@ class MarketRibbonService:
         fetch_json: Callable[[str], object] = _fetch_json,
         clock_ms: Callable[[], int] | None = None,
         ttl_ms: int = 15_000,
+        snapshot_observer: Callable[[dict], object] | None = None,
     ):
         self._fetch_json = fetch_json
         self._clock_ms = clock_ms or (lambda: int(time.time() * 1000))
         self._ttl_ms = ttl_ms
+        self._snapshot_observer = snapshot_observer
         self._lock = threading.Lock()
         self._last_response: dict | None = None
         self._last_refresh_ms = 0
@@ -93,6 +95,7 @@ class MarketRibbonService:
         self._last_refresh_duration_ms: float | None = None
         self._provider_successes: dict[str, int] = {}
         self._provider_failures: dict[str, int] = {}
+        self._observer_failures = 0
 
     def snapshot(self) -> dict:
         now_ms = self._clock_ms()
@@ -158,7 +161,13 @@ class MarketRibbonService:
                 (time.perf_counter() - refresh_started) * 1000,
                 3,
             )
-            return self._decorate(self._last_response, now_ms)
+            decorated = self._decorate(self._last_response, now_ms)
+            if self._snapshot_observer is not None:
+                try:
+                    self._snapshot_observer(decorated)
+                except Exception:  # noqa: BLE001
+                    self._observer_failures += 1
+            return decorated
 
     def stats(self) -> dict:
         """Expone telemetría operacional sin incluir datos de mercado."""
@@ -190,6 +199,7 @@ class MarketRibbonService:
                 "provider_failures": dict(
                     sorted(self._provider_failures.items())
                 ),
+                "observer_failures": self._observer_failures,
             }
 
     def _decorate(self, response: dict, now_ms: int) -> dict:

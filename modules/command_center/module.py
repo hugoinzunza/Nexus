@@ -19,6 +19,7 @@ from .contracts import (
     CONTRACT_VERSION,
     error_document,
 )
+from .context_recorder import MarketContextRecorder
 from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
 from .ai_context import AiContextService
 from .apple_music_adapter import AppleMusicAdapter
@@ -67,7 +68,20 @@ class CommandCenterModule(NexusModule):
             ),
         )
         self.module_registry = command_center_module_registry()
-        self.market_ribbon = MarketRibbonService()
+        recorder_path = os.environ.get(
+            "NEXUX_CONTEXT_RECORDER_PATH",
+            os.path.join("data", "command_center", "context_market_v1.jsonl"),
+        )
+        self.context_recorder = MarketContextRecorder(
+            recorder_path,
+            strict_existing=False,
+        )
+        self.market_ribbon = MarketRibbonService(
+            snapshot_observer=self.context_recorder.record,
+        )
+        self._context_recorder_stop = threading.Event()
+        self._context_recorder_thread: threading.Thread | None = None
+        self._context_recorder_poll_seconds = 30.0
         self.ai_context = AiContextService(
             enabled_loader=self._ai_enabled,
         )
@@ -122,6 +136,40 @@ class CommandCenterModule(NexusModule):
         }
         # Compatibilidad para consumidores internos anteriores a la selección.
         self.media_surface = self.media_surfaces["apple-music"]
+
+    def start(self) -> None:
+        if (
+            self._context_recorder_thread is not None
+            and self._context_recorder_thread.is_alive()
+        ):
+            return
+        self._context_recorder_stop.clear()
+        self._context_recorder_thread = threading.Thread(
+            target=self._context_recorder_loop,
+            name="command-center-context-recorder",
+            daemon=True,
+        )
+        self._context_recorder_thread.start()
+
+    def stop(self) -> None:
+        self._context_recorder_stop.set()
+        thread = self._context_recorder_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=2.0)
+        self._context_recorder_thread = None
+
+    def _context_recorder_loop(self) -> None:
+        while not self._context_recorder_stop.is_set():
+            try:
+                self.market_ribbon.snapshot()
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(
+                    "command-center: context recorder poll fallo "
+                    f"({type(exc).__name__})"
+                )
+            self._context_recorder_stop.wait(
+                self._context_recorder_poll_seconds
+            )
 
     def _media_metadata(self, provider: str, item_ref: str) -> dict | None:
         controller = {
@@ -667,6 +715,14 @@ class CommandCenterModule(NexusModule):
             "gateway": self.gateway.stats(),
             "module_registry": self.module_registry.stats(),
             "market_ribbon": self.market_ribbon.stats(),
+            "context_recorder": {
+                **self.context_recorder.stats(),
+                "collector_running": bool(
+                    self._context_recorder_thread
+                    and self._context_recorder_thread.is_alive()
+                ),
+                "poll_seconds": self._context_recorder_poll_seconds,
+            },
             "interfaces": {
                 "chart_provider": {
                     "version": CHART_PROVIDER_INTERFACE_VERSION,

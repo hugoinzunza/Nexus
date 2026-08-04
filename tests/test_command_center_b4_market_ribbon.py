@@ -193,7 +193,13 @@ def test_endpoint_es_autenticado_read_only_y_fuera_del_wire_abi() -> None:
     )
 
 
-def test_health_expone_telemetria_del_ribbon_sin_forzar_un_refresh() -> None:
+def test_health_expone_telemetria_del_ribbon_sin_forzar_un_refresh(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv(
+        "NEXUX_CONTEXT_RECORDER_PATH",
+        str(tmp_path / "context.jsonl"),
+    )
     module = CommandCenterModule(
         ModuleContext(
             "command_center",
@@ -208,6 +214,10 @@ def test_health_expone_telemetria_del_ribbon_sin_forzar_un_refresh() -> None:
     assert health["market_ribbon"]["status"] == "idle"
     assert health["market_ribbon"]["refresh_count"] == 0
     assert health["market_ribbon"]["cached_providers"] == []
+    assert health["context_recorder"]["status"] == "idle"
+    assert health["context_recorder"]["sequence"] == 0
+    assert health["context_recorder"]["collector_running"] is False
+    assert health["context_recorder"]["poll_seconds"] == 30.0
 
 
 def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:
