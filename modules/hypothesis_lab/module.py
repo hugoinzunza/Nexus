@@ -74,10 +74,13 @@ class HypothesisLabModule(NexusModule):
         cost_2 = _latest("HYP-COST-002-*.summary.json")
         season_1 = _latest("HYP-SEASON-001-*.summary.json")
         trend_1 = _latest("HYP-TREND-001-*.summary.json")
+        candle_1 = _latest("HYP-CANDLE-001-*.summary.json")
         shadow_path = self.runtime_root / "hypothesis_lab" / "shadow" / "protect_3r_runner_original.json"
         telemetry_path = self.runtime_root / "hypothesis_lab" / "telemetry" / "execution_costs.json"
+        candle_path = self.runtime_root / "hypothesis_lab" / "shadow" / "candle_reversal_forward.json"
         shadow = _read_json(shadow_path)
         telemetry = _read_json(telemetry_path)
+        candle_shadow = _read_json(candle_path)
 
         base = exit_1.get("aggregate_metrics", {}).get("base:original", {})
         protected = exit_2.get("paired_comparisons", {}).get("protect_3r_runner_original", {})
@@ -87,6 +90,7 @@ class HypothesisLabModule(NexusModule):
         shadow_decision = shadow.get("decision", {})
         telemetry_meta = telemetry.get("meta", {})
         telemetry_decision = telemetry.get("decision", {})
+        candle_summary = candle_shadow.get("summary", {})
 
         return {
             "research_only": True,
@@ -110,6 +114,15 @@ class HypothesisLabModule(NexusModule):
                     "decision": telemetry_decision.get("status", "not_available"),
                     "load_errors": telemetry_meta.get("load_errors", []),
                     "coverage": telemetry_decision.get("primary_live_counts", {}),
+                },
+                "candle_reversal": {
+                    **self._freshness(candle_path, 420),
+                    "hypothesis_id": "HYP-CANDLE-002-SHADOW",
+                    "records": candle_summary.get("eligible_records", 0),
+                    "patterns": candle_summary.get("patterns", 0),
+                    "closed_patterns": candle_summary.get("closed_with_pattern", 0),
+                    "decision": candle_summary.get("decision_status", "not_available"),
+                    "errors": candle_shadow.get("meta", {}).get("errors", []),
                 },
             },
             "studies": [
@@ -186,6 +199,19 @@ class HypothesisLabModule(NexusModule):
                         .get("matched_same_year_month", {}).get("avg_excess_return_pct")
                     ),
                     "july_events": trend_1.get("july_events", {}).get("n"),
+                    "promotion": False,
+                },
+                {
+                    "id": "HYP-CANDLE-001", "family": "Velas", "state": "candidate",
+                    "title": "Impulso, absorción y reclaim después del toque",
+                    "verdict": candle_1.get("verdict", {}).get("summary", "Estudio exploratorio pendiente."),
+                    "n": candle_1.get("coverage", {}).get("patterns"),
+                    "information_delta_r": _number(candle_1.get("information_value", {}).get("mean_excess_net_r")),
+                    "timing_delta_r": _number(
+                        candle_1.get("timing_value", {}).get("paired_difference_confirmation_minus_original", {})
+                        .get("mean_difference_net_r")
+                    ),
+                    "pattern_rate": _number(candle_1.get("coverage", {}).get("pattern_rate")),
                     "promotion": False,
                 },
             ],

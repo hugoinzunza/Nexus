@@ -1,0 +1,31 @@
+{
+  "hypothesis_id": "HYP-CANDLE-001",
+  "title": "Impulso, absorcion y reclaim despues del toque",
+  "status": "exploratory_post_hoc",
+  "origin": "Two screenshots of one selected reversal event reviewed on 2026-08-03",
+  "parameters_frozen_before_outcome_run": {
+    "timeframes": ["1h", "4h"],
+    "atr_period": 14,
+    "impulse_range_atr": 1.25,
+    "impulse_body_fraction": 0.6,
+    "base_max_body_vs_impulse": 0.5,
+    "base_extreme_fraction": 0.35,
+    "reclaim_body_atr": 0.5,
+    "reclaim_fraction": 0.5,
+    "max_completion_bars_after_touch": 3,
+    "confirmation_entry": "next_bar_open",
+    "total_cost_rate": 0.0014
+  },
+  "primary_comparisons": [
+    "information: original plan with pattern vs matched no-pattern controls",
+    "timing: next-open confirmation vs original entry on the same setup"
+  ],
+  "governance": {
+    "research_only": true,
+    "post_hoc_discovery": true,
+    "screenshots_are_vocabulary_not_labels": true,
+    "automatic_promotion": false,
+    "execution_enabled": false,
+    "production_change": false
+  }
+}

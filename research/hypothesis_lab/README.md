@@ -60,6 +60,8 @@ python3 -m research.hypothesis_lab.shadow_exit
 python3 -m research.hypothesis_lab.cost_study
 python3 -m research.hypothesis_lab.cost_viability
 python3 -m research.hypothesis_lab.cost_telemetry
+python3 -m research.hypothesis_lab.candle_reversal_study
+python3 -m research.hypothesis_lab.candle_reversal_shadow
 ./tools/start_cost_telemetry.command
 ```
 

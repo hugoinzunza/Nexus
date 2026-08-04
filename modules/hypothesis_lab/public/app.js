@@ -22,12 +22,15 @@
     const entries = [
       ["shadow_exit", "Protección del runner", "Comparación original vs stop protegido después de 3R"],
       ["cost_telemetry", "Costos de ejecución", "Spread, comisión y slippage realmente observados"],
+      ["candle_reversal", "Velas de reversión", "Impulso, absorción y reclaim después del toque"],
     ];
     $("#observers").innerHTML = entries.map(([key, title, subtitle]) => {
       const row = observers[key] || {};
       const secondary = key === "shadow_exit"
         ? `<div><span>Cerradas pareadas</span><strong>${esc(row.paired_closed)}</strong></div><div><span>Alcanzaron 3R</span><strong>${esc(row.reached_3r)}</strong></div>`
-        : `<div><span>Entradas live elegibles</span><strong>${esc(row.coverage?.entries_with_activation_reference || 0)}</strong></div><div><span>Comisiones confirmadas</span><strong>${esc(row.coverage?.closed_with_confirmed_fees || 0)}</strong></div>`;
+        : key === "candle_reversal"
+          ? `<div><span>Patrones</span><strong>${esc(row.patterns)}</strong></div><div><span>Patrones cerrados</span><strong>${esc(row.closed_patterns)}</strong></div>`
+          : `<div><span>Entradas live elegibles</span><strong>${esc(row.coverage?.entries_with_activation_reference || 0)}</strong></div><div><span>Comisiones confirmadas</span><strong>${esc(row.coverage?.closed_with_confirmed_fees || 0)}</strong></div>`;
       return `<article class="observer">
         <div class="observer-top"><div><span class="observer-id">${esc(row.hypothesis_id)}</span><h3>${title}</h3><small>${subtitle}</small></div><span class="badge ${esc(row.status)}">${esc(labels[row.status] || row.status)}</span></div>
         <div class="observer-metrics"><div><span>Observaciones</span><strong>${esc(row.records)}</strong></div>${secondary}</div>
@@ -50,6 +53,9 @@
     if (Number.isFinite(study.bullish_excess_10d)) parts.push(`alcista 10d ${study.bullish_excess_10d >= 0 ? "+" : ""}${num(study.bullish_excess_10d, 2)} pp`);
     if (Number.isFinite(study.bearish_excess_10d)) parts.push(`bajista 10d ${study.bearish_excess_10d >= 0 ? "+" : ""}${num(study.bearish_excess_10d, 2)} pp`);
     if (Number.isFinite(study.july_events)) parts.push(`${num(study.july_events, 0)} eventos julio`);
+    if (Number.isFinite(study.information_delta_r)) parts.push(`info ${study.information_delta_r >= 0 ? "+" : ""}${num(study.information_delta_r, 2)}R`);
+    if (Number.isFinite(study.timing_delta_r)) parts.push(`esperar ${study.timing_delta_r >= 0 ? "+" : ""}${num(study.timing_delta_r, 2)}R`);
+    if (Number.isFinite(study.pattern_rate)) parts.push(`${num(study.pattern_rate * 100, 1)}% frecuencia`);
     if (Number.isFinite(study.paired_closed)) parts.push(`${study.paired_closed} cerradas`);
     if (Number.isFinite(study.holm_rejections)) parts.push(`${study.holm_rejections} rechazos Holm`);
     return parts.join(" · ") || "Pendiente de datos";
