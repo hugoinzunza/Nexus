@@ -518,6 +518,19 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.status-footer[data-state="ready"] {
+  grid-template-columns: 1fr auto auto;
+}
+
+.status-footer[data-state="ready"] .provider-status,
+.status-footer[data-state="ready"] .readiness-list {
+  display: none;
+}
+
+.status-footer[data-state="ready"] .readiness-overall {
+  justify-self: start;
+}
+
 .context-rail {
   display: grid;
   grid-template-areas:
@@ -1074,11 +1087,20 @@ a:focus-visible {
 }
 
 .attention-panel:has(#attention-state[data-state="normal"]) {
-  border-color: color-mix(in srgb, var(--success) 42%, var(--border));
-  background: color-mix(in srgb, var(--success) 3%, var(--surface-1));
-  box-shadow: 0 0 22px color-mix(in srgb, var(--success) 6%, transparent);
+  border-color: var(--border);
+  background: var(--surface-1);
+  box-shadow: none;
 }
 
+.attention-panel:has(#attention-state[data-state="normal"]) .attention-list,
+.attention-panel:has(#attention-state[data-state="normal"]) .context-footer {
+  display: none;
+}
+
+.attention-panel:has(#attention-state[data-state="warning"]) .context-summary,
+.attention-panel:has(#attention-state[data-state="critical"]) .context-summary {
+  font-size: 22px;
+}
 
 .attention-list {
   display: grid;

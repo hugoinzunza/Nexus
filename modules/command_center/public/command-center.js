@@ -1001,10 +1001,10 @@ export class OperationalHealthClient {
 }
 
 const READINESS_LABELS = {
-  ready: "Ready",
-  degraded: "Degraded",
-  failed: "Failed",
-  unknown: "Unknown",
+  ready: "Listo",
+  degraded: "Degradado",
+  failed: "Falló",
+  unknown: "Sin datos",
 };
 
 const REQUIRED_READINESS_IDS = new Set([
@@ -1740,6 +1740,7 @@ function render(state) {
 }
 
 function renderOperationalReadiness(readiness) {
+  document.querySelector(".status-footer").dataset.state = readiness.overall;
   const overall = document.querySelector("#readiness-overall");
   overall.dataset.state = readiness.overall;
   overall.textContent = READINESS_LABELS[readiness.overall];
@@ -1937,14 +1938,14 @@ function renderMacOSContext(context) {
   const badge = document.querySelector("#macos-state");
   badge.dataset.state = context.state;
   const labels = {
-    ready: "Ready",
+    ready: "Listo",
     degraded: "Revisar",
     unavailable: "Solo local",
   };
   badge.textContent = badge.classList.contains("macos-compact-state")
     ? "macOS"
-    : labels[context.state] || "Unknown";
-  badge.title = labels[context.state] || "Unknown";
+    : labels[context.state] || "Sin datos";
+  badge.title = labels[context.state] || "Sin datos";
   document.querySelector("#macos-answer").textContent = context.detail || (
     context.state === "ready"
       ? "El equipo local está listo para operar."
@@ -1982,7 +1983,12 @@ function renderImmediateAttention(attention) {
   summary.dataset.state = attention.state;
   summary.textContent = attention.summary;
   const list = document.querySelector("#attention-list");
-  list.replaceChildren(...(attention.items || []).map((source) => {
+  const visibleItems = (attention.items || []).filter((source) =>
+    source.state === "warning" ||
+    source.state === "critical" ||
+    source.state === "unknown"
+  );
+  list.replaceChildren(...visibleItems.map((source) => {
     const item = document.createElement("div");
     item.className = "attention-item";
     item.dataset.state = source.state;
@@ -2017,12 +2023,12 @@ function renderMediaContext(context) {
   });
   const badge = document.querySelector("#music-state");
   const stateLabels = {
-    ready: "Ready",
+    ready: "Lista",
     degraded: "Degradada",
     unavailable: "No disponible",
     revoked: "Sin permiso",
     closed: "Cerrada",
-    unknown: "Unknown",
+    unknown: "Sin datos",
   };
   const capabilities = new Set(context.capabilities);
   const hasPlaybackControls =
@@ -2034,7 +2040,7 @@ function renderMediaContext(context) {
       ? "Reproduciendo"
       : context.lifecycle === "unavailable"
         ? "Cerrada"
-        : stateLabels[context.lifecycle] || "Unknown";
+        : stateLabels[context.lifecycle] || "Sin datos";
   const selectedLabel = providerLabels[context.selectedProvider] || "Música";
   document.querySelector("#music-provider-label").textContent =
     context.provider || selectedLabel;

@@ -67,6 +67,7 @@ def test_b8_prioriza_solo_alertas_operacionales_verificables() -> None:
 def test_b8_reutiliza_superficie_y_no_agrega_controles() -> None:
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
+    styles = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
 
     assert page.count('class="attention-panel"') == 1
     assert 'class="bot-context-panel"' not in page
@@ -79,6 +80,10 @@ def test_b8_reutiliza_superficie_y_no_agrega_controles() -> None:
     assert "<a " not in panel
     assert "deriveImmediateAttention" in script
     assert "Macro: sin eventos próximos" in script
+    assert 'source.state === "warning"' in script
+    assert 'source.state === "critical"' in script
+    assert ':has(#attention-state[data-state="normal"]) .attention-list' in styles
+    assert ':has(#attention-state[data-state="normal"]) .context-footer' in styles
     assert "totalPnl" not in script.split(
         "export function deriveImmediateAttention", 1
     )[1].split("export class BotContextClient", 1)[0]

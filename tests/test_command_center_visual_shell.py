@@ -64,6 +64,21 @@ def test_shell_publica_assets_y_estados_operacionales() -> None:
     assert "current.observed_at > incoming.observed_at" in script
 
 
+def test_experience_layer_usa_lenguaje_operacional_y_footer_en_calma() -> None:
+    page = (PUBLIC / "index.html").read_text(encoding="utf-8")
+    script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
+    styles = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
+
+    assert "Pulso de mercado" in page
+    assert 'class="status-footer" data-state="unknown"' in page
+    assert 'ready: "Listo"' in script
+    assert 'failed: "Falló"' in script
+    assert 'unknown: "Sin datos"' in script
+    assert 'document.querySelector(".status-footer").dataset.state' in script
+    assert '.status-footer[data-state="ready"] .provider-status' in styles
+    assert '.status-footer[data-state="ready"] .readiness-list' in styles
+
+
 def test_shell_fija_el_abi_y_no_agrega_superficie_de_comandos() -> None:
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
 
