@@ -23,6 +23,11 @@ from .contracts import (
 from .context_recorder import MarketContextRecorder
 from .context_interpreter import MarketContextInterpreter
 from .context_storage import ContextStorageManager
+from .context_vault_google_drive import (
+    ContextVaultManager,
+    GoogleDriveVaultProvider,
+    default_google_drive_vault_root,
+)
 from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
 from .ai_context import AiContextService
 from .apple_music_adapter import AppleMusicAdapter
@@ -103,6 +108,11 @@ class CommandCenterModule(NexusModule):
         self._context_vault_public_file = os.environ.get(
             "NEXUX_CONTEXT_VAULT_PUBLIC_FILE", ""
         ).strip()
+        discovered_vault_root = default_google_drive_vault_root()
+        self._context_google_drive_vault_root = os.environ.get(
+            "NEXUX_CONTEXT_GOOGLE_DRIVE_VAULT_ROOT",
+            str(discovered_vault_root) if discovered_vault_root else "",
+        ).strip()
         backup_root_configured = bool(self._context_backup_root)
         vault_public_key_configured = bool(
             self._context_vault_public_file
@@ -148,6 +158,15 @@ class CommandCenterModule(NexusModule):
             self.context_storage.active_path,
             event_loader=self.context_storage.load_all_events,
         )
+        self.context_vault = None
+        if self._context_google_drive_vault_root:
+            self.context_vault = ContextVaultManager(
+                self.context_storage,
+                GoogleDriveVaultProvider(
+                    self._context_google_drive_vault_root,
+                ),
+                public_key_file=self._context_vault_public_file,
+            )
         self.market_ribbon = MarketRibbonService(
             snapshot_observer=(
                 self._record_context_snapshot
@@ -832,6 +851,21 @@ class CommandCenterModule(NexusModule):
                 "write_blocked": self._context_storage_failed,
                 "collection_released": _CONTEXT_COLLECTION_RELEASED,
             },
+            "context_vault": (
+                self.context_vault.health()
+                if self.context_vault is not None
+                else {
+                    "status": "unconfigured",
+                    "last_backup_ms": None,
+                    "last_restore_ms": None,
+                    "hash_verified": False,
+                    "manifest_verified": False,
+                    "free_bytes": None,
+                    "total_size_bytes": 0,
+                    "automatic_backup_enabled": False,
+                    "collection_enabled": False,
+                }
+            ),
             "interfaces": {
                 "chart_provider": {
                     "version": CHART_PROVIDER_INTERFACE_VERSION,

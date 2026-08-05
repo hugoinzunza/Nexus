@@ -236,6 +236,9 @@ def test_health_expone_telemetria_del_ribbon_sin_forzar_un_refresh(
     assert health["context_storage"]["status"] == "uninitialized"
     assert health["context_storage"]["collection_released"] is False
     assert health["context_storage"]["write_blocked"] is False
+    assert health["context_vault"]["status"] == "unconfigured"
+    assert health["context_vault"]["automatic_backup_enabled"] is False
+    assert health["context_vault"]["collection_enabled"] is False
 
 
 def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:
