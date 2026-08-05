@@ -1130,9 +1130,13 @@ a:focus-visible {
   box-shadow: none;
 }
 
-.attention-panel:has(#attention-state[data-state="normal"]) .attention-list,
+.attention-panel:has(#attention-state[data-state="normal"]) .attention-list[data-timeline-active="false"],
 .attention-panel:has(#attention-state[data-state="normal"]) .context-footer {
   display: none;
+}
+
+.attention-panel:has(#attention-state[data-state="normal"]) .attention-list[data-timeline-active="true"] + .context-footer {
+  display: flex;
 }
 
 .attention-panel:has(#attention-state[data-state="warning"]) .context-summary,

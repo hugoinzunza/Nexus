@@ -611,6 +611,129 @@ export function normalizeBotContext(payload) {
 
 const ATTENTION_RANK = { critical: 3, warning: 2, info: 1 };
 
+const TIMELINE_STATE_LABELS = Object.freeze({
+  positive: "Alcista",
+  negative: "Bajista",
+  neutral: "Mixto",
+  ready: "Estable",
+  degraded: "Degradado",
+  failed: "Crítico",
+});
+
+export class OperationalTimeline {
+  constructor({ now = () => Date.now(), maxEntries = 24 } = {}) {
+    this.now = now;
+    this.maxEntries = Math.max(1, Number(maxEntries) || 24);
+    this.startedAtMs = this.now();
+    this.baselines = new Map();
+    this.seenExternalEvents = new Set();
+    this.events = [];
+  }
+
+  entries() {
+    return this.events.map((event) => Object.freeze({ ...event }));
+  }
+
+  observe({ marketInsight = null, readiness = null, positions = null, bot = null } = {}) {
+    const observedAtMs = this.now();
+    this._observeTransition({
+      source: "market-pulse",
+      value: ["positive", "negative", "neutral"].includes(marketInsight?.state)
+        ? marketInsight.state
+        : null,
+      observedAtMs,
+      build: (before, after) => ({
+        label: `Pulso: ${TIMELINE_STATE_LABELS[before]} → ${TIMELINE_STATE_LABELS[after]}`,
+        detail: marketInsight.evidence,
+        severity: "info",
+      }),
+    });
+    this._observeTransition({
+      source: "operational-health",
+      value: ["ready", "degraded", "failed"].includes(readiness?.overall)
+        ? readiness.overall
+        : null,
+      observedAtMs,
+      build: (before, after) => ({
+        label: `Sistema: ${TIMELINE_STATE_LABELS[before]} → ${TIMELINE_STATE_LABELS[after]}`,
+        detail: "Estado global observado",
+        severity: after === "failed" ? "critical" : (
+          after === "degraded" ? "warning" : "info"
+        ),
+      }),
+    });
+    this._observeTransition({
+      source: "positions",
+      value: Number.isFinite(Number(positions?.totalPositions))
+        ? Math.max(0, Number(positions.totalPositions))
+        : null,
+      observedAtMs,
+      build: (before, after) => ({
+        label: `Posiciones observadas: ${before} → ${after}`,
+        detail: "Lectura consolidada de Binance",
+        severity: "info",
+      }),
+    });
+    this._observeBotSignal(bot?.latestSignal, observedAtMs);
+    return this.entries();
+  }
+
+  _observeTransition({ source, value, observedAtMs, build }) {
+    if (value === null || value === undefined) return;
+    if (!this.baselines.has(source)) {
+      this.baselines.set(source, value);
+      return;
+    }
+    const previous = this.baselines.get(source);
+    if (Object.is(previous, value)) return;
+    this.baselines.set(source, value);
+    this._append({
+      id: `${source}:${observedAtMs}:${String(value)}`,
+      source,
+      occurredAtMs: observedAtMs,
+      observedAtMs,
+      ...build(previous, value),
+    });
+  }
+
+  _observeBotSignal(signal, observedAtMs) {
+    const occurredAtMs = Number(signal?.occurredAtMs);
+    if (
+      !signal ||
+      !Number.isFinite(occurredAtMs) ||
+      occurredAtMs < this.startedAtMs ||
+      occurredAtMs > observedAtMs
+    ) return;
+    const eventId = [
+      "bot-signal",
+      occurredAtMs,
+      signal.pair,
+      signal.direction,
+      signal.status,
+    ].join(":");
+    if (this.seenExternalEvents.has(eventId)) return;
+    this.seenExternalEvents.add(eventId);
+    this._append({
+      id: eventId,
+      source: "bot",
+      occurredAtMs,
+      observedAtMs,
+      label: `${signal.pair} · ${String(signal.direction).toUpperCase()}`,
+      detail: `Bot: ${signal.status}`,
+      severity: "info",
+    });
+  }
+
+  _append(event) {
+    this.events.push(Object.freeze(event));
+    this.events.sort((left, right) =>
+      right.occurredAtMs - left.occurredAtMs ||
+      right.observedAtMs - left.observedAtMs
+    );
+    this.events.length = Math.min(this.events.length, this.maxEntries);
+  }
+}
+
 export function deriveImmediateAttention({
   readiness = null,
   macro = null,
@@ -2034,7 +2157,7 @@ function renderMacOSContext(context) {
     formatMacUptime(context.uptimeSeconds);
 }
 
-function renderImmediateAttention(attention) {
+function renderImmediateAttention(attention, timelineEntries = []) {
   const badge = document.querySelector("#attention-state");
   badge.dataset.state = attention.state;
   const labels = {
@@ -2049,15 +2172,32 @@ function renderImmediateAttention(attention) {
   summary.dataset.state = attention.state;
   summary.textContent = attention.summary;
   const list = document.querySelector("#attention-list");
-  const visibleItems = (attention.items || []).filter((source) =>
+  const alertItems = (attention.items || []).filter((source) =>
     source.state === "warning" ||
     source.state === "critical" ||
     source.state === "unknown"
   );
-  list.replaceChildren(...visibleItems.map((source) => {
+  const visibleTimeline = alertItems.length
+    ? timelineEntries.slice(0, 1)
+    : timelineEntries.slice(0, 2);
+  list.dataset.timelineActive = String(visibleTimeline.length > 0);
+  const sources = [
+    ...alertItems,
+    ...visibleTimeline.map((event) => ({
+      label: new Date(event.occurredAtMs).toLocaleTimeString("es-CL", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      detail: event.label,
+      state: event.severity,
+      evidence: event.detail,
+    })),
+  ];
+  list.replaceChildren(...sources.map((source) => {
     const item = document.createElement("div");
     item.className = "attention-item";
     item.dataset.state = source.state;
+    if (source.evidence) item.title = source.evidence;
     const name = document.createElement("strong");
     name.textContent = source.label;
     const detail = document.createElement("span");
@@ -2549,9 +2689,23 @@ export function bootstrap() {
     macro: null,
     positions: null,
     bot: null,
+    market: null,
   };
+  const operationalTimeline = new OperationalTimeline();
+  window.__nexuxOperationalTimeline = operationalTimeline;
   const paintAttention = () => {
-    renderImmediateAttention(deriveImmediateAttention(attentionInputs));
+    const timelineEntries = operationalTimeline.observe({
+      marketInsight: attentionInputs.market
+        ? deriveMarketInsight(attentionInputs.market.assets)
+        : null,
+      readiness: attentionInputs.readiness,
+      positions: attentionInputs.positions,
+      bot: attentionInputs.bot,
+    });
+    renderImmediateAttention(
+      deriveImmediateAttention(attentionInputs),
+      timelineEntries,
+    );
   };
   const paintReadiness = () => {
     attentionInputs.readiness = deriveOperationalReadiness({
@@ -2577,7 +2731,11 @@ export function bootstrap() {
     },
   });
   const marketRibbonClient = new MarketRibbonClient({
-    onChange: renderMarketRibbon,
+    onChange: (state) => {
+      attentionInputs.market = state;
+      renderMarketRibbon(state);
+      paintAttention();
+    },
   });
   const positionsContextClient = new PositionsContextClient({
     onChange: (state) => {
