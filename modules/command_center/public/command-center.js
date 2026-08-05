@@ -807,6 +807,7 @@ export function deriveImmediateAttention({
       state: "unknown",
       summary: "Reuniendo contexto operacional.",
       detail: `${available}/4 fuentes`,
+      explanation: `Fuentes verificadas: ${available}/4.`,
       count: 0,
       items,
       evaluatedAtMs: now,
@@ -879,6 +880,7 @@ export function deriveImmediateAttention({
       state: "normal",
       summary: "Sin intervención inmediata.",
       detail: macroDetail,
+      explanation: "Sistema, Binance, Macro y Bot no publican una alerta activa.",
       count: 0,
       items,
       evaluatedAtMs: now,
@@ -891,6 +893,9 @@ export function deriveImmediateAttention({
     detail: alerts.length === 1
       ? first.source
       : `${first.source} · ${alerts.length} alertas`,
+    explanation: alerts.map((alert) =>
+      `${alert.source}: ${alert.summary}`
+    ).join(" · "),
     count: alerts.length,
     items,
     evaluatedAtMs: now,
@@ -1196,6 +1201,13 @@ const READINESS_LABELS = {
   unknown: "Sin datos",
 };
 
+const OPERATIONAL_HEALTH_LABELS = Object.freeze({
+  stable: "Estable",
+  degraded: "Degradado",
+  critical: "Crítico",
+  unknown: "Desconocido",
+});
+
 const REQUIRED_READINESS_IDS = new Set([
   "gateway",
   "event-bus",
@@ -1260,13 +1272,26 @@ export function deriveOperationalReadiness({
 
   const healthAvailable = healthState?.status === "ready";
   const services = [
-    { id: "gateway", name: "Gateway", state: gateway },
+    {
+      id: "gateway",
+      name: "Gateway",
+      state: gateway,
+      evidence: `Conexión: ${commandState?.connection || "sin lectura"}`,
+    },
     {
       id: "event-bus",
       name: "EventBus",
       state: normalizeServiceState(commandCenter?.event_bus?.status),
+      evidence: `Health: ${commandCenter?.event_bus?.status || "sin lectura"}`,
     },
-    { id: "snapshot", name: "Snapshot", state: snapshot },
+    {
+      id: "snapshot",
+      name: "Snapshot",
+      state: snapshot,
+      evidence: commandState?.snapshotAt
+        ? `Frescura: ${freshness}`
+        : "Snapshot: sin lectura",
+    },
     {
       id: "internet",
       name: "Internet",
@@ -1278,8 +1303,22 @@ export function deriveOperationalReadiness({
             : healthState?.status === "degraded"
               ? "degraded"
               : "unknown",
+      evidence: online === false
+        ? "Navegador sin conexión"
+        : `Upstream trading: ${trading?.upstream_ok === true ? "disponible" : (
+          trading?.upstream_ok === false ? "degradado" : "sin lectura"
+        )}`,
     },
-    { id: "trading", name: "Trading", state: tradingState },
+    {
+      id: "trading",
+      name: "Trading",
+      state: tradingState,
+      evidence: `Módulo: ${trading?.status || "sin lectura"} · upstream: ${
+        trading?.upstream_ok === true ? "disponible" : (
+          trading?.upstream_ok === false ? "degradado" : "sin lectura"
+        )
+      }`,
+    },
     { id: "agent", name: "Agente macOS", state: "unknown" },
     {
       id: "music",
@@ -1302,6 +1341,48 @@ export function deriveOperationalReadiness({
       ? "degraded"
       : "ready";
   return { overall, services };
+}
+
+export function deriveOperationalHealth(readiness) {
+  const required = (Array.isArray(readiness?.services) ? readiness.services : [])
+    .filter((service) => REQUIRED_READINESS_IDS.has(service.id));
+  const failures = required.filter((service) => service.state === "failed");
+  const degraded = required.filter((service) => service.state === "degraded");
+  const unknown = required.filter((service) => service.state === "unknown");
+  const state = failures.length
+    ? "critical"
+    : degraded.length
+      ? "degraded"
+      : unknown.length || required.length !== REQUIRED_READINESS_IDS.size
+        ? "unknown"
+        : "stable";
+  const affected = state === "critical"
+    ? failures
+    : state === "degraded"
+      ? degraded
+      : state === "unknown"
+        ? unknown
+        : [];
+  const reasons = affected.map((service) => Object.freeze({
+    service: service.name,
+    state: service.state,
+    evidence: service.evidence || "Sin evidencia adicional",
+  }));
+  const explanation = state === "stable"
+    ? `${required.length} servicios esenciales verificados.`
+    : reasons.length
+      ? reasons.map((reason) =>
+          `${reason.service}: ${reason.evidence}`
+        ).join(" · ")
+      : `${required.length}/${REQUIRED_READINESS_IDS.size} servicios esenciales observados.`;
+  return Object.freeze({
+    state,
+    label: OPERATIONAL_HEALTH_LABELS[state],
+    explanation,
+    reasons,
+    requiredCount: REQUIRED_READINESS_IDS.size,
+    observedCount: required.length,
+  });
 }
 
 export function reduceEnvelope(readModel, cursors, envelope) {
@@ -1930,17 +2011,13 @@ function render(state) {
 
 function renderOperationalReadiness(readiness) {
   document.querySelector(".status-footer").dataset.state = readiness.overall;
+  const health = deriveOperationalHealth(readiness);
   const overall = document.querySelector("#readiness-overall");
   overall.dataset.state = readiness.overall;
-  overall.textContent = READINESS_LABELS[readiness.overall];
-  const answers = {
-    ready: "El núcleo necesario para analizar está disponible.",
-    degraded: "Puede trabajar, pero hay servicios esenciales degradados.",
-    failed: "La plataforma no está preparada para trabajar.",
-    unknown: "Aún no hay evidencia suficiente para responder.",
-  };
-  document.querySelector("#readiness-answer").textContent =
-    answers[readiness.overall];
+  overall.textContent = health.label;
+  overall.title = health.explanation;
+  overall.setAttribute("aria-label", `${health.label}. ${health.explanation}`);
+  document.querySelector("#readiness-answer").textContent = health.explanation;
   const list = document.querySelector("#readiness-list");
   list.replaceChildren(
     ...readiness.services
@@ -1948,6 +2025,7 @@ function renderOperationalReadiness(readiness) {
       .map((service) => {
         const item = document.createElement("li");
         item.className = "readiness-item";
+        item.title = service.evidence || "Sin evidencia adicional";
         const name = document.createElement("span");
         name.className = "readiness-name";
         name.textContent = service.name;
@@ -2158,6 +2236,15 @@ function renderMacOSContext(context) {
 }
 
 function renderImmediateAttention(attention, timelineEntries = []) {
+  const attentionMode = {
+    normal: "calm",
+    info: "calm",
+    warning: "elevated",
+    critical: "focused",
+    unknown: "unknown",
+  }[attention.state] || "unknown";
+  document.querySelector(".app-shell").dataset.attentionMode = attentionMode;
+  document.querySelector(".attention-panel").dataset.attentionMode = attentionMode;
   const badge = document.querySelector("#attention-state");
   badge.dataset.state = attention.state;
   const labels = {
@@ -2171,15 +2258,17 @@ function renderImmediateAttention(attention, timelineEntries = []) {
   const summary = document.querySelector("#attention-summary");
   summary.dataset.state = attention.state;
   summary.textContent = attention.summary;
+  summary.title = attention.explanation || attention.detail;
   const list = document.querySelector("#attention-list");
   const alertItems = (attention.items || []).filter((source) =>
     source.state === "warning" ||
     source.state === "critical" ||
     source.state === "unknown"
   );
-  const visibleTimeline = alertItems.length
-    ? timelineEntries.slice(0, 1)
-    : timelineEntries.slice(0, 2);
+  const visibleTimeline = selectTimelineForAttention(
+    attention,
+    timelineEntries,
+  );
   list.dataset.timelineActive = String(visibleTimeline.length > 0);
   const sources = [
     ...alertItems,
@@ -2213,6 +2302,22 @@ function renderImmediateAttention(attention, timelineEntries = []) {
           { hour: "2-digit", minute: "2-digit" },
         )}`
       : "Sin lectura";
+}
+
+export function selectTimelineForAttention(
+  attention,
+  timelineEntries,
+  now = attention?.evaluatedAtMs || Date.now(),
+) {
+  if (attention?.state === "critical" || attention?.state === "unknown") {
+    return [];
+  }
+  const recent = (Array.isArray(timelineEntries) ? timelineEntries : [])
+    .filter((event) => {
+      const age = now - Number(event?.occurredAtMs);
+      return Number.isFinite(age) && age >= 0 && age <= 15 * 60_000;
+    });
+  return recent.slice(0, attention?.state === "warning" ? 1 : 2);
 }
 
 function renderMediaContext(context) {

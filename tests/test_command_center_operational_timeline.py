@@ -122,3 +122,50 @@ def test_timeline_reutiliza_atencion_sin_panel_nuevo() -> None:
     assert "class OperationalTimeline" in script
     assert "Posiciones observadas" in script
     assert '.attention-list[data-timeline-active="false"]' in styles
+
+
+def test_modo_adaptativo_reduce_actividad_segun_prioridad_y_edad() -> None:
+    payload = _run_node(
+        """
+        const now = 1_000_000;
+        const events = [
+          { id: "reciente-1", occurredAtMs: now - 1000 },
+          { id: "reciente-2", occurredAtMs: now - 2000 },
+          { id: "antiguo", occurredAtMs: now - 16 * 60 * 1000 }
+        ];
+        process.stdout.write(JSON.stringify({
+          calm: module.selectTimelineForAttention(
+            { state: "normal", evaluatedAtMs: now }, events
+          ).map((event) => event.id),
+          elevated: module.selectTimelineForAttention(
+            { state: "warning", evaluatedAtMs: now }, events
+          ).map((event) => event.id),
+          focused: module.selectTimelineForAttention(
+            { state: "critical", evaluatedAtMs: now }, events
+          ).map((event) => event.id),
+          unknown: module.selectTimelineForAttention(
+            { state: "unknown", evaluatedAtMs: now }, events
+          ).map((event) => event.id)
+        }));
+        """
+    )
+
+    assert payload == {
+        "calm": ["reciente-1", "reciente-2"],
+        "elevated": ["reciente-1"],
+        "focused": [],
+        "unknown": [],
+    }
+
+
+def test_modo_adaptativo_no_agrega_superficies() -> None:
+    page = (PUBLIC / "index.html").read_text(encoding="utf-8")
+    script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
+    styles = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
+
+    assert 'data-attention-mode="unknown"' in page
+    assert "dashboard-adaptive-panel" not in page
+    assert 'dataset.attentionMode = attentionMode' in script
+    assert '[data-attention-mode="calm"] .attention-panel' in styles
+    assert '[data-attention-mode="elevated"] .attention-panel' in styles
+    assert '[data-attention-mode="focused"] .attention-panel' in styles
