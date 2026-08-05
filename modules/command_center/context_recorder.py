@@ -36,26 +36,14 @@ class ContextRecorderIntegrityError(RuntimeError):
     """El log no puede continuar sin romper su cadena causal."""
 
 
-def load_verified_events(path: str | Path) -> list[dict]:
-    """Lee una copia consistente del log y valida la cadena completa."""
-    source_path = Path(path)
-    if not source_path.exists() or source_path.stat().st_size == 0:
-        return []
-    descriptor = os.open(source_path, os.O_RDONLY)
-    try:
-        _lock_descriptor(descriptor, shared=True)
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        payload = bytearray()
-        while True:
-            chunk = os.read(descriptor, 256 * 1024)
-            if not chunk:
-                break
-            payload.extend(chunk)
-    finally:
-        os.close(descriptor)
-
+def decode_verified_events(
+    payload: bytes,
+    *,
+    previous_event: dict | None = None,
+) -> list[dict]:
+    """Valida eventos serializados, incluyendo continuidad entre segmentos."""
     events = []
-    previous = None
+    previous = previous_event
     try:
         for line_number, line in enumerate(
             payload.decode("utf-8").splitlines(),
@@ -74,6 +62,31 @@ def load_verified_events(path: str | Path) -> list[dict]:
     return events
 
 
+def load_verified_events(
+    path: str | Path,
+    *,
+    previous_event: dict | None = None,
+) -> list[dict]:
+    """Lee una copia consistente del log y valida la cadena completa."""
+    source_path = Path(path)
+    if not source_path.exists() or source_path.stat().st_size == 0:
+        return []
+    descriptor = os.open(source_path, os.O_RDONLY)
+    try:
+        _lock_descriptor(descriptor, shared=True)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        payload = bytearray()
+        while True:
+            chunk = os.read(descriptor, 256 * 1024)
+            if not chunk:
+                break
+            payload.extend(chunk)
+    finally:
+        os.close(descriptor)
+
+    return decode_verified_events(bytes(payload), previous_event=previous_event)
+
+
 class MarketContextRecorder:
     """Persiste observaciones nuevas sin reconstruir historia previa."""
 
@@ -83,6 +96,8 @@ class MarketContextRecorder:
         *,
         clock_ms: Callable[[], int] | None = None,
         strict_existing: bool = True,
+        previous_event: dict | None = None,
+        coordination_lock_path: str | Path | None = None,
     ):
         self.path = Path(path)
         self._clock_ms = clock_ms or (lambda: int(time.time() * 1000))
@@ -94,6 +109,10 @@ class MarketContextRecorder:
         self._duplicates = 0
         self._rejected = 0
         self._blocked = False
+        self._previous_event = previous_event
+        self._coordination_lock_path = (
+            Path(coordination_lock_path) if coordination_lock_path else None
+        )
         try:
             self._load_existing()
         except ContextRecorderIntegrityError:
@@ -121,59 +140,72 @@ class MarketContextRecorder:
                 )
             try:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
-                descriptor = os.open(
-                    self.path,
-                    os.O_APPEND | os.O_CREAT | os.O_RDWR,
-                    0o600,
-                )
+                coordination_descriptor = self._open_coordination_lock()
                 try:
-                    self._lock_file(descriptor)
-                    disk_last = self._read_last_event(descriptor)
-                    if disk_last is not None:
-                        self._validate_link(disk_last)
-                        self._last_event = disk_last
-                    if (
-                        self._last_event
-                        and self._last_event["snapshot_fingerprint"] == fingerprint
-                    ):
-                        self._duplicates += 1
+                    if coordination_descriptor is not None:
+                        _lock_descriptor(coordination_descriptor, shared=False)
+                    descriptor = os.open(
+                        self.path,
+                        os.O_APPEND | os.O_CREAT | os.O_RDWR,
+                        0o600,
+                    )
+                    try:
+                        self._lock_file(descriptor)
+                        disk_last = self._read_last_event(descriptor)
+                        if disk_last is not None:
+                            self._validate_link(disk_last)
+                            self._last_event = disk_last
+                        if (
+                            self._last_event
+                            and self._last_event["snapshot_fingerprint"] == fingerprint
+                        ):
+                            self._duplicates += 1
+                            self._status = "ready"
+                            self._last_error = None
+                            return False
+                        if (
+                            self._last_event
+                            and captured_at_ms
+                            < self._last_event["captured_at_ms"]
+                        ):
+                            raise ValueError("capture time cannot regress")
+
+                        sequence = (
+                            int(self._last_event["sequence"]) + 1
+                            if self._last_event
+                            else 1
+                        )
+                        event = {
+                            "schema": SCHEMA,
+                            "sequence": sequence,
+                            "captured_at_ms": captured_at_ms,
+                            "previous_hash": (
+                                self._last_event["event_hash"]
+                                if self._last_event
+                                else _GENESIS_HASH
+                            ),
+                            "snapshot_fingerprint": fingerprint,
+                            "snapshot": normalized,
+                        }
+                        event["event_hash"] = _digest(event)
+                        start_size = os.lseek(descriptor, 0, os.SEEK_END)
+                        try:
+                            self._write_all(descriptor, _canonical(event) + b"\n")
+                            os.fsync(descriptor)
+                        except Exception:
+                            os.ftruncate(descriptor, start_size)
+                            os.fsync(descriptor)
+                            raise
+                        self._last_event = event
+                        self._writes += 1
                         self._status = "ready"
                         self._last_error = None
-                        return False
-                    if (
-                        self._last_event
-                        and captured_at_ms
-                        < self._last_event["captured_at_ms"]
-                    ):
-                        raise ValueError("capture time cannot regress")
-
-                    sequence = (
-                        int(self._last_event["sequence"]) + 1
-                        if self._last_event
-                        else 1
-                    )
-                    event = {
-                        "schema": SCHEMA,
-                        "sequence": sequence,
-                        "captured_at_ms": captured_at_ms,
-                        "previous_hash": (
-                            self._last_event["event_hash"]
-                            if self._last_event
-                            else _GENESIS_HASH
-                        ),
-                        "snapshot_fingerprint": fingerprint,
-                        "snapshot": normalized,
-                    }
-                    event["event_hash"] = _digest(event)
-                    os.write(descriptor, _canonical(event) + b"\n")
-                    os.fsync(descriptor)
-                    self._last_event = event
-                    self._writes += 1
-                    self._status = "ready"
-                    self._last_error = None
-                    return True
+                        return True
+                    finally:
+                        os.close(descriptor)
                 finally:
-                    os.close(descriptor)
+                    if coordination_descriptor is not None:
+                        os.close(coordination_descriptor)
             except Exception as exc:
                 self._status = "failed"
                 self._last_error = type(exc).__name__
@@ -266,9 +298,16 @@ class MarketContextRecorder:
 
     def _load_existing(self) -> None:
         try:
-            events = load_verified_events(self.path)
-            self._last_event = events[-1] if events else None
-            self._status = "ready" if events else "idle"
+            events = load_verified_events(
+                self.path,
+                previous_event=self._previous_event,
+            )
+            self._last_event = (
+                events[-1]
+                if events
+                else self._previous_event
+            )
+            self._status = "ready" if self._last_event else "idle"
         except Exception as exc:
             self._status = "failed"
             self._last_error = type(exc).__name__
@@ -310,6 +349,25 @@ class MarketContextRecorder:
         if not lines:
             return None
         return json.loads(lines[-1])
+
+    def _open_coordination_lock(self) -> int | None:
+        if self._coordination_lock_path is None:
+            return None
+        self._coordination_lock_path.parent.mkdir(parents=True, exist_ok=True)
+        return os.open(
+            self._coordination_lock_path,
+            os.O_CREAT | os.O_RDWR,
+            0o600,
+        )
+
+    @staticmethod
+    def _write_all(descriptor: int, payload: bytes) -> None:
+        written = 0
+        while written < len(payload):
+            count = os.write(descriptor, payload[written:])
+            if count <= 0:
+                raise OSError("context log write made no progress")
+            written += count
 
     @staticmethod
     def _lock_file(descriptor: int) -> None:

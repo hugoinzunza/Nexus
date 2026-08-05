@@ -79,9 +79,13 @@ presentes simultaneamente:
 - `NEXUX_CONTEXT_RECORDER_PERSISTENCE_CONFIRMED=1`;
 - `NEXUX_CONTEXT_RECORDER_BACKUP_CONFIRMED=1`.
 
-Ademas, `NEXUX_CONTEXT_RECORDER_PATH` debera apuntar al almacenamiento persistente
-aprobado. La ausencia de cualquiera de las tres confirmaciones impide tanto el
-polling headless como la escritura causada por una consulta web.
+Ademas, `NEXUX_CONTEXT_STORAGE_ROOT` debera apuntar al almacenamiento persistente
+aprobado y `NEXUX_CONTEXT_BACKUP_ROOT` al Vault externo. Existe un release gate
+compilado en `False`, por lo que estas variables no pueden activar la coleccion por
+si solas.
+
+El backup exige ademas `NEXUX_CONTEXT_VAULT_PUBLIC_FILE` con una clave publica
+dedicada a este historial.
 
 ## Superficie
 

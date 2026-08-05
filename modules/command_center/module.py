@@ -9,6 +9,7 @@ import json
 import os
 import threading
 import time
+from pathlib import Path
 
 from core.hub import load_config
 from core.module_base import NexusModule
@@ -21,6 +22,7 @@ from .contracts import (
 )
 from .context_recorder import MarketContextRecorder
 from .context_interpreter import MarketContextInterpreter
+from .context_storage import ContextStorageManager
 from .chart_provider import CHART_PROVIDER_INTERFACE_VERSION
 from .ai_context import AiContextService
 from .apple_music_adapter import AppleMusicAdapter
@@ -46,6 +48,7 @@ from .vps_positions_bridge import VpsPositionsBridge
 from .tidal_adapter import TidalAdapter
 
 _MEDIA_PROVIDERS = ("apple-music", "qobuz", "tidal")
+_CONTEXT_COLLECTION_RELEASED = False
 
 
 class CommandCenterModule(NexusModule):
@@ -69,10 +72,22 @@ class CommandCenterModule(NexusModule):
             ),
         )
         self.module_registry = command_center_module_registry()
-        recorder_path = os.environ.get(
-            "NEXUX_CONTEXT_RECORDER_PATH",
-            os.path.join("data", "command_center", "context_market_v1.jsonl"),
+        storage_root = os.environ.get(
+            "NEXUX_CONTEXT_STORAGE_ROOT",
+            str(
+                Path.home()
+                / "Library"
+                / "Application Support"
+                / "NexUX"
+                / "ContextHistory"
+            ),
         )
+        repo_root = Path(self.context.module_dir).resolve().parents[1]
+        self.context_storage = ContextStorageManager(
+            storage_root,
+            repo_root=repo_root,
+        )
+        storage_health = self.context_storage.health()
         recorder_requested = os.environ.get(
             "NEXUX_CONTEXT_RECORDER_ENABLED"
         ) == "1"
@@ -82,24 +97,60 @@ class CommandCenterModule(NexusModule):
         backup_confirmed = os.environ.get(
             "NEXUX_CONTEXT_RECORDER_BACKUP_CONFIRMED"
         ) == "1"
+        self._context_backup_root = os.environ.get(
+            "NEXUX_CONTEXT_BACKUP_ROOT", ""
+        ).strip()
+        self._context_vault_public_file = os.environ.get(
+            "NEXUX_CONTEXT_VAULT_PUBLIC_FILE", ""
+        ).strip()
+        backup_root_configured = bool(self._context_backup_root)
+        vault_public_key_configured = bool(
+            self._context_vault_public_file
+            and Path(self._context_vault_public_file).is_file()
+        )
+        previous_event = None
+        if storage_health["status"] in {"ready", "low_space"}:
+            try:
+                previous_event = self.context_storage.last_closed_event()
+            except Exception:  # noqa: BLE001
+                previous_event = None
         self._context_recorder_blockers = [
             name
             for name, ready in (
+                ("release_not_authorized", _CONTEXT_COLLECTION_RELEASED),
                 ("not_requested", recorder_requested),
                 ("persistence_unconfirmed", persistence_confirmed),
                 ("backup_unconfirmed", backup_confirmed),
+                ("backup_root_unconfigured", backup_root_configured),
+                (
+                    "vault_public_key_unconfigured",
+                    vault_public_key_configured,
+                ),
+                ("storage_outside_repo_required", storage_health["outside_repo"]),
+                ("storage_not_ready", storage_health["status"] == "ready"),
+                ("backup_incomplete", storage_health["backup_complete"]),
+                (
+                    "restore_drill_missing",
+                    storage_health["restore_drill_verified"],
+                ),
             )
             if not ready
         ]
         self._context_recorder_enabled = not self._context_recorder_blockers
+        self._context_storage_failed = False
         self.context_recorder = MarketContextRecorder(
-            recorder_path,
+            self.context_storage.active_path,
             strict_existing=False,
+            previous_event=previous_event,
+            coordination_lock_path=self.context_storage.coordination_lock_path,
         )
-        self.context_interpreter = MarketContextInterpreter(recorder_path)
+        self.context_interpreter = MarketContextInterpreter(
+            self.context_storage.active_path,
+            event_loader=self.context_storage.load_all_events,
+        )
         self.market_ribbon = MarketRibbonService(
             snapshot_observer=(
-                self.context_recorder.record
+                self._record_context_snapshot
                 if self._context_recorder_enabled
                 else None
             ),
@@ -197,6 +248,27 @@ class CommandCenterModule(NexusModule):
             self._context_recorder_stop.wait(
                 self._context_recorder_poll_seconds
             )
+
+    def _record_context_snapshot(self, snapshot: dict) -> bool:
+        if self._context_storage_failed:
+            raise RuntimeError("context storage is blocked after a failure")
+        try:
+            self.context_storage.ensure_capacity()
+            written = self.context_recorder.record(snapshot)
+            if written:
+                manifest = self.context_storage.rotate_if_needed()
+                if manifest is not None:
+                    public_pem = Path(
+                        self._context_vault_public_file
+                    ).read_text(encoding="utf-8")
+                    self.context_storage.backup_closed_segments(
+                        self._context_backup_root,
+                        public_pem,
+                    )
+            return written
+        except Exception:
+            self._context_storage_failed = True
+            raise
 
     def _media_metadata(self, provider: str, item_ref: str) -> dict | None:
         controller = {
@@ -755,6 +827,11 @@ class CommandCenterModule(NexusModule):
                 "poll_seconds": self._context_recorder_poll_seconds,
             },
             "context_interpreter": self.context_interpreter.stats(),
+            "context_storage": {
+                **self.context_storage.health(),
+                "write_blocked": self._context_storage_failed,
+                "collection_released": _CONTEXT_COLLECTION_RELEASED,
+            },
             "interfaces": {
                 "chart_provider": {
                     "version": CHART_PROVIDER_INTERFACE_VERSION,

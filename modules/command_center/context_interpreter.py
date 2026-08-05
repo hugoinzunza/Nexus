@@ -32,9 +32,13 @@ class MarketContextInterpreter:
         path: str | Path,
         *,
         clock_ms: Callable[[], int] | None = None,
+        event_loader: Callable[[], list[dict]] | None = None,
     ):
         self.path = Path(path)
         self._clock_ms = clock_ms or (lambda: int(time.time() * 1000))
+        self._event_loader = event_loader or (
+            lambda: load_verified_events(self.path)
+        )
         self._lock = threading.Lock()
         self._requests = 0
         self._claims = 0
@@ -53,12 +57,12 @@ class MarketContextInterpreter:
             return self._abstain("unsupported_horizon", normalized_id, horizon_ms)
 
         try:
-            events = load_verified_events(self.path)
+            events = self._event_loader()
         except ContextRecorderIntegrityError:
             with self._lock:
                 self._integrity_failures += 1
             return self._abstain("integrity_failure", normalized_id, horizon_ms)
-        except OSError:
+        except (OSError, RuntimeError):
             return self._abstain("history_unavailable", normalized_id, horizon_ms)
         if not events:
             return self._abstain("no_history", normalized_id, horizon_ms)

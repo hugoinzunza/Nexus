@@ -13,9 +13,9 @@ Center. Este sprint registra observaciones; no compara, interpreta ni recomienda
 - fuente: snapshot vigente de `MarketRibbonService`;
 - captura headless cada 30 segundos mientras el modulo esta iniciado;
 - independencia de la pagina y de una sesion de navegador abierta;
-- persistencia por defecto en
-  `data/command_center/context_market_v1.jsonl`;
-- ruta configurable mediante `NEXUX_CONTEXT_RECORDER_PATH`.
+- persistencia propuesta en
+  `~/Library/Application Support/NexUX/ContextHistory`;
+- raiz configurable mediante `NEXUX_CONTEXT_STORAGE_ROOT`.
 
 El colector empieza con la primera observacion recibida. No importa archivos
 anteriores, no consulta velas historicas y no rellena periodos sin cobertura.

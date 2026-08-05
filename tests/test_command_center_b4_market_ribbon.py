@@ -197,8 +197,8 @@ def test_health_expone_telemetria_del_ribbon_sin_forzar_un_refresh(
     monkeypatch, tmp_path
 ) -> None:
     monkeypatch.setenv(
-        "NEXUX_CONTEXT_RECORDER_PATH",
-        str(tmp_path / "context.jsonl"),
+        "NEXUX_CONTEXT_STORAGE_ROOT",
+        str(tmp_path / "storage"),
     )
     module = CommandCenterModule(
         ModuleContext(
@@ -217,16 +217,25 @@ def test_health_expone_telemetria_del_ribbon_sin_forzar_un_refresh(
     assert health["context_recorder"]["status"] == "idle"
     assert health["context_recorder"]["sequence"] == 0
     assert health["context_recorder"]["enabled"] is False
-    assert health["context_recorder"]["activation_blockers"] == [
+    assert set(health["context_recorder"]["activation_blockers"]) == {
+        "release_not_authorized",
         "not_requested",
         "persistence_unconfirmed",
         "backup_unconfirmed",
-    ]
+        "backup_root_unconfigured",
+        "vault_public_key_unconfigured",
+        "storage_not_ready",
+        "backup_incomplete",
+        "restore_drill_missing",
+    }
     assert health["context_recorder"]["collector_running"] is False
     assert health["context_recorder"]["poll_seconds"] == 30.0
     assert health["context_interpreter"]["status"] == "ready"
     assert health["context_interpreter"]["claims"] == 0
     assert health["context_interpreter"]["abstentions"] == 0
+    assert health["context_storage"]["status"] == "uninitialized"
+    assert health["context_storage"]["collection_released"] is False
+    assert health["context_storage"]["write_blocked"] is False
 
 
 def test_frontend_normaliza_orden_formato_y_frescura_sin_inventar() -> None:

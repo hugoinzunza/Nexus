@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from core.module_base import ModuleContext
+from core.vault import generate_keypair
 from modules.command_center.context_recorder import (
     ContextRecorderIntegrityError,
     MarketContextRecorder,
@@ -14,6 +15,7 @@ from modules.command_center.context_recorder import (
 )
 from modules.command_center.market_ribbon import MarketRibbonService
 from modules.command_center.module import CommandCenterModule
+from modules.command_center.context_storage import ContextStorageManager
 
 
 NOW = 1_800_000_000_000
@@ -284,8 +286,8 @@ def test_activacion_exige_solicitud_persistencia_y_respaldo(
     tmp_path,
 ):
     monkeypatch.setenv(
-        "NEXUX_CONTEXT_RECORDER_PATH",
-        str(tmp_path / "context.jsonl"),
+        "NEXUX_CONTEXT_STORAGE_ROOT",
+        str(tmp_path / "storage"),
     )
     monkeypatch.setenv("NEXUX_CONTEXT_RECORDER_ENABLED", "1")
     context = ModuleContext(
@@ -299,8 +301,86 @@ def test_activacion_exige_solicitud_persistencia_y_respaldo(
     assert blocked._context_recorder_enabled is False
     assert blocked.market_ribbon._snapshot_observer is None
 
+    storage = ContextStorageManager(tmp_path / "storage")
+    storage.initialize()
+    drill_source = ContextStorageManager(tmp_path / "drill-source")
+    drill_source.initialize()
+    clock = [NOW]
+    recorder = MarketContextRecorder(
+        drill_source.active_path,
+        clock_ms=lambda: clock[0],
+        coordination_lock_path=drill_source.coordination_lock_path,
+    )
+    recorder.record(_snapshot())
+    drill_source.rotate_if_needed(force=True)
+    private_pem, public_pem = generate_keypair()
+    backup_root = tmp_path / "backup"
+    public_key_file = tmp_path / "context-vault-public.pem"
+    public_key_file.write_text(public_pem)
+    drill_source.backup_closed_segments(backup_root, public_pem)
+    restored = ContextStorageManager.restore_vaults(
+        backup_root.glob("segment-*.vault.json"),
+        tmp_path / "restored",
+        private_pem,
+    )
+    storage.record_isolated_restore_drill(drill_source.root, restored.root)
+
+    assert storage.audit()["segment_count"] == 0
+    assert storage.health()["restore_drill_verified"] is True
+
     monkeypatch.setenv("NEXUX_CONTEXT_RECORDER_PERSISTENCE_CONFIRMED", "1")
     monkeypatch.setenv("NEXUX_CONTEXT_RECORDER_BACKUP_CONFIRMED", "1")
+    monkeypatch.setenv("NEXUX_CONTEXT_BACKUP_ROOT", str(backup_root))
+    monkeypatch.setenv(
+        "NEXUX_CONTEXT_VAULT_PUBLIC_FILE",
+        str(public_key_file),
+    )
     authorized = CommandCenterModule(context)
-    assert authorized._context_recorder_enabled is True
-    assert authorized.market_ribbon._snapshot_observer is not None
+    assert authorized._context_recorder_enabled is False
+    assert authorized._context_recorder_blockers == ["release_not_authorized"]
+    assert authorized.market_ribbon._snapshot_observer is None
+
+
+def test_cierre_de_segmento_dispara_vault_y_falla_cerrado(tmp_path):
+    calls = []
+
+    class Storage:
+        def ensure_capacity(self):
+            calls.append("capacity")
+
+        def rotate_if_needed(self):
+            calls.append("rotate")
+            return {"segment_id": "segment-000001"}
+
+        def backup_closed_segments(self, destination, public_pem):
+            calls.append(("backup", destination, public_pem))
+
+    class Recorder:
+        def record(self, snapshot):
+            calls.append(("record", snapshot))
+            return True
+
+    public_key = tmp_path / "public.pem"
+    public_key.write_text("public material")
+    module = object.__new__(CommandCenterModule)
+    module.context_storage = Storage()
+    module.context_recorder = Recorder()
+    module._context_storage_failed = False
+    module._context_backup_root = str(tmp_path / "external")
+    module._context_vault_public_file = str(public_key)
+
+    assert module._record_context_snapshot({"snapshot": 1}) is True
+    assert calls[-1] == (
+        "backup",
+        str(tmp_path / "external"),
+        "public material",
+    )
+
+    module.context_storage.ensure_capacity = lambda: (_ for _ in ()).throw(
+        OSError("disk unavailable")
+    )
+    with pytest.raises(OSError):
+        module._record_context_snapshot({"snapshot": 2})
+    assert module._context_storage_failed is True
+    with pytest.raises(RuntimeError, match="blocked"):
+        module._record_context_snapshot({"snapshot": 3})
