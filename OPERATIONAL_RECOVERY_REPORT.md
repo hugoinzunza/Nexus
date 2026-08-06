@@ -289,3 +289,28 @@ avanzar mientras el bot no opere. Esa decisión es tuya y está fuera de este sp
 
 No se avanzó hacia ningún experimento nuevo. HYP-EXIT y HYP-CANDLE quedan como estaban,
 esperando su propio sprint.
+
+---
+
+## 12. Cierre — APROBADO 2026-08-06
+
+Sprint cerrado. Aceptados: la fuente canónica append-only, la preservación íntegra de
+HYP-EXIT-003, la recuperación de HYP-CANDLE-002, el health por movimiento real, la detección
+rápida de estancamiento, el registro explícito del gap, la regularización Git y la validación
+punta a punta con datos nuevos reales.
+
+**Restricciones vigentes desde este cierre, más allá del sprint:**
+
+- No modificar HYP-EXIT ni HYP-CANDLE.
+- No reiniciar cohortes.
+- No rellenar retrospectivamente el gap sin evidencia previamente registrada.
+- HYP-COST-003 permanece bloqueado por `ledger_missing`, y se acepta así.
+- **No activar el Bot ni incorporar credenciales con el único objetivo de alimentar la
+  cohorte de costos.**
+- La decisión sobre HYP-COST-003 va a un sprint separado de política operativa y evidencia
+  de costos.
+
+El riesgo #1 de la sección 9 queda **aceptado como estado conocido**, no como pendiente
+técnico. Los riesgos #2 a #8 siguen abiertos y sin dueño en este sprint.
+
+Modo de observación.
