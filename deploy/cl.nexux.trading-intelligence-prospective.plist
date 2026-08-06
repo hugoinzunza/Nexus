@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Colector prospectivo del laboratorio de trading intelligence.
+
+      FUENTE: la canónica del laboratorio, igual que los observadores de hipótesis.
+      Antes leía `crisol/nexux/data/setups.json` y llevaba desde el 2026-08-04 escribiendo
+      `{"types": {}, "written": 0}` en cada ciclo porque el archivo estaba muerto.
+
+      Su log de eventos es append-only y deduplica por `event_id`, así que apuntarlo a un
+      superconjunto no duplica ni reescribe nada de lo ya registrado.
+    -->
+    <key>Label</key>
+    <string>cl.nexux.trading-intelligence-prospective</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/hugh/crisol/nexux-trading-intelligence-lab/.venv/bin/python</string>
+        <string>-m</string>
+        <string>nexux_til.prospective.collector</string>
+        <string>--source</string>
+        <string>/Users/hugh/crisol/nexux/data/hypothesis_lab/canonical/setups.json</string>
+        <string>--store</string>
+        <string>/Users/hugh/crisol/nexux-trading-intelligence-lab/datasets/prospective</string>
+        <string>--interval</string>
+        <string>15</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/hugh/crisol/nexux-trading-intelligence-lab</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/hugh/crisol/nexux-trading-intelligence-lab/datasets/prospective/collector.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/hugh/crisol/nexux-trading-intelligence-lab/datasets/prospective/collector.error.log</string>
+</dict>
+</plist>

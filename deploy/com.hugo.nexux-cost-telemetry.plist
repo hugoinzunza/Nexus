@@ -2,28 +2,45 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!--
+      Observador forward de HYP-COST-003-TELEMETRY.
+
+      A diferencia de los otros dos, este NO lee setups: lee los libros del bot
+      (`data/bot_trades.json` y `data/testnet/bot_trades.json`) relativos a `--input-root`.
+      Por eso su raíz es la INSTANCIA VIVA: es ahí donde el bot escribiría si operara.
+
+      Antes apuntaba a `crisol/nexux`, cuyo libro se detuvo el 2026-07-27 — íntegramente
+      anterior al inicio de la cohorte (2026-08-01), así que no se pierde ni un registro
+      elegible con el cambio. Con la raíz viva, los libros no existen y el observador
+      reporta `ledger_missing`: esa es la señal honesta de que el bot está inerte, y es
+      justo lo que antes quedaba invisible.
+    -->
     <key>Label</key>
     <string>com.hugo.nexux-cost-telemetry</string>
+
     <key>ProgramArguments</key>
     <array>
         <string>/Users/hugh/crisol/nexux/.venv/bin/python</string>
         <string>-m</string>
         <string>research.hypothesis_lab.cost_telemetry</string>
         <string>--input-root</string>
-        <string>/Users/hugh/crisol/nexux</string>
+        <string>/Users/hugh/crisol/nexux-command-center</string>
         <string>--output</string>
         <string>/Users/hugh/crisol/nexux/data/hypothesis_lab/telemetry/execution_costs.json</string>
         <string>--watch</string>
         <string>--interval</string>
         <string>1</string>
     </array>
+
     <key>WorkingDirectory</key>
     <string>/Users/hugh/crisol/nexux</string>
+
     <key>EnvironmentVariables</key>
     <dict>
         <key>PYTHONUNBUFFERED</key>
         <string>1</string>
     </dict>
+
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -32,6 +49,7 @@
     <string>Background</string>
     <key>ThrottleInterval</key>
     <integer>5</integer>
+
     <key>StandardOutPath</key>
     <string>/Users/hugh/crisol/nexux/logs/cost-telemetry.out.log</string>
     <key>StandardErrorPath</key>

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      FUENTE CANÓNICA DE SETUPS DEL LABORATORIO.
+
+      Une, append-only, el store histórico de `crisol/nexux` con el store vivo de
+      `crisol/nexux-command-center` (donde escribe el servidor que está en el aire) y
+      publica UN solo archivo que leen todos los observadores forward.
+
+      Existe porque el servidor se mudó de repositorio y los observadores quedaron
+      leyendo un `setups.json` muerto durante 2,5 días. Apuntarlos directo al store vivo
+      habría borrado los registros ya recolectados (shadow_exit reconstruye su cohorte
+      iterando los setups presentes en el archivo fuente), o sea, habría reiniciado la
+      cohorte. Este servicio evita las dos cosas.
+
+      Solo LEE los stores de origen. Nunca escribe en producción.
+    -->
+    <key>Label</key>
+    <string>com.hugo.nexux-lab-canonical</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/hugh/crisol/nexux/.venv/bin/python</string>
+        <string>-m</string>
+        <string>research.hypothesis_lab.canonical_setups</string>
+        <string>--source</string>
+        <string>/Users/hugh/crisol/nexux/data/setups.json</string>
+        <string>--source</string>
+        <string>/Users/hugh/crisol/nexux-command-center/data/setups.json</string>
+        <string>--output</string>
+        <string>/Users/hugh/crisol/nexux/data/hypothesis_lab/canonical/setups_canonical.json</string>
+        <string>--flat-output</string>
+        <string>/Users/hugh/crisol/nexux/data/hypothesis_lab/canonical/setups.json</string>
+        <string>--watch</string>
+        <string>--interval</string>
+        <string>30</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/hugh/crisol/nexux</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/hugh/crisol/nexux/logs/lab-canonical.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/hugh/crisol/nexux/logs/lab-canonical.err.log</string>
+</dict>
+</plist>

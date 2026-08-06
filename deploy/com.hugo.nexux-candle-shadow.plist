@@ -3,28 +3,31 @@
 <plist version="1.0">
 <dict>
     <!--
-      Observador forward de HYP-EXIT-003-SHADOW.
+      Observador forward de HYP-CANDLE-002-SHADOW.
 
-      FUENTE: la canónica del laboratorio, NUNCA un `setups.json` de un repo suelto.
-      El 2026-08-06 este servicio leía `crisol/nexux/data/setups.json`, que llevaba
-      2,5 días sin escrituras porque el servidor se había mudado de repositorio.
-      Protocolo congelado y cohorte intactos: solo cambió de dónde entran los datos.
+      FUENTE: la canónica del laboratorio. Su cohorte abrió el 2026-08-04 00:56, es decir,
+      DESPUÉS de que el `setups.json` que estaba leyendo dejara de recibir escrituras
+      (2026-08-03). Vivió dos días completos con cero registros. Protocolo congelado y
+      fecha de cohorte intactos: solo cambió de dónde entran los datos.
+
+      Este observador recalcula sus registros en cada pasada (no arrastra estado), así que
+      depende de que la fuente canónica sea append-only para no perder historia.
     -->
     <key>Label</key>
-    <string>com.hugo.nexux-shadow-exit</string>
+    <string>com.hugo.nexux-candle-shadow</string>
 
     <key>ProgramArguments</key>
     <array>
         <string>/Users/hugh/crisol/nexux/.venv/bin/python</string>
         <string>-m</string>
-        <string>research.hypothesis_lab.shadow_exit</string>
+        <string>research.hypothesis_lab.candle_reversal_shadow</string>
         <string>--setups</string>
         <string>/Users/hugh/crisol/nexux/data/hypothesis_lab/canonical/setups.json</string>
         <string>--output</string>
-        <string>/Users/hugh/crisol/nexux/data/hypothesis_lab/shadow/protect_3r_runner_original.json</string>
+        <string>/Users/hugh/crisol/nexux/data/hypothesis_lab/shadow/candle_reversal_forward.json</string>
         <string>--watch</string>
         <string>--interval</string>
-        <string>60</string>
+        <string>300</string>
     </array>
 
     <key>WorkingDirectory</key>
@@ -46,8 +49,8 @@
     <integer>10</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/hugh/crisol/nexux/logs/shadow-exit.out.log</string>
+    <string>/Users/hugh/crisol/nexux/logs/candle-shadow.out.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/hugh/crisol/nexux/logs/shadow-exit.err.log</string>
+    <string>/Users/hugh/crisol/nexux/logs/candle-shadow.err.log</string>
 </dict>
 </plist>
