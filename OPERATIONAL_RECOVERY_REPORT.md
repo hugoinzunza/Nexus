@@ -122,9 +122,10 @@ tiene el observador de velas y los 4 estudios más nuevos) no altera qué se eje
 
 ### 2.4 Cobertura de regresión
 
-`tests/test_canonical_setups.py` (8) y `tests/test_hypothesis_lab_module.py` (+5), incluida
-la que reproduce exactamente el fallo: *archivo fresco + cohorte detenida ya no puede
-reportarse sano*. **371 → 384 pruebas, todas verdes.**
+`tests/test_canonical_setups.py` (8 nuevas) y `tests/test_hypothesis_lab_module.py` (4 → 9),
+incluida la que reproduce exactamente el fallo: *archivo fresco + cohorte detenida ya no
+puede reportarse sano*. **366 → 379 pruebas, todas verdes.** Las 5 nuevas del laboratorio se
+portaron también al repo vivo, que es donde corre el `health()`.
 
 ---
 
