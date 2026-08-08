@@ -1,0 +1,412 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexux.local/contracts/confluence/ce1-v1-candidate.json",
+  "title": "NexUX Confluence CE-1 Candidate Contract",
+  "oneOf": [
+    { "$ref": "#/$defs/marketObservation" },
+    { "$ref": "#/$defs/dependencyRelation" },
+    { "$ref": "#/$defs/semanticRelation" },
+    { "$ref": "#/$defs/temporalComparisonRule" },
+    { "$ref": "#/$defs/descriptiveSynthesis" }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)*$"
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "header": {
+      "type": "object",
+      "properties": {
+        "contract": { "const": "nexux.confluence.ce1" },
+        "schema_version": { "const": "1.0.0-candidate" }
+      },
+      "required": ["contract", "schema_version"]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "symbol": { "$ref": "#/$defs/identifier" },
+        "venue": { "$ref": "#/$defs/identifier" },
+        "market": { "$ref": "#/$defs/identifier" }
+      },
+      "required": ["symbol", "venue", "market"]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "$ref": "#/$defs/identifier" },
+        "origin": { "$ref": "#/$defs/identifier" },
+        "method": { "$ref": "#/$defs/identifier" },
+        "source_ref": { "$ref": "#/$defs/identifier" },
+        "environment": { "const": "synthetic_fixture" }
+      },
+      "required": ["provider", "origin", "method", "source_ref", "environment"]
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["known", "partial", "unknown"] },
+        "lineage_group_id": {
+          "oneOf": [{ "$ref": "#/$defs/identifier" }, { "type": "null" }]
+        },
+        "raw_input_class": {
+          "oneOf": [{ "$ref": "#/$defs/identifier" }, { "type": "null" }]
+        },
+        "raw_input_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "transformation_id": { "$ref": "#/$defs/identifier" },
+        "transformation_version": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+        },
+        "parent_observation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "lookback_start_ms": {
+          "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
+        },
+        "lookback_end_ms": {
+          "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
+        }
+      },
+      "required": [
+        "status",
+        "lineage_group_id",
+        "raw_input_class",
+        "raw_input_ids",
+        "transformation_id",
+        "transformation_version",
+        "parent_observation_ids",
+        "lookback_start_ms",
+        "lookback_end_ms"
+      ]
+    },
+    "time": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "effective_at_ms": { "$ref": "#/$defs/timestamp" },
+        "source_timestamp_ms": {
+          "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
+        },
+        "observed_at_ms": { "$ref": "#/$defs/timestamp" },
+        "available_at_ms": {
+          "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
+        },
+        "computed_at_ms": { "$ref": "#/$defs/timestamp" },
+        "valid_from_ms": {
+          "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
+        },
+        "stale_at_ms": {
+          "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
+        },
+        "expires_at_ms": {
+          "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
+        },
+        "causal_availability": { "enum": ["known", "unknown"] }
+      },
+      "required": [
+        "effective_at_ms",
+        "source_timestamp_ms",
+        "observed_at_ms",
+        "available_at_ms",
+        "computed_at_ms",
+        "valid_from_ms",
+        "stale_at_ms",
+        "expires_at_ms",
+        "causal_availability"
+      ]
+    },
+    "marketObservation": {
+      "allOf": [
+        { "$ref": "#/$defs/header" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "contract": { "const": "nexux.confluence.ce1" },
+            "schema_version": { "const": "1.0.0-candidate" },
+            "document_type": { "const": "market_observation" },
+            "observation_id": { "$ref": "#/$defs/identifier" },
+            "subject": { "$ref": "#/$defs/subject" },
+            "family": {
+              "enum": [
+                "price_structure",
+                "derivatives_positioning",
+                "liquidity_microstructure",
+                "volume_flow",
+                "macro_context",
+                "cross_market_context"
+              ]
+            },
+            "subfamily": { "$ref": "#/$defs/identifier" },
+            "phenomenon": { "$ref": "#/$defs/identifier" },
+            "measurement_type": { "enum": ["direct", "proxy", "derived"] },
+            "value": { "type": "object" },
+            "temporal_context": { "type": "object" },
+            "time": { "$ref": "#/$defs/time" },
+            "provenance": { "$ref": "#/$defs/provenance" },
+            "lineage": { "$ref": "#/$defs/lineage" },
+            "evidence_status": { "const": "descriptive_unvalidated" }
+          },
+          "required": [
+            "contract",
+            "schema_version",
+            "document_type",
+            "observation_id",
+            "subject",
+            "family",
+            "subfamily",
+            "phenomenon",
+            "measurement_type",
+            "value",
+            "temporal_context",
+            "time",
+            "provenance",
+            "lineage",
+            "evidence_status"
+          ]
+        }
+      ]
+    },
+    "dependencyRelation": {
+      "allOf": [
+        { "$ref": "#/$defs/header" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "contract": { "const": "nexux.confluence.ce1" },
+            "schema_version": { "const": "1.0.0-candidate" },
+            "document_type": { "const": "dependency_relation" },
+            "dependency_id": { "$ref": "#/$defs/identifier" },
+            "subject_observation_id": { "$ref": "#/$defs/identifier" },
+            "related_observation_id": { "$ref": "#/$defs/identifier" },
+            "relation": {
+              "enum": [
+                "derived",
+                "shared_source",
+                "partially_dependent",
+                "independent",
+                "unknown"
+              ]
+            },
+            "basis": {
+              "enum": [
+                "parent_child",
+                "shared_raw_input",
+                "shared_lineage_group",
+                "shared_provider",
+                "overlapping_inputs",
+                "overlapping_lookback",
+                "known_common_driver",
+                "represented_lineage_only",
+                "insufficient_lineage",
+                "unassessed"
+              ]
+            },
+            "definition": {
+              "oneOf": [
+                { "const": "no_known_structural_dependency_within_represented_lineage" },
+                { "type": "null" }
+              ]
+            },
+            "rationale": { "type": "string", "minLength": 1, "maxLength": 512 }
+          },
+          "required": [
+            "contract",
+            "schema_version",
+            "document_type",
+            "dependency_id",
+            "subject_observation_id",
+            "related_observation_id",
+            "relation",
+            "basis",
+            "definition",
+            "rationale"
+          ]
+        }
+      ]
+    },
+    "semanticRelation": {
+      "allOf": [
+        { "$ref": "#/$defs/header" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "contract": { "const": "nexux.confluence.ce1" },
+            "schema_version": { "const": "1.0.0-candidate" },
+            "document_type": { "const": "semantic_relation" },
+            "relation_id": { "$ref": "#/$defs/identifier" },
+            "observation_ids": {
+              "type": "array",
+              "minItems": 2,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/identifier" }
+            },
+            "state": {
+              "enum": ["aligned", "co-occurring", "divergent", "contradictory"]
+            },
+            "predicate_id": { "$ref": "#/$defs/identifier" },
+            "predicate_version": {
+              "type": "string",
+              "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version",
+            "document_type",
+            "relation_id",
+            "observation_ids",
+            "state",
+            "predicate_id",
+            "predicate_version"
+          ]
+        }
+      ]
+    },
+    "temporalComparisonRule": {
+      "allOf": [
+        { "$ref": "#/$defs/header" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "contract": { "const": "nexux.confluence.ce1" },
+            "schema_version": { "const": "1.0.0-candidate" },
+            "document_type": { "const": "temporal_comparison_rule" },
+            "rule_id": { "$ref": "#/$defs/identifier" },
+            "rule_version": {
+              "type": "string",
+              "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+            },
+            "reference_at_ms": { "$ref": "#/$defs/timestamp" },
+            "window_start_ms": { "$ref": "#/$defs/timestamp" },
+            "window_end_ms": { "$ref": "#/$defs/timestamp" },
+            "mode": { "enum": ["effective_time_within_window", "validity_overlap"] }
+          },
+          "required": [
+            "contract",
+            "schema_version",
+            "document_type",
+            "rule_id",
+            "rule_version",
+            "reference_at_ms",
+            "window_start_ms",
+            "window_end_ms",
+            "mode"
+          ]
+        }
+      ]
+    },
+    "observationState": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "observation": { "$ref": "#/$defs/marketObservation" },
+        "temporal_state": { "enum": ["observed", "unavailable", "stale", "unknown"] },
+        "reason": {
+          "oneOf": [{ "$ref": "#/$defs/identifier" }, { "type": "null" }]
+        }
+      },
+      "required": ["observation", "temporal_state", "reason"]
+    },
+    "missingEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "enum": [
+            "price_structure",
+            "derivatives_positioning",
+            "liquidity_microstructure",
+            "volume_flow",
+            "macro_context",
+            "cross_market_context"
+          ]
+        },
+        "state": { "const": "missing" }
+      },
+      "required": ["family", "state"]
+    },
+    "abstention": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": { "enum": ["observation", "semantic_relation", "family"] },
+        "subject_id": { "$ref": "#/$defs/identifier" },
+        "reason": { "$ref": "#/$defs/identifier" },
+        "observation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        }
+      },
+      "required": ["scope", "subject_id", "reason", "observation_ids"]
+    },
+    "descriptiveSynthesis": {
+      "allOf": [
+        { "$ref": "#/$defs/header" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "contract": { "const": "nexux.confluence.ce1" },
+            "schema_version": { "const": "1.0.0-candidate" },
+            "document_type": { "const": "descriptive_synthesis" },
+            "status": { "enum": ["observed", "abstained"] },
+            "comparison_rule": { "$ref": "#/$defs/temporalComparisonRule" },
+            "observations": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/observationState" }
+            },
+            "dependencies": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/dependencyRelation" }
+            },
+            "semantic_relations": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/semanticRelation" }
+            },
+            "missing_evidence": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/missingEvidence" }
+            },
+            "abstentions": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/abstention" }
+            }
+          },
+          "required": [
+            "contract",
+            "schema_version",
+            "document_type",
+            "status",
+            "comparison_rule",
+            "observations",
+            "dependencies",
+            "semantic_relations",
+            "missing_evidence",
+            "abstentions"
+          ]
+        }
+      ]
+    }
+  }
+}

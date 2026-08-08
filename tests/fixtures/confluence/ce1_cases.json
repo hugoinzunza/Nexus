@@ -1,0 +1,480 @@
+{
+  "fixture": "nexux.confluence.ce1.synthetic.v1",
+  "description": "Casos sinteticos congelados para invariantes representacionales de CE-1.",
+  "comparison_rule": {
+    "contract": "nexux.confluence.ce1",
+    "schema_version": "1.0.0-candidate",
+    "document_type": "temporal_comparison_rule",
+    "rule_id": "rule.fixture.fifteen-minutes",
+    "rule_version": "1.0.0",
+    "reference_at_ms": 1786000300000,
+    "window_start_ms": 1785999400000,
+    "window_end_ms": 1786000300000,
+    "mode": "effective_time_within_window"
+  },
+  "expected_families": [
+    "price_structure",
+    "derivatives_positioning",
+    "liquidity_microstructure",
+    "volume_flow",
+    "macro_context",
+    "cross_market_context"
+  ],
+  "observations": [
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "market_observation",
+      "observation_id": "obs.price.swing",
+      "subject": {"symbol": "btcusdt", "venue": "fixture-binance", "market": "perpetual"},
+      "family": "price_structure",
+      "subfamily": "swing-structure",
+      "phenomenon": "higher-low-observed",
+      "measurement_type": "derived",
+      "value": {"direction": "up", "price": 64000.0},
+      "temporal_context": {"session": "synthetic-session"},
+      "time": {
+        "effective_at_ms": 1786000000000,
+        "source_timestamp_ms": 1786000000000,
+        "observed_at_ms": 1786000010000,
+        "available_at_ms": 1786000005000,
+        "computed_at_ms": 1786000011000,
+        "valid_from_ms": 1786000011000,
+        "stale_at_ms": 1786000600000,
+        "expires_at_ms": 1786001200000,
+        "causal_availability": "known"
+      },
+      "provenance": {
+        "provider": "fixture.price",
+        "origin": "fixture.ohlcv",
+        "method": "swing-transform",
+        "source_ref": "fixture.price.raw-a",
+        "environment": "synthetic_fixture"
+      },
+      "lineage": {
+        "status": "known",
+        "lineage_group_id": "lineage.price.ohlcv-1h",
+        "raw_input_class": "ohlcv",
+        "raw_input_ids": ["raw.price.candles-a"],
+        "transformation_id": "transform.swing",
+        "transformation_version": "1.0.0",
+        "parent_observation_ids": [],
+        "lookback_start_ms": 1785913600000,
+        "lookback_end_ms": 1786000000000
+      },
+      "evidence_status": "descriptive_unvalidated"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "market_observation",
+      "observation_id": "obs.price.pivot",
+      "subject": {"symbol": "btcusdt", "venue": "fixture-binance", "market": "perpetual"},
+      "family": "price_structure",
+      "subfamily": "confirmed-pivot",
+      "phenomenon": "support-zone-observed",
+      "measurement_type": "derived",
+      "value": {"low": 63950.0, "high": 64050.0},
+      "temporal_context": {"session": "synthetic-session"},
+      "time": {
+        "effective_at_ms": 1786000000000,
+        "source_timestamp_ms": 1786000000000,
+        "observed_at_ms": 1786000020000,
+        "available_at_ms": 1786000015000,
+        "computed_at_ms": 1786000021000,
+        "valid_from_ms": 1786000021000,
+        "stale_at_ms": 1786000600000,
+        "expires_at_ms": 1786001200000,
+        "causal_availability": "known"
+      },
+      "provenance": {
+        "provider": "fixture.price",
+        "origin": "fixture.ohlcv",
+        "method": "pivot-transform",
+        "source_ref": "fixture.price.raw-a",
+        "environment": "synthetic_fixture"
+      },
+      "lineage": {
+        "status": "known",
+        "lineage_group_id": "lineage.price.ohlcv-1h",
+        "raw_input_class": "ohlcv",
+        "raw_input_ids": ["raw.price.candles-a"],
+        "transformation_id": "transform.pivot",
+        "transformation_version": "1.0.0",
+        "parent_observation_ids": ["obs.price.swing"],
+        "lookback_start_ms": 1785913600000,
+        "lookback_end_ms": 1786000000000
+      },
+      "evidence_status": "descriptive_unvalidated"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "market_observation",
+      "observation_id": "obs.price.momentum",
+      "subject": {"symbol": "btcusdt", "venue": "fixture-binance", "market": "perpetual"},
+      "family": "price_structure",
+      "subfamily": "price-momentum",
+      "phenomenon": "positive-direction-observed",
+      "measurement_type": "derived",
+      "value": {"direction": "up"},
+      "temporal_context": {"session": "synthetic-session"},
+      "time": {
+        "effective_at_ms": 1786000060000,
+        "source_timestamp_ms": 1786000060000,
+        "observed_at_ms": 1786000070000,
+        "available_at_ms": 1786000065000,
+        "computed_at_ms": 1786000071000,
+        "valid_from_ms": 1786000071000,
+        "stale_at_ms": 1786000600000,
+        "expires_at_ms": 1786001200000,
+        "causal_availability": "known"
+      },
+      "provenance": {
+        "provider": "fixture.price",
+        "origin": "fixture.ohlcv",
+        "method": "momentum-transform",
+        "source_ref": "fixture.price.raw-a",
+        "environment": "synthetic_fixture"
+      },
+      "lineage": {
+        "status": "known",
+        "lineage_group_id": "lineage.price.ohlcv-1h",
+        "raw_input_class": "ohlcv",
+        "raw_input_ids": ["raw.price.candles-a"],
+        "transformation_id": "transform.momentum",
+        "transformation_version": "1.0.0",
+        "parent_observation_ids": [],
+        "lookback_start_ms": 1785978400000,
+        "lookback_end_ms": 1786000060000
+      },
+      "evidence_status": "descriptive_unvalidated"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "market_observation",
+      "observation_id": "obs.book.wall",
+      "subject": {"symbol": "btcusdt", "venue": "fixture-book", "market": "perpetual"},
+      "family": "liquidity_microstructure",
+      "subfamily": "orderbook-wall",
+      "phenomenon": "ask-wall-observed",
+      "measurement_type": "direct",
+      "value": {"side": "ask", "price": 64500.0},
+      "temporal_context": {"session": "synthetic-session"},
+      "time": {
+        "effective_at_ms": 1786000120000,
+        "source_timestamp_ms": 1786000120000,
+        "observed_at_ms": 1786000125000,
+        "available_at_ms": 1786000122000,
+        "computed_at_ms": 1786000125000,
+        "valid_from_ms": 1786000125000,
+        "stale_at_ms": 1786000360000,
+        "expires_at_ms": 1786000420000,
+        "causal_availability": "known"
+      },
+      "provenance": {
+        "provider": "fixture.book",
+        "origin": "fixture.depth",
+        "method": "direct-measurement",
+        "source_ref": "fixture.book.raw-a",
+        "environment": "synthetic_fixture"
+      },
+      "lineage": {
+        "status": "known",
+        "lineage_group_id": "lineage.book.depth",
+        "raw_input_class": "orderbook",
+        "raw_input_ids": ["raw.book.depth-a"],
+        "transformation_id": "transform.identity",
+        "transformation_version": "1.0.0",
+        "parent_observation_ids": [],
+        "lookback_start_ms": 1786000060000,
+        "lookback_end_ms": 1786000120000
+      },
+      "evidence_status": "descriptive_unvalidated"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "market_observation",
+      "observation_id": "obs.book.imbalance",
+      "subject": {"symbol": "btcusdt", "venue": "fixture-book", "market": "perpetual"},
+      "family": "liquidity_microstructure",
+      "subfamily": "book-imbalance",
+      "phenomenon": "ask-imbalance-observed",
+      "measurement_type": "derived",
+      "value": {"direction": "ask"},
+      "temporal_context": {"session": "synthetic-session"},
+      "time": {
+        "effective_at_ms": 1786000120000,
+        "source_timestamp_ms": 1786000120000,
+        "observed_at_ms": 1786000130000,
+        "available_at_ms": 1786000125000,
+        "computed_at_ms": 1786000131000,
+        "valid_from_ms": 1786000131000,
+        "stale_at_ms": 1786000360000,
+        "expires_at_ms": 1786000420000,
+        "causal_availability": "known"
+      },
+      "provenance": {
+        "provider": "fixture.book",
+        "origin": "fixture.depth",
+        "method": "imbalance-transform",
+        "source_ref": "fixture.book.raw-a",
+        "environment": "synthetic_fixture"
+      },
+      "lineage": {
+        "status": "known",
+        "lineage_group_id": "lineage.book.depth",
+        "raw_input_class": "orderbook",
+        "raw_input_ids": ["raw.book.depth-a"],
+        "transformation_id": "transform.imbalance",
+        "transformation_version": "1.0.0",
+        "parent_observation_ids": [],
+        "lookback_start_ms": 1786000060000,
+        "lookback_end_ms": 1786000120000
+      },
+      "evidence_status": "descriptive_unvalidated"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "market_observation",
+      "observation_id": "obs.derivatives.oi-delayed",
+      "subject": {"symbol": "btcusdt", "venue": "fixture-derivatives", "market": "perpetual"},
+      "family": "derivatives_positioning",
+      "subfamily": "open-interest",
+      "phenomenon": "open-interest-observed",
+      "measurement_type": "direct",
+      "value": {"direction": "up"},
+      "temporal_context": {"session": "synthetic-session"},
+      "time": {
+        "effective_at_ms": 1786000180000,
+        "source_timestamp_ms": 1786000180000,
+        "observed_at_ms": 1786000302000,
+        "available_at_ms": 1786000301000,
+        "computed_at_ms": 1786000302000,
+        "valid_from_ms": 1786000302000,
+        "stale_at_ms": 1786000900000,
+        "expires_at_ms": 1786001500000,
+        "causal_availability": "known"
+      },
+      "provenance": {
+        "provider": "fixture.derivatives",
+        "origin": "fixture.oi",
+        "method": "direct-measurement",
+        "source_ref": "fixture.derivatives.raw-a",
+        "environment": "synthetic_fixture"
+      },
+      "lineage": {
+        "status": "known",
+        "lineage_group_id": "lineage.derivatives.oi",
+        "raw_input_class": "derivatives",
+        "raw_input_ids": ["raw.derivatives.oi-a"],
+        "transformation_id": "transform.identity",
+        "transformation_version": "1.0.0",
+        "parent_observation_ids": [],
+        "lookback_start_ms": 1785999400000,
+        "lookback_end_ms": 1786000180000
+      },
+      "evidence_status": "descriptive_unvalidated"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "market_observation",
+      "observation_id": "obs.flow.selling",
+      "subject": {"symbol": "btcusdt", "venue": "fixture-trades", "market": "perpetual"},
+      "family": "volume_flow",
+      "subfamily": "aggressor-flow",
+      "phenomenon": "negative-flow-observed",
+      "measurement_type": "direct",
+      "value": {"direction": "down"},
+      "temporal_context": {"session": "synthetic-session"},
+      "time": {
+        "effective_at_ms": 1786000200000,
+        "source_timestamp_ms": 1786000200000,
+        "observed_at_ms": 1786000205000,
+        "available_at_ms": 1786000202000,
+        "computed_at_ms": 1786000205000,
+        "valid_from_ms": 1786000205000,
+        "stale_at_ms": 1786000500000,
+        "expires_at_ms": 1786000800000,
+        "causal_availability": "known"
+      },
+      "provenance": {
+        "provider": "fixture.trades",
+        "origin": "fixture.aggressor",
+        "method": "direct-measurement",
+        "source_ref": "fixture.trades.raw-a",
+        "environment": "synthetic_fixture"
+      },
+      "lineage": {
+        "status": "known",
+        "lineage_group_id": "lineage.flow.aggressor",
+        "raw_input_class": "derivatives",
+        "raw_input_ids": ["raw.flow.trades-a"],
+        "transformation_id": "transform.identity",
+        "transformation_version": "1.0.0",
+        "parent_observation_ids": [],
+        "lookback_start_ms": 1785999700000,
+        "lookback_end_ms": 1786000200000
+      },
+      "evidence_status": "descriptive_unvalidated"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "market_observation",
+      "observation_id": "obs.cross.vix-stale",
+      "subject": {"symbol": "vix", "venue": "fixture-index", "market": "index"},
+      "family": "cross_market_context",
+      "subfamily": "volatility-index",
+      "phenomenon": "index-level-observed",
+      "measurement_type": "direct",
+      "value": {"level": 17.2},
+      "temporal_context": {"session": "synthetic-session"},
+      "time": {
+        "effective_at_ms": 1785999700000,
+        "source_timestamp_ms": 1785999700000,
+        "observed_at_ms": 1785999710000,
+        "available_at_ms": 1785999705000,
+        "computed_at_ms": 1785999710000,
+        "valid_from_ms": 1785999710000,
+        "stale_at_ms": 1786000200000,
+        "expires_at_ms": 1786000800000,
+        "causal_availability": "known"
+      },
+      "provenance": {
+        "provider": "fixture.index",
+        "origin": "fixture.cross-market",
+        "method": "direct-measurement",
+        "source_ref": "fixture.index.raw-a",
+        "environment": "synthetic_fixture"
+      },
+      "lineage": {
+        "status": "known",
+        "lineage_group_id": "lineage.cross.vix",
+        "raw_input_class": "index",
+        "raw_input_ids": ["raw.cross.vix-a"],
+        "transformation_id": "transform.identity",
+        "transformation_version": "1.0.0",
+        "parent_observation_ids": [],
+        "lookback_start_ms": 1785999400000,
+        "lookback_end_ms": 1785999700000
+      },
+      "evidence_status": "descriptive_unvalidated"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "market_observation",
+      "observation_id": "obs.liquidity.visual-unknown",
+      "subject": {"symbol": "btcusdt", "venue": "fixture-visual", "market": "perpetual"},
+      "family": "liquidity_microstructure",
+      "subfamily": "visual-depth",
+      "phenomenon": "depth-region-observed",
+      "measurement_type": "proxy",
+      "value": {"region": "above"},
+      "temporal_context": {"session": "synthetic-session"},
+      "time": {
+        "effective_at_ms": 1786000240000,
+        "source_timestamp_ms": null,
+        "observed_at_ms": 1786000250000,
+        "available_at_ms": null,
+        "computed_at_ms": 1786000251000,
+        "valid_from_ms": null,
+        "stale_at_ms": null,
+        "expires_at_ms": null,
+        "causal_availability": "unknown"
+      },
+      "provenance": {
+        "provider": "fixture.visual",
+        "origin": "fixture.canvas",
+        "method": "visual-proxy",
+        "source_ref": "fixture.visual.raw-a",
+        "environment": "synthetic_fixture"
+      },
+      "lineage": {
+        "status": "unknown",
+        "lineage_group_id": null,
+        "raw_input_class": null,
+        "raw_input_ids": [],
+        "transformation_id": "transform.visual-proxy",
+        "transformation_version": "1.0.0",
+        "parent_observation_ids": [],
+        "lookback_start_ms": null,
+        "lookback_end_ms": null
+      },
+      "evidence_status": "descriptive_unvalidated"
+    }
+  ],
+  "dependencies": [
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "dependency_relation",
+      "dependency_id": "dep.oi.flow-partial",
+      "subject_observation_id": "obs.derivatives.oi-delayed",
+      "related_observation_id": "obs.flow.selling",
+      "relation": "partially_dependent",
+      "basis": "known_common_driver",
+      "definition": null,
+      "rationale": "El fixture declara un driver sintetico compartido sin identidad de inputs."
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "dependency_relation",
+      "dependency_id": "dep.vix.book-independent",
+      "subject_observation_id": "obs.cross.vix-stale",
+      "related_observation_id": "obs.book.wall",
+      "relation": "independent",
+      "basis": "represented_lineage_only",
+      "definition": "no_known_structural_dependency_within_represented_lineage",
+      "rationale": "No existe dependencia estructural conocida dentro del lineage sintetico representado."
+    }
+  ],
+  "semantic_relations": [
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "semantic_relation",
+      "relation_id": "semantic.price-aligned",
+      "observation_ids": ["obs.price.swing", "obs.price.momentum"],
+      "state": "aligned",
+      "predicate_id": "predicate.same-direction",
+      "predicate_version": "1.0.0"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "semantic_relation",
+      "relation_id": "semantic.price-flow-contradictory",
+      "observation_ids": ["obs.price.swing", "obs.flow.selling"],
+      "state": "contradictory",
+      "predicate_id": "predicate.opposing-direction",
+      "predicate_version": "1.0.0"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "semantic_relation",
+      "relation_id": "semantic.oi-flow-cooccurring",
+      "observation_ids": ["obs.derivatives.oi-delayed", "obs.flow.selling"],
+      "state": "co-occurring",
+      "predicate_id": "predicate.same-window",
+      "predicate_version": "1.0.0"
+    },
+    {
+      "contract": "nexux.confluence.ce1",
+      "schema_version": "1.0.0-candidate",
+      "document_type": "semantic_relation",
+      "relation_id": "semantic.visual-book-cooccurring",
+      "observation_ids": ["obs.liquidity.visual-unknown", "obs.book.wall"],
+      "state": "co-occurring",
+      "predicate_id": "predicate.same-zone",
+      "predicate_version": "1.0.0"
+    }
+  ]
+}
