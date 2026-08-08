@@ -20,6 +20,47 @@
       "type": "integer",
       "minimum": 0
     },
+    "descriptiveLabel": {
+      "allOf": [
+        { "$ref": "#/$defs/identifier" },
+        {
+          "not": {
+            "pattern": "(^|[._:-])((entr|expectanc|probabilit|qualit)(y|ies)|(action|adverse|alpha|bearish|bullish|buy|confidence|confirmation|conviction|edge|ev|execute|exit|expected|forecast|grade|likelihood|long|loss|odds|outcome|pnl|prediction|predictive|profit|rank|ranking|recommendation|return|score|sell|short|signal|strength|supportive|target|vote|weight|win|winrate)(s|es)?)([._:-]|$)"
+          }
+        }
+      ]
+    },
+    "descriptiveScalar": {
+      "oneOf": [
+        { "$ref": "#/$defs/descriptiveLabel" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
+    },
+    "descriptiveValue": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/descriptiveLabel"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          { "$ref": "#/$defs/descriptiveScalar" },
+          { "$ref": "#/$defs/descriptiveValue" },
+          { "$ref": "#/$defs/descriptiveArray" }
+        ]
+      }
+    },
+    "descriptiveArray": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/descriptiveScalar" },
+          { "$ref": "#/$defs/descriptiveValue" },
+          { "$ref": "#/$defs/descriptiveArray" }
+        ]
+      }
+    },
     "header": {
       "type": "object",
       "properties": {
@@ -156,8 +197,13 @@
             "subfamily": { "$ref": "#/$defs/identifier" },
             "phenomenon": { "$ref": "#/$defs/identifier" },
             "measurement_type": { "enum": ["direct", "proxy", "derived"] },
-            "value": { "type": "object" },
-            "temporal_context": { "type": "object" },
+            "value": { "$ref": "#/$defs/descriptiveValue" },
+            "temporal_context": {
+              "allOf": [
+                { "$ref": "#/$defs/descriptiveValue" },
+                { "not": { "required": ["family"] } }
+              ]
+            },
             "time": { "$ref": "#/$defs/time" },
             "provenance": { "$ref": "#/$defs/provenance" },
             "lineage": { "$ref": "#/$defs/lineage" },

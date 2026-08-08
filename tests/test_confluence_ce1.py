@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 from pathlib import Path
 
@@ -11,12 +12,15 @@ from modules.confluence import (
     build_descriptive_synthesis,
     validate_dependency,
     validate_observation,
+    validate_synthesis,
 )
 from modules.confluence.contracts import INDEPENDENCE_DEFINITION
 
 FIXTURE_PATH = (
     Path(__file__).parent / "fixtures" / "confluence" / "ce1_cases.json"
 )
+FIXTURE_SHA256 = "6d74904ab689038d383ef75496c6f56922178099db8751c00f6841e08bdad924"
+GOLDEN_SHA256 = "7413cb3962787f13d17bc4eb5eef5d8c306742926822d5ea748d664df06bdfda"
 
 
 @pytest.fixture
@@ -56,6 +60,18 @@ def _states(result):
         item["observation"]["observation_id"]: item
         for item in result["observations"]
     }
+
+
+def _validation_parity(observation):
+    try:
+        validate_observation(observation)
+        runtime_valid = True
+    except CE1ContractViolation:
+        runtime_valid = False
+    schema_valid = not list(
+        Draft202012Validator(CE1_SCHEMA).iter_errors(observation)
+    )
+    return runtime_valid, schema_valid
 
 
 def test_schema_candidato_es_valido_y_fixture_es_sintetico(fixture):
@@ -271,6 +287,15 @@ def test_resultado_es_determinista_y_valido_bajo_schema(fixture):
     assert pivot["lineage"]["parent_observation_ids"] == ["obs.price.swing"]
 
 
+def test_fixture_y_golden_output_preservan_digests(fixture):
+    fixture_digest = hashlib.sha256(FIXTURE_PATH.read_bytes()).hexdigest()
+    golden = json.dumps(_synthesis(fixture), sort_keys=True).encode("utf-8")
+    golden_digest = hashlib.sha256(golden).hexdigest()
+
+    assert fixture_digest == FIXTURE_SHA256
+    assert golden_digest == GOLDEN_SHA256
+
+
 def test_resultado_no_comparte_estado_mutable_con_el_fixture(fixture):
     original = copy.deepcopy(fixture)
     result = _synthesis(fixture)
@@ -320,3 +345,203 @@ def test_sintesis_no_expone_semantica_predictiva(fixture):
         "risk_multiplier",
     )
     assert all(term not in encoded for term in forbidden)
+
+
+def test_documento_completo_revalida_dependency_con_mapa_real(fixture):
+    result = _synthesis(fixture)
+    dependency = _dependency(
+        result,
+        "obs.price.swing",
+        "obs.price.momentum",
+    )
+    dependency.update(
+        relation="independent",
+        basis="represented_lineage_only",
+        definition=INDEPENDENCE_DEFINITION,
+    )
+
+    with pytest.raises(CE1ContractViolation, match="dependencia estructural"):
+        validate_synthesis(result)
+
+
+@pytest.mark.parametrize(
+    "reference_field",
+    ("subject_observation_id", "related_observation_id"),
+    ids=("source-fantasma", "target-fantasma"),
+)
+def test_documento_completo_rechaza_extremo_fantasma(
+    fixture, reference_field
+):
+    result = _synthesis(fixture)
+    result["dependencies"][0][reference_field] = "obs.ghost"
+
+    with pytest.raises(CE1ContractViolation, match="observacion desconocida"):
+        validate_synthesis(result)
+
+
+def test_documento_completo_rechaza_observation_id_fantasma(fixture):
+    result = _synthesis(fixture)
+    result["semantic_relations"][0]["observation_ids"][0] = "obs.ghost"
+
+    with pytest.raises(CE1ContractViolation, match="observacion desconocida"):
+        validate_synthesis(result)
+
+
+def test_documento_rechaza_relaciones_incompatibles_para_mismo_par(fixture):
+    result = _synthesis(fixture)
+    existing = _dependency(result, "obs.cross.vix-stale", "obs.book.wall")
+    conflict = copy.deepcopy(existing)
+    conflict.update(
+        dependency_id="dep.conflict.same-pair",
+        relation="unknown",
+        basis="unassessed",
+        definition=None,
+        rationale="Segunda relacion deliberadamente incompatible.",
+    )
+    result["dependencies"].append(conflict)
+
+    with pytest.raises(CE1ContractViolation, match="mismo par"):
+        validate_synthesis(result)
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        {"score": 0.8},
+        {"nested": {"probability": 0.7}},
+        {"items": [{"signal": "up"}]},
+        {"metrics": {"expected_return": 1.2}},
+        {"edge": True},
+        {"label": "buy"},
+    ),
+    ids=(
+        "score",
+        "probability-nested",
+        "signal-in-array",
+        "expected-return",
+        "edge",
+        "action-label",
+    ),
+)
+def test_value_rechaza_semantica_predictiva_en_cualquier_nivel(fixture, value):
+    observation = copy.deepcopy(fixture["observations"][0])
+    observation["value"] = value
+
+    with pytest.raises(CE1ContractViolation, match="no permitid"):
+        validate_observation(observation)
+    assert list(Draft202012Validator(CE1_SCHEMA).iter_errors(observation))
+
+
+def test_unknown_y_partial_siguen_validos_en_documento_completo(fixture):
+    result = _synthesis(fixture)
+    assert validate_synthesis(result) is result
+    assert (
+        _dependency(
+            result,
+            "obs.price.swing",
+            "obs.derivatives.oi-delayed",
+        )["relation"]
+        == "unknown"
+    )
+    assert (
+        _dependency(
+            result,
+            "obs.derivatives.oi-delayed",
+            "obs.flow.selling",
+        )["relation"]
+        == "partially_dependent"
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        {"scores": [0.1]},
+        {"probabilities": [0.1]},
+        {"edges": [0.1]},
+        {"signals": ["up"]},
+        {"weights": [0.1]},
+        {"winrates": [0.5]},
+        {"predictions": ["up"]},
+        {"qualities": [0.5]},
+        {"p_win": 0.5},
+        {"expected_return": 0.5},
+    ),
+    ids=(
+        "scores",
+        "probabilities",
+        "edges",
+        "signals",
+        "weights",
+        "winrates",
+        "predictions",
+        "qualities",
+        "p-win",
+        "expected-return",
+    ),
+)
+def test_vocabulario_predictivo_plural_y_compuesto_tiene_paridad(
+    fixture, value
+):
+    observation = copy.deepcopy(fixture["observations"][0])
+    observation["value"] = value
+
+    assert _validation_parity(observation) == (False, False)
+
+
+@pytest.mark.parametrize(
+    "label",
+    (
+        "bullish",
+        "bearish",
+        "long",
+        "short",
+        "Bullish",
+        "BULLISH",
+        "Bearish",
+        "BEARISH",
+        "Long",
+        "SHORT",
+    ),
+)
+def test_direccion_predictiva_y_casing_tienen_paridad(fixture, label):
+    observation = copy.deepcopy(fixture["observations"][0])
+    observation["value"] = {"direction": label}
+
+    assert _validation_parity(observation) == (False, False)
+
+
+@pytest.mark.parametrize(
+    "temporal_context",
+    (
+        {"scores": [0.1]},
+        {"nested": {"probabilities": [0.2]}},
+        {"direction": "bearish"},
+        {"direction": "Bullish"},
+        {"family": "price_structure"},
+    ),
+    ids=(
+        "scores",
+        "nested-probabilities",
+        "bearish",
+        "bullish-case",
+        "evidence-family",
+    ),
+)
+def test_temporal_context_aplica_paridad_semantica(
+    fixture, temporal_context
+):
+    observation = copy.deepcopy(fixture["observations"][0])
+    observation["temporal_context"] = temporal_context
+
+    assert _validation_parity(observation) == (False, False)
+
+
+def test_valores_descriptivos_existentes_siguen_autorizados(fixture):
+    for observation in fixture["observations"]:
+        assert _validation_parity(observation) == (True, True)
+
+    changed = copy.deepcopy(fixture["observations"][0])
+    changed["value"] = {"direction": "down", "side": "ask"}
+    changed["temporal_context"] = {"session": "synthetic-session"}
+    assert _validation_parity(changed) == (True, True)

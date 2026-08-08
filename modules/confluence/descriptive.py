@@ -13,9 +13,10 @@ from .contracts import (
     CE1ContractViolation,
     EVIDENCE_FAMILIES,
     INDEPENDENCE_DEFINITION,
+    index_dependencies,
+    index_observations,
     validate_comparison_rule,
     validate_dependency,
-    validate_observation,
     validate_semantic_relation,
     validate_synthesis,
 )
@@ -31,16 +32,7 @@ def build_descriptive_synthesis(
 ) -> dict[str, Any]:
     """Normaliza relaciones sin producir fuerza, ranking ni inferencia futura."""
     rule = copy.deepcopy(validate_comparison_rule(comparison_rule))
-    indexed: dict[str, dict[str, Any]] = {}
-    for item in observations:
-        observation = copy.deepcopy(validate_observation(item))
-        observation_id = observation["observation_id"]
-        if observation_id in indexed:
-            raise CE1ContractViolation("observation_id duplicado")
-        indexed[observation_id] = observation
-    if not indexed:
-        raise CE1ContractViolation("CE-1 requiere al menos una observacion fixture")
-    _validate_parent_references(indexed)
+    indexed = index_observations(copy.deepcopy(tuple(observations)))
 
     declared = _index_dependencies(dependencies, indexed)
     resolved = _resolve_all_dependencies(indexed, declared)
@@ -144,26 +136,7 @@ def _index_dependencies(
     dependencies: Iterable[dict[str, Any]],
     observations: Mapping[str, Mapping[str, Any]],
 ) -> dict[frozenset[str], dict[str, Any]]:
-    indexed = {}
-    identifiers = set()
-    for raw_dependency in dependencies:
-        dependency = copy.deepcopy(
-            validate_dependency(raw_dependency, observations)
-        )
-        dependency_id = dependency["dependency_id"]
-        if dependency_id in identifiers:
-            raise CE1ContractViolation("dependency_id duplicado")
-        identifiers.add(dependency_id)
-        pair = frozenset(
-            {
-                dependency["subject_observation_id"],
-                dependency["related_observation_id"],
-            }
-        )
-        if pair in indexed:
-            raise CE1ContractViolation("mas de una dependency para el mismo par")
-        indexed[pair] = dependency
-    return indexed
+    return index_dependencies(copy.deepcopy(tuple(dependencies)), observations)
 
 
 def _resolve_all_dependencies(
@@ -202,38 +175,6 @@ def _resolve_all_dependencies(
 def _auto_dependency_id(left_id: str, right_id: str) -> str:
     payload = f"{left_id}\x00{right_id}".encode("utf-8")
     return f"dep.auto.{hashlib.sha256(payload).hexdigest()[:20]}"
-
-
-def _validate_parent_references(
-    observations: Mapping[str, Mapping[str, Any]],
-) -> None:
-    known = set(observations)
-    graph = {
-        observation_id: tuple(item["lineage"]["parent_observation_ids"])
-        for observation_id, item in observations.items()
-    }
-    unknown = sorted(
-        {parent for parents in graph.values() for parent in parents} - known
-    )
-    if unknown:
-        raise CE1ContractViolation("lineage referencia parent desconocido")
-
-    visiting = set()
-    visited = set()
-
-    def visit(observation_id: str) -> None:
-        if observation_id in visiting:
-            raise CE1ContractViolation("lineage contiene un ciclo")
-        if observation_id in visited:
-            return
-        visiting.add(observation_id)
-        for parent in graph[observation_id]:
-            visit(parent)
-        visiting.remove(observation_id)
-        visited.add(observation_id)
-
-    for observation_id in sorted(graph):
-        visit(observation_id)
 
 
 def _known_relation(

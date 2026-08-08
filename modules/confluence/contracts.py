@@ -68,6 +68,54 @@ _VERSION_RE = re.compile(
     r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\."
     r"(?:0|[1-9][0-9]*)(?:-candidate)?$"
 )
+_FORBIDDEN_VALUE_ROOTS = frozenset(
+    {
+        "action",
+        "adverse",
+        "alpha",
+        "bearish",
+        "bullish",
+        "buy",
+        "confidence",
+        "confirmation",
+        "conviction",
+        "edge",
+        "entry",
+        "ev",
+        "execute",
+        "exit",
+        "expectancy",
+        "expected",
+        "forecast",
+        "grade",
+        "likelihood",
+        "long",
+        "loss",
+        "odds",
+        "outcome",
+        "pnl",
+        "prediction",
+        "predictive",
+        "probability",
+        "profit",
+        "quality",
+        "rank",
+        "ranking",
+        "recommendation",
+        "return",
+        "score",
+        "sell",
+        "short",
+        "signal",
+        "strength",
+        "supportive",
+        "target",
+        "vote",
+        "weight",
+        "win",
+        "winrate",
+    }
+)
 
 
 class CE1ContractViolation(ValueError):
@@ -136,15 +184,36 @@ def _json_value(value: Any, name: str, depth: int = 0) -> None:
     if isinstance(value, dict):
         for key, child in value.items():
             _identifier(key, f"{name}.key")
+            if _contains_forbidden_value_semantics(key):
+                raise CE1ContractViolation(
+                    f"{name} contiene semantica no permitida"
+                )
             _json_value(child, name, depth + 1)
     elif isinstance(value, list):
         for child in value:
             _json_value(child, name, depth + 1)
+    elif isinstance(value, str):
+        _identifier(value, name)
+        if _contains_forbidden_value_semantics(value):
+            raise CE1ContractViolation(f"{name} contiene label no permitido")
     elif isinstance(value, float):
         if not math.isfinite(value):
             raise CE1ContractViolation(f"{name} contiene numero no finito")
     elif value is not None and type(value) not in (str, bool, int):
         raise CE1ContractViolation(f"{name} contiene tipo no JSON")
+
+
+def _contains_forbidden_value_semantics(value: str) -> bool:
+    tokens = set(re.findall(r"[a-z0-9]+", value.lower()))
+    normalized = set(tokens)
+    for token in tokens:
+        if token.endswith("ies") and len(token) > 3:
+            normalized.add(f"{token[:-3]}y")
+        if token.endswith("es") and len(token) > 2:
+            normalized.add(token[:-2])
+        if token.endswith("s") and len(token) > 1:
+            normalized.add(token[:-1])
+    return bool(normalized & _FORBIDDEN_VALUE_ROOTS)
 
 
 def _contract_header(document: Mapping[str, Any], document_type: str) -> None:
@@ -339,6 +408,50 @@ def validate_observation(value: Any) -> dict[str, Any]:
     return observation
 
 
+def index_observations(
+    values: Iterable[Any],
+) -> dict[str, dict[str, Any]]:
+    """Valida identidad y referencias de un conjunto completo de observaciones."""
+    indexed: dict[str, dict[str, Any]] = {}
+    for value in values:
+        observation = validate_observation(value)
+        observation_id = observation["observation_id"]
+        if observation_id in indexed:
+            raise CE1ContractViolation("observation_id duplicado")
+        indexed[observation_id] = observation
+    if not indexed:
+        raise CE1ContractViolation("CE-1 requiere al menos una observacion fixture")
+
+    known = set(indexed)
+    graph = {
+        observation_id: tuple(item["lineage"]["parent_observation_ids"])
+        for observation_id, item in indexed.items()
+    }
+    unknown = sorted(
+        {parent for parents in graph.values() for parent in parents} - known
+    )
+    if unknown:
+        raise CE1ContractViolation("lineage referencia parent desconocido")
+
+    visiting = set()
+    visited = set()
+
+    def visit(observation_id: str) -> None:
+        if observation_id in visiting:
+            raise CE1ContractViolation("lineage contiene un ciclo")
+        if observation_id in visited:
+            return
+        visiting.add(observation_id)
+        for parent in graph[observation_id]:
+            visit(parent)
+        visiting.remove(observation_id)
+        visited.add(observation_id)
+
+    for observation_id in sorted(graph):
+        visit(observation_id)
+    return indexed
+
+
 def validate_dependency(
     value: Any,
     observations: Mapping[str, Mapping[str, Any]] | None = None,
@@ -394,6 +507,33 @@ def validate_dependency(
         ) from exc
     _validate_dependency_semantics(dependency, subject, related)
     return dependency
+
+
+def index_dependencies(
+    values: Iterable[Any],
+    observations: Mapping[str, Mapping[str, Any]],
+) -> dict[frozenset[str], dict[str, Any]]:
+    """Valida referencias y exige una sola relacion estructural por par."""
+    indexed: dict[frozenset[str], dict[str, Any]] = {}
+    identifiers = set()
+    for value in values:
+        dependency = validate_dependency(value, observations)
+        dependency_id = dependency["dependency_id"]
+        if dependency_id in identifiers:
+            raise CE1ContractViolation("dependency_id duplicado")
+        identifiers.add(dependency_id)
+        pair = frozenset(
+            {
+                dependency["subject_observation_id"],
+                dependency["related_observation_id"],
+            }
+        )
+        if pair in indexed:
+            raise CE1ContractViolation(
+                "relaciones incompatibles para el mismo par"
+            )
+        indexed[pair] = dependency
+    return indexed
 
 
 def _validate_dependency_semantics(
@@ -582,6 +722,7 @@ def validate_synthesis(value: Any) -> dict[str, Any]:
     ):
         if not isinstance(synthesis[field], list):
             raise CE1ContractViolation(f"synthesis.{field} debe ser lista")
+    observation_documents = []
     for item in synthesis["observations"]:
         entry = _object(item, "synthesis.observations[]")
         _exact_fields(
@@ -589,15 +730,25 @@ def validate_synthesis(value: Any) -> dict[str, Any]:
             ("observation", "temporal_state", "reason"),
             "synthesis.observations[]",
         )
-        validate_observation(entry["observation"])
+        observation_documents.append(entry["observation"])
         if entry["temporal_state"] not in TEMPORAL_STATES:
             raise CE1ContractViolation("temporal_state invalido")
         if entry["reason"] is not None:
             _identifier(entry["reason"], "reason")
-    for dependency in synthesis["dependencies"]:
-        validate_dependency(dependency)
+    observations = index_observations(observation_documents)
+    index_dependencies(synthesis["dependencies"], observations)
+    semantic_identifiers = set()
     for relation in synthesis["semantic_relations"]:
-        validate_semantic_relation(relation)
+        validated = validate_semantic_relation(relation)
+        relation_id = validated["relation_id"]
+        if relation_id in semantic_identifiers:
+            raise CE1ContractViolation("semantic relation_id duplicado")
+        semantic_identifiers.add(relation_id)
+        unknown = sorted(set(validated["observation_ids"]) - set(observations))
+        if unknown:
+            raise CE1ContractViolation(
+                "semantic relation referencia observacion desconocida"
+            )
     for item in synthesis["missing_evidence"]:
         entry = _object(item, "synthesis.missing_evidence[]")
         _exact_fields(entry, ("family", "state"), "synthesis.missing_evidence[]")
@@ -614,5 +765,11 @@ def validate_synthesis(value: Any) -> dict[str, Any]:
             raise CE1ContractViolation("abstention scope invalido")
         _identifier(entry["subject_id"], "abstention.subject_id")
         _identifier(entry["reason"], "abstention.reason")
-        _string_list(entry["observation_ids"], "abstention.observation_ids")
+        referenced = _string_list(
+            entry["observation_ids"], "abstention.observation_ids"
+        )
+        if set(referenced) - set(observations):
+            raise CE1ContractViolation(
+                "abstention referencia observacion desconocida"
+            )
     return synthesis

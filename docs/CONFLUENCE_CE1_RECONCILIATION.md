@@ -8,9 +8,12 @@ Alcance: reconciliacion semantica entre `CONFLUENCE_ENGINE_DISCOVERY.md` y la
 restriccion cientifica establecida por
 `../nexux-trading-intelligence-lab/docs/CONFLUENCE_SCIENTIFIC_REVIEW.md`.
 
-Este documento revisa el diseno conceptual del Gate CE-1. No autoriza ni
-implementa CE-1. No crea contratos, schemas, fixtures, conexiones, cohortes ni
-integraciones.
+Este documento fue emitido como reconciliacion conceptual previa a la
+implementacion. Por si solo no autorizo ni implemento CE-1, y durante esta etapa
+no creo contratos, schemas, fixtures, conexiones, cohortes ni integraciones.
+Posteriormente, una autorizacion humana separada habilito la implementacion
+limitada de CE-1, versionada en el commit `3ae6de4`, sin modificar las decisiones
+cientificas establecidas aqui.
 
 ---
 
@@ -575,6 +578,21 @@ fixtures congelados y pruebas deterministas, que:
 Estos criterios verifican semantica e integridad. No constituyen evidencia de
 edge.
 
+### 18.1 Alcance de `CE-1-valid`
+
+`CE-1-valid` significa exclusivamente correccion representacional conforme a
+las invariantes de CE-1. No certifica cientificamente que el payload opaco
+`value` este libre de toda semantica predictiva posible. `value` permanece como
+payload descriptivo opaco sujeto a las restricciones nominales y estructurales
+de CE-1; CE-1 no lo interpreta, pondera, puntua ni usa para realizar aritmetica
+predictiva.
+
+El JSON Schema candidato no constituye por si solo el validador completo de
+CE-1. Las invariantes relacionales entre observaciones, lineage, dependencia,
+temporalidad, abstencion y contradicciones requieren la validacion runtime
+canonica. Una futura necesidad de cerrar semanticamente `value` por `kind`
+pertenece a un diseno o Gate posterior y no forma parte de CE-1.
+
 ## 19. Preguntas que permanecen abiertas
 
 La reconciliacion no resuelve anticipadamente:
@@ -606,7 +624,7 @@ CE-1 queda reconciliado como Gate de representacion descriptiva, lineage,
 dependencia y disponibilidad causal. Esta listo para que una autoridad humana
 decida si autoriza su implementacion limitada a contratos y fixtures.
 
-Hasta esa autorizacion:
+En el momento de esta reconciliacion, y hasta la autorizacion humana posterior:
 
 - CE-1 no se implementa;
 - no se crean schemas ni fixtures;
