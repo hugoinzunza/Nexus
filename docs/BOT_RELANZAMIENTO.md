@@ -19,6 +19,18 @@ Fase cerrada por decisión explícita con el bot real aún apagado:
 - La siguiente etapa es Binance Demo/Testnet con ejecución virtual aislada. No
   autoriza por sí sola el regreso de la cuenta real a `live:true`.
 
+### Reconciliacion posterior del libro (2026-08-12)
+
+La fuente canonica del VPS confirma 20 V2 cerradas y `+91,8131 USD`; su SHA-256
+es `ff389904de6bbe74527ec6d9bad5e68c88ca6cc9997fe0a0a81fb41d16e19986`. El corte alternativo de 13
+operaciones y `+44,30 USD` corresponde exactamente a las primeras 13 filas cerradas
+del mismo libro. La tabla completa y sus limites quedaron fijados en
+`docs/BOT_PHASE1_V2_CANONICAL_RECONCILIATION.md`.
+
+La reconciliacion tambien confirma que el riesgo ejecutado no fue homogeneo: vario
+entre `6,69` y `17,95 USD`; el trade 20 uso `17,95 USD`. Por ello este cierre no debe
+describirse como una cohorte uniforme de `9 USD`, ni utilizarse como prueba de edge.
+
 ## Rollover Fase 1 V1 -> V2 (2026-07-18)
 
 La primera muestra dry cerró con 16 trades, 37.5% WR, -0.305R neto promedio,
@@ -195,6 +207,23 @@ Tras **≥20 trades dry o 3 semanas** (lo primero que ocurra):
 cd ~/Nexus && git pull && sudo systemctl restart nexus.service   # SOLO con 0 posiciones
 ```
 Sizing vigente: base 450, riesgo 2%, min_margin 250, cap 8%/orden, tope diario 15%.
+
+### Gate Testnet por escenarios (2026-08-12)
+
+Un contador de cinco trades no prueba los caminos peligrosos. Antes de cualquier
+revision para live deben existir artefactos verificables de estos cinco escenarios en
+Binance Demo/Testnet:
+
+1. apertura con stop nativo confirmado por Binance;
+2. parcial con stop reajustado exactamente al remanente;
+3. stop nativo disparado realmente y posicion cerrada;
+4. reinicio del proceso con reconciliacion completa entre exchange y libro;
+5. timeout ambiguo resuelto en HEDGE sin duplicar orden ni mezclar lados.
+
+Cada escenario requiere `status=passed`, timestamp y referencia a evidencia. El
+numero de operaciones cerradas se publica como contexto, pero no sustituye este gate.
+Completar los cinco escenarios solo habilita revision humana de la maquinaria; no
+demuestra rentabilidad y nunca activa live automaticamente.
 
 ---
 

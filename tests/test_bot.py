@@ -810,7 +810,28 @@ class _CliWd:
 _TRADE_WD = [{"setup_id": "s:wd", "symbol": "ADAUSDT", "dir": "long", "mode": "live",
               "status": "abierta", "entry_price": 0.20, "sl": 0.19,
               "qty": 100.0, "qty_open": 100.0, "fee_rate": 0.0005}]
-_CFG_WD = {"enabled": True, "tolerancia_r": 0.15, "hedge": True}
+_CFG_WD = {
+    "enabled": True,
+    "tolerancia_r": 0.15,
+    "hedge": True,
+    # Una prueba nunca debe contaminar el heartbeat operacional del repositorio.
+    "_state_path": None,
+}
+
+
+def test_el_watchdog_de_prueba_no_escribe_el_estado_operacional(tmp_path):
+    wd = _wd()
+    operational = tmp_path / "bot_watchdog.json"
+    wd.ESTADO = str(operational)
+
+    wd.ciclo(
+        cli=_CliWd(precio=0.195),
+        abiertos=list(_TRADE_WD),
+        cfg=_CFG_WD,
+        log=lambda _m: None,
+    )
+
+    assert not operational.exists()
 
 
 def test_el_watchdog_cierra_cuando_el_stop_se_paso():
@@ -1564,14 +1585,23 @@ def test_reabrir_remanente_no_inventa_una_salida(tmp_path):
 
 
 def test_readiness_es_un_gate_de_invariantes_no_un_contador(tmp_path):
-    """Cinco cierres sobre un libro que puede mentir no son evidencia de nada."""
+    """Los escenarios no sirven si el libro rompe sus invariantes, ni viceversa."""
     import json as _json
     from modules.bot.sync import BotSync
     store = BotStore(path=str(tmp_path / "b.json"))
     marker = tmp_path / "live_readiness.json"
+    scenarios = (
+        "native_stop_confirmed", "partial_stop_resized", "native_stop_triggered",
+        "restart_reconciled", "hedge_ambiguous_resolved",
+    )
     marker.write_text(_json.dumps({
-        "phase": "testnet", "started_at": 0, "required_new_closed": 2,
-        "deployed_commit": "abc", "criteria": {"critical_execution_errors": 0}}))
+        "phase": "testnet", "started_at": 0,
+        "deployed_commit": "abc", "criteria": {"critical_execution_errors": 0},
+        "scenario_evidence": {
+            key: {"status": "passed", "observed_at": 1, "evidence": f"artifact:{key}"}
+            for key in scenarios
+        },
+    }))
 
     class _Ex:
         def __init__(self): self.store = store; self.data_dir = str(tmp_path)
@@ -1587,7 +1617,7 @@ def test_readiness_es_un_gate_de_invariantes_no_un_contador(tmp_path):
     for t in store.all():
         store.confirm_pnl(t["setup_id"], 5.0, 0.5)
     r = BotSync._testnet_readiness(_Ex())
-    assert r["status"] == "review", f"dos cierres limpios deben pasar: {r}"
+    assert r["status"] == "review", f"escenarios e invariantes limpios deben pasar: {r}"
 
     # una operación con el P&L pendiente rompe el gate aunque el conteo alcance
     _cerrar("s:3")

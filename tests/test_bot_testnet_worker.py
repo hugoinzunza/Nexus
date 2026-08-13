@@ -253,7 +253,7 @@ def test_snapshot_testnet_no_mezcla_lados_hedge_del_mismo_simbolo(tmp_path):
     assert "tp" not in position
 
 
-def test_snapshot_testnet_publica_progreso_live_sin_autorizarlo(tmp_path):
+def test_snapshot_testnet_exige_escenarios_y_no_un_conteo_de_trades(tmp_path):
     data_dir = tmp_path / "testnet"
     data_dir.mkdir()
     marker = {
@@ -261,6 +261,12 @@ def test_snapshot_testnet_publica_progreso_live_sin_autorizarlo(tmp_path):
         "started_at": 100,
         "deployed_commit": "abc1234",
         "required_new_closed": 5,
+        "scenario_evidence": {
+            "native_stop_confirmed": {
+                "status": "passed", "observed_at": 101,
+                "evidence": "algo order demo-1 confirmado NEW",
+            },
+        },
     }
     (data_dir / "live_readiness.json").write_text(__import__("json").dumps(marker))
     store = BotStore(path=str(data_dir / "bot_trades.json"))
@@ -276,6 +282,8 @@ def test_snapshot_testnet_publica_progreso_live_sin_autorizarlo(tmp_path):
     assert readiness["closed_candidates"] == 0
     assert readiness["open_candidates"] == 1
     assert readiness["required"] == 5
+    assert readiness["scenarios_passed"] == 1
+    assert readiness["status"] == "collecting"
     assert readiness["automatic_live"] is False
 
 
@@ -306,6 +314,55 @@ def test_readiness_falla_si_hay_incidente_critico(tmp_path):
     assert readiness["critical_execution_errors"] == 1
     assert readiness["execution_ok"] is False
     assert readiness["status"] == "failed"
+
+
+def test_readiness_solo_pasa_con_evidencia_de_los_cinco_escenarios(tmp_path):
+    data_dir = tmp_path / "testnet"
+    data_dir.mkdir()
+    scenario_ids = (
+        "native_stop_confirmed", "partial_stop_resized", "native_stop_triggered",
+        "restart_reconciled", "hedge_ambiguous_resolved",
+    )
+    marker = {
+        "phase": "testnet_scenario_readiness_v1",
+        "started_at": 100,
+        "deployed_commit": "abc1234",
+        "scenario_evidence": {
+            key: {"status": "passed", "observed_at": 101, "evidence": f"artifact:{key}"}
+            for key in scenario_ids
+        },
+    }
+    (data_dir / "live_readiness.json").write_text(__import__("json").dumps(marker))
+    ex = SimpleNamespace(store=BotStore(path=str(data_dir / "bot_trades.json")),
+                         data_dir=str(data_dir))
+
+    readiness = BotSync._testnet_readiness(ex)
+
+    assert readiness["scenarios_passed"] == 5
+    assert readiness["scenarios_failed"] == 0
+    assert readiness["status"] == "review"
+    assert readiness["automatic_live"] is False
+
+
+def test_readiness_no_acepta_un_pass_sin_evidencia(tmp_path):
+    data_dir = tmp_path / "testnet"
+    data_dir.mkdir()
+    marker = {
+        "phase": "testnet_scenario_readiness_v1",
+        "started_at": 100,
+        "scenario_evidence": {
+            "native_stop_confirmed": {"status": "passed", "observed_at": 101},
+        },
+    }
+    (data_dir / "live_readiness.json").write_text(__import__("json").dumps(marker))
+    ex = SimpleNamespace(store=BotStore(path=str(data_dir / "bot_trades.json")),
+                         data_dir=str(data_dir))
+
+    readiness = BotSync._testnet_readiness(ex)
+
+    assert readiness["scenarios_passed"] == 0
+    assert readiness["scenarios"][0]["status"] == "pending"
+    assert readiness["status"] == "collecting"
 
 
 def test_panel_identifica_testnet_como_fondos_virtuales():

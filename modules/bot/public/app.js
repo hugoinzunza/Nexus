@@ -196,7 +196,7 @@ function testnet(data) {
       <div><span>P&L cerrado</span><b class="${Number(s.pnl_usd || 0) >= 0 ? "pos" : "neg"}">${signed(Number(s.pnl_usd || 0))}</b></div>
       <div><span>Operaciones</span><b>${s.total || 0}</b></div>
     </div>
-    ${readiness ? `<div class="phase-note"><strong>Validación live: ${readiness.closed_candidates}/${readiness.required}</strong> operaciones nuevas cerradas · ${readiness.open_candidates} abiertas · incidentes críticos ${readiness.critical_execution_errors || 0} · inicio ${dt(readiness.started_at)} · commit ${readiness.deployed_commit || "—"}. Llegar al objetivo exige revisión manual y no activa live automáticamente.</div>` : ""}
+    ${readiness ? `<div class="phase-note"><strong>Validación live: ${readiness.scenarios_passed || 0}/${readiness.required}</strong> escenarios críticos demostrados · ${readiness.closed_candidates} operaciones cerradas · ${readiness.open_candidates} abiertas · incidentes críticos ${readiness.critical_execution_errors || 0} · inicio ${dt(readiness.started_at)} · commit ${readiness.deployed_commit || "—"}. El conteo de trades no sustituye los escenarios; completar el gate exige revisión manual y no activa live automáticamente.</div>` : ""}
     <div class="demo-section-title"><strong>Operaciones abiertas</strong><span>actualizadas desde Binance Demo</span></div>
     ${openPositions || `<p class="phase-note">Sin posiciones abiertas en Binance Demo.</p>`}
     <div class="demo-section-title"><strong>Historial reciente</strong><span>últimas ${recent.length} operaciones del libro Demo</span></div>
