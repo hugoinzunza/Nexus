@@ -22,6 +22,14 @@ from .executor import DATA_DIR, KILL_FILE, TRADE_ENV  # noqa: F401  (rutas compa
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 COLLECTOR_ENV = os.path.join(ROOT, "deploy", "collector.env")
 
+TESTNET_READINESS_SCENARIOS = (
+    ("native_stop_confirmed", "Apertura y stop nativo confirmados"),
+    ("partial_stop_resized", "Parcial y stop reajustado al remanente"),
+    ("native_stop_triggered", "Stop nativo disparado en Binance Demo"),
+    ("restart_reconciled", "Reinicio y reconciliación sin divergencias"),
+    ("hedge_ambiguous_resolved", "Timeout ambiguo resuelto en modo HEDGE"),
+)
+
 
 def _from_env_or_file(name: str) -> str:
     v = os.environ.get(name, "").strip()
@@ -247,18 +255,40 @@ class BotSync:
         except (OSError, json.JSONDecodeError):
             return None
         started = int(marker.get("started_at") or 0)
-        required = int(marker.get("required_new_closed") or 5)
         candidates = [t for t in ex.store.all()
                       if int(t.get("opened_at") or 0) >= started]
         closed = [t for t in candidates if t.get("status") == "cerrada"]
+        evidence = marker.get("scenario_evidence") or {}
+        scenarios = []
+        for scenario_id, label in TESTNET_READINESS_SCENARIOS:
+            record = evidence.get(scenario_id) or {}
+            passed = (
+                record.get("status") == "passed"
+                and bool(record.get("observed_at"))
+                and bool(record.get("evidence"))
+            )
+            scenarios.append({
+                "id": scenario_id,
+                "label": label,
+                "status": "passed" if passed else (
+                    "failed" if record.get("status") == "failed" else "pending"
+                ),
+                "observed_at": record.get("observed_at"),
+                "evidence": record.get("evidence"),
+            })
+        passed = sum(item["status"] == "passed" for item in scenarios)
+        failed = sum(item["status"] == "failed" for item in scenarios)
         return {
             "phase": marker.get("phase"),
             "started_at": started,
             "deployed_commit": marker.get("deployed_commit"),
-            "required": required,
+            "required": len(TESTNET_READINESS_SCENARIOS),
             "closed_candidates": len(closed),
             "open_candidates": len(candidates) - len(closed),
-            "status": "review" if len(closed) >= required else "collecting",
+            "scenarios_passed": passed,
+            "scenarios_failed": failed,
+            "scenarios": scenarios,
+            "status": "review" if passed == len(scenarios) and failed == 0 else "collecting",
             "automatic_live": False,
         }
 

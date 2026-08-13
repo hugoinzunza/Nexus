@@ -810,7 +810,28 @@ class _CliWd:
 _TRADE_WD = [{"setup_id": "s:wd", "symbol": "ADAUSDT", "dir": "long", "mode": "live",
               "status": "abierta", "entry_price": 0.20, "sl": 0.19,
               "qty": 100.0, "qty_open": 100.0, "fee_rate": 0.0005}]
-_CFG_WD = {"enabled": True, "tolerancia_r": 0.15, "hedge": True}
+_CFG_WD = {
+    "enabled": True,
+    "tolerancia_r": 0.15,
+    "hedge": True,
+    # Una prueba nunca debe contaminar el heartbeat operacional del repositorio.
+    "_state_path": None,
+}
+
+
+def test_el_watchdog_de_prueba_no_escribe_el_estado_operacional(tmp_path):
+    wd = _wd()
+    operational = tmp_path / "bot_watchdog.json"
+    wd.ESTADO = str(operational)
+
+    wd.ciclo(
+        cli=_CliWd(precio=0.195),
+        abiertos=list(_TRADE_WD),
+        cfg=_CFG_WD,
+        log=lambda _m: None,
+    )
+
+    assert not operational.exists()
 
 
 def test_el_watchdog_cierra_cuando_el_stop_se_paso():
