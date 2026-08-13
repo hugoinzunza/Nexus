@@ -18,6 +18,7 @@ import urllib.error
 import urllib.request
 
 from .executor import DATA_DIR, KILL_FILE, TRADE_ENV  # noqa: F401  (rutas compartidas)
+from .testnet_evidence import verify_scenario_record
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 COLLECTOR_ENV = os.path.join(ROOT, "deploy", "collector.env")
@@ -289,11 +290,7 @@ class BotSync:
         scenarios = []
         for scenario_id, label in TESTNET_READINESS_SCENARIOS:
             record = evidence.get(scenario_id) or {}
-            passed = (
-                record.get("status") == "passed"
-                and bool(record.get("observed_at"))
-                and bool(record.get("evidence"))
-            )
+            passed = verify_scenario_record(ex.data_dir, scenario_id, record)
             scenarios.append({
                 "id": scenario_id,
                 "label": label,

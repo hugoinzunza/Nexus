@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from modules.bot.bot_store import BotStore
 from modules.bot.executor import BotExecutor
 from modules.bot.sync import BotSync
+from modules.bot.testnet_evidence import record_scenario
 from modules.trading import module as trading_module
 
 
@@ -256,19 +257,10 @@ def test_snapshot_testnet_no_mezcla_lados_hedge_del_mismo_simbolo(tmp_path):
 def test_snapshot_testnet_exige_escenarios_y_no_un_conteo_de_trades(tmp_path):
     data_dir = tmp_path / "testnet"
     data_dir.mkdir()
-    marker = {
-        "phase": "testnet_live_readiness_v1",
-        "started_at": 100,
-        "deployed_commit": "abc1234",
-        "required_new_closed": 5,
-        "scenario_evidence": {
-            "native_stop_confirmed": {
-                "status": "passed", "observed_at": 101,
-                "evidence": "algo order demo-1 confirmado NEW",
-            },
-        },
-    }
-    (data_dir / "live_readiness.json").write_text(__import__("json").dumps(marker))
+    record_scenario(
+        data_dir, "native_stop_confirmed", {"algo_id": "demo-1"},
+        observed_at_ms=101_000, deployed_commit="abc1234",
+    )
     store = BotStore(path=str(data_dir / "bot_trades.json"))
     store.open_trade({
         "setup_id": "new:1", "symbol": "BTCUSDT", "pair": "BTC_USDT",
@@ -323,16 +315,11 @@ def test_readiness_solo_pasa_con_evidencia_de_los_cinco_escenarios(tmp_path):
         "native_stop_confirmed", "partial_stop_resized", "native_stop_triggered",
         "restart_reconciled", "hedge_ambiguous_resolved",
     )
-    marker = {
-        "phase": "testnet_scenario_readiness_v1",
-        "started_at": 100,
-        "deployed_commit": "abc1234",
-        "scenario_evidence": {
-            key: {"status": "passed", "observed_at": 101, "evidence": f"artifact:{key}"}
-            for key in scenario_ids
-        },
-    }
-    (data_dir / "live_readiness.json").write_text(__import__("json").dumps(marker))
+    for index, key in enumerate(scenario_ids):
+        record_scenario(
+            data_dir, key, {"test": True}, observed_at_ms=(101 + index) * 1000,
+            deployed_commit="abc1234",
+        )
     ex = SimpleNamespace(store=BotStore(path=str(data_dir / "bot_trades.json")),
                          data_dir=str(data_dir))
 
@@ -363,6 +350,44 @@ def test_readiness_no_acepta_un_pass_sin_evidencia(tmp_path):
     assert readiness["scenarios_passed"] == 0
     assert readiness["scenarios"][0]["status"] == "pending"
     assert readiness["status"] == "collecting"
+
+
+def test_readiness_rechaza_artefacto_adulterado(tmp_path):
+    data_dir = tmp_path / "testnet"
+    data_dir.mkdir()
+    record = record_scenario(
+        data_dir, "native_stop_confirmed", {"algo_id": "demo-1"},
+        observed_at_ms=101_000,
+    )
+    artifact = data_dir / record["evidence"]["artifact"]
+    artifact.write_text('{"alterado":true}\n')
+    ex = SimpleNamespace(store=BotStore(path=str(data_dir / "bot_trades.json")),
+                         data_dir=str(data_dir))
+
+    readiness = BotSync._testnet_readiness(ex)
+
+    assert readiness["scenarios_passed"] == 0
+    assert readiness["scenarios"][0]["status"] == "pending"
+
+
+def test_readiness_rechaza_evidencia_fuera_del_directorio(tmp_path):
+    data_dir = tmp_path / "testnet"
+    data_dir.mkdir()
+    marker = {
+        "phase": "testnet_scenario_readiness_v1",
+        "started_at": 100,
+        "scenario_evidence": {
+            "native_stop_confirmed": {
+                "status": "passed", "observed_at": 101,
+                "evidence": {"artifact": "../ajeno.json", "sha256": "0" * 64},
+            },
+        },
+    }
+    (data_dir / "live_readiness.json").write_text(__import__("json").dumps(marker))
+    ex = SimpleNamespace(store=BotStore(path=str(data_dir / "bot_trades.json")),
+                         data_dir=str(data_dir))
+
+    assert BotSync._testnet_readiness(ex)["scenarios_passed"] == 0
 
 
 def test_panel_identifica_testnet_como_fondos_virtuales():
