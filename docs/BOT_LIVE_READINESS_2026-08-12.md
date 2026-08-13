@@ -137,6 +137,11 @@ hedge-ambiguous-resolved
 escenarios ya observados solo cuando posicion, libro, parcial y stop nativo coinciden.
 No cambia leverage ni envia ordenes.
 
+`baseline-current-incidents` congela de forma explicita los incidentes anteriores al
+inicio de la cohorte. Conserva sus IDs y fechas en el marker y se niega a incorporar
+un incidente posterior a `started_at`; por tanto, cualquier fallo nuevo mantiene el
+gate en estado `failed`.
+
 Cada resultado se materializa en `scenario_evidence/` como JSON canonico inmutable.
 `live_readiness.json` conserva solo ruta y SHA-256; `BotSync` vuelve a leer y verificar
 ambos antes de contar el escenario. Texto libre, archivos adulterados o referencias
