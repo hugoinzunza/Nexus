@@ -347,14 +347,26 @@ def scenario_trigger(cli: BinanceFutures, data_dir: Path, symbol: str,
         )
         deadline = time.time() + timeout
         terminal = None
+        closing_fills = []
         while time.time() < deadline:
             position_qty = sum(
                 abs(float(p["qty"])) for p in cli.positions([symbol])
                 if p["position_side"] == "LONG"
             )
             terminal = cli.get_algo_order(protected["client_algo_id"])
-            if position_qty == 0 and terminal and terminal.get("status") != "NEW":
-                break
+            if position_qty == 0 and terminal:
+                actual_order_id = terminal.get("actual_order_id")
+                if terminal.get("status") in {"TRIGGERED", "FINISHED"} and actual_order_id:
+                    closing_fills = cli.user_trades(
+                        symbol, order_ids=[actual_order_id], start_ms=started - 2_000,
+                    )
+                    expected_side = "SELL"
+                    if any(
+                        fill.get("side") == expected_side
+                        and fill.get("position_side") == "LONG"
+                        for fill in closing_fills
+                    ):
+                        break
             time.sleep(1.0)
         else:
             record_scenario(data_dir, "native_stop_triggered", {
@@ -362,11 +374,12 @@ def scenario_trigger(cli: BinanceFutures, data_dir: Path, symbol: str,
                 "timeout_seconds": timeout, "stop": terminal,
             }, status="failed", deployed_commit=deployed_commit())
             raise RuntimeError("el stop nativo no se disparo dentro del timeout")
-        fills = cli.user_trades(symbol, start_ms=started - 2_000)
         record_scenario(data_dir, "native_stop_triggered", {
             "symbol": symbol, "position_side": "LONG", "qty": protected["qty"],
             "trigger_price": protected["trigger"], "terminal_stop": terminal,
-            "position_qty_after": 0.0, "fills_after_open": len(fills),
+            "position_qty_after": 0.0,
+            "actual_order_id": terminal.get("actual_order_id"),
+            "closing_fills": closing_fills,
         }, deployed_commit=deployed_commit())
     finally:
         cancel_own_algos(cli, algo_ids)

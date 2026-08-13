@@ -105,3 +105,13 @@ def test_observe_current_es_solo_lectura_y_acredita_stop_y_parcial(tmp_path):
         "native_stop_confirmed", "partial_stop_resized",
     }
     assert cli.writes == 0
+
+
+def test_cancelacion_no_puede_hacerse_pasar_por_stop_disparado():
+    module = _module()
+    source = Path(module.__file__).read_text()
+    block = source[source.index("def scenario_trigger"):source.index("def parse_args")]
+
+    assert '{"TRIGGERED", "FINISHED"}' in block
+    assert 'terminal.get("actual_order_id")' in block
+    assert "order_ids=[actual_order_id]" in block

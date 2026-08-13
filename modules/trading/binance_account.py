@@ -391,6 +391,12 @@ class BinanceFutures:
         return {
             "algo_id": r.get("algoId"),
             "client_algo_id": r.get("clientAlgoId"),
+            # Al dispararse, Binance materializa una orden normal y publica su ID.
+            # Vacío en NEW/CANCELED; es la prueba que permite distinguir un trigger
+            # real de una cancelación seguida por un cierre externo.
+            "actual_order_id": str(r.get("actualOrderId") or ""),
+            "actual_price": float(r.get("actualPrice") or 0),
+            "trigger_time": int(r.get("triggerTime") or 0),
             "symbol": r.get("symbol"),
             "side": r.get("side"),
             "position_side": r.get("positionSide"),
