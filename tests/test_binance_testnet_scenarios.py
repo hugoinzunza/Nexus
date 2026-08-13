@@ -115,3 +115,38 @@ def test_cancelacion_no_puede_hacerse_pasar_por_stop_disparado():
     assert '{"TRIGGERED", "FINISHED"}' in block
     assert 'terminal.get("actual_order_id")' in block
     assert "order_ids=[actual_order_id]" in block
+
+
+def test_confirmacion_del_stop_reintenta_solo_get_no_post():
+    module = _module()
+
+    class _Client:
+        posts = 0
+        gets = 0
+
+        def market_order(self, *_args, **_kwargs):
+            return {"status": "FILLED", "orderId": 1, "executedQty": 1,
+                    "avgPrice": 100}
+
+        def positions(self, _symbols):
+            return [{"position_side": "LONG", "qty": 1}]
+
+        def mark_price(self, _symbol):
+            return 100
+
+        def algo_stop_market(self, *_args, **_kwargs):
+            self.posts += 1
+
+        def get_algo_order(self, _algo_id):
+            self.gets += 1
+            if self.gets < 3:
+                return None
+            return {"status": "NEW", "position_side": "LONG", "qty": 1,
+                    "trigger_price": 97}
+
+    cli = _Client()
+    result = module.open_protected(cli, "ADAUSDT", "LONG", 1, "nx-test")
+
+    assert result["stop"]["status"] == "NEW"
+    assert cli.posts == 1
+    assert cli.gets == 3
