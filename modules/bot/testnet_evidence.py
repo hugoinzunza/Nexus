@@ -88,6 +88,40 @@ def record_scenario(data_dir: str | Path, scenario_id: str, details: dict,
     return evidence[scenario_id]
 
 
+def freeze_incident_baseline(data_dir: str | Path, incidents: list[dict]) -> dict:
+    """Congela incidentes anteriores a la cohorte; nunca perdona uno posterior."""
+    root = Path(data_dir).resolve()
+    marker_path = root / "live_readiness.json"
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("live_readiness.json debe existir antes del baseline") from exc
+    started_at = int(marker.get("started_at") or 0)
+    if started_at <= 0:
+        raise ValueError("el marker no tiene started_at valido")
+    normalized = []
+    for incident in incidents:
+        opened_at = int(incident.get("opened_at") or 0)
+        if opened_at >= started_at:
+            raise ValueError(
+                f"incidente {incident.get('setup_id')} pertenece a la cohorte actual"
+            )
+        normalized.append({
+            "setup_id": str(incident.get("setup_id") or ""),
+            "opened_at": opened_at,
+            "execution_incident": incident.get("execution_incident"),
+        })
+    normalized.sort(key=lambda item: (item["opened_at"], item["setup_id"]))
+    marker["incident_baseline"] = {
+        "frozen_at_ms": int(time.time() * 1000),
+        "count": len(normalized),
+        "incidents": normalized,
+    }
+    marker.setdefault("criteria", {})["critical_execution_errors"] = len(normalized)
+    _atomic_write(marker_path, _canonical_bytes(marker))
+    return marker["incident_baseline"]
+
+
 def verify_scenario_record(data_dir: str | Path, scenario_id: str,
                            record: dict) -> bool:
     """Verifica referencia, hash y semantica minima del artefacto. Falla cerrado."""

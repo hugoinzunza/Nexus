@@ -22,7 +22,9 @@ sys.path.insert(0, str(ROOT))
 from modules.bot.bot_store import BotStore  # noqa: E402
 from modules.bot.executor import BotExecutor, ordenar_resuelto  # noqa: E402
 from modules.bot.sync import BotSync  # noqa: E402
-from modules.bot.testnet_evidence import DEMO_URL, record_scenario  # noqa: E402
+from modules.bot.testnet_evidence import (  # noqa: E402
+    DEMO_URL, freeze_incident_baseline, record_scenario,
+)
 from modules.trading.binance_account import BinanceFutures  # noqa: E402
 
 
@@ -236,6 +238,12 @@ def observe_current(cli: BinanceFutures, data_dir: Path) -> None:
                     deployed_commit=deployed_commit())
 
 
+def baseline_current_incidents(data_dir: Path) -> None:
+    store = BotStore(path=str(data_dir / "bot_trades.json"))
+    incidents = [trade for trade in store.all() if trade.get("critical_execution_error")]
+    freeze_incident_baseline(data_dir, incidents)
+
+
 def scenario_restart(cli: BinanceFutures, data_dir: Path, symbol: str,
                      notional: float) -> None:
     require_clean_symbol(cli, symbol)
@@ -368,7 +376,8 @@ def scenario_trigger(cli: BinanceFutures, data_dir: Path, symbol: str,
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=(
-        "observe-current", "native-stop-triggered", "restart-reconciled",
+        "baseline-current-incidents", "observe-current", "native-stop-triggered",
+        "restart-reconciled",
         "hedge-ambiguous-resolved", "_restart-child",
     ))
     parser.add_argument("--data-dir", required=True)
@@ -383,6 +392,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     data_dir = require_demo(args.data_dir)
+    if args.command == "baseline-current-incidents":
+        baseline_current_incidents(data_dir)
+        print("OK: baseline historico de incidentes congelado")
+        return 0
     if args.command == "_restart-child":
         if not args.checkpoint:
             raise SystemExit("--checkpoint es obligatorio")
