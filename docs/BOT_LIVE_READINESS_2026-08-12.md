@@ -146,3 +146,7 @@ Cada resultado se materializa en `scenario_evidence/` como JSON canonico inmutab
 `live_readiness.json` conserva solo ruta y SHA-256; `BotSync` vuelve a leer y verificar
 ambos antes de contar el escenario. Texto libre, archivos adulterados o referencias
 fuera de ese directorio no acreditan el gate.
+
+El escenario de stop disparado exige simultaneamente estado `TRIGGERED` o `FINISHED`,
+`actualOrderId` no vacio, posicion en cero y un fill de cierre del mismo order ID y
+`positionSide`. Un stop `CANCELED` seguido de un cierre manual no puede acreditarlo.

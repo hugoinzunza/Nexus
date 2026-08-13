@@ -42,6 +42,17 @@ def test_normaliza_close_position_sin_truthiness_de_strings(raw, expected):
     assert normalized["close_position"] is expected
 
 
+def test_normaliza_prueba_de_trigger_del_algo_order():
+    normalized = BinanceFutures._norm_algo({
+        "algoStatus": "FINISHED", "actualOrderId": 12345,
+        "actualPrice": "1.25", "triggerTime": 456,
+    })
+
+    assert normalized["actual_order_id"] == "12345"
+    assert normalized["actual_price"] == 1.25
+    assert normalized["trigger_time"] == 456
+
+
 def test_smoke_test_rechaza_cualquier_endpoint_que_no_sea_demo(monkeypatch):
     path = Path(__file__).parents[1] / "deploy" / "binance_testnet_smoke.py"
     spec = importlib.util.spec_from_file_location("binance_testnet_smoke", path)
