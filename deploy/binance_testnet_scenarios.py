@@ -134,7 +134,15 @@ def open_protected(cli: BinanceFutures, symbol: str, position_side: str,
         symbol, close_order_side, trigger, qty=real_qty,
         position_side=position_side, client_algo_id=algo_id,
     )
-    stop = cli.get_algo_order(algo_id)
+    stop = None
+    # Demo no es fuertemente consistente entre POST y GET. Solo se repite la
+    # consulta del mismo ID; reenviar el POST podria duplicar la proteccion.
+    for delay in (0.0, 0.2, 0.4, 0.6):
+        if delay:
+            time.sleep(delay)
+        stop = cli.get_algo_order(algo_id)
+        if stop:
+            break
     if not stop or stop.get("status") != "NEW":
         raise RuntimeError(f"stop Demo no confirmado: {stop}")
     if (stop.get("position_side") != position_side
