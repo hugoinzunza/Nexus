@@ -116,3 +116,28 @@ Siguiente accion segura: aislar y revisar el commit del bot, desplegar exclusiva
 en Demo y ejecutar los tres escenarios pendientes con artefactos trazables. La cohorte
 economica futura debe mantener riesgo objetivo fijo de `9 USD`; cambiarlo inicia una
 cohorte nueva.
+
+## Runner dirigido de escenarios
+
+El runner `deploy/binance_testnet_scenarios.py` no forma parte del worker automatico.
+Cada invocacion exige explicitamente `NEXUS_TESTNET=1`, el endpoint exacto
+`https://demo-fapi.binance.com`, una cuenta HEDGE y un `--data-dir` terminado en
+`/testnet`. No carga `trade.env`, no acepta el endpoint productivo y se niega a tocar
+un simbolo que ya tenga posicion u orden algo.
+
+Los tres comandos pendientes son:
+
+```text
+native-stop-triggered
+restart-reconciled
+hedge-ambiguous-resolved
+```
+
+`observe-current` es un cuarto comando estrictamente read-only: acredita los dos
+escenarios ya observados solo cuando posicion, libro, parcial y stop nativo coinciden.
+No cambia leverage ni envia ordenes.
+
+Cada resultado se materializa en `scenario_evidence/` como JSON canonico inmutable.
+`live_readiness.json` conserva solo ruta y SHA-256; `BotSync` vuelve a leer y verificar
+ambos antes de contar el escenario. Texto libre, archivos adulterados o referencias
+fuera de ese directorio no acreditan el gate.

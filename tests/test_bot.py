@@ -1586,22 +1586,18 @@ def test_reabrir_remanente_no_inventa_una_salida(tmp_path):
 
 def test_readiness_es_un_gate_de_invariantes_no_un_contador(tmp_path):
     """Los escenarios no sirven si el libro rompe sus invariantes, ni viceversa."""
-    import json as _json
     from modules.bot.sync import BotSync
+    from modules.bot.testnet_evidence import record_scenario
     store = BotStore(path=str(tmp_path / "b.json"))
-    marker = tmp_path / "live_readiness.json"
     scenarios = (
         "native_stop_confirmed", "partial_stop_resized", "native_stop_triggered",
         "restart_reconciled", "hedge_ambiguous_resolved",
     )
-    marker.write_text(_json.dumps({
-        "phase": "testnet", "started_at": 0,
-        "deployed_commit": "abc", "criteria": {"critical_execution_errors": 0},
-        "scenario_evidence": {
-            key: {"status": "passed", "observed_at": 1, "evidence": f"artifact:{key}"}
-            for key in scenarios
-        },
-    }))
+    for index, key in enumerate(scenarios):
+        record_scenario(
+            tmp_path, key, {"test": True}, observed_at_ms=(1 + index) * 1000,
+            deployed_commit="abc",
+        )
 
     class _Ex:
         def __init__(self): self.store = store; self.data_dir = str(tmp_path)
