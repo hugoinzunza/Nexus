@@ -114,15 +114,17 @@ def _excedido(trade: dict, precio: float) -> float | None:
     return exceso / riesgo if exceso > 0 else None
 
 
-def _latido(vigilados: int, posiciones: int) -> None:
+def _latido(vigilados: int, posiciones: int, state_path: str | None = ESTADO) -> None:
     """Deja constancia de que el ciclo COMPLETÓ la lectura, aunque no hiciera nada.
 
     Sirve para poder mirar el archivo y saber si el watchdog está vivo y leyendo, en
     vez de suponerlo. Un watchdog que no reporta y uno que no tiene nada que hacer se
     ven idénticos desde afuera.
     """
+    if not state_path:
+        return
     try:
-        with open(ESTADO, encoding="utf-8") as fh:
+        with open(state_path, encoding="utf-8") as fh:
             datos = json.load(fh)
     except (OSError, json.JSONDecodeError):
         datos = {"eventos": []}
@@ -132,18 +134,20 @@ def _latido(vigilados: int, posiciones: int) -> None:
     datos["posiciones_reales"] = posiciones
     datos["ciclos"] = int(datos.get("ciclos") or 0) + 1
     try:
-        os.makedirs(os.path.dirname(ESTADO), exist_ok=True)
-        tmp = ESTADO + ".tmp"
+        os.makedirs(os.path.dirname(state_path), exist_ok=True)
+        tmp = state_path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(datos, fh, indent=1)
-        os.replace(tmp, ESTADO)
+        os.replace(tmp, state_path)
     except OSError:
         pass
 
 
-def _registrar(evento: dict) -> None:
+def _registrar(evento: dict, state_path: str | None = ESTADO) -> None:
+    if not state_path:
+        return
     try:
-        with open(ESTADO, encoding="utf-8") as fh:
+        with open(state_path, encoding="utf-8") as fh:
             datos = json.load(fh)
     except (OSError, json.JSONDecodeError):
         datos = {"eventos": []}
@@ -151,11 +155,11 @@ def _registrar(evento: dict) -> None:
     datos.setdefault("eventos", []).append(evento)
     datos["eventos"] = datos["eventos"][-200:]
     try:
-        os.makedirs(os.path.dirname(ESTADO), exist_ok=True)
-        tmp = ESTADO + ".tmp"
+        os.makedirs(os.path.dirname(state_path), exist_ok=True)
+        tmp = state_path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(datos, fh, indent=1)
-        os.replace(tmp, ESTADO)
+        os.replace(tmp, state_path)
     except OSError:
         pass
 
@@ -168,6 +172,9 @@ def ciclo(dry: bool = False, log=print, cli=None, abiertos=None, cfg=None) -> in
     solo toca posiciones que existen de verdad.
     """
     cfg = _cfg() if cfg is None else cfg
+    # Los tests y simuladores pueden desactivar o redirigir explícitamente el estado.
+    # Producción no declara esta clave y conserva la ruta operacional de siempre.
+    state_path = cfg.get("_state_path", ESTADO)
     if not cfg.get("enabled") and not dry:
         return 0
     tolerancia = float(cfg.get("tolerancia_r", TOLERANCIA_R))
@@ -208,11 +215,11 @@ def ciclo(dry: bool = False, log=print, cli=None, abiertos=None, cfg=None) -> in
             # Sin lectura confiable no se cierra nada: actuar a ciegas es peor que no estar.
             log(f"watchdog: no se pudieron leer posiciones ({exc}); no se toca nada")
             _registrar({"ts": time.time(), "accion": "lectura_fallida",
-                        "error": str(exc)[-200:], "intentos": intento + 1})
+                        "error": str(exc)[-200:], "intentos": intento + 1}, state_path)
             return 0
     if reales is None:
         return 0
-    _latido(len(abiertos), len(reales))
+    _latido(len(abiertos), len(reales), state_path)
     if not abiertos:
         return 0
 
@@ -258,17 +265,17 @@ def ciclo(dry: bool = False, log=print, cli=None, abiertos=None, cfg=None) -> in
             # el próximo ciclo vuelve a mirar la posición real, que es la verdad.
             log(f"watchdog: cierre AMBIGUO en {symbol} ({exc}); se revisa el próximo ciclo")
             _registrar({"ts": time.time(), "symbol": symbol, "accion": "ambiguo",
-                        "error": str(exc)[-200:], "r": r_actual})
+                        "error": str(exc)[-200:], "r": r_actual}, state_path)
             continue
         if not resp:
             log(f"watchdog: el cierre de {symbol} no se ejecutó")
             _registrar({"ts": time.time(), "symbol": symbol, "accion": "no_ejecutada",
-                        "r": r_actual})
+                        "r": r_actual}, state_path)
             continue
         cerradas += 1
         _registrar({"ts": time.time(), "symbol": symbol, "accion": "cerrada",
                     "precio": precio, "sl": t.get("sl"), "r": r_actual,
-                    "exceso_r": exceso})
+                    "exceso_r": exceso}, state_path)
         log(f"watchdog: {symbol} cerrada a mercado")
     return cerradas
 
