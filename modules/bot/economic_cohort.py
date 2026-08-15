@@ -117,14 +117,20 @@ def operational_status(
     deadline_ms = int(protocol["stopping_rule"]["deadline_ms"])
     reached_target = len(closed) >= target
     reached_deadline = now_ms >= deadline_ms
+    started = now_ms >= start_ms
     return {
         "cohort_id": cohort_id,
         "protocol_sha256": protocol_sha,
-        "status": "ready_for_single_evaluation" if (reached_target or reached_deadline) else "collecting",
+        "status": (
+            "scheduled" if not started else
+            "ready_for_single_evaluation" if (reached_target or reached_deadline) else
+            "collecting"
+        ),
         "opened": len(eligible),
         "closed": min(len(closed), target),
         "target_closed": target,
         "deadline_ms": deadline_ms,
+        "start_at_ms": start_ms,
         "stop_reason": "n_exact" if reached_target else ("deadline" if reached_deadline else None),
         "outcome_metrics_hidden_until_close": True,
         "automatic_live": False,
