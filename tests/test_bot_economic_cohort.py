@@ -118,3 +118,14 @@ def test_exact_n_or_deadline_are_the_only_stops():
     assert by_n["stop_reason"] == "n_exact"
     assert by_date["status"] == "ready_for_single_evaluation"
     assert by_date["stop_reason"] == "deadline"
+
+
+def test_bot_module_adds_cohort_to_state_without_outcome_metrics():
+    from modules.bot.module import BotModule
+
+    data = {"trades": []}
+    BotModule._add_economic_cohort(data, cfg=_config())
+
+    assert data["economic_cohort"]["status"] == "collecting"
+    assert data["economic_cohort"]["automatic_live"] is False
+    assert "avg_net_r" not in data["economic_cohort"]

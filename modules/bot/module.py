@@ -59,6 +59,7 @@ class BotModule(NexusModule):
             data = dict(ing)
             data["source"] = "vps"
             data["age_seconds"] = round((time.time() * 1000 - ing.get("_received_at_ms", ing["ts"])) / 1000, 0)
+            self._add_economic_cohort(data)
             return self._json(200, data)
         # Fallback local (VPS/dev sin ingesta): solo el libro, sin cuenta en vivo.
         from .bot_store import BotStore
@@ -66,13 +67,27 @@ class BotModule(NexusModule):
         s = BotStore()
         cfg = load_config()
         key, _sec = _trade_creds()
-        return self._json(200, {
+        data = {
             "source": "local", "account": {}, "positions": [], "open_orders": [],
             "summary": s.summary(),
             "trades": sorted(s.all(), key=lambda t: t.get("opened_at", 0), reverse=True),
             "live": bool(cfg.get("live")), "active": bool(cfg.get("enabled")) and bool(key),
             "kill": os.path.exists(os.path.join(ROOT, "data", "bot_kill")),
-        })
+        }
+        self._add_economic_cohort(data, cfg=cfg)
+        return self._json(200, data)
+
+    @staticmethod
+    def _add_economic_cohort(data, cfg=None):
+        """Paridad de observabilidad para snapshots ingeridos y fallback local."""
+        if data.get("economic_cohort"):
+            return
+        from .executor import load_config
+        cfg = cfg or load_config()
+        if not (cfg.get("economic_cohort") or {}).get("enabled"):
+            return
+        from .economic_cohort import operational_status
+        data["economic_cohort"] = operational_status(data.get("trades") or [], cfg)
 
     # --- POST ----------------------------------------------------------
     def api_post(self, subpath, body, headers, user=None):
