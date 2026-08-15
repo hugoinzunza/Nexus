@@ -230,6 +230,15 @@ def _trade_creds() -> tuple[str, str]:
     return key, sec
 
 
+# --- Protección del runner a 3R (HYP-EXIT-002 / cohorte HYP-EXIT-003) ----------
+# Mismos números que la spec congelada research/hypothesis_lab/specs/v1/
+# HYP-EXIT-003-SHADOW.frozen.json: trigger_rr=3.0 y protected_stop_rr=0.0
+# (el stop protegido queda EXACTO en la entrada). Si la sombra y producción
+# calculan distinto, la evidencia de la cohorte no aplica al código real.
+PROTECT3R_TRIGGER_RR = 3.0
+PROTECT3R_STOP_GEN = 9  # generación de stop reservada; los parciales usan 1..n
+
+
 class BotExecutor:
     def __init__(self, store, log, config: dict | None = None, client=None,
                  data_dir: str | None = None, kill_file: str | None = None):
@@ -293,6 +302,69 @@ class BotExecutor:
                 self.log(f"bot: error procesando {t.get('key')} ({t.get('type')}): {exc}")
 
     # --- acciones ------------------------------------------------------
+    def on_protect_tick(self, symbol: str, price: float) -> None:
+        """Gancho por tick del poller para la protección del runner a 3R.
+
+        OSCURO POR DEFECTO: sin `exit_protect_3r: true` en la config retorna en
+        la primera línea y el comportamiento del bot es idéntico al actual. La
+        bandera solo puede encenderse tras el veredicto de la cohorte
+        HYP-EXIT-003 (24-oct-2026) y el cierre de ECON-COHORT-001; encenderla
+        antes invalida ambas evidencias.
+
+        Semántica (fiel a la sombra, con una diferencia declarada): la sombra
+        activa el stop protegido desde la vela SIGUIENTE al cruce de 3R; en vivo
+        el reemplazo ocurre al detectar el cruce, con la latencia del tick como
+        aproximación de ese "después". El BE usa la entrada REAL (fill), no la
+        planeada: producción protege lo que de verdad pagó."""
+        if not self.cfg.get("exit_protect_3r") or not price:
+            return
+        for trade in self.store.all():
+            if trade.get("status") != "abierta" or trade.get("symbol") != symbol:
+                continue
+            if trade.get("sl_move_reason") == "protect_3r":
+                continue
+            entry = float(trade.get("entry_price") or 0)
+            qty0 = float(trade.get("qty") or 0)
+            risk_usd = float(trade.get("risk_usd_est") or trade.get("risk_usd") or 0)
+            if entry <= 0 or qty0 <= 0 or risk_usd <= 0:
+                continue
+            risk_px = risk_usd / qty0  # riesgo por unidad, congelado a la apertura
+            long = trade.get("dir") == "long"
+            trigger = entry + PROTECT3R_TRIGGER_RR * risk_px if long \
+                else entry - PROTECT3R_TRIGGER_RR * risk_px
+            if (price < trigger) if long else (price > trigger):
+                continue
+            sid = trade.get("setup_id")
+            if trade.get("mode") != "live":
+                # En dry no hay stop nativo que mover ni motor propio de salidas
+                # (el diario es el cerebro): solo se deja constancia.
+                self.log(f"bot[dry]: {symbol} cruzó 3R; protect_3r registraría BE "
+                         f"@ {entry} (sin acción en dry)")
+                self.store.move_stop(sid, trade.get("sl"), "protect_3r")
+                continue
+            cli = self.client()
+            if not cli:
+                continue
+            rem = float(trade.get("qty_open") or 0)
+            if rem <= 0:
+                continue
+            be_pos = ("LONG" if long else "SHORT") if self.hedge else None
+            # Mismo orden que los parciales: stop NUEVO confirmado primero, viejo
+            # después. Si el reemplazo no confirma, el stop original sigue vivo y
+            # se reintenta al próximo tick — nunca hay ventana sin stop.
+            if self._proteger(cli, symbol, trade["dir"], entry,
+                              cli.round_qty(symbol, rem), sid, be_pos,
+                              gen=PROTECT3R_STOP_GEN):
+                self._cancelar_stops_anteriores(
+                    cli, symbol, sid, conservar=self._aid(sid, PROTECT3R_STOP_GEN)
+                )
+                self.store.move_stop(sid, entry, "protect_3r")
+                self.log(f"bot: 🛡️ {symbol} alcanzó 3R → stop protegido a BE "
+                         f"@ {entry} por {rem} (HYP-EXIT-002)")
+            else:
+                self.log(f"bot: ⚠️ {symbol} cruzó 3R pero el stop BE no confirmó; "
+                         f"el stop original sigue vivo, se reintenta")
+
     def _open(self, t: dict, ref_price: float) -> None:
         if t.get("paper_only"):
             self.log(f"bot: {t.get('pair')} {t.get('dir')} es paper_only "

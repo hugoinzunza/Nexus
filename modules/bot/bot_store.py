@@ -146,6 +146,24 @@ class BotStore:
             self._save()
             return True
 
+    def move_stop(self, setup_id: str, new_sl: float, reason: str) -> bool:
+        """Mueve el SL del libro de un trade ABIERTO y deja constancia del motivo.
+
+        Existe para la protección del runner a 3R (HYP-EXIT-002): el stop nativo
+        se reemplaza en el exchange y el libro debe reflejarlo para que el
+        watchdog —que lee el LIBRO— haga cumplir el nivel nuevo, no el viejo.
+        Idempotente: repetir la misma mudanza no reescribe ni duplica nada."""
+        with self._lock:
+            t = self.get_open(setup_id)
+            if not t:
+                return False
+            if t.get("sl") == new_sl and t.get("sl_move_reason") == reason:
+                return True
+            t["sl"] = new_sl
+            t["sl_move_reason"] = reason
+            self._save()
+            return True
+
     def ajustar_qty(self, setup_id: str, qty_real: float) -> bool:
         """Alinea el libro con la cantidad REAL del exchange.
 

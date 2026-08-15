@@ -385,6 +385,14 @@ class TradingModule(NexusModule):
                                               "→ gatillo SL con precio Crypto.com en vivo")
                     if st.get("ticker"):
                         st["ticker"]["last"] = last
+                    # Protección del runner a 3R: gancho oscuro (retorna en una
+                    # línea sin la bandera exit_protect_3r). Aislado para que un
+                    # error suyo jamás tumbe el poller del diario.
+                    if self._bot_executor:
+                        try:
+                            self._bot_executor.on_protect_tick(bsym, last)
+                        except Exception as exc:  # noqa: BLE001
+                            self.context.log(f"bot: protect_3r tick: {exc}")
                 # RISK-OFF: vela anormal (guardia de volatilidad) O evento de alto impacto
                 # inminente (calendario). En ambos: pausa de entradas + BE defensivo.
                 spike = smc_live.volatility_spike(st.get("candles") or [])
