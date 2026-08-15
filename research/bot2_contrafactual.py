@@ -7,7 +7,7 @@ misma ventana, la única variable es la regla. Cada trade real se vuelve evidenc
 doble, en vez de partir en dos una muestra que ya es escasa (~1,3 días
 independientes por semana).
 
-Reglas CONGELADAS en `docs/BOT2_REGLAS_CONGELADAS_2026-07-26.md` antes de mirar
+Reglas CONGELADAS en `docs/BOT2_MUROS_COINGLASS_REGLAS_CONGELADAS_2026-07-26.md` antes de mirar
 ningún resultado. Este script NO debe elegir umbrales; los lee de allí.
 
   R1  veto por muro opuesto entre la entrada y TP1   (la única con chance)
@@ -43,7 +43,7 @@ ARCHIVO = os.path.join(DATA, "coinglass_visual_book_archive.jsonl")
 CALIENTE = os.path.join(DATA, "coinglass_visual_book_history.json")
 SETUPS = os.path.join(DATA, "setups.json")
 OUT_JSON = os.path.join(WT, "research", "bot2_contrafactual_results.json")
-REGLAS_DOC = os.path.join(WT, "docs", "BOT2_REGLAS_CONGELADAS_2026-07-26.md")
+REGLAS_DOC = os.path.join(WT, "docs", "BOT2_MUROS_COINGLASS_REGLAS_CONGELADAS_2026-07-26.md")
 
 SIMBOLO = "BTC_USDT"        # lo único que captura el colector
 TOLERANCIA_MIN = 15         # captura válida si es de hasta 15 min antes del toque
@@ -201,7 +201,7 @@ def main():
             "aviso": "Research only - No senal - No bot - NO usar para activar live",
             "que_es": ("evaluador contrafactual sobre los MISMOS setups de BOT1; "
                        "NO es un segundo bot con universo propio"),
-            "reglas_congeladas_en": "docs/BOT2_REGLAS_CONGELADAS_2026-07-26.md",
+            "reglas_congeladas_en": "docs/BOT2_MUROS_COINGLASS_REGLAS_CONGELADAS_2026-07-26.md",
             "umbral_muro_usd": UMBRAL_MURO,
             "causalidad": "captura anterior o igual a la activacion, nunca posterior",
             "simbolo": SIMBOLO,
