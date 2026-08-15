@@ -1,0 +1,1994 @@
+{
+  "coverage": {
+    "eligible_activated_setups": 4633,
+    "matched_information_rows": 98,
+    "pattern_rate": 0.021152600906540038,
+    "patterns": 98,
+    "resolved_baseline": 4633,
+    "unmatched_information_rows": 0,
+    "valid_confirmation_entries": 97
+  },
+  "dataset": {
+    "pairs": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "SOLUSDT",
+      "ADAUSDT",
+      "XRPUSDT"
+    ],
+    "setup_export": "data/setup_backtest_trades.json",
+    "setups_sha256": "0dc7f280578382ed15dc5ba0a2f910de668b56b7c4b70fae7b684902b1c87f38",
+    "timeframes": [
+      "1h",
+      "4h"
+    ]
+  },
+  "execution_enabled": false,
+  "generated_at_ms": 1785804940621,
+  "hypothesis_id": "HYP-CANDLE-001",
+  "information_value": {
+    "matched_strata": "pair + timeframe + direction + calendar month",
+    "mean_excess_net_r": 1.3903155430433998,
+    "month_block_bootstrap_ci95": [
+      0.12836534638263614,
+      2.7011148789075037
+    ],
+    "no_pattern_original_entry": {
+      "avg_net_r": 0.6801404188635247,
+      "break_even_win_rate_after_costs_observed_payoffs": 0.12964630610335387,
+      "discarded": 0,
+      "fixed_fraction_of_equity": {
+        "assumption": "sequential trades; concurrent account heat not modeled",
+        "ending_equity_multiple": 299152664436.0404,
+        "max_drawdown_pct": 55.843829657129284,
+        "portfolio_claim": false,
+        "risk_fraction": 0.01
+      },
+      "fixed_nominal_risk": {
+        "max_drawdown_r": 79.9352035304014,
+        "max_losing_streak": 64
+      },
+      "n_candidates": 4535,
+      "n_used": 4535,
+      "payoff_inputs": {
+        "avg_negative_net_r_abs": 1.1970694417375336,
+        "avg_positive_net_r": 8.036278408398909,
+        "formula": "observed net payoff means",
+        "partials_supported": true
+      },
+      "profit_factor_net": 1.713162616856583,
+      "temporal_stability": {
+        "by_year": {
+          "2022": {
+            "avg_net_r": 0.6171458464204757,
+            "n": 580
+          },
+          "2023": {
+            "avg_net_r": 0.5890466411328199,
+            "n": 1069
+          },
+          "2024": {
+            "avg_net_r": 0.5466572697538185,
+            "n": 1145
+          },
+          "2025": {
+            "avg_net_r": 0.9634587732491982,
+            "n": 1217
+          },
+          "2026": {
+            "avg_net_r": 0.5693691762191373,
+            "n": 524
+          }
+        },
+        "positive_year_fraction": 1.0
+      },
+      "win_rate_after_costs": 0.20330760749724366
+    },
+    "pattern_original_entry": {
+      "avg_net_r": 2.9291565827059816,
+      "break_even_win_rate_after_costs_observed_payoffs": 0.11584985756493608,
+      "discarded": 0,
+      "fixed_fraction_of_equity": {
+        "assumption": "sequential trades; concurrent account heat not modeled",
+        "ending_equity_multiple": 13.622053981269978,
+        "max_drawdown_pct": 7.025093953873249,
+        "portfolio_claim": false,
+        "risk_fraction": 0.01
+      },
+      "fixed_nominal_risk": {
+        "max_drawdown_r": 7.208827069418881,
+        "max_losing_streak": 5
+      },
+      "n_candidates": 98,
+      "n_used": 98,
+      "payoff_inputs": {
+        "avg_negative_net_r_abs": 1.1608854192289935,
+        "avg_positive_net_r": 8.859717485511695,
+        "formula": "observed net payoff means",
+        "partials_supported": true
+      },
+      "profit_factor_net": 5.26335320333866,
+      "temporal_stability": {
+        "by_year": {
+          "2022": {
+            "avg_net_r": 4.590656775591756,
+            "n": 12
+          },
+          "2023": {
+            "avg_net_r": -0.1091867449743677,
+            "n": 11
+          },
+          "2024": {
+            "avg_net_r": 1.6660895604010564,
+            "n": 23
+          },
+          "2025": {
+            "avg_net_r": 4.165980369668104,
+            "n": 32
+          },
+          "2026": {
+            "avg_net_r": 3.0769543137099764,
+            "n": 20
+          }
+        },
+        "positive_year_fraction": 0.8
+      },
+      "win_rate_after_costs": 0.40816326530612246
+    }
+  },
+  "limitations": [
+    "The pattern was defined after reviewing selected screenshots.",
+    "The historical setup export is recycled research data, not a fresh confirmation cohort.",
+    "OHLC cannot prove intrabar sequence; stop-first rules and next-open confirmation are conservative.",
+    "Matched strata reduce but do not eliminate selection and overlapping-trade dependence.",
+    "This study does not authorize a candle gate, entry delay, early exit or bot change."
+  ],
+  "notice": "Research only - No signal - No bot",
+  "parameters": {
+    "atr_period": 14,
+    "base_extreme_fraction": 0.35,
+    "base_max_body_vs_impulse": 0.5,
+    "confirmation_entry": "next_bar_open",
+    "impulse_body_fraction": 0.6,
+    "impulse_range_atr": 1.25,
+    "max_completion_bars_after_touch": 3,
+    "pattern": "impulse_absorption_reclaim",
+    "reclaim_body_atr": 0.5,
+    "reclaim_fraction": 0.5,
+    "total_cost_rate": 0.0014
+  },
+  "pattern_records": [
+    {
+      "bars_after_touch": 2,
+      "completion_index": 3007,
+      "completion_timestamp": 1665828000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.626699105018698,
+      "direction": "long",
+      "original_net_r": 2.8045403601695047,
+      "pair": "BTCUSDT",
+      "setup_id": "4b12df9eecf9b80f69596d47",
+      "start_index": 3005,
+      "start_timestamp": 1665820800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 3889,
+      "completion_timestamp": 1669003200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.063153843575419,
+      "direction": "long",
+      "original_net_r": -1.1837179614052447,
+      "pair": "BTCUSDT",
+      "setup_id": "634a7349ab197c631f17a7e3",
+      "start_index": 3887,
+      "start_timestamp": 1668996000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 6830,
+      "completion_timestamp": 1679590800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0822369875241318,
+      "direction": "short",
+      "original_net_r": -1.2152502446631164,
+      "pair": "BTCUSDT",
+      "setup_id": "22f27bd5b5a8607a409fc196",
+      "start_index": 6828,
+      "start_timestamp": 1679583600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 6830,
+      "completion_timestamp": 1679590800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0822813965563793,
+      "direction": "short",
+      "original_net_r": -1.111154704436249,
+      "pair": "BTCUSDT",
+      "setup_id": "09a7e15487f8349b596ea2cd",
+      "start_index": 6828,
+      "start_timestamp": 1679583600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 17338,
+      "completion_timestamp": 1717423200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0477414625922858,
+      "direction": "short",
+      "original_net_r": -1.162994201167731,
+      "pair": "BTCUSDT",
+      "setup_id": "c902727472f3233814201318",
+      "start_index": 17336,
+      "start_timestamp": 1717416000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 3,
+      "completion_index": 18015,
+      "completion_timestamp": 1719860400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 3.5347677652475253,
+      "direction": "short",
+      "original_net_r": 3.339099194200461,
+      "pair": "BTCUSDT",
+      "setup_id": "b98e8d5d9caf0daaa8b6ccad",
+      "start_index": 18013,
+      "start_timestamp": 1719853200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 21691,
+      "completion_timestamp": 1733094000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 1.522777890711415,
+      "direction": "short",
+      "original_net_r": 5.492874054907268,
+      "pair": "BTCUSDT",
+      "setup_id": "8e2b815ad17087bf7d1da760",
+      "start_index": 21689,
+      "start_timestamp": 1733086800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 23199,
+      "completion_timestamp": 1738522800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0725160035208483,
+      "direction": "long",
+      "original_net_r": -1.3806407105514658,
+      "pair": "BTCUSDT",
+      "setup_id": "26b229452d6c8ca1de23c870",
+      "start_index": 23197,
+      "start_timestamp": 1738515600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 24044,
+      "completion_timestamp": 1741564800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0439112790773946,
+      "direction": "long",
+      "original_net_r": -1.0936273349739671,
+      "pair": "BTCUSDT",
+      "setup_id": "6ac6048173884870b5146250",
+      "start_index": 24042,
+      "start_timestamp": 1741557600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 3,
+      "completion_index": 27726,
+      "completion_timestamp": 1754820000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.2515651857490853,
+      "direction": "short",
+      "original_net_r": -1.2058698777445132,
+      "pair": "BTCUSDT",
+      "setup_id": "66cdaafa68190db6d4184d4a",
+      "start_index": 27724,
+      "start_timestamp": 1754812800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 34357,
+      "completion_timestamp": 1778691600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.1058677121472935,
+      "direction": "long",
+      "original_net_r": -1.2831865325911387,
+      "pair": "BTCUSDT",
+      "setup_id": "04ec78010b1f9b1298ecc81c",
+      "start_index": 34355,
+      "start_timestamp": 1778684400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 35068,
+      "completion_timestamp": 1781251200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.6117323773584927,
+      "direction": "long",
+      "original_net_r": 5.221590771725433,
+      "pair": "BTCUSDT",
+      "setup_id": "29e840b69e03b3dfa404b704",
+      "start_index": 35066,
+      "start_timestamp": 1781244000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 632,
+      "completion_timestamp": 1654646400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 1.100206931186418,
+      "direction": "short",
+      "original_net_r": 9.750789298617828,
+      "pair": "BTCUSDT",
+      "setup_id": "9cdc74df4a9c265c3b047315",
+      "start_index": 630,
+      "start_timestamp": 1654617600000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 985,
+      "completion_timestamp": 1659729600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.31815554828564985,
+      "direction": "long",
+      "original_net_r": 2.8574946764188613,
+      "pair": "BTCUSDT",
+      "setup_id": "ba229bc6ffe45ca43cd22438",
+      "start_index": 983,
+      "start_timestamp": 1659700800000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 1819,
+      "completion_timestamp": 1671739200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 2.6131655146709996,
+      "direction": "long",
+      "original_net_r": 8.651614215264866,
+      "pair": "BTCUSDT",
+      "setup_id": "ff873cd5a57023c0e8bea2ce",
+      "start_index": 1817,
+      "start_timestamp": 1671710400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 4249,
+      "completion_timestamp": 1706731200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0435925936759587,
+      "direction": "short",
+      "original_net_r": -1.1133924773312431,
+      "pair": "BTCUSDT",
+      "setup_id": "3c949901849770ccad1abdf0",
+      "start_index": 4247,
+      "start_timestamp": 1706702400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 4249,
+      "completion_timestamp": 1706731200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.047864592951832,
+      "direction": "short",
+      "original_net_r": -1.297400048699712,
+      "pair": "BTCUSDT",
+      "setup_id": "860597dfa975402d7ca61ace",
+      "start_index": 4247,
+      "start_timestamp": 1706702400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 7741,
+      "completion_timestamp": 1757016000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 1.0395245315155048,
+      "direction": "long",
+      "original_net_r": 4.76566328038502,
+      "pair": "BTCUSDT",
+      "setup_id": "5a546b77c849d31b0050e044",
+      "start_index": 7739,
+      "start_timestamp": 1756987200000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 3089,
+      "completion_timestamp": 1666123200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0380056186738276,
+      "direction": "long",
+      "original_net_r": -1.0933127593360996,
+      "pair": "ETHUSDT",
+      "setup_id": "5618fe1e6c74ab39ad971d3d",
+      "start_index": 3087,
+      "start_timestamp": 1666116000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 7098,
+      "completion_timestamp": 1680559200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.8551236729559745,
+      "direction": "long",
+      "original_net_r": 7.072649890590719,
+      "pair": "ETHUSDT",
+      "setup_id": "923ec42c41b79eed9da57d91",
+      "start_index": 7096,
+      "start_timestamp": 1680552000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 13209,
+      "completion_timestamp": 1702558800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.030251240931650113,
+      "direction": "short",
+      "original_net_r": 2.0607941527107534,
+      "pair": "ETHUSDT",
+      "setup_id": "85d70ff275457c9f600ac93e",
+      "start_index": 13207,
+      "start_timestamp": 1702551600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 16323,
+      "completion_timestamp": 1713769200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0566935406396158,
+      "direction": "short",
+      "original_net_r": -1.097052870608398,
+      "pair": "ETHUSDT",
+      "setup_id": "a5c47d51a23c86a92f812193",
+      "start_index": 16321,
+      "start_timestamp": 1713762000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 21443,
+      "completion_timestamp": 1732201200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.029989815662178,
+      "direction": "short",
+      "original_net_r": -1.1291959749796014,
+      "pair": "ETHUSDT",
+      "setup_id": "5c6c80c5add24e8d16a2402d",
+      "start_index": 21441,
+      "start_timestamp": 1732194000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 22214,
+      "completion_timestamp": 1734976800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0448873302289483,
+      "direction": "short",
+      "original_net_r": -1.1906812399355866,
+      "pair": "ETHUSDT",
+      "setup_id": "c416a7f8ab20583132a643f3",
+      "start_index": 22212,
+      "start_timestamp": 1734969600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 25968,
+      "completion_timestamp": 1748491200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 1.7036367558239847,
+      "direction": "short",
+      "original_net_r": 6.45473745835317,
+      "pair": "ETHUSDT",
+      "setup_id": "f5ac618bd2499896984d7696",
+      "start_index": 25966,
+      "start_timestamp": 1748484000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 28098,
+      "completion_timestamp": 1756159200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.41758978982240763,
+      "direction": "long",
+      "original_net_r": 3.075981242197259,
+      "pair": "ETHUSDT",
+      "setup_id": "16e0881a312bda8d12ed7ed6",
+      "start_index": 28096,
+      "start_timestamp": 1756152000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 5347,
+      "completion_timestamp": 1722542400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0276121167343923,
+      "direction": "long",
+      "original_net_r": -1.17217304452467,
+      "pair": "ETHUSDT",
+      "setup_id": "541ed280c7f78bdc7f63fa4b",
+      "start_index": 5345,
+      "start_timestamp": 1722513600000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 6419,
+      "completion_timestamp": 1737979200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0289535080192727,
+      "direction": "long",
+      "original_net_r": -1.1481873417721515,
+      "pair": "ETHUSDT",
+      "setup_id": "90407ed2b0697d5a8616b02f",
+      "start_index": 6417,
+      "start_timestamp": 1737950400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 6419,
+      "completion_timestamp": 1737979200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0282487346255393,
+      "direction": "long",
+      "original_net_r": -1.093336934950386,
+      "pair": "ETHUSDT",
+      "setup_id": "6eceae55d181301a1345f619",
+      "start_index": 6417,
+      "start_timestamp": 1737950400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 7492,
+      "completion_timestamp": 1753430400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.6657024348867382,
+      "direction": "long",
+      "original_net_r": 9.482461625352888,
+      "pair": "ETHUSDT",
+      "setup_id": "029c1992f7b3858cb99b9046",
+      "start_index": 7490,
+      "start_timestamp": 1753401600000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 7495,
+      "completion_timestamp": 1753473600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.8630745429160317,
+      "direction": "long",
+      "original_net_r": 4.288839879268042,
+      "pair": "ETHUSDT",
+      "setup_id": "e8eda61d6eeb0740861367a1",
+      "start_index": 7493,
+      "start_timestamp": 1753444800000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 7769,
+      "completion_timestamp": 1757419200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0567702848490583,
+      "direction": "short",
+      "original_net_r": -1.2317002654531675,
+      "pair": "ETHUSDT",
+      "setup_id": "a557a779dbab6c4565ed60ec",
+      "start_index": 7767,
+      "start_timestamp": 1757390400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 8056,
+      "completion_timestamp": 1761552000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 5.992962811565323,
+      "direction": "short",
+      "original_net_r": 21.67124105603455,
+      "pair": "ETHUSDT",
+      "setup_id": "3edab0e8724b0b45d8642f4e",
+      "start_index": 8054,
+      "start_timestamp": 1761523200000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 8159,
+      "completion_timestamp": 1763035200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.9090393033381736,
+      "direction": "short",
+      "original_net_r": 13.736416591928386,
+      "pair": "ETHUSDT",
+      "setup_id": "95488e43de090e7a122b8a22",
+      "start_index": 8157,
+      "start_timestamp": 1763006400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 8801,
+      "completion_timestamp": 1772280000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 1.2537408869734512,
+      "direction": "long",
+      "original_net_r": 4.8293794392523495,
+      "pair": "ETHUSDT",
+      "setup_id": "8d89af8c15296b2526d2bf73",
+      "start_index": 8799,
+      "start_timestamp": 1772251200000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 8801,
+      "completion_timestamp": 1772280000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 2.694995436681225,
+      "direction": "long",
+      "original_net_r": 11.302009229651167,
+      "pair": "ETHUSDT",
+      "setup_id": "69bba801e781d779e8b72e63",
+      "start_index": 8799,
+      "start_timestamp": 1772251200000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 9017,
+      "completion_timestamp": 1775390400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 4.382340930089343,
+      "direction": "long",
+      "original_net_r": 21.295802551020625,
+      "pair": "ETHUSDT",
+      "setup_id": "5fe5a0dfaa3f86b56576235b",
+      "start_index": 9015,
+      "start_timestamp": 1775361600000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 9190,
+      "completion_timestamp": 1777881600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0465192039800995,
+      "direction": "short",
+      "original_net_r": -1.1281088743757193,
+      "pair": "ETHUSDT",
+      "setup_id": "73a7fae8f5e51d7c52b2b4df",
+      "start_index": 9188,
+      "start_timestamp": 1777852800000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 9305,
+      "completion_timestamp": 1779537600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0249233388058412,
+      "direction": "long",
+      "original_net_r": -1.0933404255319146,
+      "pair": "ETHUSDT",
+      "setup_id": "6f89f8d7e8beb868cd944a23",
+      "start_index": 9303,
+      "start_timestamp": 1779508800000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 538,
+      "completion_timestamp": 1656939600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.032386558072685,
+      "direction": "short",
+      "original_net_r": -1.093333333333334,
+      "pair": "SOLUSDT",
+      "setup_id": "392b050c409ead1d24b521b8",
+      "start_index": 536,
+      "start_timestamp": 1656932400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 7642,
+      "completion_timestamp": 1682517600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0551810584958217,
+      "direction": "short",
+      "original_net_r": -1.123889745566691,
+      "pair": "SOLUSDT",
+      "setup_id": "dd61cae38d058d380e35b30e",
+      "start_index": 7640,
+      "start_timestamp": 1682510400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 11149,
+      "completion_timestamp": 1695142800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0525891005091461,
+      "direction": "short",
+      "original_net_r": -1.100742062076348,
+      "pair": "SOLUSDT",
+      "setup_id": "102f77b5eb0a9e90cb023dd2",
+      "start_index": 11147,
+      "start_timestamp": 1695135600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 13351,
+      "completion_timestamp": 1703070000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.045561045652266,
+      "direction": "short",
+      "original_net_r": -1.1289776058154546,
+      "pair": "SOLUSDT",
+      "setup_id": "8a4c430de235ea54412dff86",
+      "start_index": 13349,
+      "start_timestamp": 1703062800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 15350,
+      "completion_timestamp": 1710266400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.2799358249772074,
+      "direction": "long",
+      "original_net_r": 5.660331753554459,
+      "pair": "SOLUSDT",
+      "setup_id": "edca1bbfcdb31dff9bbfd75e",
+      "start_index": 15348,
+      "start_timestamp": 1710259200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 15638,
+      "completion_timestamp": 1711303200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.437602592592597,
+      "direction": "long",
+      "original_net_r": 3.6796927710843415,
+      "pair": "SOLUSDT",
+      "setup_id": "339a0c560315008cdd043c34",
+      "start_index": 15636,
+      "start_timestamp": 1711296000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 16046,
+      "completion_timestamp": 1712772000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0456027027027026,
+      "direction": "short",
+      "original_net_r": -1.2349825242718444,
+      "pair": "SOLUSDT",
+      "setup_id": "eb216a1252984dd1dc98be94",
+      "start_index": 16044,
+      "start_timestamp": 1712764800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 17488,
+      "completion_timestamp": 1717963200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 3.247639062500005,
+      "direction": "short",
+      "original_net_r": 12.098233734939589,
+      "pair": "SOLUSDT",
+      "setup_id": "13683bdab45b8ec777a26324",
+      "start_index": 17486,
+      "start_timestamp": 1717956000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 19979,
+      "completion_timestamp": 1726930800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0469731818181818,
+      "direction": "short",
+      "original_net_r": -1.1920927272727282,
+      "pair": "SOLUSDT",
+      "setup_id": "937880d3703f54f4b6c1146d",
+      "start_index": 19977,
+      "start_timestamp": 1726923600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 26464,
+      "completion_timestamp": 1750276800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.036218245614035,
+      "direction": "long",
+      "original_net_r": -1.1851629629629608,
+      "pair": "SOLUSDT",
+      "setup_id": "bc045582de671c329874984d",
+      "start_index": 26462,
+      "start_timestamp": 1750269600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 27348,
+      "completion_timestamp": 1753459200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 2.908477832512314,
+      "direction": "long",
+      "original_net_r": 8.069516571428574,
+      "pair": "SOLUSDT",
+      "setup_id": "106a1688f67074b6416d5920",
+      "start_index": 27346,
+      "start_timestamp": 1753452000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 28285,
+      "completion_timestamp": 1756832400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.11830233160621986,
+      "direction": "long",
+      "original_net_r": 2.1649377289377134,
+      "pair": "SOLUSDT",
+      "setup_id": "7257326248b62dd4c24d3779",
+      "start_index": 28283,
+      "start_timestamp": 1756825200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 29160,
+      "completion_timestamp": 1759982400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0341708154506437,
+      "direction": "long",
+      "original_net_r": -1.0933951807228917,
+      "pair": "SOLUSDT",
+      "setup_id": "7d1c66bbc3e2a47fbb5027b1",
+      "start_index": 29158,
+      "start_timestamp": 1759975200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 34602,
+      "completion_timestamp": 1779573600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 2.263935808072618,
+      "direction": "short",
+      "original_net_r": 10.272587268993732,
+      "pair": "SOLUSDT",
+      "setup_id": "785f7152632b6fe206a48f5c",
+      "start_index": 34600,
+      "start_timestamp": 1779566400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 3,
+      "completion_index": 35005,
+      "completion_timestamp": 1781024400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 1.3136195410806852,
+      "direction": "long",
+      "original_net_r": 7.006088116065746,
+      "pair": "SOLUSDT",
+      "setup_id": "2a903b1ab99306e7a8cacdac",
+      "start_index": 35003,
+      "start_timestamp": 1781017200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 1229,
+      "completion_timestamp": 1663243200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.6624322754929427,
+      "direction": "short",
+      "original_net_r": 11.053392562740516,
+      "pair": "SOLUSDT",
+      "setup_id": "c7d04be8405e58442c42e4c6",
+      "start_index": 1227,
+      "start_timestamp": 1663214400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 2568,
+      "completion_timestamp": 1682524800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0138985125211823,
+      "direction": "short",
+      "original_net_r": -1.123889745566691,
+      "pair": "SOLUSDT",
+      "setup_id": "f08c657c59b709e039b3d6a4",
+      "start_index": 2566,
+      "start_timestamp": 1682496000000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 4286,
+      "completion_timestamp": 1707264000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0400701228648488,
+      "direction": "short",
+      "original_net_r": -1.1669525547445279,
+      "pair": "SOLUSDT",
+      "setup_id": "d93b1556be369d1ef9fda386",
+      "start_index": 4284,
+      "start_timestamp": 1707235200000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 0,
+      "completion_index": 5521,
+      "completion_timestamp": 1725048000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0338922807017543,
+      "direction": "long",
+      "original_net_r": -1.0999138297872342,
+      "pair": "SOLUSDT",
+      "setup_id": "0558028e969618c44ef1f159",
+      "start_index": 5519,
+      "start_timestamp": 1725019200000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 6750,
+      "completion_timestamp": 1742745600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0342881801125703,
+      "direction": "short",
+      "original_net_r": -1.0932358208955228,
+      "pair": "SOLUSDT",
+      "setup_id": "4555c55a48da8b90766e3228",
+      "start_index": 6748,
+      "start_timestamp": 1742716800000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 0,
+      "completion_index": 6811,
+      "completion_timestamp": 1743624000000,
+      "confirmation_discarded_reason": "confirmation_crossed_plan_boundary",
+      "confirmation_net_r": null,
+      "direction": "short",
+      "original_net_r": 7.718308212560413,
+      "pair": "SOLUSDT",
+      "setup_id": "0d577fdff5f3050c00039d55",
+      "start_index": 6809,
+      "start_timestamp": 1743595200000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 7544,
+      "completion_timestamp": 1754179200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 8.296292844036671,
+      "direction": "long",
+      "original_net_r": 53.485079569892086,
+      "pair": "SOLUSDT",
+      "setup_id": "74ba8aec754a99f5f6a419b0",
+      "start_index": 7542,
+      "start_timestamp": 1754150400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 8801,
+      "completion_timestamp": 1772280000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.2983454748434218,
+      "direction": "long",
+      "original_net_r": 6.0444763565494455,
+      "pair": "SOLUSDT",
+      "setup_id": "5dc0e46af82c61cf9bb7caca",
+      "start_index": 8799,
+      "start_timestamp": 1772251200000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 8870,
+      "completion_timestamp": 1773273600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0312220968968864,
+      "direction": "short",
+      "original_net_r": -1.1878061767838106,
+      "pair": "SOLUSDT",
+      "setup_id": "8eb904a0d49c2ac0c97a198c",
+      "start_index": 8868,
+      "start_timestamp": 1773244800000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 8984,
+      "completion_timestamp": 1774915200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.02777474548518,
+      "direction": "long",
+      "original_net_r": -1.093335263462652,
+      "pair": "SOLUSDT",
+      "setup_id": "1866dc645c4d99fb0d702e2d",
+      "start_index": 8982,
+      "start_timestamp": 1774886400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 9355,
+      "completion_timestamp": 1780257600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0519627262086972,
+      "direction": "long",
+      "original_net_r": -1.1539258555133074,
+      "pair": "SOLUSDT",
+      "setup_id": "d36d972a1372b754f86e39d8",
+      "start_index": 9353,
+      "start_timestamp": 1780228800000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 0,
+      "completion_index": 637,
+      "completion_timestamp": 1657296000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 1.4141410344041903,
+      "direction": "short",
+      "original_net_r": 7.0603957382038995,
+      "pair": "XRPUSDT",
+      "setup_id": "594a3c84e434cd4f1c6e4e99",
+      "start_index": 635,
+      "start_timestamp": 1657288800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 1239,
+      "completion_timestamp": 1659463200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.052315715575168,
+      "direction": "short",
+      "original_net_r": -1.251122112211223,
+      "pair": "XRPUSDT",
+      "setup_id": "73c4ef8670ac6d3cefd274fa",
+      "start_index": 1237,
+      "start_timestamp": 1659456000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 2304,
+      "completion_timestamp": 1663297200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 3.098986893375841,
+      "direction": "long",
+      "original_net_r": 11.144866736621278,
+      "pair": "XRPUSDT",
+      "setup_id": "c6fe49b42c433a9f278264bf",
+      "start_index": 2302,
+      "start_timestamp": 1663290000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 5315,
+      "completion_timestamp": 1674136800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.053677534436627,
+      "direction": "short",
+      "original_net_r": -1.1875790547432865,
+      "pair": "XRPUSDT",
+      "setup_id": "b4cfa9417e7f0fa1ac1311cd",
+      "start_index": 5313,
+      "start_timestamp": 1674129600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 6499,
+      "completion_timestamp": 1678399200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0334718404398133,
+      "direction": "long",
+      "original_net_r": -1.1286380928227229,
+      "pair": "XRPUSDT",
+      "setup_id": "3f698178a153b677a6460c19",
+      "start_index": 6497,
+      "start_timestamp": 1678392000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 12348,
+      "completion_timestamp": 1699459200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.053877414312828,
+      "direction": "long",
+      "original_net_r": -1.2143769823289574,
+      "pair": "XRPUSDT",
+      "setup_id": "d09f80be7bd540d572ec9835",
+      "start_index": 12346,
+      "start_timestamp": 1699452000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 16216,
+      "completion_timestamp": 1713384000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0374162262300441,
+      "direction": "short",
+      "original_net_r": -1.098894833169084,
+      "pair": "XRPUSDT",
+      "setup_id": "9b85cc22aaf80a8339e52ca4",
+      "start_index": 16214,
+      "start_timestamp": 1713376800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 16997,
+      "completion_timestamp": 1716195600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0996960825317164,
+      "direction": "short",
+      "original_net_r": -1.251005917159762,
+      "pair": "XRPUSDT",
+      "setup_id": "6cec543b6c29f847336f7aa0",
+      "start_index": 16995,
+      "start_timestamp": 1716188400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 25990,
+      "completion_timestamp": 1748570400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.027511426040744,
+      "direction": "long",
+      "original_net_r": -1.0932373831775708,
+      "pair": "XRPUSDT",
+      "setup_id": "1c76ff240692bdffa119d1b3",
+      "start_index": 25988,
+      "start_timestamp": 1748563200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 26753,
+      "completion_timestamp": 1751317200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.13324194053207797,
+      "direction": "short",
+      "original_net_r": 1.7203736842105122,
+      "pair": "XRPUSDT",
+      "setup_id": "fd9eff6c190b95bc8d465bbf",
+      "start_index": 26751,
+      "start_timestamp": 1751310000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 29546,
+      "completion_timestamp": 1761372000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0334248353715898,
+      "direction": "short",
+      "original_net_r": -1.0932772378516626,
+      "pair": "XRPUSDT",
+      "setup_id": "bb4ada424e6a0f5f64bcaca1",
+      "start_index": 29544,
+      "start_timestamp": 1761364800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 30369,
+      "completion_timestamp": 1764334800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.4998145762711844,
+      "direction": "long",
+      "original_net_r": 4.27072261904765,
+      "pair": "XRPUSDT",
+      "setup_id": "5bf8470e439dd4b506d79dad",
+      "start_index": 30367,
+      "start_timestamp": 1764327600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 32777,
+      "completion_timestamp": 1773003600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0745873517786566,
+      "direction": "short",
+      "original_net_r": -1.2732400000000041,
+      "pair": "XRPUSDT",
+      "setup_id": "1d30b58475277d4aed41f2a2",
+      "start_index": 32775,
+      "start_timestamp": 1772996400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 33622,
+      "completion_timestamp": 1776045600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.1152521739130434,
+      "direction": "short",
+      "original_net_r": -1.2669000000000041,
+      "pair": "XRPUSDT",
+      "setup_id": "52aefa392a927a7786acdd8e",
+      "start_index": 33620,
+      "start_timestamp": 1776038400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 798,
+      "completion_timestamp": 1657036800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.6587118320610692,
+      "direction": "long",
+      "original_net_r": 6.386273885350226,
+      "pair": "XRPUSDT",
+      "setup_id": "1a3d1c6a7e89aa24709960b8",
+      "start_index": 796,
+      "start_timestamp": 1657008000000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 8023,
+      "completion_timestamp": 1761076800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0251927191679049,
+      "direction": "short",
+      "original_net_r": -1.0977518005540159,
+      "pair": "XRPUSDT",
+      "setup_id": "de5bd1a10926aade93b7c052",
+      "start_index": 8021,
+      "start_timestamp": 1761048000000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 17507,
+      "completion_timestamp": 1718031600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0479678284182306,
+      "direction": "long",
+      "original_net_r": -1.230380414312616,
+      "pair": "ADAUSDT",
+      "setup_id": "868072c5059d5746a14d8f86",
+      "start_index": 17505,
+      "start_timestamp": 1718024400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 18318,
+      "completion_timestamp": 1720951200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0440055349209818,
+      "direction": "short",
+      "original_net_r": -1.0933368788937852,
+      "pair": "ADAUSDT",
+      "setup_id": "12b8724e2357f8b00496ed72",
+      "start_index": 18316,
+      "start_timestamp": 1720944000000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 3,
+      "completion_index": 19116,
+      "completion_timestamp": 1723824000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 7.324125481563053,
+      "direction": "long",
+      "original_net_r": 20.096898186890105,
+      "pair": "ADAUSDT",
+      "setup_id": "64c78d5f9fc2319d5081fa7d",
+      "start_index": 19114,
+      "start_timestamp": 1723816800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 19671,
+      "completion_timestamp": 1725822000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.1145764362220059,
+      "direction": "short",
+      "original_net_r": -1.3145358090185657,
+      "pair": "ADAUSDT",
+      "setup_id": "86fd15d516b0d44549f0a168",
+      "start_index": 19669,
+      "start_timestamp": 1725814800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 22215,
+      "completion_timestamp": 1734980400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.8256893395296422,
+      "direction": "long",
+      "original_net_r": 6.79791553952516,
+      "pair": "ADAUSDT",
+      "setup_id": "74e47dd515dc6600b37ac489",
+      "start_index": 22213,
+      "start_timestamp": 1734973200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 22786,
+      "completion_timestamp": 1737036000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0192961240310077,
+      "direction": "short",
+      "original_net_r": -1.0933857988165674,
+      "pair": "ADAUSDT",
+      "setup_id": "19c26c854052b18ae0818185",
+      "start_index": 22784,
+      "start_timestamp": 1737028800000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 22757,
+      "completion_timestamp": 1736931600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0159342312008979,
+      "direction": "short",
+      "original_net_r": -1.093353374233129,
+      "pair": "ADAUSDT",
+      "setup_id": "05e47519d959ae57f0388634",
+      "start_index": 22755,
+      "start_timestamp": 1736924400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 23375,
+      "completion_timestamp": 1739156400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 0.9056302825007401,
+      "direction": "long",
+      "original_net_r": 4.7932507244928555,
+      "pair": "ADAUSDT",
+      "setup_id": "398fa252cd1f92652e759d7e",
+      "start_index": 23373,
+      "start_timestamp": 1739149200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 3,
+      "completion_index": 25237,
+      "completion_timestamp": 1745859600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0571130049031054,
+      "direction": "long",
+      "original_net_r": -1.0933355808129455,
+      "pair": "ADAUSDT",
+      "setup_id": "1381eb196d67e5dfe7010e49",
+      "start_index": 25235,
+      "start_timestamp": 1745852400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 31769,
+      "completion_timestamp": 1769374800000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0465385746495441,
+      "direction": "long",
+      "original_net_r": -1.0944031508786107,
+      "pair": "ADAUSDT",
+      "setup_id": "f17b3f0a1ec55278b580ec30",
+      "start_index": 31767,
+      "start_timestamp": 1769367600000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 32095,
+      "completion_timestamp": 1770548400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0591115893021825,
+      "direction": "long",
+      "original_net_r": -1.1716047144152322,
+      "pair": "ADAUSDT",
+      "setup_id": "dee7780e9611c0d526f2504d",
+      "start_index": 32093,
+      "start_timestamp": 1770541200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 1,
+      "completion_index": 34602,
+      "completion_timestamp": 1779573600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 1.5055103227682458,
+      "direction": "short",
+      "original_net_r": 9.58080466830454,
+      "pair": "ADAUSDT",
+      "setup_id": "87b4f31f401272dfcd045c98",
+      "start_index": 34600,
+      "start_timestamp": 1779566400000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 35030,
+      "completion_timestamp": 1781114400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0363748225272125,
+      "direction": "long",
+      "original_net_r": -1.1733979829325079,
+      "pair": "ADAUSDT",
+      "setup_id": "742982428ffe0eaf8f17a8d8",
+      "start_index": 35028,
+      "start_timestamp": 1781107200000,
+      "timeframe": "1h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 7339,
+      "completion_timestamp": 1751227200000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.035549593138333,
+      "direction": "long",
+      "original_net_r": -1.3339014989293396,
+      "pair": "ADAUSDT",
+      "setup_id": "f6de6656b7d16021f27c4013",
+      "start_index": 7337,
+      "start_timestamp": 1751198400000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 8156,
+      "completion_timestamp": 1762992000000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0219950517318939,
+      "direction": "long",
+      "original_net_r": -1.0933333333333337,
+      "pair": "ADAUSDT",
+      "setup_id": "40bc50cf0bd0d7a50a0b2f0f",
+      "start_index": 8154,
+      "start_timestamp": 1762963200000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 8307,
+      "completion_timestamp": 1765166400000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": 1.086699421243288,
+      "direction": "long",
+      "original_net_r": 7.130574023025804,
+      "pair": "ADAUSDT",
+      "setup_id": "96a5626ecc78bd72546caefa",
+      "start_index": 8305,
+      "start_timestamp": 1765137600000,
+      "timeframe": "4h"
+    },
+    {
+      "bars_after_touch": 2,
+      "completion_index": 8600,
+      "completion_timestamp": 1769385600000,
+      "confirmation_discarded_reason": null,
+      "confirmation_net_r": -1.0298216159496327,
+      "direction": "long",
+      "original_net_r": -1.0944031508786107,
+      "pair": "ADAUSDT",
+      "setup_id": "98b41b97c5435c0631e15b4a",
+      "start_index": 8598,
+      "start_timestamp": 1769356800000,
+      "timeframe": "4h"
+    }
+  ],
+  "posthoc_robustness": {
+    "by_timeframe_direction_original_entry": {
+      "1h:long": {
+        "avg_net_r": 2.5636746644174435,
+        "break_even_win_rate_after_costs_observed_payoffs": 0.1510566835881901,
+        "discarded": 0,
+        "fixed_fraction_of_equity": {
+          "assumption": "sequential trades; concurrent account heat not modeled",
+          "ending_equity_multiple": 2.018119870329866,
+          "max_drawdown_pct": 4.391176066441874,
+          "portfolio_claim": false,
+          "risk_fraction": 0.01
+        },
+        "fixed_nominal_risk": {
+          "max_drawdown_r": 4.46536326192745,
+          "max_losing_streak": 4
+        },
+        "n_candidates": 29,
+        "n_used": 29,
+        "payoff_inputs": {
+          "avg_negative_net_r_abs": 1.1674945162816621,
+          "avg_positive_net_r": 6.5613559294521995,
+          "formula": "observed net payoff means",
+          "partials_supported": true
+        },
+        "profit_factor_net": 5.245362710846885,
+        "temporal_stability": {
+          "by_year": {
+            "2022": {
+              "avg_net_r": 2.9180940940123596,
+              "n": 4
+            },
+            "2023": {
+              "avg_net_r": 1.5765449384796792,
+              "n": 3
+            },
+            "2024": {
+              "avg_net_r": 7.00089156734829,
+              "n": 5
+            },
+            "2025": {
+              "avg_net_r": 1.4031827029911137,
+              "n": 11
+            },
+            "2026": {
+              "avg_net_r": 1.2508477511622818,
+              "n": 6
+            }
+          },
+          "positive_year_fraction": 1.0
+        },
+        "win_rate_after_costs": 0.4827586206896552
+      },
+      "1h:short": {
+        "avg_net_r": 0.9114258129350077,
+        "break_even_win_rate_after_costs_observed_payoffs": 0.15311927425051297,
+        "discarded": 0,
+        "fixed_fraction_of_equity": {
+          "assumption": "sequential trades; concurrent account heat not modeled",
+          "ending_equity_multiple": 1.3183079661791353,
+          "max_drawdown_pct": 11.313181291240266,
+          "portfolio_claim": false,
+          "risk_fraction": 0.01
+        },
+        "fixed_nominal_risk": {
+          "max_drawdown_r": 11.902851723178435,
+          "max_losing_streak": 6
+        },
+        "n_candidates": 33,
+        "n_used": 33,
+        "payoff_inputs": {
+          "avg_negative_net_r_abs": 1.1667853386653613,
+          "avg_positive_net_r": 6.453322217202658,
+          "formula": "observed net payoff means",
+          "partials_supported": true
+        },
+        "profit_factor_net": 2.074071169097079,
+        "temporal_stability": {
+          "by_year": {
+            "2022": {
+              "avg_net_r": 1.5719800975531142,
+              "n": 3
+            },
+            "2023": {
+              "avg_net_r": -0.6866856092271989,
+              "n": 7
+            },
+            "2024": {
+              "avg_net_r": 0.70503338519771,
+              "n": 13
+            },
+            "2025": {
+              "avg_net_r": 0.6148708089863018,
+              "n": 6
+            },
+            "2026": {
+              "avg_net_r": 4.328312984324565,
+              "n": 4
+            }
+          },
+          "positive_year_fraction": 0.8
+        },
+        "win_rate_after_costs": 0.2727272727272727
+      },
+      "4h:long": {
+        "avg_net_r": 5.870173547852172,
+        "break_even_win_rate_after_costs_observed_payoffs": 0.0885448515190067,
+        "discarded": 0,
+        "fixed_fraction_of_equity": {
+          "assumption": "sequential trades; concurrent account heat not modeled",
+          "ending_equity_multiple": 3.130181557078659,
+          "max_drawdown_pct": 5.712513441412177,
+          "portfolio_claim": false,
+          "risk_fraction": 0.01
+        },
+        "fixed_nominal_risk": {
+          "max_drawdown_r": 5.847512649963781,
+          "max_losing_streak": 5
+        },
+        "n_candidates": 22,
+        "n_used": 22,
+        "payoff_inputs": {
+          "avg_negative_net_r_abs": 1.13758506786836,
+          "avg_positive_net_r": 11.709972394285948,
+          "formula": "observed net payoff means",
+          "partials_supported": true
+        },
+        "profit_factor_net": 12.352453693396416,
+        "temporal_stability": {
+          "by_year": {
+            "2022": {
+              "avg_net_r": 5.9651275923446505,
+              "n": 3
+            },
+            "2024": {
+              "avg_net_r": -1.1360434371559522,
+              "n": 2
+            },
+            "2025": {
+              "avg_net_r": 8.275984363215404,
+              "n": 9
+            },
+            "2026": {
+              "avg_net_r": 4.879582860135888,
+              "n": 8
+            }
+          },
+          "positive_year_fraction": 0.75
+        },
+        "win_rate_after_costs": 0.5454545454545454
+      },
+      "4h:short": {
+        "avg_net_r": 3.82070785410552,
+        "break_even_win_rate_after_costs_observed_payoffs": 0.08317953272053785,
+        "discarded": 0,
+        "fixed_fraction_of_equity": {
+          "assumption": "sequential trades; concurrent account heat not modeled",
+          "ending_equity_multiple": 1.6357210168289396,
+          "max_drawdown_pct": 5.662226037505709,
+          "portfolio_claim": false,
+          "risk_fraction": 0.01
+        },
+        "fixed_nominal_risk": {
+          "max_drawdown_r": 5.794870647237694,
+          "max_losing_streak": 5
+        },
+        "n_candidates": 14,
+        "n_used": 14,
+        "payoff_inputs": {
+          "avg_negative_net_r_abs": 1.1600264182671567,
+          "avg_positive_net_r": 12.786029544376339,
+          "formula": "observed net payoff means",
+          "partials_supported": true
+        },
+        "profit_factor_net": 6.123437910566469,
+        "temporal_stability": {
+          "by_year": {
+            "2022": {
+              "avg_net_r": 10.402090930679172,
+              "n": 2
+            },
+            "2023": {
+              "avg_net_r": -1.123889745566691,
+              "n": 1
+            },
+            "2024": {
+              "avg_net_r": -1.1925816935918276,
+              "n": 3
+            },
+            "2025": {
+              "avg_net_r": 6.617212995603441,
+              "n": 6
+            },
+            "2026": {
+              "avg_net_r": -1.157957525579765,
+              "n": 2
+            }
+          },
+          "positive_year_fraction": 0.4
+        },
+        "win_rate_after_costs": 0.35714285714285715
+      }
+    },
+    "input_characteristics": {
+      "no_pattern_avg_planned_rr": 14.136802646085998,
+      "no_pattern_avg_sl_fraction": 0.009051631070289296,
+      "pattern_avg_planned_rr": 13.944897959183672,
+      "pattern_avg_sl_fraction": 0.010702357575030515
+    },
+    "rr_at_least_5": {
+      "confirmation_next_open": {
+        "avg_net_r": 0.10370310673679904,
+        "break_even_win_rate_after_costs_observed_payoffs": 0.34819377733258844,
+        "discarded": 0,
+        "fixed_fraction_of_equity": {
+          "assumption": "sequential trades; concurrent account heat not modeled",
+          "ending_equity_multiple": 1.0718995970460876,
+          "max_drawdown_pct": 17.478738899490224,
+          "portfolio_claim": false,
+          "risk_fraction": 0.01
+        },
+        "fixed_nominal_risk": {
+          "max_drawdown_r": 18.689306010497166,
+          "max_losing_streak": 7
+        },
+        "n_candidates": 81,
+        "n_used": 81,
+        "payoff_inputs": {
+          "avg_negative_net_r_abs": 1.0459559673065368,
+          "avg_positive_net_r": 1.9579919358389537,
+          "formula": "observed net payoff means",
+          "partials_supported": true
+        },
+        "profit_factor_net": 1.160617691532687,
+        "temporal_stability": {
+          "by_year": {
+            "2022": {
+              "avg_net_r": 0.7026487468986886,
+              "n": 10
+            },
+            "2023": {
+              "avg_net_r": -0.78067272514187,
+              "n": 11
+            },
+            "2024": {
+              "avg_net_r": -0.0770060770726282,
+              "n": 19
+            },
+            "2025": {
+              "avg_net_r": 0.39502741827767945,
+              "n": 22
+            },
+            "2026": {
+              "avg_net_r": 0.14386191660659975,
+              "n": 19
+            }
+          },
+          "positive_year_fraction": 0.6
+        },
+        "win_rate_after_costs": 0.38271604938271603
+      },
+      "paired_difference_confirmation_minus_original": {
+        "ci95": [
+          -4.52123517721775,
+          -1.913963327907248
+        ],
+        "mean_difference_net_r": -3.0883282863336614,
+        "months": 39,
+        "n_paired": 81,
+        "p_two_sided": 0.0009995002498750624,
+        "pairing_check": "exact setup_id intersection",
+        "status": "computed"
+      },
+      "pattern_original_entry": {
+        "avg_net_r": 3.2472298908691184,
+        "break_even_win_rate_after_costs_observed_payoffs": 0.10265647798163052,
+        "discarded": 0,
+        "fixed_fraction_of_equity": {
+          "assumption": "sequential trades; concurrent account heat not modeled",
+          "ending_equity_multiple": 11.13656136477102,
+          "max_drawdown_pct": 7.7272540166490575,
+          "portfolio_claim": false,
+          "risk_fraction": 0.01
+        },
+        "fixed_nominal_risk": {
+          "max_drawdown_r": 7.995767316193209,
+          "max_losing_streak": 7
+        },
+        "n_candidates": 82,
+        "n_used": 82,
+        "payoff_inputs": {
+          "avg_negative_net_r_abs": 1.1591229499073032,
+          "avg_positive_net_r": 10.132156204582277,
+          "formula": "observed net payoff means",
+          "partials_supported": true
+        },
+        "profit_factor_net": 5.594384936862169,
+        "temporal_stability": {
+          "by_year": {
+            "2022": {
+              "avg_net_r": 5.332369939001832,
+              "n": 10
+            },
+            "2023": {
+              "avg_net_r": -0.1091867449743677,
+              "n": 11
+            },
+            "2024": {
+              "avg_net_r": 1.7782766508090053,
+              "n": 19
+            },
+            "2025": {
+              "avg_net_r": 5.1153155870426765,
+              "n": 23
+            },
+            "2026": {
+              "avg_net_r": 3.300562683611303,
+              "n": 19
+            }
+          },
+          "positive_year_fraction": 0.8
+        },
+        "win_rate_after_costs": 0.3902439024390244
+      }
+    },
+    "warning": "Sensitivity checks were inspected after the primary result and are not confirmatory."
+  },
+  "promotion_available": false,
+  "question": "Does impulse-absorption-reclaim after a POI touch add information or improve entry timing?",
+  "research_only": true,
+  "schema_version": 1,
+  "status": "exploratory_post_hoc",
+  "timing_value": {
+    "confirmation_next_open": {
+      "avg_net_r": 0.07705967559230777,
+      "break_even_win_rate_after_costs_observed_payoffs": 0.37458869819008955,
+      "discarded": 0,
+      "fixed_fraction_of_equity": {
+        "assumption": "sequential trades; concurrent account heat not modeled",
+        "ending_equity_multiple": 1.0607106972447131,
+        "max_drawdown_pct": 16.154239245112308,
+        "portfolio_claim": false,
+        "risk_fraction": 0.01
+      },
+      "fixed_nominal_risk": {
+        "max_drawdown_r": 17.01371716029383,
+        "max_losing_streak": 5
+      },
+      "n_candidates": 97,
+      "n_used": 97,
+      "payoff_inputs": {
+        "avg_negative_net_r_abs": 1.050686787060158,
+        "avg_positive_net_r": 1.7542210815882824,
+        "formula": "observed net payoff means",
+        "partials_supported": true
+      },
+      "profit_factor_net": 1.1226584991263182,
+      "temporal_stability": {
+        "by_year": {
+          "2022": {
+            "avg_net_r": 0.5255531165498925,
+            "n": 12
+          },
+          "2023": {
+            "avg_net_r": -0.78067272514187,
+            "n": 11
+          },
+          "2024": {
+            "avg_net_r": 0.015824178618511636,
+            "n": 23
+          },
+          "2025": {
+            "avg_net_r": 0.24894613470860436,
+            "n": 31
+          },
+          "2026": {
+            "avg_net_r": 0.08371324131116065,
+            "n": 20
+          }
+        },
+        "positive_year_fraction": 0.8
+      },
+      "win_rate_after_costs": 0.4020618556701031
+    },
+    "original_entry_on_pattern_setups": {
+      "avg_net_r": 2.879783885490987,
+      "break_even_win_rate_after_costs_observed_payoffs": 0.11551248337258335,
+      "discarded": 0,
+      "fixed_fraction_of_equity": {
+        "assumption": "sequential trades; concurrent account heat not modeled",
+        "ending_equity_multiple": 12.64599695939301,
+        "max_drawdown_pct": 7.025093953873249,
+        "portfolio_claim": false,
+        "risk_fraction": 0.01
+      },
+      "fixed_nominal_risk": {
+        "max_drawdown_r": 7.208827069418881,
+        "max_losing_streak": 5
+      },
+      "n_candidates": 97,
+      "n_used": 97,
+      "payoff_inputs": {
+        "avg_negative_net_r_abs": 1.1608854192289935,
+        "avg_positive_net_r": 8.888984389946343,
+        "formula": "observed net payoff means",
+        "partials_supported": true
+      },
+      "profit_factor_net": 5.1487214943666535,
+      "temporal_stability": {
+        "by_year": {
+          "2022": {
+            "avg_net_r": 4.590656775591756,
+            "n": 12
+          },
+          "2023": {
+            "avg_net_r": -0.1091867449743677,
+            "n": 11
+          },
+          "2024": {
+            "avg_net_r": 1.6660895604010564,
+            "n": 23
+          },
+          "2025": {
+            "avg_net_r": 4.051389148929642,
+            "n": 31
+          },
+          "2026": {
+            "avg_net_r": 3.0769543137099764,
+            "n": 20
+          }
+        },
+        "positive_year_fraction": 0.8
+      },
+      "win_rate_after_costs": 0.4020618556701031
+    },
+    "paired_difference_confirmation_minus_original": {
+      "ci95": [
+        -3.950427400006681,
+        -1.8612187686180748
+      ],
+      "mean_difference_net_r": -2.8027242098986798,
+      "months": 42,
+      "n_paired": 97,
+      "p_two_sided": 0.0009995002498750624,
+      "pairing_check": "exact setup_id intersection",
+      "status": "computed"
+    }
+  },
+  "verdict": {
+    "classification": "information_candidate_do_not_chase",
+    "next_step": "Registrar el patrón en shadow sobre nuevos setups sin cambiar entrada, stop, target ni gestión.",
+    "production_change": false,
+    "summary": "El patrón identifica mejores planes originales, pero esperar su cierre destruye la expectativa; candidato solo para observación de mantener/abortar."
+  },
+  "visual_examples": {
+    "count": 2,
+    "effective_events": 1,
+    "role": "vocabulary_only",
+    "warning": "Both screenshots appear to show the same selected event and are excluded from inference."
+  }
+}

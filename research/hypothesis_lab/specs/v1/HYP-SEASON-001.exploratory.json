@@ -1,0 +1,26 @@
+{
+  "hypothesis_id": "HYP-SEASON-001",
+  "title": "Estacionalidad de julio despues de mayo y junio negativos",
+  "status": "exploratory_post_hoc",
+  "origin": "CoinGlass monthly return heatmap observed after July 2026 closed",
+  "primary_question": "Does a negative May and June increase BTC's July return beyond July's base rate?",
+  "data": {
+    "source": "Binance Spot public monthly klines",
+    "symbol": "BTCUSDT",
+    "timezone": "UTC",
+    "closed_months_only": true
+  },
+  "controls": [
+    "unconditional July base rate",
+    "other Julys without both May and June negative",
+    "any calendar month after two negative months",
+    "six-month causal log-price slope"
+  ],
+  "governance": {
+    "research_only": true,
+    "post_hoc_discovery": true,
+    "automatic_promotion": false,
+    "execution_enabled": false,
+    "production_change": false
+  }
+}

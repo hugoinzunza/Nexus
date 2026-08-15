@@ -13,7 +13,6 @@ from core.module_base import NexusModule
 ROOT = Path(__file__).resolve().parents[2]
 REPORTS = ROOT / "research" / "hypothesis_lab" / "reports"
 
-
 # Cuánto puede pasar un observador sin registrar NADA nuevo antes de declararlo detenido.
 # No es un umbral científico y no toca ningún protocolo: es plomería.
 #
@@ -212,6 +211,24 @@ class HypothesisLabModule(NexusModule):
             observer["source_age_seconds"] = source.get("age_seconds")
             observer["capturing"] = bool(silence is not None and silence <= limit)
 
+            # Bloqueo ACEPTADO: HYP-COST-003 no puede avanzar mientras el bot no
+            # opere en real, y esa espera fue aceptada explícitamente por Hugo al
+            # cerrar el Operational Recovery Sprint (2026-08-06). Reportarla como
+            # "degraded" a perpetuidad entrena a ignorar el semáforo — fatiga de
+            # alarma. `blocked` dice la verdad: no está roto, está esperando una
+            # precondición externa conocida. Solo aplica cuando la ÚNICA razón es
+            # la ausencia del ledger; cualquier otro error sigue siendo degraded.
+            load_errors = observer.get("load_errors")
+            if (
+                observer["status"] == "degraded"
+                and isinstance(load_errors, list)
+                and load_errors
+                and all(item.get("error") == "ledger_missing" for item in load_errors)
+                and not observer.get("errors")
+            ):
+                observer["status"] = "blocked"
+                observer["blocked_reason"] = "ledger_missing_accepted"
+                continue
             # Un estado ya degradado o ausente manda: no se pisa con esto.
             if observer["status"] in ("missing", "degraded"):
                 continue
@@ -230,11 +247,16 @@ class HypothesisLabModule(NexusModule):
         exit_2 = _latest("HYP-EXIT-002-*.summary.json")
         cost_1 = _latest("HYP-COST-001-*.summary.json")
         cost_2 = _latest("HYP-COST-002-*.summary.json")
+        season_1 = _latest("HYP-SEASON-001-*.summary.json")
+        trend_1 = _latest("HYP-TREND-001-*.summary.json")
+        candle_1 = _latest("HYP-CANDLE-001-*.summary.json")
         shadow_path = self.runtime_root / "hypothesis_lab" / "shadow" / "protect_3r_runner_original.json"
         telemetry_path = self.runtime_root / "hypothesis_lab" / "telemetry" / "execution_costs.json"
+        candle_path = self.runtime_root / "hypothesis_lab" / "shadow" / "candle_reversal_forward.json"
         canonical_path = self.runtime_root / "hypothesis_lab" / "canonical" / "setups.json"
         shadow = _read_json(shadow_path)
         telemetry = _read_json(telemetry_path)
+        candle_shadow = _read_json(candle_path)
 
         # Fecha del registro más nuevo de cada cohorte. Cuando todavía no hay ninguno, se
         # usa el inicio de la cohorte: recién abierta no es lo mismo que detenida.
@@ -242,6 +264,9 @@ class HypothesisLabModule(NexusModule):
         shadow_newest = _newest_ms(
             [row.get("entry_at_ms") for row in shadow.get("records", [])]
         ) or shadow.get("meta", {}).get("cohort_start_ms")
+        candle_newest = _newest_ms(
+            [row.get("entry_at_ms") for row in candle_shadow.get("records", [])]
+        ) or candle_shadow.get("protocol", {}).get("cohort", {}).get("start_at_ms")
         telemetry_newest = _newest_ms(
             [row.get("opened_at_ms") for row in telemetry.get("records", [])]
         ) or telemetry.get("meta", {}).get("cohort_start_ms")
@@ -254,6 +279,7 @@ class HypothesisLabModule(NexusModule):
         shadow_decision = shadow.get("decision", {})
         telemetry_meta = telemetry.get("meta", {})
         telemetry_decision = telemetry.get("decision", {})
+        candle_summary = candle_shadow.get("summary", {})
 
         return {
             "research_only": True,
@@ -277,12 +303,24 @@ class HypothesisLabModule(NexusModule):
                     "hypothesis_id": "HYP-COST-003-TELEMETRY",
                     "records": telemetry_meta.get("n_records", 0),
                     "decision": telemetry_decision.get("status", "not_available"),
+                    "errors": telemetry_meta.get("errors", []),
                     "load_errors": telemetry_meta.get("load_errors", []),
                     "coverage": telemetry_decision.get("primary_live_counts", {}),
                     "_newest_record_ms": telemetry_newest,
                     # No lee setups sino los libros del bot: su fuente es otra y su
                     # ausencia ya viaja en load_errors.
                     "_source": None,
+                },
+                "candle_reversal": {
+                    **self._freshness(candle_path, 420),
+                    "hypothesis_id": "HYP-CANDLE-002-SHADOW",
+                    "records": candle_summary.get("eligible_records", 0),
+                    "patterns": candle_summary.get("patterns", 0),
+                    "closed_patterns": candle_summary.get("closed_with_pattern", 0),
+                    "decision": candle_summary.get("decision_status", "not_available"),
+                    "errors": candle_shadow.get("meta", {}).get("errors", []),
+                    "_newest_record_ms": candle_newest,
+                    "_source": canonical,
                 },
             }),
             "studies": [
@@ -333,6 +371,47 @@ class HypothesisLabModule(NexusModule):
                     "verdict": "Espera operaciones live elegibles; Testnet es diagnostico y no satisface el minimo.",
                     "n": telemetry_meta.get("n_records", 0), "promotion": False,
                 },
+                {
+                    "id": "HYP-SEASON-001", "family": "Estacionalidad", "state": "exploratory",
+                    "title": "Julio después de mayo y junio negativos",
+                    "verdict": season_1.get("verdict", {}).get("summary", "Estudio exploratorio pendiente."),
+                    "n": season_1.get("may_june_negative_then_july", {}).get("n"),
+                    "avg_pct": _number(season_1.get("may_june_negative_then_july", {}).get("avg_return_pct")),
+                    "positive_rate": _number(season_1.get("may_june_negative_then_july", {}).get("positive_rate")),
+                    "baseline_rate": _number(season_1.get("july_baseline", {}).get("positive_rate")),
+                    "ci95": season_1.get("conditioned_vs_other_julys", {}).get("ci95"),
+                    "p_value": _number(season_1.get("conditioned_vs_other_julys", {}).get("fisher_exact_two_sided_p")),
+                    "promotion": False,
+                },
+                {
+                    "id": "HYP-TREND-001", "family": "Estructura", "state": "exploratory",
+                    "title": "Ruptura y retest causal de líneas por pivotes",
+                    "verdict": trend_1.get("verdict", {}).get("summary", "Estudio exploratorio pendiente."),
+                    "n": trend_1.get("event_count"),
+                    "bullish_excess_10d": _number(
+                        trend_1.get("groups", {}).get("bullish", {}).get("10", {})
+                        .get("matched_same_year_month", {}).get("avg_excess_return_pct")
+                    ),
+                    "bearish_excess_10d": _number(
+                        trend_1.get("groups", {}).get("bearish", {}).get("10", {})
+                        .get("matched_same_year_month", {}).get("avg_excess_return_pct")
+                    ),
+                    "july_events": trend_1.get("july_events", {}).get("n"),
+                    "promotion": False,
+                },
+                {
+                    "id": "HYP-CANDLE-001", "family": "Velas", "state": "candidate",
+                    "title": "Impulso, absorción y reclaim después del toque",
+                    "verdict": candle_1.get("verdict", {}).get("summary", "Estudio exploratorio pendiente."),
+                    "n": candle_1.get("coverage", {}).get("patterns"),
+                    "information_delta_r": _number(candle_1.get("information_value", {}).get("mean_excess_net_r")),
+                    "timing_delta_r": _number(
+                        candle_1.get("timing_value", {}).get("paired_difference_confirmation_minus_original", {})
+                        .get("mean_difference_net_r")
+                    ),
+                    "pattern_rate": _number(candle_1.get("coverage", {}).get("pattern_rate")),
+                    "promotion": False,
+                },
             ],
             "protocol": shadow.get("decision_protocol", {}),
             # Fuentes reales, no las de un repo que quedó atrás. Los setups entran por la
@@ -375,15 +454,20 @@ class HypothesisLabModule(NexusModule):
         observers = state["observers"]
         statuses = {name: item["status"] for name, item in observers.items()}
         stalled = sorted(name for name, value in statuses.items() if value == "stalled")
+        blocked = sorted(name for name, value in statuses.items() if value == "blocked")
         degraded = sorted(
             name for name, value in statuses.items() if value in ("degraded", "missing", "stale")
         )
+        # Un bloqueo aceptado no es salud rota: el módulo está "ok" cuando todo lo
+        # que PUEDE capturar está fresco y lo demás espera su precondición conocida.
+        healthy = set(statuses.values()) <= {"fresh", "blocked"} and "fresh" in statuses.values()
         return {
             "slug": self.slug,
-            "status": "ok" if set(statuses.values()) == {"fresh"} else "degraded",
+            "status": "ok" if healthy else "degraded",
             "mode": "research", "execution": False,
             "observers": statuses,
             "stalled": stalled,
+            "blocked_accepted": blocked,
             "degraded_observers": degraded,
             "capturing": sorted(name for name, item in observers.items() if item.get("capturing")),
         }

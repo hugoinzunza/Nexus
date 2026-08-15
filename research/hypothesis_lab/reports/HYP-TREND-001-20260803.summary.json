@@ -1,0 +1,1976 @@
+{
+  "causality": {
+    "all_anchors_known_before_break": true,
+    "future_prices_used_for_signal": false,
+    "pivot_confirmation_delay_bars": 5
+  },
+  "dataset": {
+    "path": "research/hypothesis_lab/data/BINANCE_BTCUSDT_DAILY_2017_2026.json",
+    "rows": 3274,
+    "rows_sha256": "28d796bce426cc4c7331c5c5d9674e1c4005c362116a37cb3dad49c0961af753",
+    "source": "Binance Spot public klines",
+    "timezone": "UTC"
+  },
+  "event_count": 88,
+  "events": [
+    {
+      "anchor_1_date": "2017-08-22",
+      "anchor_2_confirmed_date": "2017-09-10",
+      "anchor_2_date": "2017-09-05",
+      "anchors_known_before_break": true,
+      "break_date": "2017-09-14",
+      "calendar_month": 9,
+      "calendar_year": 2017,
+      "direction": "bearish",
+      "entry_close": 3700.0,
+      "event_date": "2017-09-15",
+      "line_id": "low:5:19",
+      "returns_pct": {
+        "10": -5.966216216216225,
+        "20": -16.011621621621618,
+        "5": -5.405405405405395
+      }
+    },
+    {
+      "anchor_1_date": "2017-10-05",
+      "anchor_2_confirmed_date": "2017-10-23",
+      "anchor_2_date": "2017-10-18",
+      "anchors_known_before_break": true,
+      "break_date": "2017-11-10",
+      "calendar_month": 11,
+      "calendar_year": 2017,
+      "direction": "bearish",
+      "entry_close": 6245.05,
+      "event_date": "2017-11-11",
+      "line_id": "low:49:62",
+      "returns_pct": {
+        "10": -30.01513198453174,
+        "20": -72.66459035556159,
+        "5": -25.931737936445654
+      }
+    },
+    {
+      "anchor_1_date": "2017-12-17",
+      "anchor_2_confirmed_date": "2018-01-01",
+      "anchor_2_date": "2017-12-27",
+      "anchors_known_before_break": true,
+      "break_date": "2018-01-03",
+      "calendar_month": 1,
+      "calendar_year": 2018,
+      "direction": "bullish",
+      "entry_close": 15059.54,
+      "event_date": "2018-01-04",
+      "line_id": "high:122:132",
+      "returns_pct": {
+        "10": -10.52190173139419,
+        "20": -24.632558497802727,
+        "5": -4.379549441749219
+      }
+    },
+    {
+      "anchor_1_date": "2017-11-12",
+      "anchor_2_confirmed_date": "2017-12-27",
+      "anchor_2_date": "2017-12-22",
+      "anchors_known_before_break": true,
+      "break_date": "2018-01-11",
+      "calendar_month": 1,
+      "calendar_year": 2018,
+      "direction": "bearish",
+      "entry_close": 13740.01,
+      "event_date": "2018-01-12",
+      "line_id": "low:87:127",
+      "returns_pct": {
+        "10": 21.68819382227525,
+        "20": 32.86380432037531,
+        "5": 20.023420652532277
+      }
+    },
+    {
+      "anchor_1_date": "2017-10-18",
+      "anchor_2_confirmed_date": "2017-10-30",
+      "anchor_2_date": "2017-10-25",
+      "anchors_known_before_break": true,
+      "break_date": "2018-02-04",
+      "calendar_month": 2,
+      "calendar_year": 2018,
+      "direction": "bearish",
+      "entry_close": 8533.98,
+      "event_date": "2018-02-10",
+      "line_id": "low:62:69",
+      "returns_pct": {
+        "10": -31.251655148008318,
+        "20": -29.353478681693666,
+        "5": -17.179674665279276
+      }
+    },
+    {
+      "anchor_1_date": "2018-03-05",
+      "anchor_2_confirmed_date": "2018-03-26",
+      "anchor_2_date": "2018-03-21",
+      "anchors_known_before_break": true,
+      "break_date": "2018-04-03",
+      "calendar_month": 4,
+      "calendar_year": 2018,
+      "direction": "bullish",
+      "entry_close": 6895.8,
+      "event_date": "2018-04-07",
+      "line_id": "high:200:216",
+      "returns_pct": {
+        "10": 14.34525363264596,
+        "20": 29.286667246729902,
+        "5": 14.89602366657965
+      }
+    },
+    {
+      "anchor_1_date": "2018-05-05",
+      "anchor_2_confirmed_date": "2018-06-08",
+      "anchor_2_date": "2018-06-03",
+      "anchors_known_before_break": true,
+      "break_date": "2018-06-08",
+      "calendar_month": 6,
+      "calendar_year": 2018,
+      "direction": "bullish",
+      "entry_close": 6712.46,
+      "event_date": "2018-06-18",
+      "line_id": "high:261:290",
+      "returns_pct": {
+        "10": -12.789349955158025,
+        "20": -0.0053631604508552755,
+        "5": -8.379640251115095
+      }
+    },
+    {
+      "anchor_1_date": "2018-06-24",
+      "anchor_2_confirmed_date": "2018-07-17",
+      "anchor_2_date": "2018-07-12",
+      "anchors_known_before_break": true,
+      "break_date": "2018-08-08",
+      "calendar_month": 8,
+      "calendar_year": 2018,
+      "direction": "bearish",
+      "entry_close": 6529.79,
+      "event_date": "2018-08-09",
+      "line_id": "low:311:329",
+      "returns_pct": {
+        "10": 0.8003320168029959,
+        "20": -7.679113723412234,
+        "5": 5.233093254147536
+      }
+    },
+    {
+      "anchor_1_date": "2018-08-14",
+      "anchor_2_confirmed_date": "2018-09-13",
+      "anchor_2_date": "2018-09-08",
+      "anchors_known_before_break": true,
+      "break_date": "2018-10-11",
+      "calendar_month": 10,
+      "calendar_year": 2018,
+      "direction": "bearish",
+      "entry_close": 6339.34,
+      "event_date": "2018-10-14",
+      "line_id": "low:362:387",
+      "returns_pct": {
+        "10": -3.5675638157915524,
+        "20": -0.7532329863992215,
+        "5": -2.9899011569027634
+      }
+    },
+    {
+      "anchor_1_date": "2018-07-25",
+      "anchor_2_confirmed_date": "2018-09-09",
+      "anchor_2_date": "2018-09-04",
+      "anchors_known_before_break": true,
+      "break_date": "2018-10-07",
+      "calendar_month": 10,
+      "calendar_year": 2018,
+      "direction": "bullish",
+      "entry_close": 6752.5,
+      "event_date": "2018-10-15",
+      "line_id": "high:342:383",
+      "returns_pct": {
+        "10": -3.323361717882267,
+        "20": -3.9489078119215093,
+        "5": -2.4302110329507687
+      }
+    },
+    {
+      "anchor_1_date": "2018-11-07",
+      "anchor_2_confirmed_date": "2018-12-29",
+      "anchor_2_date": "2018-12-24",
+      "anchors_known_before_break": true,
+      "break_date": "2019-01-02",
+      "calendar_month": 1,
+      "calendar_year": 2019,
+      "direction": "bullish",
+      "entry_close": 3766.78,
+      "event_date": "2019-01-03",
+      "line_id": "high:447:494",
+      "returns_pct": {
+        "10": -7.698086960215367,
+        "20": -5.68018307413759,
+        "5": 5.000292026611586
+      }
+    },
+    {
+      "anchor_1_date": "2019-01-08",
+      "anchor_2_confirmed_date": "2019-01-24",
+      "anchor_2_date": "2019-01-19",
+      "anchors_known_before_break": true,
+      "break_date": "2019-01-25",
+      "calendar_month": 1,
+      "calendar_year": 2019,
+      "direction": "bullish",
+      "entry_close": 3550.84,
+      "event_date": "2019-01-27",
+      "line_id": "high:509:520",
+      "returns_pct": {
+        "10": -4.096777100629723,
+        "20": 1.9029300109269842,
+        "5": -2.499971837649684
+      }
+    },
+    {
+      "anchor_1_date": "2018-12-24",
+      "anchor_2_confirmed_date": "2019-01-13",
+      "anchor_2_date": "2019-01-08",
+      "anchors_known_before_break": true,
+      "break_date": "2019-02-18",
+      "calendar_month": 2,
+      "calendar_year": 2019,
+      "direction": "bullish",
+      "entry_close": 3818.07,
+      "event_date": "2019-02-27",
+      "line_id": "high:494:509",
+      "returns_pct": {
+        "10": 3.2731196651711425,
+        "20": 5.171722886170249,
+        "5": -2.691674065692873
+      }
+    },
+    {
+      "anchor_1_date": "2019-03-04",
+      "anchor_2_confirmed_date": "2019-03-19",
+      "anchor_2_date": "2019-03-14",
+      "anchors_known_before_break": true,
+      "break_date": "2019-03-25",
+      "calendar_month": 3,
+      "calendar_year": 2019,
+      "direction": "bearish",
+      "entry_close": 3948.55,
+      "event_date": "2019-03-26",
+      "line_id": "low:564:574",
+      "returns_pct": {
+        "10": -26.754124931937028,
+        "20": -27.260639981765443,
+        "5": -3.935621937166789
+      }
+    },
+    {
+      "anchor_1_date": "2019-03-21",
+      "anchor_2_confirmed_date": "2019-04-17",
+      "anchor_2_date": "2019-04-12",
+      "anchors_known_before_break": true,
+      "break_date": "2019-04-25",
+      "calendar_month": 4,
+      "calendar_year": 2019,
+      "direction": "bearish",
+      "entry_close": 5314.1,
+      "event_date": "2019-04-26",
+      "line_id": "low:581:603",
+      "returns_pct": {
+        "10": -8.161118533712198,
+        "20": -48.03240435821681,
+        "5": -1.3003142582939553
+      }
+    },
+    {
+      "anchor_1_date": "2019-06-06",
+      "anchor_2_confirmed_date": "2019-07-07",
+      "anchor_2_date": "2019-07-02",
+      "anchors_known_before_break": true,
+      "break_date": "2019-07-14",
+      "calendar_month": 7,
+      "calendar_year": 2019,
+      "direction": "bearish",
+      "entry_close": 10838.72,
+      "event_date": "2019-07-15",
+      "line_id": "low:658:684",
+      "returns_pct": {
+        "10": 8.84652431283397,
+        "20": -0.8350617047031328,
+        "5": 0.9086866345841549
+      }
+    },
+    {
+      "anchor_1_date": "2019-04-25",
+      "anchor_2_confirmed_date": "2019-06-11",
+      "anchor_2_date": "2019-06-06",
+      "anchors_known_before_break": true,
+      "break_date": "2019-07-24",
+      "calendar_month": 7,
+      "calendar_year": 2019,
+      "direction": "bearish",
+      "entry_close": 9879.87,
+      "event_date": "2019-07-25",
+      "line_id": "low:616:658",
+      "returns_pct": {
+        "10": -10.621192384110302,
+        "20": -1.725731209013892,
+        "5": 3.0937654037958118
+      }
+    },
+    {
+      "anchor_1_date": "2019-06-26",
+      "anchor_2_confirmed_date": "2019-07-15",
+      "anchor_2_date": "2019-07-10",
+      "anchors_known_before_break": true,
+      "break_date": "2019-08-05",
+      "calendar_month": 8,
+      "calendar_year": 2019,
+      "direction": "bullish",
+      "entry_close": 11975.03,
+      "event_date": "2019-08-07",
+      "line_id": "high:678:692",
+      "returns_pct": {
+        "10": -14.688981990024242,
+        "20": -14.94760347155708,
+        "5": -4.834643420517537
+      }
+    },
+    {
+      "anchor_1_date": "2019-07-28",
+      "anchor_2_confirmed_date": "2019-08-21",
+      "anchor_2_date": "2019-08-16",
+      "anchors_known_before_break": true,
+      "break_date": "2019-08-28",
+      "calendar_month": 9,
+      "calendar_year": 2019,
+      "direction": "bearish",
+      "entry_close": 10298.73,
+      "event_date": "2019-09-06",
+      "line_id": "low:710:729",
+      "returns_pct": {
+        "10": 0.4604451228452433,
+        "20": 21.70170496750571,
+        "5": 1.363274889233912
+      }
+    },
+    {
+      "anchor_1_date": "2019-10-26",
+      "anchor_2_confirmed_date": "2019-11-09",
+      "anchor_2_date": "2019-11-04",
+      "anchors_known_before_break": true,
+      "break_date": "2019-11-10",
+      "calendar_month": 11,
+      "calendar_year": 2019,
+      "direction": "bullish",
+      "entry_close": 8821.94,
+      "event_date": "2019-11-12",
+      "line_id": "high:800:809",
+      "returns_pct": {
+        "10": -17.61188582103257,
+        "20": -17.31659929675333,
+        "5": -3.6221057953239377
+      }
+    },
+    {
+      "anchor_1_date": "2019-11-04",
+      "anchor_2_confirmed_date": "2019-12-04",
+      "anchor_2_date": "2019-11-29",
+      "anchors_known_before_break": true,
+      "break_date": "2019-12-06",
+      "calendar_month": 12,
+      "calendar_year": 2019,
+      "direction": "bullish",
+      "entry_close": 7338.64,
+      "event_date": "2019-12-09",
+      "line_id": "high:809:834",
+      "returns_pct": {
+        "10": -2.5664155756379925,
+        "20": 0.6758745489627405,
+        "5": -3.7417014596709985
+      }
+    },
+    {
+      "anchor_1_date": "2019-12-18",
+      "anchor_2_confirmed_date": "2020-01-01",
+      "anchor_2_date": "2019-12-27",
+      "anchors_known_before_break": true,
+      "break_date": "2020-01-01",
+      "calendar_month": 1,
+      "calendar_year": 2020,
+      "direction": "bearish",
+      "entry_close": 7758.0,
+      "event_date": "2020-01-06",
+      "line_id": "low:853:862",
+      "returns_pct": {
+        "10": -12.400232018561486,
+        "20": -11.046661510698641,
+        "5": -3.3772879608146456
+      }
+    },
+    {
+      "anchor_1_date": "2020-01-24",
+      "anchor_2_confirmed_date": "2020-02-09",
+      "anchor_2_date": "2020-02-04",
+      "anchors_known_before_break": true,
+      "break_date": "2020-02-16",
+      "calendar_month": 2,
+      "calendar_year": 2020,
+      "direction": "bearish",
+      "entry_close": 10164.71,
+      "event_date": "2020-02-18",
+      "line_id": "low:890:901",
+      "returns_pct": {
+        "10": 14.479508023347442,
+        "20": 21.986264241675357,
+        "5": 2.246104414193806
+      }
+    },
+    {
+      "anchor_1_date": "2020-03-07",
+      "anchor_2_confirmed_date": "2020-03-30",
+      "anchor_2_date": "2020-03-25",
+      "anchors_known_before_break": true,
+      "break_date": "2020-03-31",
+      "calendar_month": 4,
+      "calendar_year": 2020,
+      "direction": "bullish",
+      "entry_close": 6642.92,
+      "event_date": "2020-04-01",
+      "line_id": "high:933:951",
+      "returns_pct": {
+        "10": 3.5211924876409784,
+        "20": 2.9873910870520826,
+        "5": 10.341536553202491
+      }
+    },
+    {
+      "anchor_1_date": "2020-02-13",
+      "anchor_2_confirmed_date": "2020-03-12",
+      "anchor_2_date": "2020-03-07",
+      "anchors_known_before_break": true,
+      "break_date": "2020-04-16",
+      "calendar_month": 4,
+      "calendar_year": 2020,
+      "direction": "bullish",
+      "entry_close": 6826.83,
+      "event_date": "2020-04-20",
+      "line_id": "high:910:933",
+      "returns_pct": {
+        "10": 26.26651022509716,
+        "20": 27.771894129486174,
+        "5": 10.42709427362334
+      }
+    },
+    {
+      "anchor_1_date": "2020-04-16",
+      "anchor_2_confirmed_date": "2020-05-15",
+      "anchor_2_date": "2020-05-10",
+      "anchors_known_before_break": true,
+      "break_date": "2020-05-24",
+      "calendar_month": 5,
+      "calendar_year": 2020,
+      "direction": "bearish",
+      "entry_close": 9204.07,
+      "event_date": "2020-05-27",
+      "line_id": "low:973:997",
+      "returns_pct": {
+        "10": -5.022017433591874,
+        "20": -3.493237230920676,
+        "5": -10.82890503874916
+      }
+    },
+    {
+      "anchor_1_date": "2020-05-07",
+      "anchor_2_confirmed_date": "2020-05-23",
+      "anchor_2_date": "2020-05-18",
+      "anchors_known_before_break": true,
+      "break_date": "2020-06-01",
+      "calendar_month": 6,
+      "calendar_year": 2020,
+      "direction": "bullish",
+      "entry_close": 9789.06,
+      "event_date": "2020-06-04",
+      "line_id": "high:994:1005",
+      "returns_pct": {
+        "10": -4.56591337676957,
+        "20": -5.031841668147907,
+        "5": -0.16988352303488607
+      }
+    },
+    {
+      "anchor_1_date": "2020-05-10",
+      "anchor_2_confirmed_date": "2020-05-30",
+      "anchor_2_date": "2020-05-25",
+      "anchors_known_before_break": true,
+      "break_date": "2020-06-18",
+      "calendar_month": 6,
+      "calendar_year": 2020,
+      "direction": "bearish",
+      "entry_close": 9624.89,
+      "event_date": "2020-06-23",
+      "line_id": "low:997:1012",
+      "returns_pct": {
+        "10": 5.887132216575974,
+        "20": 3.9716817542849725,
+        "5": 5.2835928514507575
+      }
+    },
+    {
+      "anchor_1_date": "2020-06-01",
+      "anchor_2_confirmed_date": "2020-06-15",
+      "anchor_2_date": "2020-06-10",
+      "anchors_known_before_break": true,
+      "break_date": "2020-06-22",
+      "calendar_month": 6,
+      "calendar_year": 2020,
+      "direction": "bullish",
+      "entry_close": 9192.56,
+      "event_date": "2020-06-29",
+      "line_id": "high:1019:1028",
+      "returns_pct": {
+        "10": 0.4337203129487488,
+        "20": 0.17873149590539317,
+        "5": -0.6211544988556028
+      }
+    },
+    {
+      "anchor_1_date": "2020-05-25",
+      "anchor_2_confirmed_date": "2020-06-20",
+      "anchor_2_date": "2020-06-15",
+      "anchors_known_before_break": true,
+      "break_date": "2020-07-03",
+      "calendar_month": 7,
+      "calendar_year": 2020,
+      "direction": "bearish",
+      "entry_close": 9135.46,
+      "event_date": "2020-07-04",
+      "line_id": "low:1012:1033",
+      "returns_pct": {
+        "10": -1.317831833317662,
+        "20": -4.404156988263308,
+        "5": -1.0614681690905625
+      }
+    },
+    {
+      "anchor_1_date": "2020-06-10",
+      "anchor_2_confirmed_date": "2020-06-27",
+      "anchor_2_date": "2020-06-22",
+      "anchors_known_before_break": true,
+      "break_date": "2020-07-21",
+      "calendar_month": 7,
+      "calendar_year": 2020,
+      "direction": "bullish",
+      "entry_close": 9518.16,
+      "event_date": "2020-07-22",
+      "line_id": "high:1028:1040",
+      "returns_pct": {
+        "10": 23.985833396370726,
+        "20": 19.687838825991587,
+        "5": 15.88332198660245
+      }
+    },
+    {
+      "anchor_1_date": "2020-09-01",
+      "anchor_2_confirmed_date": "2020-09-24",
+      "anchor_2_date": "2020-09-19",
+      "anchors_known_before_break": true,
+      "break_date": "2020-09-29",
+      "calendar_month": 9,
+      "calendar_year": 2020,
+      "direction": "bullish",
+      "entry_close": 10776.59,
+      "event_date": "2020-09-30",
+      "line_id": "high:1111:1129",
+      "returns_pct": {
+        "10": 4.794002555539367,
+        "20": 10.517241539299537,
+        "5": 0.14494380875582635
+      }
+    },
+    {
+      "anchor_1_date": "2020-12-11",
+      "anchor_2_confirmed_date": "2021-01-16",
+      "anchor_2_date": "2021-01-11",
+      "anchors_known_before_break": true,
+      "break_date": "2021-01-21",
+      "calendar_month": 1,
+      "calendar_year": 2021,
+      "direction": "bearish",
+      "entry_close": 34252.2,
+      "event_date": "2021-01-29",
+      "line_id": "low:1212:1243",
+      "returns_pct": {
+        "10": -35.392383554924955,
+        "20": -50.508872422793296,
+        "5": -9.829062074844842
+      }
+    },
+    {
+      "anchor_1_date": "2021-01-08",
+      "anchor_2_confirmed_date": "2021-02-03",
+      "anchor_2_date": "2021-01-29",
+      "anchors_known_before_break": true,
+      "break_date": "2021-02-05",
+      "calendar_month": 2,
+      "calendar_year": 2021,
+      "direction": "bullish",
+      "entry_close": 38795.69,
+      "event_date": "2021-02-07",
+      "line_id": "high:1240:1261",
+      "returns_pct": {
+        "10": 34.34407275653557,
+        "20": 18.844206663162844,
+        "5": 21.888797441159035
+      }
+    },
+    {
+      "anchor_1_date": "2021-03-13",
+      "anchor_2_confirmed_date": "2021-04-07",
+      "anchor_2_date": "2021-04-02",
+      "anchors_known_before_break": true,
+      "break_date": "2021-04-13",
+      "calendar_month": 4,
+      "calendar_year": 2021,
+      "direction": "bullish",
+      "entry_close": 60006.66,
+      "event_date": "2021-04-17",
+      "line_id": "high:1304:1324",
+      "returns_pct": {
+        "10": -8.323559418237913,
+        "20": -4.486018718588913,
+        "5": -13.857961766243953
+      }
+    },
+    {
+      "anchor_1_date": "2021-05-19",
+      "anchor_2_confirmed_date": "2021-06-04",
+      "anchor_2_date": "2021-05-30",
+      "anchors_known_before_break": true,
+      "break_date": "2021-06-07",
+      "calendar_month": 6,
+      "calendar_year": 2021,
+      "direction": "bearish",
+      "entry_close": 36675.72,
+      "event_date": "2021-06-10",
+      "line_id": "low:1371:1382",
+      "returns_pct": {
+        "10": 2.9326213636705623,
+        "20": 4.446320344903931,
+        "5": -9.456719595416253
+      }
+    },
+    {
+      "anchor_1_date": "2021-04-14",
+      "anchor_2_confirmed_date": "2021-06-08",
+      "anchor_2_date": "2021-06-03",
+      "anchors_known_before_break": true,
+      "break_date": "2021-06-09",
+      "calendar_month": 6,
+      "calendar_year": 2021,
+      "direction": "bullish",
+      "entry_close": 36675.72,
+      "event_date": "2021-06-10",
+      "line_id": "high:1336:1386",
+      "returns_pct": {
+        "10": -2.9326213636705623,
+        "20": -4.446320344903931,
+        "5": 9.456719595416253
+      }
+    },
+    {
+      "anchor_1_date": "2021-06-15",
+      "anchor_2_confirmed_date": "2021-07-04",
+      "anchor_2_date": "2021-06-29",
+      "anchors_known_before_break": true,
+      "break_date": "2021-07-09",
+      "calendar_month": 7,
+      "calendar_year": 2021,
+      "direction": "bullish",
+      "entry_close": 33502.87,
+      "event_date": "2021-07-10",
+      "line_id": "high:1398:1412",
+      "returns_pct": {
+        "10": -11.081199909142125,
+        "20": 25.978371405196032,
+        "5": -4.843973068575924
+      }
+    },
+    {
+      "anchor_1_date": "2021-06-22",
+      "anchor_2_confirmed_date": "2021-07-13",
+      "anchor_2_date": "2021-07-08",
+      "anchors_known_before_break": true,
+      "break_date": "2021-07-14",
+      "calendar_month": 7,
+      "calendar_year": 2021,
+      "direction": "bearish",
+      "entry_close": 31880.0,
+      "event_date": "2021-07-15",
+      "line_id": "low:1405:1421",
+      "returns_pct": {
+        "10": -10.981869510664977,
+        "20": -24.602195734002507,
+        "5": 6.554736511919701
+      }
+    },
+    {
+      "anchor_1_date": "2021-07-20",
+      "anchor_2_confirmed_date": "2021-08-10",
+      "anchor_2_date": "2021-08-05",
+      "anchors_known_before_break": true,
+      "break_date": "2021-08-26",
+      "calendar_month": 8,
+      "calendar_year": 2021,
+      "direction": "bearish",
+      "entry_close": 48895.35,
+      "event_date": "2021-08-28",
+      "line_id": "low:1433:1449",
+      "returns_pct": {
+        "10": 4.155037237692327,
+        "20": 3.2628256061159044,
+        "5": -0.718452777206835
+      }
+    },
+    {
+      "anchor_1_date": "2021-08-19",
+      "anchor_2_confirmed_date": "2021-08-31",
+      "anchor_2_date": "2021-08-26",
+      "anchors_known_before_break": true,
+      "break_date": "2021-08-31",
+      "calendar_month": 9,
+      "calendar_year": 2021,
+      "direction": "bearish",
+      "entry_close": 46863.73,
+      "event_date": "2021-09-07",
+      "line_id": "low:1463:1470",
+      "returns_pct": {
+        "10": -0.9308904775612081,
+        "20": 10.06403032793165,
+        "5": 1.7892088401840978
+      }
+    },
+    {
+      "anchor_1_date": "2021-09-21",
+      "anchor_2_confirmed_date": "2021-11-02",
+      "anchor_2_date": "2021-10-28",
+      "anchors_known_before_break": true,
+      "break_date": "2021-11-05",
+      "calendar_month": 11,
+      "calendar_year": 2021,
+      "direction": "bearish",
+      "entry_close": 61470.61,
+      "event_date": "2021-11-06",
+      "line_id": "low:1496:1533",
+      "returns_pct": {
+        "10": 2.296609713162112,
+        "20": 12.598020419839662,
+        "5": -5.374356948792269
+      }
+    },
+    {
+      "anchor_1_date": "2021-10-20",
+      "anchor_2_confirmed_date": "2021-11-07",
+      "anchor_2_date": "2021-11-02",
+      "anchors_known_before_break": true,
+      "break_date": "2021-11-08",
+      "calendar_month": 11,
+      "calendar_year": 2021,
+      "direction": "bullish",
+      "entry_close": 64882.43,
+      "event_date": "2021-11-10",
+      "line_id": "high:1525:1538",
+      "returns_pct": {
+        "10": -7.975841841928544,
+        "20": -12.224989107220551,
+        "5": -1.966156323060042
+      }
+    },
+    {
+      "anchor_1_date": "2021-12-04",
+      "anchor_2_confirmed_date": "2021-12-22",
+      "anchor_2_date": "2021-12-17",
+      "anchors_known_before_break": true,
+      "break_date": "2021-12-28",
+      "calendar_month": 12,
+      "calendar_year": 2021,
+      "direction": "bearish",
+      "entry_close": 46464.66,
+      "event_date": "2021-12-29",
+      "line_id": "low:1570:1583",
+      "returns_pct": {
+        "10": 10.297977000154535,
+        "20": 8.850898726042544,
+        "5": 0.039944336190134155
+      }
+    },
+    {
+      "anchor_1_date": "2021-12-27",
+      "anchor_2_confirmed_date": "2022-01-18",
+      "anchor_2_date": "2022-01-13",
+      "anchors_known_before_break": true,
+      "break_date": "2022-01-29",
+      "calendar_month": 1,
+      "calendar_year": 2022,
+      "direction": "bullish",
+      "entry_close": 37881.76,
+      "event_date": "2022-01-30",
+      "line_id": "high:1593:1610",
+      "returns_pct": {
+        "10": 17.134789935842477,
+        "20": 5.800707253306059,
+        "5": 9.747408779317524
+      }
+    },
+    {
+      "anchor_1_date": "2022-01-24",
+      "anchor_2_confirmed_date": "2022-02-08",
+      "anchor_2_date": "2022-02-03",
+      "anchors_known_before_break": true,
+      "break_date": "2022-02-18",
+      "calendar_month": 2,
+      "calendar_year": 2022,
+      "direction": "bearish",
+      "entry_close": 43160.0,
+      "event_date": "2022-02-28",
+      "line_id": "low:1621:1631",
+      "returns_pct": {
+        "10": 8.660797034291011,
+        "20": 4.397335495829468,
+        "5": 8.716496756255799
+      }
+    },
+    {
+      "anchor_1_date": "2022-02-10",
+      "anchor_2_confirmed_date": "2022-03-07",
+      "anchor_2_date": "2022-03-02",
+      "anchors_known_before_break": true,
+      "break_date": "2022-03-27",
+      "calendar_month": 4,
+      "calendar_year": 2022,
+      "direction": "bullish",
+      "entry_close": 46283.49,
+      "event_date": "2022-04-01",
+      "line_id": "high:1638:1658",
+      "returns_pct": {
+        "10": -14.590602394071839,
+        "20": -12.538985283953297,
+        "5": -6.725983714711226
+      }
+    },
+    {
+      "anchor_1_date": "2022-03-14",
+      "anchor_2_confirmed_date": "2022-04-16",
+      "anchor_2_date": "2022-04-11",
+      "anchors_known_before_break": true,
+      "break_date": "2022-04-23",
+      "calendar_month": 4,
+      "calendar_year": 2022,
+      "direction": "bearish",
+      "entry_close": 39450.13,
+      "event_date": "2022-04-24",
+      "line_id": "low:1670:1698",
+      "returns_pct": {
+        "10": -0.6080334843003188,
+        "20": 23.73475068396479,
+        "5": 2.1648090893489957
+      }
+    },
+    {
+      "anchor_1_date": "2022-05-04",
+      "anchor_2_confirmed_date": "2022-06-05",
+      "anchor_2_date": "2022-05-31",
+      "anchors_known_before_break": true,
+      "break_date": "2022-06-06",
+      "calendar_month": 6,
+      "calendar_year": 2022,
+      "direction": "bullish",
+      "entry_close": 31125.33,
+      "event_date": "2022-06-07",
+      "line_id": "high:1721:1748",
+      "returns_pct": {
+        "10": -34.23745226155032,
+        "20": -33.357943514173186,
+        "5": -14.620889160050677
+      }
+    },
+    {
+      "anchor_1_date": "2022-04-21",
+      "anchor_2_confirmed_date": "2022-05-09",
+      "anchor_2_date": "2022-05-04",
+      "anchors_known_before_break": true,
+      "break_date": "2022-07-19",
+      "calendar_month": 7,
+      "calendar_year": 2022,
+      "direction": "bullish",
+      "entry_close": 23152.19,
+      "event_date": "2022-07-21",
+      "line_id": "high:1708:1721",
+      "returns_pct": {
+        "10": 0.6095751632998914,
+        "20": 3.463430457334704,
+        "5": -8.195855338091128
+      }
+    },
+    {
+      "anchor_1_date": "2022-06-30",
+      "anchor_2_confirmed_date": "2022-07-18",
+      "anchor_2_date": "2022-07-13",
+      "anchors_known_before_break": true,
+      "break_date": "2022-08-28",
+      "calendar_month": 8,
+      "calendar_year": 2022,
+      "direction": "bearish",
+      "entry_close": 19811.66,
+      "event_date": "2022-08-30",
+      "line_id": "low:1778:1791",
+      "returns_pct": {
+        "10": -7.8158518771269,
+        "20": 1.3862543572825237,
+        "5": -0.9521665524241829
+      }
+    },
+    {
+      "anchor_1_date": "2022-09-21",
+      "anchor_2_confirmed_date": "2022-10-03",
+      "anchor_2_date": "2022-09-28",
+      "anchors_known_before_break": true,
+      "break_date": "2022-10-15",
+      "calendar_month": 10,
+      "calendar_year": 2022,
+      "direction": "bearish",
+      "entry_close": 19262.98,
+      "event_date": "2022-10-16",
+      "line_id": "low:1861:1868",
+      "returns_pct": {
+        "10": -7.831654292326529,
+        "20": -10.571521124976503,
+        "5": 0.5119145635825828
+      }
+    },
+    {
+      "anchor_1_date": "2022-12-30",
+      "anchor_2_confirmed_date": "2023-02-18",
+      "anchor_2_date": "2023-02-13",
+      "anchors_known_before_break": true,
+      "break_date": "2023-03-03",
+      "calendar_month": 3,
+      "calendar_year": 2023,
+      "direction": "bearish",
+      "entry_close": 24113.48,
+      "event_date": "2023-03-13",
+      "line_id": "low:1961:2006",
+      "returns_pct": {
+        "10": -17.342706237341112,
+        "20": -16.830378692747793,
+        "5": -11.58692150614511
+      }
+    },
+    {
+      "anchor_1_date": "2023-03-27",
+      "anchor_2_confirmed_date": "2023-04-08",
+      "anchor_2_date": "2023-04-03",
+      "anchors_known_before_break": true,
+      "break_date": "2023-04-20",
+      "calendar_month": 4,
+      "calendar_year": 2023,
+      "direction": "bearish",
+      "entry_close": 28415.29,
+      "event_date": "2023-04-26",
+      "line_id": "low:2048:2055",
+      "returns_pct": {
+        "10": -1.523510757764579,
+        "20": 4.861643150571404,
+        "5": 1.2212791071286033
+      }
+    },
+    {
+      "anchor_1_date": "2023-04-14",
+      "anchor_2_confirmed_date": "2023-05-01",
+      "anchor_2_date": "2023-04-26",
+      "anchors_known_before_break": true,
+      "break_date": "2023-05-28",
+      "calendar_month": 5,
+      "calendar_year": 2023,
+      "direction": "bullish",
+      "entry_close": 27736.4,
+      "event_date": "2023-05-29",
+      "line_id": "high:2066:2078",
+      "returns_pct": {
+        "10": -4.46269162544527,
+        "20": -5.034647611081466,
+        "5": -2.405431130211566
+      }
+    },
+    {
+      "anchor_1_date": "2023-06-15",
+      "anchor_2_confirmed_date": "2023-07-05",
+      "anchor_2_date": "2023-06-30",
+      "anchors_known_before_break": true,
+      "break_date": "2023-07-05",
+      "calendar_month": 7,
+      "calendar_year": 2023,
+      "direction": "bearish",
+      "entry_close": 29895.43,
+      "event_date": "2023-07-06",
+      "line_id": "low:2128:2143",
+      "returns_pct": {
+        "10": -1.1257907981253368,
+        "20": 1.8179032715033738,
+        "5": -2.4307059640888307
+      }
+    },
+    {
+      "anchor_1_date": "2023-06-30",
+      "anchor_2_confirmed_date": "2023-07-12",
+      "anchor_2_date": "2023-07-07",
+      "anchors_known_before_break": true,
+      "break_date": "2023-07-20",
+      "calendar_month": 7,
+      "calendar_year": 2023,
+      "direction": "bearish",
+      "entry_close": 29901.72,
+      "event_date": "2023-07-21",
+      "line_id": "low:2143:2150",
+      "returns_pct": {
+        "10": 2.23890130734955,
+        "20": 1.491452665599169,
+        "5": 1.8385564442446878
+      }
+    },
+    {
+      "anchor_1_date": "2023-07-13",
+      "anchor_2_confirmed_date": "2023-08-07",
+      "anchor_2_date": "2023-08-02",
+      "anchors_known_before_break": true,
+      "break_date": "2023-08-08",
+      "calendar_month": 8,
+      "calendar_year": 2023,
+      "direction": "bullish",
+      "entry_close": 29581.99,
+      "event_date": "2023-08-09",
+      "line_id": "high:2156:2176",
+      "returns_pct": {
+        "10": -11.77060772449725,
+        "20": -6.306708913092063,
+        "5": -0.5106485398717275
+      }
+    },
+    {
+      "anchor_1_date": "2023-08-08",
+      "anchor_2_confirmed_date": "2023-09-03",
+      "anchor_2_date": "2023-08-29",
+      "anchors_known_before_break": true,
+      "break_date": "2023-09-15",
+      "calendar_month": 9,
+      "calendar_year": 2023,
+      "direction": "bullish",
+      "entry_close": 26559.67,
+      "event_date": "2023-09-16",
+      "line_id": "high:2182:2203",
+      "returns_pct": {
+        "10": -1.2726061731941685,
+        "20": 5.163543071130028,
+        "5": 0.03166455004901536
+      }
+    },
+    {
+      "anchor_1_date": "2023-08-29",
+      "anchor_2_confirmed_date": "2023-09-24",
+      "anchor_2_date": "2023-09-19",
+      "anchors_known_before_break": true,
+      "break_date": "2023-10-01",
+      "calendar_month": 10,
+      "calendar_year": 2023,
+      "direction": "bullish",
+      "entry_close": 27426.46,
+      "event_date": "2023-10-03",
+      "line_id": "high:2203:2224",
+      "returns_pct": {
+        "10": -2.0580855130410525,
+        "20": 20.576953788421836,
+        "5": 1.7887470712589337
+      }
+    },
+    {
+      "anchor_1_date": "2023-10-11",
+      "anchor_2_confirmed_date": "2023-11-19",
+      "anchor_2_date": "2023-11-14",
+      "anchors_known_before_break": true,
+      "break_date": "2023-11-21",
+      "calendar_month": 11,
+      "calendar_year": 2023,
+      "direction": "bearish",
+      "entry_close": 37447.43,
+      "event_date": "2023-11-26",
+      "line_id": "low:2246:2280",
+      "returns_pct": {
+        "10": -16.86433488226029,
+        "20": -12.899683636500558,
+        "5": -3.2981969657196686
+      }
+    },
+    {
+      "anchor_1_date": "2023-11-22",
+      "anchor_2_confirmed_date": "2023-12-16",
+      "anchor_2_date": "2023-12-11",
+      "anchors_known_before_break": true,
+      "break_date": "2023-12-26",
+      "calendar_month": 1,
+      "calendar_year": 2024,
+      "direction": "bearish",
+      "entry_close": 44946.91,
+      "event_date": "2024-01-02",
+      "line_id": "low:2288:2307",
+      "returns_pct": {
+        "10": 4.814969482885479,
+        "20": 11.967207534400037,
+        "5": 2.264649561004317
+      }
+    },
+    {
+      "anchor_1_date": "2023-12-08",
+      "anchor_2_confirmed_date": "2023-12-27",
+      "anchor_2_date": "2023-12-22",
+      "anchors_known_before_break": true,
+      "break_date": "2024-01-02",
+      "calendar_month": 1,
+      "calendar_year": 2024,
+      "direction": "bullish",
+      "entry_close": 44151.1,
+      "event_date": "2024-01-04",
+      "line_id": "high:2304:2318",
+      "returns_pct": {
+        "10": -5.478345952875463,
+        "20": -9.209781862739552,
+        "5": 4.436809048925161
+      }
+    },
+    {
+      "anchor_1_date": "2023-12-11",
+      "anchor_2_confirmed_date": "2023-12-23",
+      "anchor_2_date": "2023-12-18",
+      "anchors_known_before_break": true,
+      "break_date": "2024-01-18",
+      "calendar_month": 1,
+      "calendar_year": 2024,
+      "direction": "bearish",
+      "entry_close": 41659.03,
+      "event_date": "2024-01-19",
+      "line_id": "low:2307:2314",
+      "returns_pct": {
+        "10": -3.9455311369467783,
+        "20": -8.712684860881303,
+        "5": 3.778652551439632
+      }
+    },
+    {
+      "anchor_1_date": "2024-02-23",
+      "anchor_2_confirmed_date": "2024-03-10",
+      "anchor_2_date": "2024-03-05",
+      "anchors_known_before_break": true,
+      "break_date": "2024-03-16",
+      "calendar_month": 3,
+      "calendar_year": 2024,
+      "direction": "bearish",
+      "entry_close": 67609.99,
+      "event_date": "2024-03-18",
+      "line_id": "low:2381:2392",
+      "returns_pct": {
+        "10": -4.689558451347198,
+        "20": -2.588966512197377,
+        "5": 5.354208749328326
+      }
+    },
+    {
+      "anchor_1_date": "2024-03-14",
+      "anchor_2_confirmed_date": "2024-04-01",
+      "anchor_2_date": "2024-03-27",
+      "anchors_known_before_break": true,
+      "break_date": "2024-04-08",
+      "calendar_month": 4,
+      "calendar_year": 2024,
+      "direction": "bullish",
+      "entry_close": 70631.08,
+      "event_date": "2024-04-10",
+      "line_id": "high:2401:2414",
+      "returns_pct": {
+        "10": -8.05663738965906,
+        "20": -14.100138352691193,
+        "5": -10.209513998653286
+      }
+    },
+    {
+      "anchor_1_date": "2024-03-20",
+      "anchor_2_confirmed_date": "2024-04-08",
+      "anchor_2_date": "2024-04-03",
+      "anchors_known_before_break": true,
+      "break_date": "2024-04-13",
+      "calendar_month": 4,
+      "calendar_year": 2024,
+      "direction": "bearish",
+      "entry_close": 63419.99,
+      "event_date": "2024-04-15",
+      "line_id": "low:2407:2421",
+      "returns_pct": {
+        "10": -1.7003313939343068,
+        "20": -0.9334753915918315,
+        "5": -2.39766672937034
+      }
+    },
+    {
+      "anchor_1_date": "2024-04-08",
+      "anchor_2_confirmed_date": "2024-04-27",
+      "anchor_2_date": "2024-04-22",
+      "anchors_known_before_break": true,
+      "break_date": "2024-05-04",
+      "calendar_month": 5,
+      "calendar_year": 2024,
+      "direction": "bullish",
+      "entry_close": 61193.03,
+      "event_date": "2024-05-08",
+      "line_id": "high:2426:2440",
+      "returns_pct": {
+        "10": 9.351015957209508,
+        "20": 11.77480507175408,
+        "5": 2.8549820134744053
+      }
+    },
+    {
+      "anchor_1_date": "2024-05-01",
+      "anchor_2_confirmed_date": "2024-05-15",
+      "anchor_2_date": "2024-05-10",
+      "anchors_known_before_break": true,
+      "break_date": "2024-05-31",
+      "calendar_month": 6,
+      "calendar_year": 2024,
+      "direction": "bearish",
+      "entry_close": 68809.9,
+      "event_date": "2024-06-03",
+      "line_id": "low:2449:2458",
+      "returns_pct": {
+        "10": 2.9601699755413047,
+        "20": 8.138203950303657,
+        "5": -0.7274534623651796
+      }
+    },
+    {
+      "anchor_1_date": "2024-07-29",
+      "anchor_2_confirmed_date": "2024-08-13",
+      "anchor_2_date": "2024-08-08",
+      "anchors_known_before_break": true,
+      "break_date": "2024-08-13",
+      "calendar_month": 8,
+      "calendar_year": 2024,
+      "direction": "bullish",
+      "entry_close": 58683.39,
+      "event_date": "2024-08-14",
+      "line_id": "high:2538:2548",
+      "returns_pct": {
+        "10": 9.327375258995785,
+        "20": -2.037476021749929,
+        "5": 1.2867525206025077
+      }
+    },
+    {
+      "anchor_1_date": "2024-08-05",
+      "anchor_2_confirmed_date": "2024-08-20",
+      "anchor_2_date": "2024-08-15",
+      "anchors_known_before_break": true,
+      "break_date": "2024-08-22",
+      "calendar_month": 8,
+      "calendar_year": 2024,
+      "direction": "bearish",
+      "entry_close": 62834.0,
+      "event_date": "2024-08-26",
+      "line_id": "low:2545:2555",
+      "returns_pct": {
+        "10": 10.589808065696914,
+        "20": 5.891714676767357,
+        "5": 6.143186809689027
+      }
+    },
+    {
+      "anchor_1_date": "2024-09-06",
+      "anchor_2_confirmed_date": "2024-10-08",
+      "anchor_2_date": "2024-10-03",
+      "anchors_known_before_break": true,
+      "break_date": "2024-10-09",
+      "calendar_month": 10,
+      "calendar_year": 2024,
+      "direction": "bearish",
+      "entry_close": 60326.39,
+      "event_date": "2024-10-10",
+      "line_id": "low:2577:2604",
+      "returns_pct": {
+        "10": -14.430832012324956,
+        "20": -19.9222098322144,
+        "5": -11.185403270442663
+      }
+    },
+    {
+      "anchor_1_date": "2024-11-04",
+      "anchor_2_confirmed_date": "2024-12-01",
+      "anchor_2_date": "2024-11-26",
+      "anchors_known_before_break": true,
+      "break_date": "2024-12-02",
+      "calendar_month": 12,
+      "calendar_year": 2024,
+      "direction": "bearish",
+      "entry_close": 98587.32,
+      "event_date": "2024-12-04",
+      "line_id": "low:2636:2658",
+      "returns_pct": {
+        "10": -2.8732701122213156,
+        "20": -0.07735274678324355,
+        "5": 1.3296334660481746
+      }
+    },
+    {
+      "anchor_1_date": "2024-12-05",
+      "anchor_2_confirmed_date": "2024-12-25",
+      "anchor_2_date": "2024-12-20",
+      "anchors_known_before_break": true,
+      "break_date": "2025-01-09",
+      "calendar_month": 1,
+      "calendar_year": 2025,
+      "direction": "bearish",
+      "entry_close": 94599.99,
+      "event_date": "2025-01-11",
+      "line_id": "low:2667:2682",
+      "returns_pct": {
+        "10": -12.202781416784504,
+        "20": -8.27650193197693,
+        "5": -5.694831468798256
+      }
+    },
+    {
+      "anchor_1_date": "2025-01-13",
+      "anchor_2_confirmed_date": "2025-02-01",
+      "anchor_2_date": "2025-01-27",
+      "anchors_known_before_break": true,
+      "break_date": "2025-02-02",
+      "calendar_month": 2,
+      "calendar_year": 2025,
+      "direction": "bearish",
+      "entry_close": 101328.52,
+      "event_date": "2025-02-03",
+      "line_id": "low:2706:2720",
+      "returns_pct": {
+        "10": 4.658491015165334,
+        "20": 5.004040323494319,
+        "5": 4.819748674904167
+      }
+    },
+    {
+      "anchor_1_date": "2025-01-30",
+      "anchor_2_confirmed_date": "2025-02-19",
+      "anchor_2_date": "2025-02-14",
+      "anchors_known_before_break": true,
+      "break_date": "2025-02-20",
+      "calendar_month": 2,
+      "calendar_year": 2025,
+      "direction": "bullish",
+      "entry_close": 96181.98,
+      "event_date": "2025-02-21",
+      "line_id": "high:2723:2738",
+      "returns_pct": {
+        "10": -10.3567944847881,
+        "20": -15.664264761444912,
+        "5": -12.40553583945766
+      }
+    },
+    {
+      "anchor_1_date": "2025-02-03",
+      "anchor_2_confirmed_date": "2025-02-17",
+      "anchor_2_date": "2025-02-12",
+      "anchors_known_before_break": true,
+      "break_date": "2025-02-21",
+      "calendar_month": 2,
+      "calendar_year": 2025,
+      "direction": "bearish",
+      "entry_close": 96551.01,
+      "event_date": "2025-02-22",
+      "line_id": "low:2727:2736",
+      "returns_pct": {
+        "10": 9.600137792447738,
+        "20": 13.016756634653536,
+        "5": 12.265464649204594
+      }
+    },
+    {
+      "anchor_1_date": "2025-02-21",
+      "anchor_2_confirmed_date": "2025-03-07",
+      "anchor_2_date": "2025-03-02",
+      "anchors_known_before_break": true,
+      "break_date": "2025-03-23",
+      "calendar_month": 3,
+      "calendar_year": 2025,
+      "direction": "bullish",
+      "entry_close": 82648.54,
+      "event_date": "2025-03-29",
+      "line_id": "high:2745:2754",
+      "returns_pct": {
+        "10": -7.654242894066843,
+        "20": 2.2095369137797416,
+        "5": 0.6830731674146939
+      }
+    },
+    {
+      "anchor_1_date": "2025-01-20",
+      "anchor_2_confirmed_date": "2025-02-04",
+      "anchor_2_date": "2025-01-30",
+      "anchors_known_before_break": true,
+      "break_date": "2025-04-12",
+      "calendar_month": 4,
+      "calendar_year": 2025,
+      "direction": "bullish",
+      "entry_close": 83760.0,
+      "event_date": "2025-04-13",
+      "line_id": "high:2713:2723",
+      "returns_pct": {
+        "10": 11.856590257879663,
+        "20": 14.44176217765043,
+        "5": 0.8532593123209198
+      }
+    },
+    {
+      "anchor_1_date": "2025-06-05",
+      "anchor_2_confirmed_date": "2025-06-18",
+      "anchor_2_date": "2025-06-13",
+      "anchors_known_before_break": true,
+      "break_date": "2025-06-20",
+      "calendar_month": 6,
+      "calendar_year": 2025,
+      "direction": "bearish",
+      "entry_close": 105333.93,
+      "event_date": "2025-06-23",
+      "line_id": "low:2849:2857",
+      "returns_pct": {
+        "10": -4.0355942287542135,
+        "20": -13.056296295030489,
+        "5": -1.8634641278456154
+      }
+    },
+    {
+      "anchor_1_date": "2025-05-22",
+      "anchor_2_confirmed_date": "2025-06-14",
+      "anchor_2_date": "2025-06-09",
+      "anchors_known_before_break": true,
+      "break_date": "2025-07-03",
+      "calendar_month": 7,
+      "calendar_year": 2025,
+      "direction": "bullish",
+      "entry_close": 109203.84,
+      "event_date": "2025-07-06",
+      "line_id": "high:2835:2853",
+      "returns_pct": {
+        "10": 8.632104878363256,
+        "20": 7.981541674725001,
+        "5": 7.622277751405093
+      }
+    },
+    {
+      "anchor_1_date": "2025-06-22",
+      "anchor_2_confirmed_date": "2025-07-07",
+      "anchor_2_date": "2025-07-02",
+      "anchors_known_before_break": true,
+      "break_date": "2025-07-21",
+      "calendar_month": 7,
+      "calendar_year": 2025,
+      "direction": "bearish",
+      "entry_close": 118755.99,
+      "event_date": "2025-07-23",
+      "line_id": "low:2866:2876",
+      "returns_pct": {
+        "10": 5.228906769250119,
+        "20": -1.1604383071540214,
+        "5": 0.5841136939703007
+      }
+    },
+    {
+      "anchor_1_date": "2025-09-01",
+      "anchor_2_confirmed_date": "2025-10-01",
+      "anchor_2_date": "2025-09-26",
+      "anchors_known_before_break": true,
+      "break_date": "2025-10-16",
+      "calendar_month": 10,
+      "calendar_year": 2025,
+      "direction": "bearish",
+      "entry_close": 106431.68,
+      "event_date": "2025-10-17",
+      "line_id": "low:2937:2962",
+      "returns_pct": {
+        "10": -7.212110153668538,
+        "20": 4.778314126019623,
+        "5": -1.067125878309927
+      }
+    },
+    {
+      "anchor_1_date": "2025-10-27",
+      "anchor_2_confirmed_date": "2025-11-16",
+      "anchor_2_date": "2025-11-11",
+      "anchors_known_before_break": true,
+      "break_date": "2025-12-09",
+      "calendar_month": 12,
+      "calendar_year": 2025,
+      "direction": "bullish",
+      "entry_close": 92513.38,
+      "event_date": "2025-12-11",
+      "line_id": "high:2993:3008",
+      "returns_pct": {
+        "10": -4.166445977868283,
+        "20": -5.258871743741289,
+        "5": -5.0262567425382265
+      }
+    },
+    {
+      "anchor_1_date": "2025-11-21",
+      "anchor_2_confirmed_date": "2025-12-06",
+      "anchor_2_date": "2025-12-01",
+      "anchors_known_before_break": true,
+      "break_date": "2025-12-15",
+      "calendar_month": 12,
+      "calendar_year": 2025,
+      "direction": "bearish",
+      "entry_close": 87863.42,
+      "event_date": "2025-12-16",
+      "line_id": "low:3018:3028",
+      "returns_pct": {
+        "10": 0.5620769143746096,
+        "20": -6.82455793321044,
+        "5": -0.905314179666572
+      }
+    },
+    {
+      "anchor_1_date": "2026-01-14",
+      "anchor_2_confirmed_date": "2026-02-20",
+      "anchor_2_date": "2026-02-15",
+      "anchors_known_before_break": true,
+      "break_date": "2026-02-20",
+      "calendar_month": 2,
+      "calendar_year": 2026,
+      "direction": "bullish",
+      "entry_close": 64656.02,
+      "event_date": "2026-02-23",
+      "line_id": "high:3072:3104",
+      "returns_pct": {
+        "10": 9.642876254987565,
+        "20": 12.619428167709689,
+        "5": 3.5839508834598854
+      }
+    },
+    {
+      "anchor_1_date": "2026-02-24",
+      "anchor_2_confirmed_date": "2026-03-13",
+      "anchor_2_date": "2026-03-08",
+      "anchors_known_before_break": true,
+      "break_date": "2026-03-22",
+      "calendar_month": 3,
+      "calendar_year": 2026,
+      "direction": "bearish",
+      "entry_close": 68820.31,
+      "event_date": "2026-03-26",
+      "line_id": "low:3113:3125",
+      "returns_pct": {
+        "10": -0.3107658189857032,
+        "20": -8.703360970039231,
+        "5": 0.7785928310988455
+      }
+    },
+    {
+      "anchor_1_date": "2026-06-15",
+      "anchor_2_confirmed_date": "2026-07-11",
+      "anchor_2_date": "2026-07-06",
+      "anchors_known_before_break": true,
+      "break_date": "2026-07-14",
+      "calendar_month": 7,
+      "calendar_year": 2026,
+      "direction": "bullish",
+      "entry_close": 63830.2,
+      "event_date": "2026-07-16",
+      "line_id": "high:3224:3245",
+      "returns_pct": {
+        "10": 2.459321763052591,
+        "5": 4.270643049841616
+      }
+    }
+  ],
+  "execution_enabled": false,
+  "generated_at_ms": 1785803744940,
+  "groups": {
+    "bearish": {
+      "10": {
+        "avg_return_pct": -3.452838452307909,
+        "matched_same_year_month": {
+          "avg_excess_return_pct": -2.7818918576995246,
+          "year_block_bootstrap_ci95": [
+            -4.351115081639531,
+            -1.1315860325398839
+          ]
+        },
+        "median_return_pct": -1.4206712955411205,
+        "n": 48,
+        "positive_rate": 0.3958333333333333,
+        "raw_mean_bootstrap_ci95": [
+          -6.7147481707928405,
+          -0.2914309657665212
+        ]
+      },
+      "20": {
+        "avg_return_pct": -4.222860399277205,
+        "matched_same_year_month": {
+          "avg_excess_return_pct": -1.8167715848547732,
+          "year_block_bootstrap_ci95": [
+            -4.006855677807508,
+            0.14265581861075227
+          ]
+        },
+        "median_return_pct": -0.8842685481474821,
+        "n": 48,
+        "positive_rate": 0.4375,
+        "raw_mean_bootstrap_ci95": [
+          -9.601908367506772,
+          0.879226262772662
+        ]
+      },
+      "5": {
+        "avg_return_pct": -0.8581463186271772,
+        "matched_same_year_month": {
+          "avg_excess_return_pct": -0.46907250825040825,
+          "year_block_bootstrap_ci95": [
+            -2.0308506707965575,
+            0.6178186784884817
+          ]
+        },
+        "median_return_pct": -0.3392542205083504,
+        "n": 48,
+        "positive_rate": 0.5,
+        "raw_mean_bootstrap_ci95": [
+          -2.910045490338663,
+          1.1695911084820854
+        ]
+      }
+    },
+    "bullish": {
+      "10": {
+        "avg_return_pct": -0.8075763662800087,
+        "matched_same_year_month": {
+          "avg_excess_return_pct": -0.9815891263383585,
+          "year_block_bootstrap_ci95": [
+            -3.5656845112977797,
+            1.813403317953281
+          ]
+        },
+        "median_return_pct": -3.1279915407764145,
+        "n": 40,
+        "positive_rate": 0.4,
+        "raw_mean_bootstrap_ci95": [
+          -4.786130086130734,
+          3.2259652888714903
+        ]
+      },
+      "20": {
+        "avg_return_pct": 0.7898814153472773,
+        "matched_same_year_month": {
+          "avg_excess_return_pct": -0.5879874676258434,
+          "year_block_bootstrap_ci95": [
+            -2.7220230879971385,
+            1.8738297560062465
+          ]
+        },
+        "median_return_pct": 0.17873149590539317,
+        "n": 39,
+        "positive_rate": 0.5128205128205128,
+        "raw_mean_bootstrap_ci95": [
+          -3.54631437508637,
+          5.084881767263847
+        ]
+      },
+      "5": {
+        "avg_return_pct": 0.27648891379985924,
+        "matched_same_year_month": {
+          "avg_excess_return_pct": 0.27917337803155234,
+          "year_block_bootstrap_ci95": [
+            -1.167470172814711,
+            1.941452100373327
+          ]
+        },
+        "median_return_pct": -0.3402660314533068,
+        "n": 40,
+        "positive_rate": 0.475,
+        "raw_mean_bootstrap_ci95": [
+          -2.158987067180619,
+          2.738934958858252
+        ]
+      }
+    }
+  },
+  "hypothesis_id": "HYP-TREND-001",
+  "july_events": {
+    "events": [
+      {
+        "anchor_1_date": "2019-06-06",
+        "anchor_2_confirmed_date": "2019-07-07",
+        "anchor_2_date": "2019-07-02",
+        "anchors_known_before_break": true,
+        "break_date": "2019-07-14",
+        "calendar_month": 7,
+        "calendar_year": 2019,
+        "direction": "bearish",
+        "entry_close": 10838.72,
+        "event_date": "2019-07-15",
+        "line_id": "low:658:684",
+        "returns_pct": {
+          "10": 8.84652431283397,
+          "20": -0.8350617047031328,
+          "5": 0.9086866345841549
+        }
+      },
+      {
+        "anchor_1_date": "2019-04-25",
+        "anchor_2_confirmed_date": "2019-06-11",
+        "anchor_2_date": "2019-06-06",
+        "anchors_known_before_break": true,
+        "break_date": "2019-07-24",
+        "calendar_month": 7,
+        "calendar_year": 2019,
+        "direction": "bearish",
+        "entry_close": 9879.87,
+        "event_date": "2019-07-25",
+        "line_id": "low:616:658",
+        "returns_pct": {
+          "10": -10.621192384110302,
+          "20": -1.725731209013892,
+          "5": 3.0937654037958118
+        }
+      },
+      {
+        "anchor_1_date": "2020-05-25",
+        "anchor_2_confirmed_date": "2020-06-20",
+        "anchor_2_date": "2020-06-15",
+        "anchors_known_before_break": true,
+        "break_date": "2020-07-03",
+        "calendar_month": 7,
+        "calendar_year": 2020,
+        "direction": "bearish",
+        "entry_close": 9135.46,
+        "event_date": "2020-07-04",
+        "line_id": "low:1012:1033",
+        "returns_pct": {
+          "10": -1.317831833317662,
+          "20": -4.404156988263308,
+          "5": -1.0614681690905625
+        }
+      },
+      {
+        "anchor_1_date": "2020-06-10",
+        "anchor_2_confirmed_date": "2020-06-27",
+        "anchor_2_date": "2020-06-22",
+        "anchors_known_before_break": true,
+        "break_date": "2020-07-21",
+        "calendar_month": 7,
+        "calendar_year": 2020,
+        "direction": "bullish",
+        "entry_close": 9518.16,
+        "event_date": "2020-07-22",
+        "line_id": "high:1028:1040",
+        "returns_pct": {
+          "10": 23.985833396370726,
+          "20": 19.687838825991587,
+          "5": 15.88332198660245
+        }
+      },
+      {
+        "anchor_1_date": "2021-06-15",
+        "anchor_2_confirmed_date": "2021-07-04",
+        "anchor_2_date": "2021-06-29",
+        "anchors_known_before_break": true,
+        "break_date": "2021-07-09",
+        "calendar_month": 7,
+        "calendar_year": 2021,
+        "direction": "bullish",
+        "entry_close": 33502.87,
+        "event_date": "2021-07-10",
+        "line_id": "high:1398:1412",
+        "returns_pct": {
+          "10": -11.081199909142125,
+          "20": 25.978371405196032,
+          "5": -4.843973068575924
+        }
+      },
+      {
+        "anchor_1_date": "2021-06-22",
+        "anchor_2_confirmed_date": "2021-07-13",
+        "anchor_2_date": "2021-07-08",
+        "anchors_known_before_break": true,
+        "break_date": "2021-07-14",
+        "calendar_month": 7,
+        "calendar_year": 2021,
+        "direction": "bearish",
+        "entry_close": 31880.0,
+        "event_date": "2021-07-15",
+        "line_id": "low:1405:1421",
+        "returns_pct": {
+          "10": -10.981869510664977,
+          "20": -24.602195734002507,
+          "5": 6.554736511919701
+        }
+      },
+      {
+        "anchor_1_date": "2022-04-21",
+        "anchor_2_confirmed_date": "2022-05-09",
+        "anchor_2_date": "2022-05-04",
+        "anchors_known_before_break": true,
+        "break_date": "2022-07-19",
+        "calendar_month": 7,
+        "calendar_year": 2022,
+        "direction": "bullish",
+        "entry_close": 23152.19,
+        "event_date": "2022-07-21",
+        "line_id": "high:1708:1721",
+        "returns_pct": {
+          "10": 0.6095751632998914,
+          "20": 3.463430457334704,
+          "5": -8.195855338091128
+        }
+      },
+      {
+        "anchor_1_date": "2023-06-15",
+        "anchor_2_confirmed_date": "2023-07-05",
+        "anchor_2_date": "2023-06-30",
+        "anchors_known_before_break": true,
+        "break_date": "2023-07-05",
+        "calendar_month": 7,
+        "calendar_year": 2023,
+        "direction": "bearish",
+        "entry_close": 29895.43,
+        "event_date": "2023-07-06",
+        "line_id": "low:2128:2143",
+        "returns_pct": {
+          "10": -1.1257907981253368,
+          "20": 1.8179032715033738,
+          "5": -2.4307059640888307
+        }
+      },
+      {
+        "anchor_1_date": "2023-06-30",
+        "anchor_2_confirmed_date": "2023-07-12",
+        "anchor_2_date": "2023-07-07",
+        "anchors_known_before_break": true,
+        "break_date": "2023-07-20",
+        "calendar_month": 7,
+        "calendar_year": 2023,
+        "direction": "bearish",
+        "entry_close": 29901.72,
+        "event_date": "2023-07-21",
+        "line_id": "low:2143:2150",
+        "returns_pct": {
+          "10": 2.23890130734955,
+          "20": 1.491452665599169,
+          "5": 1.8385564442446878
+        }
+      },
+      {
+        "anchor_1_date": "2025-05-22",
+        "anchor_2_confirmed_date": "2025-06-14",
+        "anchor_2_date": "2025-06-09",
+        "anchors_known_before_break": true,
+        "break_date": "2025-07-03",
+        "calendar_month": 7,
+        "calendar_year": 2025,
+        "direction": "bullish",
+        "entry_close": 109203.84,
+        "event_date": "2025-07-06",
+        "line_id": "high:2835:2853",
+        "returns_pct": {
+          "10": 8.632104878363256,
+          "20": 7.981541674725001,
+          "5": 7.622277751405093
+        }
+      },
+      {
+        "anchor_1_date": "2025-06-22",
+        "anchor_2_confirmed_date": "2025-07-07",
+        "anchor_2_date": "2025-07-02",
+        "anchors_known_before_break": true,
+        "break_date": "2025-07-21",
+        "calendar_month": 7,
+        "calendar_year": 2025,
+        "direction": "bearish",
+        "entry_close": 118755.99,
+        "event_date": "2025-07-23",
+        "line_id": "low:2866:2876",
+        "returns_pct": {
+          "10": 5.228906769250119,
+          "20": -1.1604383071540214,
+          "5": 0.5841136939703007
+        }
+      },
+      {
+        "anchor_1_date": "2026-06-15",
+        "anchor_2_confirmed_date": "2026-07-11",
+        "anchor_2_date": "2026-07-06",
+        "anchors_known_before_break": true,
+        "break_date": "2026-07-14",
+        "calendar_month": 7,
+        "calendar_year": 2026,
+        "direction": "bullish",
+        "entry_close": 63830.2,
+        "event_date": "2026-07-16",
+        "line_id": "high:3224:3245",
+        "returns_pct": {
+          "10": 2.459321763052591,
+          "5": 4.270643049841616
+        }
+      }
+    ],
+    "n": 12
+  },
+  "limitations": [
+    "The hypothesis and parameters were defined after reviewing selected CoinSignals screenshots.",
+    "Daily pivots approximate drawings made on mixed 1h, 4h and daily timeframes.",
+    "Events may share market regimes despite the directional cooldown.",
+    "Forward returns are diagnostic and do not include an executable entry, stop or trading costs.",
+    "July-specific samples are expected to be too small for confirmation."
+  ],
+  "notice": "Research only - No signal - No bot",
+  "parameters": {
+    "atr_period": 14,
+    "break_buffer_atr": 0.25,
+    "event_cooldown_days": 10,
+    "forward_horizons_days": [
+      5,
+      10,
+      20
+    ],
+    "max_line_age_days": 120,
+    "minimum_anchor_span_days": 7,
+    "pivot_width_bars": 5,
+    "retest_window_days": 10,
+    "timeframe": "1d"
+  },
+  "promotion_available": false,
+  "question": "Do causal pivot trendline breaks followed by a retest have directional forward value?",
+  "research_only": true,
+  "schema_version": 1,
+  "status": "exploratory_post_hoc",
+  "verdict": {
+    "classification": "continuation_not_supported",
+    "production_change": false,
+    "summary": "La continuacion alcista no muestra edge; el quiebre bajista es anti-predictivo a 10 dias y parece revertir."
+  },
+  "visual_examples": {
+    "count": 9,
+    "families": [
+      "descending_channel",
+      "triangle_compression",
+      "ascending_support",
+      "horizontal_structure",
+      "scenario_arrow"
+    ],
+    "role": "vocabulary_only",
+    "warning": "Selected screenshots and drawn arrows are not outcome labels and are excluded from inferential metrics."
+  }
+}

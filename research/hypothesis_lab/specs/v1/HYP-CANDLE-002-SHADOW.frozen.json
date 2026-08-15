@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "hypothesis_id": "HYP-CANDLE-002-SHADOW",
+  "title": "Forward observation of impulse-absorption-reclaim",
+  "frozen": true,
+  "research_only": true,
+  "notice": "Research only - No signal - No bot",
+  "cohort": {
+    "start_at_ms": 1785804969000,
+    "start_at_iso": "2026-08-04T00:56:09Z",
+    "eligible_timeframes": ["1h", "4h"],
+    "closed_setups_only_for_outcome": true
+  },
+  "decision_protocol": {
+    "minimum_calendar_weeks": 12,
+    "minimum_closed_patterns": 30,
+    "minimum_matched_no_pattern_controls": 100,
+    "promotion_requires_all": [
+      "matched mean excess net R is positive",
+      "month-block bootstrap CI95 lower bound is above zero",
+      "effect direction is not inverted in either 1h or 4h"
+    ],
+    "discard_when_sufficient": "discard if CI95 upper bound is at or below zero",
+    "no_decision": "continue collecting when sample or interval remains insufficient"
+  },
+  "governance": {
+    "automatic_promotion": false,
+    "execution_enabled": false,
+    "writes_allowed": ["data/hypothesis_lab/shadow/candle_reversal_forward.json"],
+    "setups_store_mutation": false,
+    "bot_imports_allowed": false
+  }
+}

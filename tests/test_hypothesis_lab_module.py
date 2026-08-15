@@ -31,6 +31,16 @@ def test_state_es_solo_lectura_y_separa_historico_de_forward(tmp_path):
     assert {item["state"] for item in payload["studies"]} >= {"closed", "collecting"}
     assert all(item["promotion"] is False for item in payload["studies"])
     assert payload["observers"]["shadow_exit"]["status"] == "missing"
+    assert payload["observers"]["candle_reversal"]["status"] == "missing"
+    season = next(item for item in payload["studies"] if item["id"] == "HYP-SEASON-001")
+    assert season["state"] == "exploratory"
+    assert season["promotion"] is False
+    trend = next(item for item in payload["studies"] if item["id"] == "HYP-TREND-001")
+    assert trend["state"] == "exploratory"
+    assert trend["promotion"] is False
+    candle = next(item for item in payload["studies"] if item["id"] == "HYP-CANDLE-001")
+    assert candle["state"] == "candidate"
+    assert candle["promotion"] is False
 
 
 def test_observador_con_error_no_puede_aparecer_sano(tmp_path):
@@ -148,3 +158,72 @@ def test_vista_visible_y_con_candado_research():
     assert "Sin promoción automática" in html
     assert "/m/hypothesis-lab/" in shell
     assert '"hypothesis_lab"' in config
+
+
+def _candle_sano(tmp_path, *, generado_ms, entrada_ms):
+    ruta = tmp_path / "hypothesis_lab" / "shadow" / "candle_reversal_forward.json"
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(json.dumps({
+        "meta": {"generated_at_ms": generado_ms, "errors": [], "records": 1},
+        "protocol": {"cohort": {"start_at_ms": entrada_ms}},
+        "summary": {"eligible_records": 1, "patterns": 0, "closed_with_pattern": 0,
+                    "decision_status": "collecting_insufficient_evidence"},
+        "records": [{"entry_at_ms": entrada_ms}],
+    }), encoding="utf-8")
+    return ruta
+
+
+def _telemetria_bloqueada(tmp_path, *, generado_ms, extra_errors=(), load_errors=None):
+    ruta = tmp_path / "hypothesis_lab" / "telemetry" / "execution_costs.json"
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    if load_errors is None:
+        load_errors = [{"source_id": "main_ledger", "error": "ledger_missing"},
+                       {"source_id": "testnet_ledger", "error": "ledger_missing"}]
+    ruta.write_text(json.dumps({
+        "meta": {"generated_at_ms": generado_ms, "errors": list(extra_errors),
+                 "n_records": 0, "cohort_start_ms": generado_ms,
+                 "load_errors": load_errors},
+        "decision": {"status": "collecting_insufficient_coverage"},
+        "records": [],
+    }), encoding="utf-8")
+    return ruta
+
+
+def test_bloqueo_aceptado_se_reporta_blocked_y_no_degrada_el_modulo(tmp_path):
+    """HYP-COST-003 esperando el ledger es un estado aceptado (cierre del sprint
+    2026-08-06), no una falla: no debe teñir el módulo de degraded a perpetuidad."""
+    ahora_ms = int(time.time() * 1000)
+    _observador_sano(tmp_path, generado_ms=ahora_ms, entrada_ms=ahora_ms - 60_000)
+    _canonica(tmp_path, generado_ms=ahora_ms)
+    _candle_sano(tmp_path, generado_ms=ahora_ms, entrada_ms=ahora_ms - 60_000)
+    _telemetria_bloqueada(tmp_path, generado_ms=ahora_ms)
+
+    modulo = _module(tmp_path)
+    estado = json.loads(modulo.api("state", {}, None)[2])
+    assert estado["observers"]["cost_telemetry"]["status"] == "blocked"
+    assert estado["observers"]["cost_telemetry"]["blocked_reason"] == "ledger_missing_accepted"
+
+    salud = modulo.health()
+    assert salud["status"] == "ok"
+    assert salud["blocked_accepted"] == ["cost_telemetry"]
+    assert "cost_telemetry" not in salud["degraded_observers"]
+
+
+def test_ledger_missing_con_otro_error_sigue_siendo_degraded(tmp_path):
+    """El indulto es SOLO para la espera aceptada: cualquier error adicional o un
+    load_error distinto vuelve a ser una falla real."""
+    ahora_ms = int(time.time() * 1000)
+    _observador_sano(tmp_path, generado_ms=ahora_ms, entrada_ms=ahora_ms - 60_000)
+    _canonica(tmp_path, generado_ms=ahora_ms)
+    _candle_sano(tmp_path, generado_ms=ahora_ms, entrada_ms=ahora_ms - 60_000)
+    _telemetria_bloqueada(tmp_path, generado_ms=ahora_ms, extra_errors=["boom"])
+
+    modulo = _module(tmp_path)
+    estado = json.loads(modulo.api("state", {}, None)[2])
+    assert estado["observers"]["cost_telemetry"]["status"] == "degraded"
+    assert modulo.health()["status"] == "degraded"
+
+    _telemetria_bloqueada(tmp_path, generado_ms=ahora_ms, load_errors=[
+        {"source_id": "main_ledger", "error": "ledger_corrupt"}])
+    estado = json.loads(_module(tmp_path).api("state", {}, None)[2])
+    assert estado["observers"]["cost_telemetry"]["status"] == "degraded"

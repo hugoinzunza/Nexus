@@ -1,0 +1,26 @@
+{
+  "hypothesis_id": "HYP-TREND-001",
+  "title": "Ruptura y retest causal de lineas por pivotes",
+  "status": "exploratory_post_hoc",
+  "origin": "Nine selected CoinSignals screenshots reviewed on 2026-08-03",
+  "primary_question": "Do causal pivot trendline breaks followed by a retest have directional forward value?",
+  "parameters_frozen_before_outcome_run": {
+    "timeframe": "1d",
+    "pivot_width_bars": 5,
+    "atr_period": 14,
+    "break_buffer_atr": 0.25,
+    "retest_window_days": 10,
+    "max_line_age_days": 120,
+    "minimum_anchor_span_days": 7,
+    "event_cooldown_days": 10,
+    "forward_horizons_days": [5, 10, 20]
+  },
+  "governance": {
+    "research_only": true,
+    "post_hoc_discovery": true,
+    "screenshots_are_vocabulary_not_labels": true,
+    "automatic_promotion": false,
+    "execution_enabled": false,
+    "production_change": false
+  }
+}
