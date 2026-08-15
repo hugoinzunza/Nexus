@@ -84,7 +84,11 @@ class Bot2Module(NexusModule):
             if cached and time.time() - cached[0] < TTL:
                 return self._json(200, cached[1])
         candles, source, meta = self._candles(symbol, tf)
-        result = strategy.analyze(candles, tf, variant)
+        result = strategy.analyze(
+            candles, tf, variant,
+            piv=int(self.config.get("piv") or strategy.PIV),
+            min_net_rr=float(self.config.get("min_net_rr") or strategy.MIN_NET_RR),
+        )
         result.update({
             "symbol": symbol,
             "source": source,

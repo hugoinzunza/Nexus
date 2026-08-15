@@ -242,7 +242,8 @@ def _simulate(velas: list[dict], event: dict) -> dict:
 
 def _watch_candidate(velas: list[dict], ciclo: dict, variant: str,
                      points: dict, atrs: list[float | None],
-                     contexto: dict[str, list[dict]]) -> dict | None:
+                     contexto: dict[str, list[dict]],
+                     min_net_rr: float = MIN_NET_RR) -> dict | None:
     """Describe un ciclo vigente sin anticipar la próxima apertura."""
     i = len(velas) - 1
     if i <= ciclo["available_idx"] or i - ciclo["available_idx"] > MAX_WAIT_BARS:
@@ -349,10 +350,10 @@ def _watch_candidate(velas: list[dict], ciclo: dict, variant: str,
         net_rr = abs(target[0] - close) / risk \
             - close * ROUND_TRIP_COST_PCT / risk
     eligible = bool(ready and context_ok and net_rr is not None
-                    and net_rr >= MIN_NET_RR)
+                    and net_rr >= min_net_rr)
     if ready and not context_ok:
         status = "gatillo listo · panorama opuesto"
-    elif ready and (net_rr is None or net_rr < MIN_NET_RR):
+    elif ready and (net_rr is None or net_rr < min_net_rr):
         status = "gatillo listo · RR insuficiente"
     return {
         **base, "status": status, "trigger": trigger,
@@ -364,13 +365,22 @@ def _watch_candidate(velas: list[dict], ciclo: dict, variant: str,
     }
 
 
-def analyze(velas: list[dict], tf: str, variant: str) -> dict:
+def analyze(velas: list[dict], tf: str, variant: str, *,
+            piv: int = PIV, min_net_rr: float = MIN_NET_RR) -> dict:
+    """`piv` y `min_net_rr` son configurables desde 2026-08-15 (contrato v2).
+
+    La grilla pre-declarada PIV×RR×variante (ver bitácora en
+    research/bot2_accion_precio_2026-07-27.md) mostró que con PIV=5 el retraso de
+    confirmación (5 velas por pivote, tres pivotes para el ciclo y dos más para el
+    evento) consume la fase: 54% de los ciclos se invalidan antes de que el evento
+    sea observable. PIV=3 reduce ese retraso mecánico. El cambio NO es una promesa
+    de edge: la grilla completa queda publicada con su advertencia de multiplicidad."""
     if variant not in VARIANTS:
         raise ValueError("variante no habilitada")
     if tf not in PANORAMA:
         raise ValueError("temporalidad no habilitada")
-    points = F.pivotes_confirmados(velas, tf, PIV)
-    ciclos = F.ciclos_confirmados(velas, tf, PIV)
+    points = F.pivotes_confirmados(velas, tf, piv)
+    ciclos = F.ciclos_confirmados(velas, tf, piv)
     atrs = atr_values(velas)
     contexto = _context_series(velas, tf)
     candidatos = []
@@ -402,7 +412,7 @@ def analyze(velas: list[dict], tf: str, variant: str) -> dict:
                                "context": tendencias,
                                "context_label": context_label})
             continue
-        if event["net_rr"] < MIN_NET_RR:
+        if event["net_rr"] < min_net_rr:
             reason = "RR neto menor a 2"
             rejected[reason] = rejected.get(reason, 0) + 1
             candidatos.append({"cycle_id": ciclo["id"], "side": ciclo["side"],
@@ -443,7 +453,8 @@ def analyze(velas: list[dict], tf: str, variant: str) -> dict:
     for ciclo in ciclos[-16:]:
         if ciclo["id"] in resolved_cycle_ids:
             continue
-        watch = _watch_candidate(velas, ciclo, variant, points, atrs, contexto)
+        watch = _watch_candidate(velas, ciclo, variant, points, atrs, contexto,
+                                 min_net_rr)
         if watch:
             watchlist.append(watch)
     watchlist.sort(key=lambda w: (
@@ -456,12 +467,12 @@ def analyze(velas: list[dict], tf: str, variant: str) -> dict:
         "strategy_id": "crecetrader_basic_trend_v1",
         "tf": tf, "variant": variant,
         "rules": {
-            "pivot": "5+1+5", "correction_zone": [0.382, 0.618],
+            "pivot": f"{piv}+1+{piv}", "correction_zone": [0.382, 0.618],
             "entry": "apertura siguiente + slippage adverso",
             "stop": "extremo estructural + 0,10 ATR",
             "target": "primera proyección de fase alcanzable",
             "obstacles": "pivotes causales intermedios registrados, no omitidos",
-            "min_net_rr": MIN_NET_RR, "management": "salida completa",
+            "min_net_rr": min_net_rr, "management": "salida completa",
         },
         "summary": {
             "cycles": len(ciclos), "accepted_events": len(eventos),
@@ -477,5 +488,5 @@ def analyze(velas: list[dict], tf: str, variant: str) -> dict:
         "candidates": candidatos[-40:],
         "watchlist": watchlist[:8],
         "trades": trades[-80:],
-        "phases": F.fases_para_grafico(velas, tf, PIV, limit=12),
+        "phases": F.fases_para_grafico(velas, tf, piv, limit=12),
     }

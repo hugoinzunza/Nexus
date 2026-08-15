@@ -152,7 +152,9 @@
         "4h",
         "1d"
       ],
-      "_nota": "Laboratorio Bot2 de Accion del precio. Solo simulacion causal; no importa ejecutor, credenciales ni ordenes."
+      "_nota": "Laboratorio Bot2 de Accion del precio. Solo simulacion causal; no importa ejecutor, credenciales ni ordenes.",
+      "piv": 3,
+      "_contrato_nota": "v2 2026-08-15 (decision Hugo): piv 5->3. Justificacion MECANICA: con piv=5 el retraso de confirmacion consumia la fase (54% de ciclos invalidados antes de poder observar el evento; 12-23 trades en 4 anos). La grilla completa PIVxRRxvariante quedo publicada en research/bot2_accion_precio_2026-07-27.md con advertencia de multiplicidad. min_net_rr se mantiene en 2.0 (curso). NO es promesa de edge; research_only sigue."
     },
     "hypothesis_lab": {
       "enabled": true,
