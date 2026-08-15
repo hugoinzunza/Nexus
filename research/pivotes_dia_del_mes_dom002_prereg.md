@@ -51,3 +51,41 @@ monitoreo descriptivo sin poder estadístico, y se declara así.
 Si el mecanismo de expiración es real, debería verse en las alts (es de mercado
 completo). Prior general escéptico: la casa lleva 4 estudios de
 calendario/niveles y ninguno superó su control. 50/50 honesto.
+
+---
+
+## Resultados (2026-08-15, posteriores al freeze — `pivotes_dia_del_mes_dom002.py`)
+
+### Primario (5+1+5, el que decide)
+
+| Activo | lows | día 25 obs | esperado | |
+|---|---:|---:|---:|---|
+| ETH | 109 | 7 | 3,6 | ↑ |
+| SOL | 91 | 3 | 3,0 | ↑ |
+| ADA | 105 | 6 | 3,5 | ↑ |
+| XRP | 103 | 5 | 3,4 | ↑ |
+| DOGE | 104 | 7 | 3,4 | ↑ |
+| BNB | 100 | 4 | 3,3 | ↑ |
+| **TOTAL** | | **32** | **20,1** | **p conjunta = 0,0757** |
+
+Elevados: **6/6**. Criterio congelado: p<0,05 **y** ≥4/6. → **NO REPLICA**
+(la p conjunta falla; 0,076 > 0,05).
+
+### Secundario (3+1+3, publicado, no decisivo)
+
+Total 51 vs 32,9 esperado, p=0,0403, 6/6 elevados — habría pasado, pero el
+criterio se congeló sobre el primario y así se lee.
+
+### Lectura honesta
+
+- La **dirección** es unánime: 12 de 12 brazos entre DOM-001 y DOM-002 muestran
+  elevación del día 25 en mínimos, y los 6 activos individualmente. Eso no es
+  común en ruido puro.
+- Pero la rotación conjunta —que existe justamente para que el co-movimiento
+  cripto no fabrique replicaciones— deja la p primaria en 0,076. Un test
+  ingenuo por activo habría "confirmado" fácil; ese test habría estado mal.
+- **Veredicto formal: no replica.** El día 25 queda como candidato con
+  dirección consistente y significancia insuficiente — exactamente el tipo de
+  señal que el brazo forward registrado (BTC, ≥50 lows desde 2026-08-16,
+  evaluación ~2028) tiene que dirimir. Hasta entonces: sin señal, sin uso
+  operativo, sin excepciones.
