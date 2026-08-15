@@ -54,10 +54,23 @@
           "label": "DOGE/USDT",
           "binance": "DOGEUSDT",
           "market": "futures"
+        },
+        {
+          "name": "LINK_USDT",
+          "label": "LINK/USDT",
+          "binance": "LINKUSDT",
+          "market": "futures"
+        },
+        {
+          "name": "AVAX_USDT",
+          "label": "AVAX/USDT",
+          "binance": "AVAXUSDT",
+          "market": "futures"
         }
       ],
       "claude_grader_enabled": false,
-      "_claude_grader_nota": "Graduador sombra con Opus. APAGADO: 254 setups graduados no muestran discriminacion positiva (keep=True avgR +0,258 vs keep=False +0,506; CI95 por bloques [-0,546,+0,039] cruza cero). Ninguna decision lee claude_grade. Era el grueso del gasto Opus."
+      "_claude_grader_nota": "Graduador sombra con Opus. APAGADO: 254 setups graduados no muestran discriminacion positiva (keep=True avgR +0,258 vs keep=False +0,506; CI95 por bloques [-0,546,+0,039] cruza cero). Ninguna decision lee claude_grade. Era el grueso del gasto Opus.",
+      "_ampliacion_nota": "2026-08-15: LINK y AVAX sumados por decision de Hugo para acelerar HYP-CANDLE-002 (1/30 patrones al ritmo anterior). BNB era el candidato original pero no existe en Crypto.com (feed de ticker/book); LINK y AVAX estan en ambos feeds. Solo amplia el universo del DIARIO local: bot.pairs no cambia, el VPS no se toca y ninguna spec congelada del laboratorio enumera pares."
     },
     "journal": {
       "enabled": true
