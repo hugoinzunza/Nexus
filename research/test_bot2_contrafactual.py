@@ -17,7 +17,7 @@ if WT not in sys.path:
 
 from research import bot2_contrafactual as bot2  # noqa: E402
 
-DOC = os.path.join(WT, "docs", "BOT2_REGLAS_CONGELADAS_2026-07-26.md")
+DOC = os.path.join(WT, "docs", "BOT2_MUROS_COINGLASS_REGLAS_CONGELADAS_2026-07-26.md")
 
 
 def _fila(**kw):
