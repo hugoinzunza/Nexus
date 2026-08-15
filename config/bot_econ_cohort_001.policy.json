@@ -1,0 +1,52 @@
+{
+  "_entry_profiles_nota": "min_rr GLOBAL (rr>=5). NO es un perfil sobreoptimizado: la 2a auditoria (Fable 5, 2026-07-04) refuto OOS el combo 4h/1D-o-short (no batia a rr>=5 solo) y la regla evitar-1h-long. Un solo {min_rr:5} = piso rr>=5 para cualquier tf/dir.",
+  "base_equity": 897.61,
+  "base_equity_auto": true,
+  "economic_cohort": {
+    "cohort_id": "ECON-COHORT-001",
+    "enabled": true
+  },
+  "enabled": true,
+  "entry_profiles": [
+    {
+      "min_rr": 5
+    }
+  ],
+  "fee_rate": 0.0005,
+  "fixed_leverage": 10,
+  "fundamental_guard_enabled": true,
+  "hedge": true,
+  "live": false,
+  "max_daily_loss_pct": 5.0,
+  "max_entry_slippage_pct": 0.3,
+  "max_leverage": 10,
+  "max_margin_pct": 0.8,
+  "max_notional_per_order": 4000.0,
+  "max_positions": 2,
+  "max_risk_pct": 0.08,
+  "min_margin": 0.0,
+  "one_position_at_a_time": false,
+  "pairs": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "ADAUSDT",
+    "XRPUSDT"
+  ],
+  "quality_filter": true,
+  "quality_min_rr": 5.0,
+  "quality_poi_tfs": [
+    "1h",
+    "4h",
+    "1D"
+  ],
+  "quality_require_disc": false,
+  "risk_pct": 0.02,
+  "risk_usd_fixed": 9.0,
+  "watchdog": {
+    "_nota": "SEGUNDA linea de defensa. La primera es el stop NATIVO que el executor pone via /fapi/v1/algoOrder al abrir (fail-closed: si no se confirma, se cierra la posicion). Este proceso cubre lo que el nativo no puede: que no se haya llegado a colocar, que lo cancelen, o que la posicion quede fuera del libro.",
+    "enabled": true,
+    "hedge": true,
+    "tolerancia_r": 0.25
+  }
+}

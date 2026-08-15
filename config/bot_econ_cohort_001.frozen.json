@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "cohort_id": "ECON-COHORT-001",
+  "title": "Cohorte economica forward del bot NexUX",
+  "frozen": true,
+  "decision_mode": "human_review_only",
+  "automatic_live": false,
+  "environment": "dry",
+  "activation": {
+    "start_at": "2026-08-15T04:30:00Z",
+    "start_at_ms": 1786768200000,
+    "retrospective_inclusion": false
+  },
+  "stopping_rule": {
+    "exact_closed_trades": 50,
+    "deadline": "2026-10-10T04:30:00Z",
+    "deadline_ms": 1791606600000,
+    "stop_at_first_condition": true,
+    "evaluate_once_after_stop": true,
+    "interim_outcome_evaluation": false,
+    "deadline_with_less_than_exact_n": "insufficient_evidence_no_live"
+  },
+  "eligibility": {
+    "required_cohort_tag": "ECON-COHORT-001",
+    "required_mode": "dry",
+    "opened_at_or_after_start": true,
+    "first_50_closed_by_closed_at": true,
+    "all_directions_pairs_and_timeframes_allowed_by_frozen_policy": true,
+    "execution_incidents_remain_in_cohort": true,
+    "silent_exclusions": false
+  },
+  "risk": {
+    "target_usd": 9.0,
+    "sizing_field": "risk_usd_fixed",
+    "normalization_denominator": "ledger.risk_usd_est",
+    "rounding_and_caps_are_observed_not_excluded": true
+  },
+  "costs": {
+    "primary_dry_net_field": "ledger.pnl_usd",
+    "estimated_fee_rate_from_frozen_policy": 0.0005,
+    "definition": "dry gross pnl minus ledger estimated entry, partial and exit fees",
+    "hyp_cost_003": {
+      "canonical_path": "research/hypothesis_lab/specs/v1/HYP-COST-003-TELEMETRY.frozen.json",
+      "owner_commit": "e8cadae3fcd58eebb13e922530b955ec5798bdd4",
+      "sha256": "fe632337e675b36256741a65ec5820f4bb1d08f0bce5d9346a712a1629ba2148",
+      "reuse": [
+        "entries_with_timely_spread",
+        "closed_with_confirmed_fees"
+      ],
+      "constraint": "HYP-COST-003 excludes dry and cannot certify this cohort's fees",
+      "pooling": false,
+      "missing_confirmed_costs": "remain_missing_and_visible"
+    }
+  },
+  "final_metrics": {
+    "net_r_per_trade": "ledger.pnl_usd / ledger.risk_usd_est",
+    "avg_net_r": true,
+    "net_profit_factor": true,
+    "win_rate": true,
+    "max_drawdown_r": true,
+    "avg_net_r_ci95": "pre-registered block bootstrap",
+    "win_rate_ci95": "Wilson",
+    "cost_coverage": true
+  },
+  "promotion_review_gate": {
+    "requires_exact_n": 50,
+    "avg_net_r_point_gt": 0.2,
+    "avg_net_r_ci95_lower_gt": 0.0,
+    "win_rate_point_gte_pct": 55.0,
+    "win_rate_ci95_lower_gte_pct": 55.0,
+    "net_profit_factor_gt": 1.0,
+    "critical_execution_incidents": 0,
+    "cost_limitations_must_be_reviewed": true,
+    "all_conditions_required": true,
+    "result_only_authorizes_human_review": true,
+    "automatic_live": false
+  },
+  "governance": {
+    "full_bot_policy_frozen": true,
+    "any_policy_change": "invalidate_and_start_new_cohort",
+    "rule_changes_after_start": "forbidden",
+    "interim_outcome_metrics": "forbidden",
+    "operational_counts_allowed": true,
+    "live_orders": false,
+    "testnet_orders": false
+  },
+  "frozen_bot_policy_path": "config/bot_econ_cohort_001.policy.json",
+  "frozen_bot_policy_sha256": "6d1b2d7a045e98f6e95bb4a0b8a5faca5efa038b78bf26ce50733ea7ff30820a"
+}

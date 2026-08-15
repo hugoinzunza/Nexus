@@ -225,6 +225,15 @@ numero de operaciones cerradas se publica como contexto, pero no sustituye este 
 Completar los cinco escenarios solo habilita revision humana de la maquinaria; no
 demuestra rentabilidad y nunca activa live automaticamente.
 
+Un sexto escenario queda pre-registrado como opcional y no bloqueante: cancelar en
+Demo el stop nativo de una posicion, dejar que cruce el SL y acreditar el cierre de
+emergencia efectuado por `nexus-watchdog` de punta a punta. Hasta ejecutarlo, el
+watchdog es un respaldo operativo condicionado, no una defensa verificada por este gate.
+
+La evidencia economica posterior se rige por `ECON-COHORT-001`: 50 cierres exactos o
+`2026-10-10 04:30 UTC`, lo primero que ocurra, con una unica evaluacion al cierre. La
+configuracion completa queda congelada; cualquier cambio inicia una cohorte nueva.
+
 ---
 
 ## ROLLBACK / EMERGENCIA

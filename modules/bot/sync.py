@@ -132,6 +132,9 @@ class BotSync:
             "watching": self._watching(),
             "fundamental": fundamental,
         }
+        if (ex.cfg.get("economic_cohort") or {}).get("enabled"):
+            from modules.bot.economic_cohort import operational_status
+            snapshot["economic_cohort"] = operational_status(ex.store.all(), ex.cfg)
         if self.testnet_executor:
             snapshot["testnet"] = self._testnet_snapshot()
         return snapshot

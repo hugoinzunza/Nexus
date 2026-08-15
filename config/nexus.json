@@ -67,6 +67,7 @@
       "live": false,
       "base_equity": 897.61,
       "risk_pct": 0.02,
+      "risk_usd_fixed": 9.0,
       "pairs": [
         "BTCUSDT",
         "ETHUSDT",
@@ -107,6 +108,11 @@
         "enabled": true,
         "tolerancia_r": 0.25,
         "hedge": true
+      },
+      "economic_cohort": {
+        "enabled": true,
+        "cohort_id": "ECON-COHORT-001",
+        "protocol_sha256": "a46d073e1e069a7eb61e7000e19cf21b4ef0abf902f00b5a85e2e7ffc098eddf"
       }
     },
     "coinsignals": {

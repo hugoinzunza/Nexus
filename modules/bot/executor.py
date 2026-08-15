@@ -144,6 +144,7 @@ DEFAULTS = {
     # simultáneas pidiendo 1.294,85 USDT sobre una cuenta de 897,61.
     "max_margin_pct": 0.80,
     "risk_pct": 0.02,              # 2% de riesgo por trade (reflejo del diario)
+    "risk_usd_fixed": None,        # cohorte: presupuesto nominal fijo, si se define
     "pairs": ["BTCUSDT", "ETHUSDT"],
     "max_leverage": 20,
     "max_notional_per_order": 6000.0,
@@ -326,6 +327,14 @@ class BotExecutor:
             self.log(f"bot: {symbol} saltado por calidad {quality['grade']} "
                      f"(tf={quality['poi_tf']}, rr={quality['rr']}, disc={quality['disc_ok']})")
             return
+        cohort_metadata = {}
+        if (self.cfg.get("economic_cohort") or {}).get("enabled"):
+            try:
+                from modules.bot.economic_cohort import trade_metadata
+                cohort_metadata = trade_metadata(self.cfg)
+            except ValueError as exc:
+                self.log(f"bot: ECON fail-closed; no abre {symbol}: {exc}")
+                return
         if os.path.exists(self.kill_file):
             self.log(f"bot: KILL-SWITCH activo → no abre {symbol}")
             return
@@ -400,7 +409,8 @@ class BotExecutor:
             return
         base = self._equity_base()
         risk_pct = float(self.cfg["risk_pct"])
-        risk_usd = base * risk_pct
+        fixed_risk = self.cfg.get("risk_usd_fixed")
+        risk_usd = float(fixed_risk) if fixed_risk is not None else base * risk_pct
         max_lev = int(self.cfg.get("max_leverage", 20))
         lev_ovr = t.get("leverage_override")
         fixed_lev = self.cfg.get("fixed_leverage")
@@ -508,6 +518,7 @@ class BotExecutor:
                 "disc_ok": quality["disc_ok"], "sl_pct": round(sl_frac * 100, 3),
                 "sin_stop_nativo": sin_stop,
             }
+            rec.update(cohort_metadata)
             rec.update(extra)
             return rec
 
