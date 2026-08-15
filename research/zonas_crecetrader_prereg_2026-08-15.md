@@ -75,3 +75,41 @@ BTC y ETH, con el histórico versionado del repo.
 
 La casa ya aprendió que "varios descriptores coinciden" no es evidencia; este
 estudio existe para medir, no para confirmar.
+
+---
+
+## Resultados (2026-08-15, posteriores al freeze — harness `zonas_crecetrader.py`)
+
+Primario (k=0,50, grado 1 vs placebo, OOS 2025+, IC95 por bloques mensuales):
+
+| TF | grado1 n / tasa | placebo n / tasa | Δ | IC95 | ¿Borde inferior > 0? |
+|---|---|---|---|---|---|
+| 1h | 4.184 / 0,733 | 226 / 0,686 | +0,047 | [−0,011; +0,109] | no |
+| 4h | 861 / 0,714 | 41 / 0,634 | +0,080 | [−0,129; +0,274] | no |
+| 1d | 117 / 0,650 | 18 / 0,500 | +0,150 | [−0,069; +0,373] | no |
+
+Secundario (k=0,25): única celda con borde en cero exacto (4h, [+0,000; +0,183]),
+1 de 3 TF, en el brazo secundario. Grado 1 tampoco supera al referente puntual de
+forma consistente (positivo solo en 1h primario; negativo en 4h secundario).
+
+### Veredicto según el criterio congelado
+
+**La definición se descarta.** Exigía borde inferior > 0 en ≥2 de 3 TF en el brazo
+primario; obtuvo 0 de 3. El gate Z sigue no implementable — ahora con evidencia
+propia, no solo por ausencia de definición.
+
+Observación estructural honesta: la tasa base de "reacción" es ~70% en TODOS los
+brazos, placebo incluido. Con cripto revirtiendo ≥1 ATR en 12 velas la mayoría de
+las veces, casi cualquier banda "reacciona". El Δ verdadero de una zona, si
+existe, es pequeño frente a esa base — consistente con la predicción escéptica
+registrada y con los estudios previos de niveles (refugios, rejilla) que tampoco
+superaron sus controles.
+
+### Consecuencias
+
+1. Tercera línea independiente de evidencia contra "niveles con información
+   propia" en este stack (refugios 2026, rejilla anual, zonas CreceTrader).
+2. El gate V verdadero de Bot2 queda **bloqueado con honestidad**: sin catálogo Z
+   con información demostrada, recortar targets a "obstáculos" no tiene base.
+3. Una definición distinta de zona (volumen, tiempo de permanencia, confluencia
+   multi-TF) exigiría ZONAS-002 con nuevo pre-registro. Este no se edita.
