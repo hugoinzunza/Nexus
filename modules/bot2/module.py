@@ -75,15 +75,19 @@ class Bot2Module(NexusModule):
                 "pairs": self._pairs(),
                 "timeframes": self._timeframes(),
                 "variants": list(strategy.VARIANTS),
+                "target_policies": list(strategy.TARGET_POLICIES),
             })
         symbol = (query.get("symbol") or self._pairs()[0]).upper()
         tf = query.get("tf") or self._timeframes()[0]
         variant = query.get("variant") or strategy.VARIANTS[0]
+        target_policy = query.get("target") or "projection"
         if symbol not in self._pairs() or tf not in self._timeframes():
             return self._json(400, {"error": "mercado no habilitado"})
         if variant not in strategy.VARIANTS:
             return self._json(400, {"error": "variante no habilitada"})
-        key = (symbol, tf, variant)
+        if target_policy not in strategy.TARGET_POLICIES:
+            return self._json(400, {"error": "política de target no habilitada"})
+        key = (symbol, tf, variant, target_policy)
         with self._lock:
             cached = self._cache.get(key)
             if cached and time.time() - cached[0] < TTL:
@@ -93,6 +97,7 @@ class Bot2Module(NexusModule):
             candles, tf, variant,
             piv=int(self.config.get("piv") or strategy.PIV),
             min_net_rr=float(self.config.get("min_net_rr") or strategy.MIN_NET_RR),
+            target_policy=target_policy,
         )
         result.update({
             "symbol": symbol,

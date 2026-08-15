@@ -155,3 +155,30 @@ cuenta es el libro forward: consideración de promoción a política por defecto
 visor recién con **n≥30 afectados** en forward y ΔavgR pareado con IC95 por
 bloques que no cruce cero. `research_only` sigue; nada alimenta a BOT1 ni al
 Diario.
+
+### Resultados de la corrida histórica pareada (2026-08-15, posterior al pre-registro)
+
+Datos reciclados (BTC+ETH, 1h+4h, piv=3, RR≥2, las tres variantes de gatillo):
+
+| Política | n cerrados | WR | totR | avgR |
+|---|---:|---:|---:|---:|
+| `projection` (v2) | 87 | 39% | +29,75 | +0,342 |
+| `first_obstacle` (v3) | **0** | — | — | — |
+
+Embudo del v3: además de los rechazos compartidos con v2, **678 eventos mueren por
+`vacío insuficiente`** (el primer obstáculo queda pegado a la entrada) y **611 por
+`RR neto < 2` contra el target recortado**. El gate V literal cierra la estrategia
+por completo.
+
+**Lectura honesta:** la predicción registrada era "n baja"; la realidad fue n=0.
+La causa es identificable: Bot2 trata **cada pivote confirmado** del lado opuesto
+como obstáculo, y con piv=3 los pivotes son densos. El curso, en cambio, mide el
+vacío contra su **catálogo de zonas de primer y segundo grado** (el gate Z) — no
+contra cada micro-pivote. Es decir: **V sin Z no es el plan del curso, es una
+caricatura más estricta**, y este resultado lo demuestra con números.
+
+**Consecuencia:** `first_obstacle` queda disponible en el visor como evidencia
+didáctica (muestra el embudo del veto), pero NO como candidata a política por
+defecto. Implementar el V verdadero exige primero definir grados de zona de forma
+objetiva — el mismo requisito que dejó a Z fuera de este contrato. Si se hace,
+será un pre-registro nuevo; este no se edita.

@@ -5,6 +5,10 @@ const LABELS = {
   first_close: "Primer cierre",
   structure_break: "Quiebre estructural",
 };
+const TARGET_LABELS = {
+  projection: "Target: proyección (v2)",
+  first_obstacle: "Target: gate V · 1er obstáculo (v3)",
+};
 let chart;
 let candles;
 let phaseSeries = [];
@@ -102,7 +106,7 @@ function render(data) {
   drawPhases(data.phases || []);
   drawTrades(data.trades || [], data.candles || [], data.watchlist || []);
   chart.timeScale().fitContent();
-  $("chart-sub").textContent=`${data.symbol} · ${data.tf} · ${LABELS[data.variant]} · ${data.source}`;
+  $("chart-sub").textContent=`${data.symbol} · ${data.tf} · ${LABELS[data.variant]} · ${TARGET_LABELS[data.rules.target_policy]||""} · ${data.source}`;
   $("trades").innerHTML=(data.trades || []).slice().reverse().map(t=>`<tr>
     <td>${date(t.entry_t)}</td><td class="${t.side}">${t.side}</td>
     <td class="${t.status}">${t.status}</td><td>${fmt(t.net_rr,2)}</td>
@@ -127,7 +131,7 @@ function render(data) {
 
 async function load() {
   $("chart-sub").textContent="Calculando histórico causal…";
-  const q=new URLSearchParams({symbol:$("symbol").value,tf:$("tf").value,variant:$("variant").value});
+  const q=new URLSearchParams({symbol:$("symbol").value,tf:$("tf").value,variant:$("variant").value,target:$("target").value});
   const response=await fetch(`${API}/analysis?${q}`,{cache:"no-store"});
   const data=await response.json();
   if(!response.ok || data.error) throw new Error(data.error || "No fue posible calcular");
@@ -140,7 +144,8 @@ async function boot() {
   $("symbol").innerHTML=state.pairs.map(x=>`<option>${x}</option>`).join("");
   $("tf").innerHTML=state.timeframes.map(x=>`<option value="${x}">${x.toUpperCase()}</option>`).join("");
   $("variant").innerHTML=state.variants.map(x=>`<option value="${x}">${LABELS[x]}</option>`).join("");
-  [$("symbol"),$("tf"),$("variant")].forEach(el=>el.addEventListener("change",()=>load().catch(showError)));
+  $("target").innerHTML=(state.target_policies||["projection"]).map(x=>`<option value="${x}">${TARGET_LABELS[x]||x}</option>`).join("");
+  [$("symbol"),$("tf"),$("variant"),$("target")].forEach(el=>el.addEventListener("change",()=>load().catch(showError)));
   await load();
 }
 function showError(error){$("chart-sub").textContent=error.message;}

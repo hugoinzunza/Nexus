@@ -15,6 +15,8 @@ MIN_NET_RR = 2.0
 MAX_WAIT_BARS = 120
 ROUND_TRIP_COST_PCT = 0.0012
 VARIANTS = ("teacher_2close", "first_close", "structure_break")
+TARGET_POLICIES = ("projection", "first_obstacle")
+OBSTACLE_EPS = 0.0005
 PANORAMA = {
     "1h": ("4h", "1d"),
     "4h": ("1d", "1w"),
@@ -100,8 +102,27 @@ def _line_value(a: dict, b: dict, idx: int) -> float:
     return float(a["price"]) + slope * (idx - a["idx"])
 
 
+def _resolve_target(entry: float, projection: float, obstacles: list[float],
+                    long: bool, policy: str) -> tuple[float, str, bool]:
+    """Aplica la política de target del contrato v3 (gate V, clase 14).
+
+    `projection` es el target v2. Con `first_obstacle`, si hay un pivote opuesto
+    confirmado entre la entrada y esa proyección, el target se corre justo antes
+    del primer obstáculo (epsilon del doc de muros). Devuelve (target, etiqueta,
+    válido): inválido cuando el recorte deja el target del lado equivocado de la
+    entrada — el "vacío insuficiente" que el curso convierte en veto."""
+    if policy != "first_obstacle" or not obstacles:
+        return projection, "proyección", True
+    first = min(obstacles) if long else max(obstacles)
+    cut = first * (1 - OBSTACLE_EPS) if long else first * (1 + OBSTACLE_EPS)
+    if (cut <= entry) if long else (cut >= entry):
+        return cut, "antes del primer obstáculo", False
+    return cut, "antes del primer obstáculo", True
+
+
 def _phase_event(velas: list[dict], ciclo: dict, variant: str,
-                 points: dict, atrs: list[float | None]) -> dict:
+                 points: dict, atrs: list[float | None],
+                 target_policy: str = "projection") -> dict:
     side = ciclo["side"]
     long = side == "long"
     a, b, c = ciclo["origin"], ciclo["impulse_end"], ciclo["correction_end"]
@@ -192,6 +213,13 @@ def _phase_event(velas: list[dict], ciclo: dict, variant: str,
             and ((entry < p["price"] < target) if long
                  else (target < p["price"] < entry))
         ]
+        projection_target = target
+        target, target_label, target_ok = _resolve_target(
+            entry, projection_target, obstaculos, long, target_policy)
+        if target_label != "proyección":
+            target_type = target_label
+        if not target_ok:
+            return {"event": None, "reason": "vacío insuficiente", "detail": rechazos}
         gross_rr = abs(target - entry) / risk
         cost_r = entry * ROUND_TRIP_COST_PCT / risk
         net_rr = gross_rr - cost_r
@@ -200,6 +228,8 @@ def _phase_event(velas: list[dict], ciclo: dict, variant: str,
             "signal_idx": i, "signal_t": int(vela["t"]),
             "entry_idx": entry_idx, "entry_t": int(velas[entry_idx]["t"]),
             "entry": entry, "stop": stop, "target": target,
+            "projection_target": projection_target,
+            "target_policy": target_policy,
             "target_type": target_type, "gross_rr": gross_rr,
             "cost_r": cost_r, "net_rr": net_rr, "fib_61_8": fib,
             "obstacles_before_target": len(obstaculos),
@@ -243,7 +273,8 @@ def _simulate(velas: list[dict], event: dict) -> dict:
 def _watch_candidate(velas: list[dict], ciclo: dict, variant: str,
                      points: dict, atrs: list[float | None],
                      contexto: dict[str, list[dict]],
-                     min_net_rr: float = MIN_NET_RR) -> dict | None:
+                     min_net_rr: float = MIN_NET_RR,
+                     target_policy: str = "projection") -> dict | None:
     """Describe un ciclo vigente sin anticipar la próxima apertura."""
     i = len(velas) - 1
     if i <= ciclo["available_idx"] or i - ciclo["available_idx"] > MAX_WAIT_BARS:
@@ -345,6 +376,19 @@ def _watch_candidate(velas: list[dict], ciclo: dict, variant: str,
                    if (price > close if long else price < close)]
     target = min(projections, key=lambda x: abs(x[0] - close)) \
         if projections else None
+    target_label = f"proyección {target[1]:g}" if target else None
+    if target:
+        obstaculos = [
+            float(p["price"]) for p in (points["highs"] if long else points["lows"])
+            if p["confirm_idx"] <= i
+            and ((close < p["price"] < target[0]) if long
+                 else (target[0] < p["price"] < close))
+        ]
+        precio_final, etiqueta, target_ok = _resolve_target(
+            close, target[0], obstaculos, long, target_policy)
+        if etiqueta != "proyección":
+            target_label = etiqueta
+        target = (precio_final, target[1]) if target_ok else None
     net_rr = None
     if risk > 0 and target:
         net_rr = abs(target[0] - close) / risk \
@@ -360,13 +404,14 @@ def _watch_candidate(velas: list[dict], ciclo: dict, variant: str,
         "distance_pct": distance / close * 100 if close else None,
         "estimated_entry": close, "stop": stop,
         "target": target[0] if target else None,
-        "target_type": f"proyección {target[1]:g}" if target else None,
+        "target_type": target_label if target else None,
         "net_rr_estimate": net_rr, "eligible_next_open": eligible,
     }
 
 
 def analyze(velas: list[dict], tf: str, variant: str, *,
-            piv: int = PIV, min_net_rr: float = MIN_NET_RR) -> dict:
+            piv: int = PIV, min_net_rr: float = MIN_NET_RR,
+            target_policy: str = "projection") -> dict:
     """`piv` y `min_net_rr` son configurables desde 2026-08-15 (contrato v2).
 
     La grilla pre-declarada PIV×RR×variante (ver bitácora en
@@ -379,6 +424,8 @@ def analyze(velas: list[dict], tf: str, variant: str, *,
         raise ValueError("variante no habilitada")
     if tf not in PANORAMA:
         raise ValueError("temporalidad no habilitada")
+    if target_policy not in TARGET_POLICIES:
+        raise ValueError("política de target no habilitada")
     points = F.pivotes_confirmados(velas, tf, piv)
     ciclos = F.ciclos_confirmados(velas, tf, piv)
     atrs = atr_values(velas)
@@ -388,7 +435,8 @@ def analyze(velas: list[dict], tf: str, variant: str, *,
     rejected = {}
     resolved_cycle_ids = set()
     for ciclo in ciclos:
-        resultado = _phase_event(velas, ciclo, variant, points, atrs)
+        resultado = _phase_event(velas, ciclo, variant, points, atrs,
+                                 target_policy)
         if not resultado["event"]:
             reason = resultado["reason"]
             if reason == "fase invalidada":
@@ -454,7 +502,7 @@ def analyze(velas: list[dict], tf: str, variant: str, *,
         if ciclo["id"] in resolved_cycle_ids:
             continue
         watch = _watch_candidate(velas, ciclo, variant, points, atrs, contexto,
-                                 min_net_rr)
+                                 min_net_rr, target_policy)
         if watch:
             watchlist.append(watch)
     watchlist.sort(key=lambda w: (
@@ -470,7 +518,10 @@ def analyze(velas: list[dict], tf: str, variant: str, *,
             "pivot": f"{piv}+1+{piv}", "correction_zone": [0.382, 0.618],
             "entry": "apertura siguiente + slippage adverso",
             "stop": "extremo estructural + 0,10 ATR",
-            "target": "primera proyección de fase alcanzable",
+            "target": ("primera proyección de fase alcanzable"
+                       if target_policy == "projection"
+                       else "proyección recortada al primer obstáculo (gate V)"),
+            "target_policy": target_policy,
             "obstacles": "pivotes causales intermedios registrados, no omitidos",
             "min_net_rr": min_net_rr, "management": "salida completa",
         },

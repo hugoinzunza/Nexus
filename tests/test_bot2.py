@@ -119,3 +119,29 @@ def test_linea_de_tendencia_interpola_y_no_divide_por_cero():
     assert strategy._line_value(a, b, 25) == 115.0
     mismo = {"idx": 5, "price": 100.0}
     assert strategy._line_value(mismo, {"idx": 5, "price": 103.0}, 9) == 103.0
+
+
+def test_gate_v_recorta_el_target_al_primer_obstaculo():
+    # long: proyección en 110, obstáculos confirmados en 106 y 108
+    target, etiqueta, ok = strategy._resolve_target(
+        100.0, 110.0, [108.0, 106.0], True, "first_obstacle")
+    assert ok and etiqueta == "antes del primer obstáculo"
+    assert abs(target - 106.0 * (1 - strategy.OBSTACLE_EPS)) < 1e-9
+    # short espejo: obstáculos en 94 y 92 -> manda el 94 (el más cercano)
+    target, _, ok = strategy._resolve_target(
+        100.0, 90.0, [92.0, 94.0], False, "first_obstacle")
+    assert ok and abs(target - 94.0 * (1 + strategy.OBSTACLE_EPS)) < 1e-9
+
+
+def test_gate_v_sin_obstaculos_o_en_v2_no_cambia_nada():
+    assert strategy._resolve_target(100.0, 110.0, [], True, "first_obstacle") == \
+        (110.0, "proyección", True)
+    assert strategy._resolve_target(100.0, 110.0, [105.0], True, "projection") == \
+        (110.0, "proyección", True)
+
+
+def test_gate_v_veta_cuando_no_hay_vacio():
+    # obstáculo pegado a la entrada: el recorte cae bajo la entrada -> veto
+    _, _, ok = strategy._resolve_target(
+        100.0, 110.0, [100.02], True, "first_obstacle")
+    assert not ok
