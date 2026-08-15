@@ -153,6 +153,30 @@ def observe(setups_path: Path = SETUPS_PATH, output_path: Path = OUTPUT_PATH,
     return payload
 
 
+def observe_with_retry(setups_path: Path, output_path: Path, spec_path: Path,
+                       retries: int = 2, backoff_seconds: float = 5.0,
+                       sleeper=time.sleep) -> dict[str, Any]:
+    """Reintenta la pasada cuando el setup store cambia mientras se observa.
+
+    El guard de `observe` es correcto: si la fuente muta a mitad de pasada, ese
+    snapshot no es coherente y se descarta. Pero morir con el proceso entero era
+    excesivo — la fuente canónica se reescribe cada vez que el diario avanza, y
+    una pasada de este observador es lenta (klines por red), así que la colisión
+    es rutina, no anomalía: 46 crashes acumulados al 2026-08-15, todos benignos.
+    Releer TODO desde cero en el siguiente intento conserva exactamente la misma
+    garantía de integridad; solo deja de convertirla en un exit 1."""
+    last: RuntimeError | None = None
+    for attempt in range(retries + 1):
+        try:
+            return observe(setups_path, output_path, spec_path)
+        except RuntimeError as exc:
+            last = exc
+            if attempt < retries:
+                sleeper(backoff_seconds)
+    assert last is not None
+    raise last
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--setups", type=Path, default=SETUPS_PATH)
@@ -162,9 +186,18 @@ def main() -> None:
     parser.add_argument("--interval", type=int, default=300)
     args = parser.parse_args()
     while True:
-        payload = observe(args.setups, args.output, args.spec)
-        print(json.dumps({"generated_at_ms": payload["meta"]["generated_at_ms"],
-                          **payload["summary"]}, ensure_ascii=False), flush=True)
+        try:
+            payload = observe_with_retry(args.setups, args.output, args.spec)
+        except RuntimeError as exc:
+            # En modo watch, un tick perdido no amerita matar el servicio: el
+            # siguiente intervalo vuelve a intentar con la fuente ya quieta.
+            if not args.watch:
+                raise
+            print(json.dumps({"skipped_tick": True, "reason": str(exc)[:120]},
+                             ensure_ascii=False), flush=True)
+        else:
+            print(json.dumps({"generated_at_ms": payload["meta"]["generated_at_ms"],
+                              **payload["summary"]}, ensure_ascii=False), flush=True)
         if not args.watch:
             break
         time.sleep(max(60, args.interval))

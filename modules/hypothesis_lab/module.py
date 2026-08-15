@@ -211,6 +211,24 @@ class HypothesisLabModule(NexusModule):
             observer["source_age_seconds"] = source.get("age_seconds")
             observer["capturing"] = bool(silence is not None and silence <= limit)
 
+            # Bloqueo ACEPTADO: HYP-COST-003 no puede avanzar mientras el bot no
+            # opere en real, y esa espera fue aceptada explícitamente por Hugo al
+            # cerrar el Operational Recovery Sprint (2026-08-06). Reportarla como
+            # "degraded" a perpetuidad entrena a ignorar el semáforo — fatiga de
+            # alarma. `blocked` dice la verdad: no está roto, está esperando una
+            # precondición externa conocida. Solo aplica cuando la ÚNICA razón es
+            # la ausencia del ledger; cualquier otro error sigue siendo degraded.
+            load_errors = observer.get("load_errors")
+            if (
+                observer["status"] == "degraded"
+                and isinstance(load_errors, list)
+                and load_errors
+                and all(item.get("error") == "ledger_missing" for item in load_errors)
+                and not observer.get("errors")
+            ):
+                observer["status"] = "blocked"
+                observer["blocked_reason"] = "ledger_missing_accepted"
+                continue
             # Un estado ya degradado o ausente manda: no se pisa con esto.
             if observer["status"] in ("missing", "degraded"):
                 continue
@@ -285,6 +303,7 @@ class HypothesisLabModule(NexusModule):
                     "hypothesis_id": "HYP-COST-003-TELEMETRY",
                     "records": telemetry_meta.get("n_records", 0),
                     "decision": telemetry_decision.get("status", "not_available"),
+                    "errors": telemetry_meta.get("errors", []),
                     "load_errors": telemetry_meta.get("load_errors", []),
                     "coverage": telemetry_decision.get("primary_live_counts", {}),
                     "_newest_record_ms": telemetry_newest,
@@ -435,15 +454,20 @@ class HypothesisLabModule(NexusModule):
         observers = state["observers"]
         statuses = {name: item["status"] for name, item in observers.items()}
         stalled = sorted(name for name, value in statuses.items() if value == "stalled")
+        blocked = sorted(name for name, value in statuses.items() if value == "blocked")
         degraded = sorted(
             name for name, value in statuses.items() if value in ("degraded", "missing", "stale")
         )
+        # Un bloqueo aceptado no es salud rota: el módulo está "ok" cuando todo lo
+        # que PUEDE capturar está fresco y lo demás espera su precondición conocida.
+        healthy = set(statuses.values()) <= {"fresh", "blocked"} and "fresh" in statuses.values()
         return {
             "slug": self.slug,
-            "status": "ok" if set(statuses.values()) == {"fresh"} else "degraded",
+            "status": "ok" if healthy else "degraded",
             "mode": "research", "execution": False,
             "observers": statuses,
             "stalled": stalled,
+            "blocked_accepted": blocked,
             "degraded_observers": degraded,
             "capturing": sorted(name for name, item in observers.items() if item.get("capturing")),
         }
