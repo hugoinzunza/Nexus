@@ -55,7 +55,12 @@ class Bot2Module(NexusModule):
         pushed, meta = klines_push.serie_con_meta(ROOT, symbol, tf, 2_000)
         merged = {int(row["t"]): row for row in historical}
         merged.update({int(row["t"]): row for row in pushed})
-        rows = [merged[t] for t in sorted(merged)][-MAX_BARS:]
+        # La vista corre en el handler síncrono del servidor: con piv=3 el análisis
+        # sobre 35k velas de 1h tarda minutos y estrangula el event loop entero
+        # (quedó demostrado el 2026-08-15 con el panel completo bloqueado). El visor
+        # usa una ventana acotada; los estudios de historial completo van offline.
+        window = int(self.config.get("max_bars") or MAX_BARS)
+        rows = [merged[t] for t in sorted(merged)][-window:]
         closed = P.velas_cerradas(rows, tf, int(time.time() * 1000))
         source = "historico+vps_binance" if pushed else "historico_versionado"
         return closed, source, meta
