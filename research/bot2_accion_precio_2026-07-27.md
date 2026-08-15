@@ -112,3 +112,46 @@ OOS = 2025+; corte fijado antes de correr):
 
 El v1 (piv=5) queda reproducible poniendo `piv: 5` en la config; los resultados
 v1 de esta misma página no se editan.
+
+---
+
+## Contrato v3 — gate V pre-registrado (2026-08-15, ANTES de computar resultados)
+
+**Origen:** los apuntes de la clase 14 muestran que el plan del curso es **T+Z+V
+conjuntivo** y Bot2 solo implementa la T (panorama). El vacío (V) se registra
+(`obstacles_before_target`) pero no se exige, y el target usa la proyección más
+cercana en vez del "anterior al primer obstáculo" que enseña el curso.
+
+**Definición congelada de la política `first_obstacle`:**
+
+1. Se calcula el target por proyección igual que v2.
+2. Si existe un pivote confirmado del lado opuesto **estrictamente entre la
+   entrada y ese target** (mismo criterio causal que ya usa
+   `obstacles_before_target`), el target se mueve **justo antes** del primer
+   obstáculo: `obstáculo × (1 − 0,0005)` en long, `× (1 + 0,0005)` en short —
+   el mismo epsilon del doc de muros.
+3. Si el target recortado no supera la entrada, la operación se rechaza por
+   `vacío insuficiente`.
+4. El gate `RR neto ≥ 2` se evalúa contra el target final. Ahí vive el veto V del
+   curso: si el primer obstáculo está tan cerca que no caben 2R, no hay entrada.
+5. Todo lo demás es idéntico al v2 (piv=3, mismas variantes de gatillo).
+
+**Z queda explícitamente fuera:** la clase 06 define las zonas de forma narrativa
+(sin ancho ni grado objetivos). Implementarla exigiría decisiones nuestras que el
+curso no toma; sería otra hipótesis, con su propio pre-registro.
+
+**Predicciones registradas ahora, con la evidencia previa en la mano:**
+
+| Efecto | Predicción | Fundamento previo |
+|---|---|---|
+| n de trades | baja | el veto solo remueve |
+| Win rate | sube | targets más cercanos se alcanzan más |
+| avgR | **incierta, sesgo a peor** | el estudio del imán (2026-07-25) mostró que capar ganadoras empeora la expectativa de forma monótona; el gate V mezcla veto (que no puede inflar) con recorte (que históricamente resta) |
+
+**Criterio de lectura, congelado:** la comparación es **pareada** (mismos ciclos,
+misma señal, solo cambia la política de target). La corrida histórica se publica
+completa como contexto exploratorio sobre datos reciclados. La evidencia que
+cuenta es el libro forward: consideración de promoción a política por defecto del
+visor recién con **n≥30 afectados** en forward y ΔavgR pareado con IC95 por
+bloques que no cruce cero. `research_only` sigue; nada alimenta a BOT1 ni al
+Diario.
