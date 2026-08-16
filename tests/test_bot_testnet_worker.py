@@ -38,6 +38,44 @@ def test_testnet_rechaza_env_que_no_apunta_a_demo(monkeypatch, tmp_path):
     assert any("INERTE por seguridad" in line for line in logs)
 
 
+def test_testnet_usa_env_estable_fuera_del_release(monkeypatch, tmp_path):
+    release = tmp_path / "release"
+    release.mkdir()
+    stable_env = tmp_path / "secrets" / "testnet.env"
+    stable_env.parent.mkdir()
+    stable_env.write_text(
+        "NEXUS_TESTNET=1\n"
+        "BINANCE_FAPI_BASE_URL=https://demo-fapi.binance.com\n"
+        "BINANCE_TRADE_API_KEY=x\n"
+        "BINANCE_TRADE_API_SECRET=y\n"
+    )
+    monkeypatch.setenv("NEXUS_TESTNET_WORKER", "1")
+    monkeypatch.setenv("NEXUS_TESTNET_ENV_FILE", str(stable_env))
+    monkeypatch.setattr(trading_module, "_ROOT_REPO", str(release))
+    monkeypatch.setattr(trading_module, "_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setattr(
+        "modules.trading.binance_account.BinanceFutures",
+        lambda **_kwargs: _FakeClient(),
+    )
+
+    executor = _bare_trading([])._make_testnet_executor()
+
+    assert executor is not None
+    assert executor.live is True
+
+
+def test_testnet_env_estable_ausente_falla_cerrado(monkeypatch, tmp_path):
+    missing = tmp_path / "secrets" / "testnet.env"
+    monkeypatch.setenv("NEXUS_TESTNET_WORKER", "1")
+    monkeypatch.setenv("NEXUS_TESTNET_ENV_FILE", str(missing))
+    logs = []
+
+    executor = _bare_trading(logs)._make_testnet_executor()
+
+    assert executor is None
+    assert any("ausente o ilegible" in line for line in logs)
+
+
 def test_testnet_tiene_cliente_store_y_kill_aislados(monkeypatch, tmp_path):
     deploy = tmp_path / "deploy"
     deploy.mkdir()

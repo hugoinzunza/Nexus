@@ -225,8 +225,12 @@ class TradingModule(NexusModule):
             from modules.bot.executor import BotExecutor, load_config
             from modules.trading.binance_account import BinanceFutures
 
-            env_path = os.path.join(_ROOT_REPO, "deploy", "testnet.env")
+            env_path = os.environ.get("NEXUS_TESTNET_ENV_FILE") or os.path.join(
+                _ROOT_REPO, "deploy", "testnet.env"
+            )
             values = self._env_file(env_path)
+            if not values:
+                raise RuntimeError(f"testnet.env ausente o ilegible: {env_path}")
             base_url = values.get("BINANCE_FAPI_BASE_URL", "").rstrip("/")
             if values.get("NEXUS_TESTNET") != "1" or base_url != "https://demo-fapi.binance.com":
                 raise RuntimeError("testnet.env no apunta al endpoint Demo oficial")
