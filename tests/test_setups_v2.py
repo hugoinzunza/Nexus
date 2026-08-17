@@ -152,3 +152,46 @@ def test_paper_account_reporta_riesgo_simultaneo_correlacionado():
     assert acc["max_concurrentes"] == 4
     assert acc["max_concurrentes_misma_dir"] == 3          # los tres long
     assert acc["riesgo_simultaneo_pct"] == 6.0             # 3 × 2%
+
+
+def _plan_short(entry=100.0, tf="1h"):
+    return {"dir": "short", "tf": tf, "entry": entry, "entry_lo": entry - 0.5,
+            "entry_hi": entry + 0.5, "sl": entry * 1.02, "tp": entry * 0.9,
+            "rr": 5.0, "tp_label": "t", "disc_ok": True}
+
+
+def test_be_defensivo_no_toca_los_brazos_de_seguimiento_simple(tmp_path):
+    """Regresión del gemelo BTC del 2026-08-12: protect_to_be estampaba un
+    break-even sobre setups paper/profe que _update_simple jamás ejecuta,
+    dejándolos vivos con el precio más allá de su BE. Su plan es su plan."""
+    store = SetupStore(path=str(tmp_path / "setups.json"))
+    store.record(_plan_short(), "BTC_USDT", "1h", last_price=101.0, now_s=1000.0)
+    paper = dict(_plan_short(tf="15m"), paper_only=True, bta_paper=True)
+    store.record(paper, "BTC_USDT", "15m", last_price=101.0, now_s=1000.0)
+    # modelo V2: armar cruzando bajo el midpoint y activar al tocarlo de vuelta
+    store.track("BTC_USDT", 99.9, 1050.0)   # arma (short: precio bajo entry-tol)
+    store.track("BTC_USDT", 100.0, 1100.0)  # activa al tocar el midpoint
+    activos = [s for s in store.all() if s["status"] == "activo"]
+    assert len(activos) == 2
+
+    # risk-off con ambos en ganancia (short: precio bajo la entrada)
+    transiciones = store.protect_to_be("BTC_USDT", 99.0, 1200.0, reason="volatilidad")
+
+    protegidos = {s["key"]: s for s in store.all() if s["status"] == "activo"}
+    indicador = next(s for s in protegidos.values() if not s.get("paper_only"))
+    gemelo = next(s for s in protegidos.values() if s.get("paper_only"))
+    # el brazo NexUX SÍ se protege
+    assert indicador.get("sl_be") is True and indicador["sl_cur"] == indicador["entry"]
+    # el brazo paper queda TAL CUAL su plan: sin BE estampado
+    assert gemelo.get("sl_be") is not True
+    assert gemelo.get("sl_cur", gemelo["sl"]) == gemelo["sl"]
+    assert all(t["key"] != gemelo["key"] for t in transiciones)
+
+    # y si el precio vuelve a la entrada: el indicador cierra en BE (R=0),
+    # el paper sigue vivo porque su SL original no fue tocado
+    store.track("BTC_USDT", 100.2, 1300.0)
+    indicador_final = next(s for s in store.all() if not s.get("paper_only"))
+    gemelo_final = next(s for s in store.all() if s.get("paper_only"))
+    assert indicador_final["status"] in ("ganada", "perdida")
+    assert abs(indicador_final["result_r"]) < 1e-9   # cierre en break-even
+    assert gemelo_final["status"] == "activo"
