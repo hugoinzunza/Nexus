@@ -626,7 +626,11 @@ class TradingModule(NexusModule):
         sel = self._candles_cached(instrument, sel_tf)
         closed = smc_live.closed_candles(sel, sel_tf)   # anti-repaint: solo cierres
         last = sel[-1]["c"] if sel else 0.0
-        analysis = smc_course.analyze(closed, last, sel_tf)
+        # Velas de la estructura RECTORA (H4/1D) para el rango del curso, también
+        # solo cierres. La jerarquía la resuelve smc_course.RECTOR_TF.
+        htf = {tf: smc_live.closed_candles(c, tf)
+               for tf, c in (self._htf_candles(instrument) or {}).items() if c}
+        analysis = smc_course.analyze(closed, htf, last, sel_tf)
         with self._smc_lock:
             self._smc_course_cache[key] = {"analysis": analysis, "ts": now}
         return analysis

@@ -617,11 +617,12 @@
             }
             const strongCol = up ? "#16c784" : "#ea3943";
             const weakCol = up ? "#ea3943" : "#16c784";
+            const rtf = rng.tf ? ` ${rng.tf}` : "";
             hline(rng.strong, strongCol,
-              `Strong ${up ? "Low" : "High"} · inicio${rng.sweep ? " · ⚡ liq" : ""}`,
+              `Strong ${up ? "Low" : "High"}${rtf} · inicio${rng.sweep ? " · ⚡ liq" : ""}`,
               { width: 1.6, below: !up });
             hline(rng.weak, weakCol,
-              `Weak ${up ? "High" : "Low"} · target`, { dash: [6, 4], below: up });
+              `Weak ${up ? "High" : "Low"}${rtf} · target`, { dash: [6, 4], below: up });
             hline(rng.eq, "#a29bfe", "50%", { dash: [2, 4], alpha: 0.8, below: !up });
           }
           // Fractal: nivel 50% de la última pierna (regla del retroceso).
@@ -700,7 +701,11 @@
               ctx.beginPath(); ctx.moveTo(x, yMid); ctx.lineTo(W, yMid); ctx.stroke();
               ctx.setLineDash([]);
             }
-            const tag = (isOB ? "OB " + z.tipo : "FVG")
+            // Etiqueta como las del profe: "Premium POI" / "Discount POI", con la
+            // TF de origen cuando la zona viene del RECTOR (H4/D).
+            const side = z.lado === "premium" ? "Premium" : (z.lado === "discount" ? "Discount" : "");
+            const tfTag = z.tf && z.tf !== course.timeframe ? z.tf + " " : "";
+            const tag = tfTag + (isOB ? (side ? side + " POI" : "OB") : "FVG" + (side ? " " + side.toLowerCase() : ""))
               + (z.trampa ? " · ⚠ trampa" : "")
               + (z.liq_delante ? " · liq delante" : "");
             pill(placeR(top + 2), tag,
@@ -708,10 +713,26 @@
                                            : (long ? "#a29bfe" : "#f5a623")),
               { right: true });
           });
+          // Entradas del curso (✓ zona confirmada con iBOS / ✗ invalidada),
+          // como los marcadores del indicador del profe. Descriptivas.
+          (course.entradas || []).forEach((m) => {
+            const x = tx(m.t), y = py(m.price);
+            if (x == null || y == null) return;
+            const ok = m.estado === "confirmada";
+            const col = ok ? "#16c784" : "#ea3943";
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.arc(x, y, 4.2, 0, 6.2832); ctx.fill();
+            ctx.strokeStyle = "rgba(9,11,17,0.9)"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(x, y, 4.2, 0, 6.2832); ctx.stroke();
+            pill(placeD(ok ? y + 7 : y - 20),
+              (ok ? "✓ entrada · " : "✗ ") + m.zona, col,
+              { x: Math.max(2, Math.min(x - 24, W - 110)),
+                font: "600 9px -apple-system, sans-serif" });
+          });
           // Resumen de lectura (checklist del playbook) arriba a la izquierda.
           const ck = course.checklist || {};
           if (ck.direccion) {
-            const parts = [`CURSO · ${ck.direccion.toUpperCase()}`];
+            const parts = [`CURSO${ck.rector ? " · rector " + ck.rector : ""} · ${ck.direccion.toUpperCase()}`];
             if (ck.toma_liquidez != null) parts.push(ck.toma_liquidez ? "liq ✓" : "liq –");
             if (ck.retroceso_50 != null) parts.push(ck.retroceso_50 ? "50% ✓" : "50% ✗");
             if (ck.precio_zona) parts.push(ck.precio_zona);
