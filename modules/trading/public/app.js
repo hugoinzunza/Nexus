@@ -682,7 +682,8 @@
             if (ck.trampa_cerca) parts.push("⚠ trampa");
             if (ck.target_dist_pct != null)
               parts.push(`target ${ck.target_dist_pct > 0 ? "+" : ""}${ck.target_dist_pct}%`);
-            pill(placeL(6), parts.join(" · "), "#a29bfe",
+            // Bajo la leyenda OHLC (que es DOM y taparía la pill en y=6).
+            pill(placeL(28), parts.join(" · "), "#a29bfe",
               { font: "600 10px -apple-system, sans-serif" });
           }
         }
