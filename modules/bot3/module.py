@@ -92,6 +92,11 @@ class Bot3Module(NexusModule):
         result = strategy.simulate(sel, rector, tf)
         result.update({
             "symbol": symbol, "tf": tf, "rector_tf": rector_tf,
+            # Auditoría 2026-08-17 (docs/AUDITORIA_CURSO_BOT3_2026-08-17.md):
+            # RECHAZADO por look-ahead HTF (C-1) y confirmación incompleta.
+            # Las métricas v1 son PROTOTIPO INVÁLIDO: no acumulan forward ni
+            # entran a la evaluación de octubre. Pendiente Bot3.v2.
+            "estado_auditoria": "FORWARD INVÁLIDO — prototipo v1 rechazado (2026-08-17); no acumular",
             "research_only": True, "execution_enabled": False,
             "source": source, "source_meta": meta,
             "as_of": int(sel[-1]["t"]) if sel else None,
