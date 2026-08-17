@@ -650,25 +650,62 @@
               pill(placeR(y - 8), `${p.kind} ×${p.count}`, "#f5a623",
                 { right: true, font: "600 9px -apple-system, sans-serif" });
           });
-          // Zonas frescas del curso (OB/FVG) con tipo y banderas de liquidez.
+          // Marcas de estructura BOS/iBOS como las traza el profe: segmento en
+          // el swing roto → vela del cierre que lo rompió, etiqueta al medio.
+          (course.structure || []).forEach((ev) => {
+            const y = py(ev.price); if (y == null) return;
+            let x1 = tx(ev.t_from), x2 = tx(ev.t_to);
+            if (x2 == null) return;
+            if (x1 == null) x1 = 0;
+            const up = ev.dir === "up";
+            const col = up ? "#16c784" : "#ea3943";
+            const ibos = ev.label === "iBOS";
+            ctx.strokeStyle = col; ctx.lineWidth = ibos ? 1 : 1.4;
+            ctx.setLineDash(ibos ? [4, 3] : []);
+            ctx.globalAlpha = ibos ? 0.7 : 0.85;
+            ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+            // Tick vertical en la vela del quiebre (donde cerró más allá).
+            ctx.beginPath(); ctx.moveTo(x2, y - 4); ctx.lineTo(x2, y + 4); ctx.stroke();
+            ctx.setLineDash([]); ctx.globalAlpha = 1;
+            pill(y - 8, ev.label, col,
+              { x: Math.max(2, Math.min((x1 + x2) / 2 - 16, W - 48)),
+                font: "600 9px -apple-system, sans-serif" });
+          });
+          // Zonas frescas del curso con paleta POR TIPO (como el profe):
+          // OB verde/rojo según dirección; FVG (imbalance) púrpura/naranjo.
+          // Trampa = borde rojo grueso + ⚠ (la liquidez detrás manda).
           (course.zones || []).filter((z) => z.fresh).forEach((z) => {
             const y1 = py(z.hi), y2 = py(z.lo); if (y1 == null || y2 == null) return;
             const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
             let x = z.t ? tx(z.t) : 0; if (x == null) x = 0; x = Math.max(0, x);
             const long = z.dir === "long";
-            const base = z.trampa ? "245,166,35" : (long ? "22,199,132" : "234,57,67");
+            const isOB = z.kind === "ob";
+            const base = isOB ? (long ? "22,199,132" : "234,57,67")
+                             : (long ? "162,155,254" : "245,166,35");
             const g = ctx.createLinearGradient(x, 0, W, 0);
-            g.addColorStop(0, `rgba(${base},${z.kind === "ob" ? 0.20 : 0.13})`);
+            g.addColorStop(0, `rgba(${base},${isOB ? 0.20 : 0.14})`);
             g.addColorStop(1, `rgba(${base},0.05)`);
             ctx.fillStyle = g; ctx.fillRect(x, top, W - x, h);
-            ctx.strokeStyle = `rgba(${base},0.55)`; ctx.lineWidth = 1;
-            if (z.kind === "fvg") ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = z.trampa ? "rgba(234,57,67,0.9)" : `rgba(${base},0.55)`;
+            ctx.lineWidth = z.trampa ? 1.5 : 1;
+            if (!isOB) ctx.setLineDash([3, 3]);
             ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
             ctx.setLineDash([]);
-            const tag = (z.kind === "ob" ? "OB " + z.tipo : "FVG")
+            // EJE de la zona (50% del OB/FVG): la línea media que usa el profe
+            // como umbral de mitigación/entrada refinada dentro de la caja.
+            const yMid = py((z.lo + z.hi) / 2);
+            if (yMid != null && h > 6) {
+              ctx.strokeStyle = `rgba(${base},0.5)`; ctx.lineWidth = 1;
+              ctx.setLineDash([2, 3]);
+              ctx.beginPath(); ctx.moveTo(x, yMid); ctx.lineTo(W, yMid); ctx.stroke();
+              ctx.setLineDash([]);
+            }
+            const tag = (isOB ? "OB " + z.tipo : "FVG")
               + (z.trampa ? " · ⚠ trampa" : "")
               + (z.liq_delante ? " · liq delante" : "");
-            pill(placeR(top + 2), tag, z.trampa ? "#f5a623" : (long ? "#16c784" : "#ea3943"),
+            pill(placeR(top + 2), tag,
+              z.trampa ? "#ea3943" : (isOB ? (long ? "#16c784" : "#ea3943")
+                                           : (long ? "#a29bfe" : "#f5a623")),
               { right: true });
           });
           // Resumen de lectura (checklist del playbook) arriba a la izquierda.
