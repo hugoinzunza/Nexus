@@ -20,6 +20,7 @@ deben migrar al bot sin pasar por el laboratorio.
 """
 from __future__ import annotations
 
+import bisect
 from typing import Dict, List, Optional
 
 from . import smc
@@ -51,6 +52,16 @@ MAX_POOLS = 8
 RECTOR_TF = {"1m": "1h", "5m": "4h", "15m": "4h", "30m": "4h", "1h": "4h",
              "2h": "1D", "4h": "1D", "6h": "1D", "12h": "1D",
              "1D": "1D", "7D": "1D"}
+
+# Duración de vela por TF (acepta ambas convenciones de nombre). CRÍTICO para
+# la DISPONIBILIDAD causal (fix C-1 de la auditoría 2026-08-17): `t` es la
+# APERTURA de la vela; un BOS, FVG o zona que se completa en la vela i recién
+# EXISTE en `t_i + duración` (su cierre). Ninguna vela de una TF menor puede
+# consumir un evento del rector antes de ese instante.
+TF_MS = {"1m": 60_000, "5m": 300_000, "15m": 900_000, "30m": 1_800_000,
+         "1h": 3_600_000, "2h": 7_200_000, "4h": 14_400_000, "6h": 21_600_000,
+         "12h": 43_200_000, "1D": 86_400_000, "1d": 86_400_000,
+         "7D": 604_800_000, "1w": 604_800_000}
 
 
 def _q(x):
@@ -249,7 +260,7 @@ def _pools(candles: List[dict], last_price: float) -> List[Dict]:
 
 
 def _zones(candles: List[dict], rng: Optional[Dict], pools: List[Dict],
-           last_price: float) -> List[Dict]:
+           last_price: float, dur_ms: int = 0) -> List[Dict]:
     """Zonas admitidas del curso: OB (última vela opuesta antes del impulso que
     deja FVG) y FVG. Cada zona lleva frescura, tipo (extremo/decisional/interna),
     liquidez delante (inducement) y liquidez DETRÁS (bloque trampa)."""
@@ -287,6 +298,13 @@ def _zones(candles: List[dict], rng: Optional[Dict], pools: List[Dict],
     zones = dedup[:MAX_ZONES]
     for z in zones:
         z["lo"], z["hi"] = _q(z["lo"]), _q(z["hi"])
+        # Disponibilidad causal (fix C-1): la zona se completa con el CIERRE de
+        # la vela del FVG (`born`), no con su apertura.
+        born = z.get("born")
+        if born is not None and 0 <= born < n:
+            z["avail_t"] = candles[born]["t"] + dur_ms
+        else:
+            z["avail_t"] = z["t"] + dur_ms
         z.pop("born", None)
         # Lado respecto al EQ RECTOR, como rotula el profe (Premium/Discount POI).
         z["lado"] = None
@@ -363,11 +381,15 @@ def _entradas(candles: List[dict], zones: List[Dict], keep: int = 6) -> List[Dic
     Son marcas DESCRIPTIVAS del método sobre el gráfico (como los ✓/✗ del
     indicador del profe). No llevan entry/SL/TP y no alimentan nada."""
     n = len(candles)
+    times = [c["t"] for c in candles]
     ib = _bos_events(candles, INT_PIV)
     out = []
     for z in zones:
-        start = next((i for i in range(n) if candles[i]["t"] > z["t"]), None)
-        if start is None:
+        # Fix C-1: el toque solo puede observarse en velas que ABREN cuando la
+        # zona ya existe (avail_t = cierre de su vela de formación).
+        avail = z.get("avail_t", z["t"] + 1)
+        start = bisect.bisect_left(times, avail)
+        if start >= n:
             continue
         touch = next((i for i in range(start, n)
                       if candles[i]["l"] <= z["hi"] and candles[i]["h"] >= z["lo"]), None)
@@ -451,15 +473,16 @@ def analyze(sel_candles: List[dict], htf_map: Optional[Dict[str, list]],
     bos = _bos_events(candles, STRUCT_PIV)
     fractal = _fractal(candles)
     pools = _pools(candles, last_price)
-    zones = _zones(candles, rng, pools, last_price)
+    zones = _zones(candles, rng, pools, last_price, dur_ms=TF_MS.get(sel_tf, 0))
     for z in zones:
         z["tf"] = sel_tf
     # Zonas del RECTOR (las cajas Premium/Discount POI grandes del mapa del
     # profe nacen en H4/D, no en la TF vista). Frescura y trampa evaluadas en
-    # su propia escala.
+    # su propia escala; su avail_t usa la duración RECTORA (fix C-1).
     if rector_tf != sel_tf:
         pools_r = _pools(rector, last_price)
-        for z in _zones(rector, rng, pools_r, last_price):
+        for z in _zones(rector, rng, pools_r, last_price,
+                        dur_ms=TF_MS.get(rector_tf, 0)):
             if not z["fresh"]:
                 continue
             z["tf"] = rector_tf

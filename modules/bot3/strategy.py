@@ -20,7 +20,7 @@ from __future__ import annotations
 import bisect
 
 from modules.trading import smc
-from modules.trading.smc_course import _bos_events, INT_PIV, STRUCT_PIV
+from modules.trading.smc_course import _bos_events, INT_PIV, STRUCT_PIV, TF_MS
 
 ROUND_TRIP_COST_PCT = 0.0012   # mismo supuesto de costos redondos que Bot2
 MIN_NET_RR = 2.0               # regla del curso (ejemplo de S06)
@@ -31,23 +31,26 @@ MAX_ZONES_SIM = 300            # cota de zonas simuladas (las más recientes)
 RECTOR_TF = {"15m": "4h", "1h": "4h", "4h": "1d"}
 
 
-def _zone_events(candles: list[dict]) -> list[dict]:
-    """Zonas admitidas del curso con su vela de NACIMIENTO (causal): FVG de
-    tres velas y su OB (última vela opuesta antes del gap)."""
+def _zone_events(candles: list[dict], dur_ms: int) -> list[dict]:
+    """Zonas admitidas del curso con su vela de nacimiento y su DISPONIBILIDAD
+    causal (fix C-1): el FVG de tres velas se completa recién con el CIERRE de
+    la tercera vela → `avail_t = t_nacimiento + duración de la TF`. Nada puede
+    tocar/consumir la zona antes de ese instante."""
     n = len(candles)
     out = []
     for bullish in (True, False):
         d = "long" if bullish else "short"
         for f in smc.find_fvgs(candles, 2, n - 1, bullish):
             i = f["idx"]
+            avail = candles[i]["t"] + dur_ms
             out.append({"kind": "fvg", "dir": d, "lo": f["lo"], "hi": f["hi"],
-                        "born": i, "t": candles[i]["t"]})
+                        "born": i, "t": candles[i]["t"], "avail_t": avail})
             ob = smc.find_order_block(candles, max(0, i - 6), i - 2, bullish)
             if ob:
                 out.append({"kind": "ob", "dir": d, "lo": ob["lo"], "hi": ob["hi"],
-                            "born": i, "t": candles[i]["t"]})
+                            "born": i, "t": candles[i]["t"], "avail_t": avail})
     seen, ded = set(), []
-    for z in sorted(out, key=lambda z: z["t"]):
+    for z in sorted(out, key=lambda z: z["avail_t"]):
         k = (z["kind"], z["dir"], round(z["lo"], 6), round(z["hi"], 6))
         if k in seen:
             continue
@@ -56,10 +59,12 @@ def _zone_events(candles: list[dict]) -> list[dict]:
     return ded
 
 
-def _rector_dir_series(rector: list[dict]) -> list[tuple[int, str]]:
-    """Dirección rectora como serie de eventos (t_ms, long/short) por cada
-    ruptura con cuerpo de la estructura del rector."""
-    return [(rector[e["j"]]["t"], "long" if e["dir"] == "up" else "short")
+def _rector_dir_series(rector: list[dict], dur_ms: int) -> list[tuple[int, str]]:
+    """Dirección rectora como serie de eventos (t_disponible_ms, long/short).
+
+    Fix C-1: la ruptura se conoce en el CIERRE de la vela que la produce, así
+    que el evento se publica en `t + duración`, nunca en la apertura."""
+    return [(rector[e["j"]]["t"] + dur_ms, "long" if e["dir"] == "up" else "short")
             for e in _bos_events(rector, STRUCT_PIV)]
 
 
@@ -103,18 +108,22 @@ def simulate(sel: list[dict], rector: list[dict] | None, tf: str) -> dict:
     if n < 2 * STRUCT_PIV + 5:
         return empty
     times = [c["t"] for c in sel]
-    zones = _zone_events(sel)
+    dur_sel = TF_MS.get(tf, 0)
+    rector_tf = RECTOR_TF.get(tf)
+    dur_rector = TF_MS.get(rector_tf, dur_sel) if rector else dur_sel
+    zones = _zone_events(sel, dur_sel)
     for z in zones:
         z["zona_tf"] = tf
     if rector:
-        for z in _zone_events(rector):
+        for z in _zone_events(rector, dur_rector):
             z["zona_tf"] = "rector"
             zones.append(z)
-    zones.sort(key=lambda z: z["t"])
+    zones.sort(key=lambda z: z["avail_t"])
     zones = zones[-MAX_ZONES_SIM:]
     ib = _bos_events(sel, INT_PIV)
     sh, sl_pts = smc.swing_points(sel, STRUCT_PIV)
-    dir_series = _rector_dir_series(rector if rector else sel)
+    dir_series = _rector_dir_series(rector if rector else sel,
+                                    dur_rector if rector else dur_sel)
 
     trades = []
     desc: dict[str, int] = {}
@@ -124,7 +133,9 @@ def simulate(sel: list[dict], rector: list[dict] | None, tf: str) -> dict:
 
     open_until = -1
     for z in zones:
-        start = bisect.bisect_right(times, z["t"])
+        # Fix C-1: el toque solo puede observarse en velas de la TF vista que
+        # ABREN cuando la zona ya está disponible (cierre de su formación).
+        start = bisect.bisect_left(times, z["avail_t"])
         if start >= n:
             continue
         stop_scan = min(n, start + ZONE_TTL_BARS)
@@ -150,7 +161,9 @@ def simulate(sel: list[dict], rector: list[dict] | None, tf: str) -> dict:
         if j <= open_until:
             skip("posición virtual ya abierta")
             continue
-        rd = _dir_as_of(dir_series, sel[j]["t"])
+        # Fix C-1: la decisión ocurre al CIERRE de la vela de entrada; solo
+        # cuentan eventos rectores disponibles hasta ese instante.
+        rd = _dir_as_of(dir_series, sel[j]["t"] + dur_sel)
         if rd is not None and rd != z["dir"]:
             skip("contra la dirección rectora")
             continue
@@ -185,7 +198,8 @@ def simulate(sel: list[dict], rector: list[dict] | None, tf: str) -> dict:
             open_until = n                   # bloquea nuevas entradas
         trades.append({
             "tf": tf, "dir": z["dir"], "zona": z["kind"], "zona_tf": z["zona_tf"],
-            "t_zona": z["t"], "t_toque": sel[touch]["t"], "t_entrada": sel[j]["t"],
+            "t_zona": z["t"], "t_zona_avail": z["avail_t"],
+            "t_toque": sel[touch]["t"], "t_entrada": sel[j]["t"],
             "entry": round(entry, 6), "sl": round(sl, 6), "tp": round(tp, 6),
             "gross_rr": round(gross, 2), "cost_r": round(cost_r, 3),
             "net_rr": round(net, 2), "estado": estado,
