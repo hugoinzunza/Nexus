@@ -25,6 +25,7 @@ from core import klines_push
 from . import cryptocom
 from . import binance
 from . import smc_live
+from . import smc_course
 from . import regime
 from . import news
 from . import claude_grader
@@ -108,6 +109,10 @@ class TradingModule(NexusModule):
         # Indicador SMC en vivo: análisis cacheado, zonas de POI activas (para las
         # alertas) y estado de "precio dentro" para no spamear (una alerta por toque).
         self._smc_cache = {}        # (instrumento, tf) → {"analysis", "ts"}
+        # Capa "curso" (estrategia Bitcoin Traders, playbook.v1): SOLO gráfico.
+        # Cache aparte para no rozar el análisis que alimenta diario/bot
+        # (ECON-COHORT-001 congelada: ese camino no se toca).
+        self._smc_course_cache = {}  # (instrumento, tf) → {"analysis", "ts"}
         self._smc_lock = threading.Lock()
         self._poi_zones = {}        # instrumento → lista de POIs válidos (para alertas)
         self._risk_off = {}         # instrumento → estado de volatilidad anormal (risk-off)
@@ -608,6 +613,24 @@ class TradingModule(NexusModule):
             self._smc_cache[key] = {"analysis": analysis, "ts": now}
         return analysis
 
+    def _smc_course_analysis(self, instrument: str, sel_tf: str) -> dict:
+        """Capa 'curso' (Bitcoin Traders playbook.v1) SOLO para el gráfico.
+        Aislada a propósito: cache propio, sin tpsl, y NADIE más la llama
+        (_record_setups y el bot siguen colgados de _smc_analysis intacto)."""
+        key = (instrument, sel_tf)
+        now = time.time()
+        with self._smc_lock:
+            entry = self._smc_course_cache.get(key)
+            if entry and now - entry["ts"] < 25:
+                return entry["analysis"]
+        sel = self._candles_cached(instrument, sel_tf)
+        closed = smc_live.closed_candles(sel, sel_tf)   # anti-repaint: solo cierres
+        last = sel[-1]["c"] if sel else 0.0
+        analysis = smc_course.analyze(closed, last, sel_tf)
+        with self._smc_lock:
+            self._smc_course_cache[key] = {"analysis": analysis, "ts": now}
+        return analysis
+
     def _check_alerts(self, name: str, label: str, last: float) -> None:
         """Alerta (web push) cuando el precio ENTRA a un POI válido sin mitigar.
         Una alerta por POI por toque: se rearma cuando el precio sale de la zona."""
@@ -1106,7 +1129,11 @@ class TradingModule(NexusModule):
             if timeframe not in self.ui_timeframes:
                 return self._json_error(400, "temporalidad no válida")
             try:
-                analysis = self._smc_analysis(instrument, timeframe)
+                # strategy=course → capa paralela del curso (solo gráfico, sin tpsl).
+                if query.get("strategy") == "course":
+                    analysis = self._smc_course_analysis(instrument, timeframe)
+                else:
+                    analysis = self._smc_analysis(instrument, timeframe)
             except Exception as exc:  # noqa: BLE001
                 return self._json_error(502, f"no se pudo analizar SMC: {exc}")
             body = json.dumps({"instrument": instrument, **analysis},
