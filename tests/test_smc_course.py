@@ -72,7 +72,7 @@ def test_payload_sin_tpsl_ni_plan():
     out = smc_course.analyze(candles, candles[-1]["c"], "15m")
     assert "tpsl" not in out
     assert out["version"] == "curso.v1"
-    for k in ("range", "fractal", "zones", "liquidity", "checklist", "note"):
+    for k in ("range", "fractal", "zones", "liquidity", "structure", "checklist", "note"):
         assert k in out
     # Ninguna zona trae entry/sl/tp: son contexto, no plan.
     for z in out["zones"]:
@@ -104,6 +104,19 @@ def test_fractal_retroceso_50_detectado():
     assert fr is not None
     # El retroceso llegó a ~97 (>50% de la pierna) → regla cumplida.
     assert fr["retrace_ok"] is True
+
+
+def test_structure_bos_ibos():
+    """El impulso del escenario rompe estructura con cuerpo → debe existir al
+    menos un BOS alcista dibujable, con segmento origen→quiebre."""
+    candles = _bull_scenario()
+    out = smc_course.analyze(candles, candles[-1]["c"], "15m")
+    evs = out["structure"]
+    assert evs, "el escenario debe producir marcas de estructura"
+    assert any(e["label"] == "BOS" and e["dir"] == "up" for e in evs)
+    for e in evs:
+        assert e["label"] in ("BOS", "iBOS")
+        assert e["t_from"] <= e["t_to"]
 
 
 def test_checklist_es_descriptiva():

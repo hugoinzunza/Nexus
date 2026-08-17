@@ -296,6 +296,33 @@ def _zones(candles: List[dict], rng: Optional[Dict], pools: List[Dict],
     return zones
 
 
+def _structure_events(candles: List[dict], bos: List[Dict]) -> List[Dict]:
+    """Marcas de estructura para DIBUJAR como las traza el profe: un segmento
+    horizontal en el swing roto, desde su origen hasta la vela cuyo CIERRE lo
+    rompió, con etiqueta BOS (estructura de la TF vista) o iBOS (interna).
+
+    Un evento interno que coincide con uno estructural (misma vela de quiebre y
+    mismo nivel) se omite: es la misma ruptura vista dos veces."""
+    ib = _bos_events(candles, INT_PIV)
+    out = []
+    seen = set()
+    for e in bos[-4:]:
+        sw = e["swing"]
+        key = (round(sw["price"], 6), e["j"])
+        seen.add(key)
+        out.append({"label": "BOS", "dir": e["dir"], "price": _q(sw["price"]),
+                    "t_from": candles[sw["idx"]]["t"], "t_to": candles[e["j"]]["t"]})
+    for e in ib[-6:]:
+        sw = e["swing"]
+        key = (round(sw["price"], 6), e["j"])
+        if key in seen:
+            continue
+        out.append({"label": "iBOS", "dir": e["dir"], "price": _q(sw["price"]),
+                    "t_from": candles[sw["idx"]]["t"], "t_to": candles[e["j"]]["t"]})
+    out.sort(key=lambda x: x["t_to"])
+    return out[-8:]
+
+
 def _checklist(rng, fractal, zones, last_price) -> Dict:
     """Semáforo de lectura del profe (checklist del playbook §Checklist):
     puro estado descriptivo — NO es señal ni recomendación."""
@@ -326,7 +353,7 @@ def analyze(sel_candles: List[dict], last_price: float, sel_tf: str) -> Dict:
     candles = sel_candles[-WINDOW:] if sel_candles else []
     base = {"version": "curso.v1", "timeframe": sel_tf, "last_price": last_price,
             "range": None, "fractal": None, "zones": [], "liquidity": [],
-            "checklist": {},
+            "structure": [], "checklist": {},
             "note": ("Estrategia del curso (playbook course-study.v1): contexto "
                      "visual, no señales; no alimenta diario ni bot.")}
     if len(candles) < 2 * STRUCT_PIV + 5:
@@ -338,5 +365,6 @@ def analyze(sel_candles: List[dict], last_price: float, sel_tf: str) -> Dict:
     zones = _zones(candles, rng, pools, last_price)
     base.update({"range": rng, "fractal": fractal, "zones": zones,
                  "liquidity": pools,
+                 "structure": _structure_events(candles, bos),
                  "checklist": _checklist(rng, fractal, zones, last_price)})
     return base
