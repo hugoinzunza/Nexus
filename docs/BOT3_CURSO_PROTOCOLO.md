@@ -1,6 +1,13 @@
 # Bot3 · Curso BTA — protocolo congelado (v1)
 
-**Fecha de congelamiento:** 2026-08-17 · **Estado:** `PAPER / RESEARCH_ONLY`
+> **⛔ SUSPENDIDO POR AUDITORÍA (2026-08-17, mismo día):**
+> `AUDITORIA_CURSO_BOT3_2026-08-17.md` rechazó v1 por look-ahead HTF (C-1),
+> confirmación incompleta vs el iBOS válido de S08 (M-1/M-2) y ausencia de
+> cohorte append-only (M-6). **El forward v1 es inválido y no acumula**; sus
+> números quedan solo como evidencia de prototipo. La evaluación de octubre
+> exige un protocolo v2 con frontera posterior al despliegue verificado.
+
+**Fecha de congelamiento:** 2026-08-17 · **Estado:** `PAPER / RESEARCH_ONLY / SUSPENDIDO`
 **Módulo:** `modules/bot3` · **Config:** bloque `bot3` de `config/nexus.json`
 
 ## Qué es
