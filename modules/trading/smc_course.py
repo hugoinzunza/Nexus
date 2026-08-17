@@ -43,6 +43,15 @@ FVG_LOOKBACK = 140
 MAX_ZONES = 10
 MAX_POOLS = 8
 
+# ESTRUCTURA RECTORA (jerarquía del curso: D, H4 y M15 — tabla zona→confirmación).
+# El rango que el profe dibuja en M15 es el de la estructura PRINCIPAL (H4/D),
+# no el de 500 velas de la TF vista: en su gráfico real de M15 el Strong High y
+# el Weak Low abarcan semanas. La TF vista aporta la estructura interna
+# (BOS/iBOS, zonas de entrada); el rango rector viene de esta tabla.
+RECTOR_TF = {"1m": "1h", "5m": "4h", "15m": "4h", "30m": "4h", "1h": "4h",
+             "2h": "1D", "4h": "1D", "6h": "1D", "12h": "1D",
+             "1D": "1D", "7D": "1D"}
+
 
 def _q(x):
     if not x:
@@ -125,6 +134,25 @@ def _rango(candles: List[dict], bos: List[Dict]) -> Optional[Dict]:
         sweep = any(candles[k0]["l"] < p["price"] for p in sl_prev[-6:]) if sl_prev else False
     else:
         sweep = any(candles[k0]["h"] > p["price"] for p in sh_prev[-6:]) if sh_prev else False
+    # El WEAK del curso es LIQUIDEZ PENDIENTE, no el extremo reciente: si más
+    # allá del extremo post-BOS queda un swing SIN BARRER más profundo dentro de
+    # la ventana, el target es ESE (el Weak Low de Ago/1 del profe sigue vigente
+    # aunque el mínimo del 15/Ago no llegara a barrerlo).
+    # Se toma la MÁS CERCANA al extremo (el Weak Low del profe es el bajo
+    # pendiente inmediato, no el fondo histórico de la ventana).
+    sh_all, sl_all = smc.swing_points(candles, STRUCT_PIV)
+    if up:
+        cands = [p for p in sh_all if p["price"] > weak and p["confirm_idx"] < n
+                 and not any(candles[k]["h"] > p["price"] for k in range(p["idx"] + 1, n))]
+        if cands:
+            best = min(cands, key=lambda p: p["price"])
+            weak, weak_t = best["price"], candles[best["idx"]]["t"]
+    else:
+        cands = [p for p in sl_all if p["price"] < weak and p["confirm_idx"] < n
+                 and not any(candles[k]["l"] < p["price"] for k in range(p["idx"] + 1, n))]
+        if cands:
+            best = max(cands, key=lambda p: p["price"])
+            weak, weak_t = best["price"], candles[best["idx"]]["t"]
     # Finalización: después del extremo weak, ¿hubo giro interno (iBOS opuesto)?
     fin = "en_desarrollo"
     tail = candles[kw:]
@@ -260,6 +288,10 @@ def _zones(candles: List[dict], rng: Optional[Dict], pools: List[Dict],
     for z in zones:
         z["lo"], z["hi"] = _q(z["lo"]), _q(z["hi"])
         z.pop("born", None)
+        # Lado respecto al EQ RECTOR, como rotula el profe (Premium/Discount POI).
+        z["lado"] = None
+        if rng:
+            z["lado"] = "premium" if (z["lo"] + z["hi"]) / 2 > rng["eq"] else "discount"
         # Tipo según el rango: EXTREMO si la caja toca el strong extreme;
         # DECISIONAL si vive del lado del strong (origen del movimiento);
         # interna en el resto. Etiqueta descriptiva, no un juicio de calidad.
@@ -323,10 +355,54 @@ def _structure_events(candles: List[dict], bos: List[Dict]) -> List[Dict]:
     return out[-8:]
 
 
+def _entradas(candles: List[dict], zones: List[Dict], keep: int = 6) -> List[Dict]:
+    """Marcas de ENTRADA del curso (modelo por confirmación, S06/S08): zona
+    tocada y luego iBOS de la TF vista en la dirección de la zona → ✓ entrada;
+    si un cierre atraviesa la invalidación antes de confirmar → ✗ invalidada.
+
+    Son marcas DESCRIPTIVAS del método sobre el gráfico (como los ✓/✗ del
+    indicador del profe). No llevan entry/SL/TP y no alimentan nada."""
+    n = len(candles)
+    ib = _bos_events(candles, INT_PIV)
+    out = []
+    for z in zones:
+        start = next((i for i in range(n) if candles[i]["t"] > z["t"]), None)
+        if start is None:
+            continue
+        touch = next((i for i in range(start, n)
+                      if candles[i]["l"] <= z["hi"] and candles[i]["h"] >= z["lo"]), None)
+        if touch is None:
+            continue
+        long = z["dir"] == "long"
+        far = z["lo"] if long else z["hi"]
+        conf = next((e for e in ib
+                     if e["j"] > touch and e["dir"] == ("up" if long else "down")), None)
+        inval = next((i for i in range(touch, n)
+                      if ((candles[i]["c"] < far) if long else (candles[i]["c"] > far))),
+                     None)
+        zona = (z["kind"].upper() + " " + z.get("tf", "")).strip()
+        if inval is not None and (conf is None or inval < conf["j"]):
+            out.append({"t": candles[inval]["t"], "price": _q(far), "dir": z["dir"],
+                        "estado": "invalidada", "zona": zona})
+        elif conf is not None and conf["j"] - touch <= 30:
+            out.append({"t": candles[conf["j"]]["t"],
+                        "price": _q(candles[conf["j"]]["c"]), "dir": z["dir"],
+                        "estado": "confirmada", "zona": zona})
+    # Dedup por vela (varias zonas confirman en el mismo iBOS) y las más recientes.
+    seen, uniq = set(), []
+    for m in sorted(out, key=lambda x: x["t"]):
+        if (m["t"], m["estado"]) in seen:
+            continue
+        seen.add((m["t"], m["estado"]))
+        uniq.append(m)
+    return uniq[-keep:]
+
+
 def _checklist(rng, fractal, zones, last_price) -> Dict:
     """Semáforo de lectura del profe (checklist del playbook §Checklist):
     puro estado descriptivo — NO es señal ni recomendación."""
     out = {"direccion": rng["dir"] if rng else None,
+           "rector": rng.get("tf") if rng else None,
            "rango_estado": rng["state"] if rng else None,
            "toma_liquidez": rng["sweep"] if rng else None,
            "retroceso_50": fractal["retrace_ok"] if fractal else None,
@@ -348,23 +424,49 @@ def _checklist(rng, fractal, zones, last_price) -> Dict:
     return out
 
 
-def analyze(sel_candles: List[dict], last_price: float, sel_tf: str) -> Dict:
-    """Análisis 'curso.v1' de la TF vista. Sin tpsl, sin señales."""
+def analyze(sel_candles: List[dict], htf_map: Optional[Dict[str, list]],
+            last_price: float, sel_tf: str) -> Dict:
+    """Análisis 'curso.v1'. Sin tpsl, sin señales.
+
+    El RANGO viene de la estructura RECTORA (RECTOR_TF: H4 para intradía, 1D
+    para TFs altas), como el mapa real del profe en M15; la TF vista aporta la
+    estructura interna (BOS/iBOS), el fractal y las zonas de entrada. Si no hay
+    velas de la rectora disponibles, cae a la TF vista."""
     candles = sel_candles[-WINDOW:] if sel_candles else []
+    rector_tf = RECTOR_TF.get(sel_tf, sel_tf)
+    rector = (htf_map or {}).get(rector_tf) or []
+    rector = rector[-WINDOW:]
+    if len(rector) < 2 * STRUCT_PIV + 5 or rector_tf == sel_tf:
+        rector, rector_tf = candles, sel_tf
     base = {"version": "curso.v1", "timeframe": sel_tf, "last_price": last_price,
             "range": None, "fractal": None, "zones": [], "liquidity": [],
-            "structure": [], "checklist": {},
+            "structure": [], "entradas": [], "checklist": {},
             "note": ("Estrategia del curso (playbook course-study.v1): contexto "
                      "visual, no señales; no alimenta diario ni bot.")}
     if len(candles) < 2 * STRUCT_PIV + 5:
         return base
+    rng = _rango(rector, _bos_events(rector, STRUCT_PIV))
+    if rng:
+        rng["tf"] = rector_tf
     bos = _bos_events(candles, STRUCT_PIV)
-    rng = _rango(candles, bos)
     fractal = _fractal(candles)
     pools = _pools(candles, last_price)
     zones = _zones(candles, rng, pools, last_price)
+    for z in zones:
+        z["tf"] = sel_tf
+    # Zonas del RECTOR (las cajas Premium/Discount POI grandes del mapa del
+    # profe nacen en H4/D, no en la TF vista). Frescura y trampa evaluadas en
+    # su propia escala.
+    if rector_tf != sel_tf:
+        pools_r = _pools(rector, last_price)
+        for z in _zones(rector, rng, pools_r, last_price):
+            if not z["fresh"]:
+                continue
+            z["tf"] = rector_tf
+            zones.append(z)
     base.update({"range": rng, "fractal": fractal, "zones": zones,
                  "liquidity": pools,
                  "structure": _structure_events(candles, bos),
+                 "entradas": _entradas(candles, zones),
                  "checklist": _checklist(rng, fractal, zones, last_price)})
     return base

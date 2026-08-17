@@ -69,7 +69,7 @@ def _bull_scenario():
 
 def test_payload_sin_tpsl_ni_plan():
     candles = _bull_scenario()
-    out = smc_course.analyze(candles, candles[-1]["c"], "15m")
+    out = smc_course.analyze(candles, {}, candles[-1]["c"], "15m")
     assert "tpsl" not in out
     assert out["version"] == "curso.v1"
     for k in ("range", "fractal", "zones", "liquidity", "structure", "checklist", "note"):
@@ -82,7 +82,7 @@ def test_payload_sin_tpsl_ni_plan():
 
 def test_rango_alcista_strong_es_el_minimo_barrido():
     candles = _bull_scenario()
-    out = smc_course.analyze(candles, candles[-1]["c"], "15m")
+    out = smc_course.analyze(candles, {}, candles[-1]["c"], "15m")
     rng = out["range"]
     assert rng is not None
     assert rng["dir"] == "alcista"
@@ -99,7 +99,7 @@ def test_rango_alcista_strong_es_el_minimo_barrido():
 
 def test_fractal_retroceso_50_detectado():
     candles = _bull_scenario()
-    out = smc_course.analyze(candles, candles[-1]["c"], "15m")
+    out = smc_course.analyze(candles, {}, candles[-1]["c"], "15m")
     fr = out["fractal"]
     assert fr is not None
     # El retroceso llegó a ~97 (>50% de la pierna) → regla cumplida.
@@ -110,7 +110,7 @@ def test_structure_bos_ibos():
     """El impulso del escenario rompe estructura con cuerpo → debe existir al
     menos un BOS alcista dibujable, con segmento origen→quiebre."""
     candles = _bull_scenario()
-    out = smc_course.analyze(candles, candles[-1]["c"], "15m")
+    out = smc_course.analyze(candles, {}, candles[-1]["c"], "15m")
     evs = out["structure"]
     assert evs, "el escenario debe producir marcas de estructura"
     assert any(e["label"] == "BOS" and e["dir"] == "up" for e in evs)
@@ -121,7 +121,7 @@ def test_structure_bos_ibos():
 
 def test_checklist_es_descriptiva():
     candles = _bull_scenario()
-    out = smc_course.analyze(candles, candles[-1]["c"], "15m")
+    out = smc_course.analyze(candles, {}, candles[-1]["c"], "15m")
     ck = out["checklist"]
     assert ck["direccion"] == "alcista"
     assert ck["precio_zona"] in ("premium", "descuento")
@@ -173,6 +173,56 @@ def test_pools_eqh_eql_cluster():
 
 def test_serie_corta_no_revienta():
     candles = _flat(5, 100)
-    out = smc_course.analyze(candles, 100.0, "1h")
+    out = smc_course.analyze(candles, {}, 100.0, "1h")
     assert out["range"] is None
     assert out["zones"] == []
+
+
+def _bear_scenario(step=240 * 60_000):
+    """Espejo bajista en escala H4: subida → máximo con barrido → impulso
+    bajista con cuerpo que rompe estructura → target = liquidez pendiente."""
+    t = [0]
+
+    def nxt(n):
+        t0 = t[0]
+        t[0] += n * step
+        return t0
+
+    c = []
+    c += _flat(20, 100, nxt(20), step=step)
+    c += _leg(8, 100, 98, nxt(8), step=step)      # valle: deja un swing low (~98)
+    c += _leg(20, 98.1, 108, nxt(20), step=step)  # subida
+    c += _flat(12, 108, nxt(12), step=step)
+    t0 = nxt(1)
+    c.append(_c(t0, 108, 109.6, 107.9, 108.1))    # barrido del máximo (mecha)
+    c += _leg(25, 108, 96, nxt(25), step=step)    # impulso bajista rompe el 98 con cuerpo
+    c += _leg(8, 96, 99, nxt(8), step=step)       # retroceso
+    return c
+
+
+def test_rango_rector_htf_manda():
+    """Con velas de la rectora (H4) bajistas y TF vista alcista local, el rango
+    del payload debe salir del RECTOR (dir bajista, tf 4h) — el mapa del profe
+    en M15 es el rango de la estructura principal, no el de 500 velas de M15."""
+    sel = _bull_scenario()                        # 15m local alcista
+    rector = _bear_scenario()                     # H4 bajista
+    out = smc_course.analyze(sel, {"4h": rector}, sel[-1]["c"], "15m")
+    rng = out["range"]
+    assert rng is not None
+    assert rng["tf"] == "4h"
+    assert rng["dir"] == "bajista"
+    assert rng["strong"] > rng["weak"]            # strong high arriba, weak low target abajo
+    assert out["checklist"]["rector"] == "4h"
+    # Las zonas de la TF vista quedan etiquetadas por lado vs el EQ rector.
+    assert all(z.get("lado") in ("premium", "discount", None) for z in out["zones"])
+
+
+def test_entradas_descriptivas_sin_plan():
+    """Las marcas de entrada existen, tienen estado válido y NO llevan plan."""
+    candles = _bull_scenario()
+    out = smc_course.analyze(candles, {}, candles[-1]["c"], "15m")
+    assert "entradas" in out
+    for m in out["entradas"]:
+        assert m["estado"] in ("confirmada", "invalidada")
+        for prohibido in ("entry", "sl", "tp", "rr"):
+            assert prohibido not in m

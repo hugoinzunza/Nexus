@@ -30,9 +30,11 @@ cierre: cualquier cambio la invalida). Por eso:
 | Playbook (§) | Implementación |
 |---|---|
 | §2 Fractal ≥50% | `_fractal`: última pierna estructural; fib50; toque con cuerpo O mecha (regla verificada) |
-| §3 Rango causal | `_rango`: ruptura CON CUERPO (BOS) → strong = origen de la pierna (marca ⚡ si tomó liquidez) → weak = extremo posterior sin barrer (target) → 50% |
+| §3 Rango causal | `_rango`: ruptura CON CUERPO (BOS) → strong = origen de la pierna (⚡ si tomó liquidez) → weak = LIQUIDEZ PENDIENTE más cercana más allá del extremo post-BOS (el Weak Low del profe) → 50% |
+| §1 Jerarquía (rector) | El rango sale de la estructura RECTORA (`RECTOR_TF`: H4 para ≤1h, 1D para ≥2h) — el mapa del profe en M15 es el rango H4/D. La TF vista aporta estructura interna, fractal, zonas y entradas |
+| §7 Entrada por confirmación | `_entradas`: zona (propia o del rector) tocada + iBOS de la TF vista en su dirección → ✓ entrada; cierre a través de la invalidación antes → ✗. Marcas descriptivas, sin entry/SL/TP |
 | §4 Premium/discount | bandas del rango del curso, direccionales |
-| §5 Zonas admitidas | `_zones`: OB (última vela opuesta antes del FVG) + FVG abiertos; frescura = primer uso sin tocar |
+| §5 Zonas admitidas | `_zones`: OB (última vela opuesta antes del FVG) + FVG abiertos; frescura = primer uso sin tocar; se detectan en la TF vista Y en la rectora (las cajas Premium/Discount POI grandes del profe); etiqueta por lado vs EQ rector |
 | §5 Taxonomía OB | `tipo`: extremo (toca el strong) / decisional (lado del origen) / interna — descriptivo |
 | §6 Liquidez delante/detrás | `_pools` (EQH/EQL + swings sin barrer) + banderas `liq_delante` / `trampa` (pool detrás de la invalidación a <35% del alto del rango) |
 | §8 Target | weak del rango + distancia % en el checklist |
