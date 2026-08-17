@@ -52,6 +52,17 @@ ENTRY_MODEL_V2 = "midpoint_touch_v2"
 CURRENT_PHASE_ID = "phase1_v2_2026-07-18"
 
 
+def _seguimiento_simple(s: dict) -> bool:
+    """True si el setup se sigue TAL CUAL su plan (vía `_update_simple`): entradas
+    del profe, manuales y paper (BTA). Compartido entre el tracking y el BE
+    defensivo para que nadie vuelva a estampar gestión NexUX sobre un brazo que
+    prometió no tenerla — el bug del gemelo BTC del 2026-08-12: `protect_to_be`
+    le escribió un break-even que `_update_simple` jamás ejecuta, y el setup
+    quedó vivo con el precio más allá de su BE."""
+    return bool((s.get("sel_tf") == "manual" or s.get("source") == "profe"
+                 or s.get("paper_only")) and not s.get("scaled"))
+
+
 def is_entry_v2(s: dict) -> bool:
     return s.get("entry_model") == ENTRY_MODEL_V2
 
@@ -646,6 +657,8 @@ class SetupStore:
             for s in self._setups:
                 if s["pair"] != pair or s["status"] != "activo":
                     continue
+                if _seguimiento_simple(s):
+                    continue  # su plan es su plan: sin BE defensivo (ver _seguimiento_simple)
                 long = s["dir"] == "long"
                 entry = s.get("entry")
                 if not entry:
@@ -764,8 +777,7 @@ class SetupStore:
         # SIN parciales ni break-even. La idea del forward-test del profe es comparar
         # SU gestión (aguantar a TP/SL, SL ancho) contra la nuestra (SMC escalonada);
         # aplicarle nuestras parciales lo cerraba antes de tiempo en break-even.
-        if (s.get("sel_tf") == "manual" or s.get("source") == "profe"
-                or s.get("paper_only")) and not s.get("scaled"):
+        if _seguimiento_simple(s):
             return SetupStore._update_simple(s, price, now_s)
 
         # --- Activo: plan de salida ESCALONADA (parciales) + break-even ---
@@ -774,12 +786,15 @@ class SetupStore:
         if risk <= 0:                       # plan degenerado → resolución simple
             return SetupStore._update_simple(s, price, now_s)
         # Estado de parciales (init perezoso para trades ya abiertos antes del deploy).
+        # setdefault y no asignación: si el BE defensivo (protect_to_be) llegó entre
+        # la activación y este primer tick, ya dejó sl_cur/sl_be puestos — pisarlos
+        # con el SL original borraría la protección en silencio.
         if "remaining" not in s:
             s["remaining"] = 1.0
             s["realized_r"] = 0.0
             s["legs_filled"] = 0
-            s["sl_cur"] = sl0
-            s["sl_be"] = False
+            s.setdefault("sl_cur", sl0)
+            s.setdefault("sl_be", False)
         events = []
         # 1) Stop / break-even primero (conservador). En BE el SL = entrada → aporta 0R.
         if (long and price <= s["sl_cur"]) or ((not long) and price >= s["sl_cur"]):
