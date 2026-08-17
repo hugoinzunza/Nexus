@@ -324,6 +324,11 @@
       if (!D || !src._series) return;
       const smc = D.smc;
       const show = D.show || {};
+      // Capa "Curso" (estrategia del profe, playbook.v1): cuando está activa
+      // REEMPLAZA la lectura SMC NexUX en pantalla (rango causal, zonas con
+      // trampa, liquidez). Las cajas de trades activos del forward-test se
+      // mantienen — esos son reales y no dependen de la lectura.
+      const course = show.curso ? D.course : null;
       const series = src._series;
       const ts = src._chart.timeScale();
       const py = (p) => series.priceToCoordinate(p);
@@ -424,7 +429,7 @@
         // equilibrium alrededor del 50% (fib del rango) y descuento pegada a los
         // mínimos (ahí se buscan largos). NO mitades completas: las zonas marcan
         // dónde buscar la operación, el 50% solo separa caro de barato.
-        if (smc.range && smc.range.eq) {
+        if (!course && smc.range && smc.range.eq) {
           const pHi = smc.range.strong_high, pLo = smc.range.weak_low;
           const d = pHi - pLo;
           if (d > 0) {
@@ -455,7 +460,7 @@
         }
         // FVG: caja desde su origen hacia la derecha, gradiente que decae y
         // etiqueta pill a la derecha (solo si la caja tiene alto suficiente).
-        (smc.fvgs || []).filter((f) => !f.filled).forEach((f) => {
+        (course ? [] : (smc.fvgs || [])).filter((f) => !f.filled).forEach((f) => {
           const y1 = py(f.hi), y2 = py(f.lo); if (y1 == null || y2 == null) return;
           let x = tx(f.t); if (x == null) x = 0; x = Math.max(0, x);
           const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
@@ -476,7 +481,7 @@
         // la derecha. Válido = relleno con gradiente + borde + línea de
         // mitigación al 50%; mitigado/roto = fondo no sólido y sin etiqueta
         // (estilo breaker de LuxAlgo: menos ruido).
-        (smc.pois || []).forEach((poi) => {
+        (course ? [] : (smc.pois || [])).forEach((poi) => {
           // Toggle "Solo 4h/1D": muestra únicamente order blocks de timeframe alto
           // (el edge robusto del backtest: avgR 0,90 vs 0,76, win 85%).
           if (show.htf && poi.tf !== "4h" && poi.tf !== "1D") return;
@@ -514,7 +519,7 @@
         });
 
         // --- Capa LuxAlgo: niveles Weak/Strong con % ---
-        if (show.levels && smc.levels) {
+        if (!course && show.levels && smc.levels) {
           // Menos ruido: niveles FUERTES (estructura) + el WEAK más cercano al
           // precio por lado. Antes se dibujaban todos y se encimaban.
           const ref = smc.last_price || (smc.range && smc.range.eq);
@@ -547,7 +552,7 @@
         // ESTRUCTURAL roto hasta la vela cuyo CIERRE lo rompió, con etiqueta
         // "CDC" en el eje de la línea — roja siempre, como el indicador de
         // referencia (calibrado con los ejemplos M15 de Hugo).
-        if (smc.cdc_events && smc.cdc_events.length) {
+        if (!course && smc.cdc_events && smc.cdc_events.length) {
           smc.cdc_events.forEach((ev) => {
             const y = py(ev.price); if (y == null) return;
             let x1 = tx(ev.t_from), x2 = tx(ev.t_to);
@@ -569,6 +574,117 @@
                  { x: Math.max(2, Math.min((x1 + x2) / 2 - 14, W - 44)),
                    font: "600 9px -apple-system, sans-serif" });
           });
+        }
+
+        // --- Capa CURSO: estrategia Bitcoin Traders (playbook.v1) -----------
+        // Lectura del profe sobre la TF vista: rango operativo causal (strong
+        // → weak target, 50%), fractal ≥50%, zonas frescas (OB/FVG) con
+        // liquidez delante/detrás (⚠ trampa) y pools de liquidez (EQH/EQL).
+        // Contexto visual — el backend NO manda plan (sin tpsl a propósito).
+        if (course) {
+          const rng = course.range;
+          const hline = (price, color, label, opts = {}) => {
+            const y = py(price); if (y == null) return;
+            ctx.strokeStyle = color; ctx.lineWidth = opts.width || 1.2;
+            ctx.setLineDash(opts.dash || []); ctx.globalAlpha = opts.alpha || 1;
+            ctx.beginPath(); ctx.moveTo(opts.x1 || 0, y); ctx.lineTo(W, y); ctx.stroke();
+            ctx.setLineDash([]); ctx.globalAlpha = 1;
+            if (label) pill(placeL(y - (opts.below ? 2 : 16)), label, color);
+          };
+          if (rng) {
+            const up = rng.dir === "alcista";
+            const d = rng.hi - rng.lo;
+            // Bandas premium/descuento del rango del CURSO (compras en descuento
+            // hacia el weak high / ventas en premium hacia el weak low).
+            if (d > 0) {
+              const BAND = 0.08;
+              const bandC = (pTop, pBot, rgb, label) => {
+                const y1 = py(pTop), y2 = py(pBot);
+                if (y1 == null || y2 == null) return;
+                const top = Math.max(0, Math.min(y1, y2));
+                const bot = Math.min(H, Math.max(y1, y2));
+                if (bot - top < 2) return;
+                ctx.fillStyle = `rgba(${rgb},0.08)`; ctx.fillRect(0, top, W, bot - top);
+                if (label && bot - top > 14) {
+                  ctx.globalAlpha = 0.85;
+                  pill((top + bot) / 2 - 7, label, `rgba(${rgb},0.95)`,
+                    { right: true, font: "600 9px -apple-system, sans-serif" });
+                  ctx.globalAlpha = 1;
+                }
+              };
+              bandC(rng.hi, rng.hi - BAND * d, "234,57,67", "PREMIUM");
+              bandC(rng.lo + BAND * d, rng.lo, "22,199,132", "DESCUENTO");
+            }
+            const strongCol = up ? "#16c784" : "#ea3943";
+            const weakCol = up ? "#ea3943" : "#16c784";
+            hline(rng.strong, strongCol,
+              `Strong ${up ? "Low" : "High"} · inicio${rng.sweep ? " · ⚡ liq" : ""}`,
+              { width: 1.6, below: !up });
+            hline(rng.weak, weakCol,
+              `Weak ${up ? "High" : "Low"} · target`, { dash: [6, 4], below: up });
+            hline(rng.eq, "#a29bfe", "50%", { dash: [2, 4], alpha: 0.8, below: !up });
+          }
+          // Fractal: nivel 50% de la última pierna (regla del retroceso).
+          const fr = course.fractal;
+          if (fr && (!rng || Math.abs(fr.fib50 - rng.eq) > 1e-9)) {
+            const x1 = fr.to_t ? Math.max(0, tx(fr.to_t) || 0) : 0;
+            const y = py(fr.fib50);
+            if (y != null) {
+              ctx.strokeStyle = "#f5a623"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+              ctx.globalAlpha = 0.85;
+              ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(W, y); ctx.stroke();
+              ctx.setLineDash([]); ctx.globalAlpha = 1;
+              pill(placeR(y - 8), `Fib 50% ${fr.retrace_ok ? "✓" : (fr.retrace_pct != null ? fr.retrace_pct + "%" : "…")}`,
+                "#f5a623", { right: true, font: "600 9px -apple-system, sans-serif" });
+            }
+          }
+          // Pools de liquidez: EQH/EQL y swings sin barrer (objetivos/inducement).
+          (course.liquidity || []).forEach((p) => {
+            const y = py(p.price); if (y == null) return;
+            const col = p.type === "high" ? "rgba(234,57,67,0.8)" : "rgba(22,199,132,0.8)";
+            ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.setLineDash([1, 5]);
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            ctx.setLineDash([]); ctx.globalAlpha = 1;
+            if (p.kind === "EQH" || p.kind === "EQL")
+              pill(placeR(y - 8), `${p.kind} ×${p.count}`, "#f5a623",
+                { right: true, font: "600 9px -apple-system, sans-serif" });
+          });
+          // Zonas frescas del curso (OB/FVG) con tipo y banderas de liquidez.
+          (course.zones || []).filter((z) => z.fresh).forEach((z) => {
+            const y1 = py(z.hi), y2 = py(z.lo); if (y1 == null || y2 == null) return;
+            const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
+            let x = z.t ? tx(z.t) : 0; if (x == null) x = 0; x = Math.max(0, x);
+            const long = z.dir === "long";
+            const base = z.trampa ? "245,166,35" : (long ? "22,199,132" : "234,57,67");
+            const g = ctx.createLinearGradient(x, 0, W, 0);
+            g.addColorStop(0, `rgba(${base},${z.kind === "ob" ? 0.20 : 0.13})`);
+            g.addColorStop(1, `rgba(${base},0.05)`);
+            ctx.fillStyle = g; ctx.fillRect(x, top, W - x, h);
+            ctx.strokeStyle = `rgba(${base},0.55)`; ctx.lineWidth = 1;
+            if (z.kind === "fvg") ctx.setLineDash([3, 3]);
+            ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
+            ctx.setLineDash([]);
+            const tag = (z.kind === "ob" ? "OB " + z.tipo : "FVG")
+              + (z.trampa ? " · ⚠ trampa" : "")
+              + (z.liq_delante ? " · liq delante" : "");
+            pill(placeR(top + 2), tag, z.trampa ? "#f5a623" : (long ? "#16c784" : "#ea3943"),
+              { right: true });
+          });
+          // Resumen de lectura (checklist del playbook) arriba a la izquierda.
+          const ck = course.checklist || {};
+          if (ck.direccion) {
+            const parts = [`CURSO · ${ck.direccion.toUpperCase()}`];
+            if (ck.toma_liquidez != null) parts.push(ck.toma_liquidez ? "liq ✓" : "liq –");
+            if (ck.retroceso_50 != null) parts.push(ck.retroceso_50 ? "50% ✓" : "50% ✗");
+            if (ck.precio_zona) parts.push(ck.precio_zona);
+            if (ck.zona_fresca != null) parts.push(ck.zona_fresca ? "zona ✓" : "sin zona");
+            if (ck.trampa_cerca) parts.push("⚠ trampa");
+            if (ck.target_dist_pct != null)
+              parts.push(`target ${ck.target_dist_pct > 0 ? "+" : ""}${ck.target_dist_pct}%`);
+            pill(placeL(6), parts.join(" · "), "#a29bfe",
+              { font: "600 10px -apple-system, sans-serif" });
+          }
         }
 
         // --- Cajita del trade ACTIVO (forward-test), acotada desde la entrada ---
@@ -622,7 +738,7 @@
         // --- Capa LuxAlgo: escenario TP/SL anclado a estructura (NO una orden) ---
         // Solo llega aquí si el backend validó: POI ✓ que el precio toca, en su
         // zona correcta (descuento/premium) y con R:R real >= 2. Es contexto.
-        if (show.tpsl && smc.tpsl && (!show.htf || smc.tpsl.tf === "4h" || smc.tpsl.tf === "1D")) {
+        if (!course && show.tpsl && smc.tpsl && (!show.htf || smc.tpsl.tf === "4h" || smc.tpsl.tf === "1D")) {
           const t = smc.tpsl;
           const long = t.dir === "long";
           const line = (price, color, label) => {
@@ -742,7 +858,7 @@
   const IND_KEY = "nexus_trading_ind";
   // TP/SL (la capa del PLAN) parte encendida: es el corazón del indicador y ahí
   // viven las etiquetas de régimen y CDC del badge.
-  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, div: false, htf: false };
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, div: false, htf: false, curso: false };
   let indState = (() => {
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
@@ -752,7 +868,7 @@
     for (let i = 0; i < values.length; i++) out.push(i === 0 ? values[0] : values[i] * k + out[i - 1] * (1 - k));
     return out;
   }
-  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, div: indState.div, htf: indState.htf }; }
+  function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, div: indState.div, htf: indState.htf, curso: indState.curso }; }
   function saveIndState() { try { localStorage.setItem(IND_KEY, JSON.stringify(indState)); } catch (e) {} }
 
   function rsiCalc(closes, p) {
@@ -884,7 +1000,7 @@
   // Indicadores en panes (recrean series) y capas Lux (solo redibujan el primitive).
   const TOGGLE_GROUPS = {
     ".ind-toggles": [["vol", "Vol"], ["rsi", "RSI"], ["adx", "ADX"]],
-    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."], ["htf", "Solo 4h/1D"]],
+    ".lux-toggles": [["ribbon", "Cinta"], ["levels", "Niveles"], ["tpsl", "TP/SL"], ["div", "Diverg."], ["htf", "Solo 4h/1D"], ["curso", "Curso"]],
   };
   const PANE_INDICATORS = new Set(["vol", "rsi", "adx"]);
 
@@ -902,7 +1018,11 @@
           indState[k] = !indState[k];
           saveIndState();
           if (PANE_INDICATORS.has(k)) Object.values(cards).forEach((c) => buildIndicators(c));
-          else Object.values(cards).forEach((c) => { computeRibbon(c); pushPrim(c); });
+          else Object.values(cards).forEach((c) => {
+            computeRibbon(c); pushPrim(c);
+            // "Curso" recién encendido: la capa aún no tiene datos → los pedimos.
+            if (k === "curso" && indState.curso && !c.course) loadSMC(c.symbol, c);
+          });
           refreshToggleUI();
         });
         box.appendChild(b);
@@ -1150,6 +1270,14 @@
       const j = await r.json();
       if (card.timeframe !== tf) return;
       card.smc = j;
+      // Capa "Curso" (estrategia del profe, playbook.v1): solo si el toggle está
+      // activo. Payload aparte y sin tpsl — no alimenta diario ni bot.
+      if (indState.curso) {
+        try {
+          const rc = await fetch(`api/smc?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&strategy=course`);
+          if (rc.ok) { const cj = await rc.json(); if (card.timeframe === tf) card.course = cj; }
+        } catch (e) { /* conservamos la capa previa */ }
+      }
       // Trades ACTIVOS del forward-test (para dibujar la cajita acotada del trade).
       try {
         const sj = await fetch("/m/journal/api/setups").then((r) => (r.ok ? r.json() : null));
@@ -1243,7 +1371,7 @@
           interval: bars.length > 1 ? bars[bars.length - 1].time - bars[bars.length - 2].time : 900 }
       : null;
     if (card.smcPrim) card.smcPrim.setData({
-      smc: card.smc, ribbon: card.ribbon || [], div: card.div || [],
+      smc: card.smc, course: card.course, ribbon: card.ribbon || [], div: card.div || [],
       trades: card.trades || [], show: luxShow(), barMeta,
     });
   }
@@ -1271,6 +1399,7 @@
           b.setAttribute("aria-pressed", on ? "true" : "false");
         });
         card.smc = null;      // el SMC depende de la TF seleccionada (estructura/FVG)
+        card.course = null;   // la capa Curso también es por TF
         card.fitted = false;  // reajustamos la vista a la nueva resolución
         loadCandles(symbol, card);
         loadSMC(symbol, card);
