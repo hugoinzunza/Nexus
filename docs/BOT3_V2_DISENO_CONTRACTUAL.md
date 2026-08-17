@@ -1,140 +1,190 @@
-# Bot3.v2 — diseño contractual (PROPUESTA, no congelada)
+# Bot3.v2 — diseño contractual (revisión 2, clarificaciones incorporadas)
 
-**Fecha:** 2026-08-17 · **Estado:** `BORRADOR PARA APROBACIÓN (Hugo + re-auditoría Codex)`
-**Insumos:** `AUDITORIA_CURSO_BOT3_2026-08-17.md` (rechazo v1), re-auditoría C-1
-(PASS con fix requerido: selección retrospectiva de zonas), playbook
+**Fecha:** 2026-08-17 · **Estado:** `BORRADOR PARA FREEZE (rev. 2 tras
+APPROVED WITH REQUIRED CLARIFICATIONS)` · **Copia canónica:** este archivo en
+la rama `codex/command-center-contract-v1`; la copia de `main` es solo una
+referencia y no debe editarse.
+
+**Insumos:** `AUDITORIA_CURSO_BOT3_2026-08-17.md`, re-auditoría C-1 (PASS con
+fix requerido), revisión del diseño (8 clarificaciones), playbook
 `course-study.v1`, `CLAUDE_INDEPENDENT_REVIEW.md`.
 
-Este documento es el paso 3 de la secuencia aprobada. Nada de aquí se
-implementa hasta que exista el protocolo v2 pre-registrado (paso 4) firmado
-sobre esta base. Ninguna métrica de v1 se reutiliza.
+Nada de aquí se implementa hasta el protocolo v2 pre-registrado con hash.
+Ninguna métrica de v1 se reutiliza.
 
 ---
 
-## 1. Objeto científico (elección única)
+## 1. Objeto científico
 
-**La fila H4→M15 de la tabla docente** (S06 00:43:13–00:50:50; S11
-00:31:14–00:32:35): zona de interés del rector **H4**, confirmación completa
-en **M15**. Es la porción del curso medible con los datos disponibles (no hay
-velas <15m). Todo lo que no sea esta fila queda fuera del objeto y no se
-menciona como "estrategia del curso" en los resultados.
+**Submodelo causal single-entry H4→M15 del curso** (clarificación 7): zona de
+interés del rector H4, confirmación completa en M15, UNA entrada por
+oportunidad. NO es "la estrategia completa del curso": excluye deliberadamente
+la regla docente universal de dos entradas (S08 00:52:30–00:53:53, amarilla en
+el playbook por falta de especificación), break-even y parciales. Los
+resultados se rotulan siempre como submodelo.
 
 ## 2. Contexto rector (H4) — fail closed
 
-- **Rango operativo causal**: strong SOLO si su origen barrió liquidez
-  (sweep verificable); weak cerrado SOLO tras finalización por swing + iBOS
-  (S03 01:05:15–01:24:54). Sin sweep → no hay rango → **abstención**.
-- **Dirección**: última ruptura H4 con cuerpo, disponible a su cierre
-  (`available_at`). `None`, conflicto o rango sin dirección → **abstención**
-  (nunca fail open — corrige M-5).
-- **Antigüedad máxima del rector** (a congelar en el protocolo, no durante el
-  desarrollo): la dirección expira si su BOS tiene más de **180 velas H4
-  (30 días)** sin un BOS de continuación, o si el rango que la originó fue
-  invalidado por cierre H4. Valor propuesto; Hugo decide el número final.
+- **Rango causal**: strong SOLO con sweep verificable en su origen; weak
+  cerrado SOLO tras finalización por swing + iBOS (S03). Sin ambos →
+  abstención.
+- **Dirección**: última ruptura H4 con cuerpo. `None`, conflicto o expiración
+  → abstención.
+- **Expiración de dirección**: 180 velas H4 sin BOS de continuación, o
+  invalidación del rango origen por cierre H4. `[U0 — decisión operacional,
+  no enseñada]`
 
 ## 3. Selección de zona (H4)
 
-Zona admitida: OB o FVG **del rector H4**, con:
-- disponibilidad causal (`avail_t` = cierre de la vela que la completa);
-- **frescura contractual**: cero toques entre `avail_t` y el toque de entrada;
-- **lado correcto**: discount para largos / premium para cortos vs el EQ del
-  rango rector (corrige M-2);
-- **gate de fractal**: el fractal H4 vigente alcanzó retroceso ≥50%
-  (cuerpo o mecha) en la dirección del trade (S02);
-- registro descriptivo de `liq_delante` y `trampa` (no vetan en v2; quedan
-  medidos para HYP-BT-LIQ-EXT-001).
+OB o FVG del rector H4 con: disponibilidad causal, frescura contractual (cero
+toques entre `available_at` y el toque de entrada), lado correcto vs EQ del
+rango rector, y gate de fractal H4 ≥50%. `liq_delante`/`trampa` se registran
+sin vetar (alimentan HYP-BT-LIQ-EXT-001).
 
-## 4. Confirmación M15 completa (iBOS válido, S08 00:36:05–00:41:50)
+- **TTL de zona**: 180 velas H4 desde `available_at` `[U0]`. Justificación
+  operacional (clarificación sobre el 500 original): una zona más antigua que
+  la vigencia máxima de la dirección que la haría operable no puede producir
+  entrada; TTL y expiración de dirección quedan alineados en 30 días.
 
-Tras el toque de la zona H4, en M15 y dentro de una ventana congelada
-(propuesta: **48 velas M15 = 12 h**):
+## 4. Confirmación M15 y entrada (iBOS válido, S08)
+
+**Deadline total: 64 velas M15 (16 h) desde el CIERRE de la vela del toque
+H4** (clarificación 6). Todo lo siguiente debe completarse dentro de él:
+
 1. **Toma de liquidez a la izquierda**: la pierna M15 que entra a la zona
-   barrió (mecha) al menos un swing low/high interno M15 previo;
-2. **iBOS M15 con cuerpo** en la dirección del trade (disponible a su cierre);
-3. **Zona derivada**: el desplazamiento del iBOS deja OB/FVG M15 propio;
-4. **Entrada = retest de la zona derivada** (primer toque posterior, ventana
-   propuesta: **32 velas M15 = 8 h**). Sin retest → no hay trade (se registra
-   `confirmada_sin_retest`: los rechazos también son resultado).
+   barrió con mecha ≥1 swing interno M15 previo (INT_PIV M15).
+2. **iBOS M15 con cuerpo** en la dirección del trade, a más tardar 48 velas
+   M15 tras el toque `[U0 — máximo inicial]`.
+3. **Zona derivada** creada por el desplazamiento del iBOS.
+4. **Orden límite** en el borde PROXIMAL de la zona derivada (el más cercano
+   al precio), disponible desde el cierre de la vela que completa la zona
+   derivada.
+5. **Fill** (clarificación 1 — el midpoint queda eliminado): la orden se
+   considera ejecutada solo si una vela M15 posterior CRUZA el nivel
+   (largo: `low ≤ nivel`; corto: `high ≥ nivel`).
+   - Precio de fill = nivel de la orden.
+   - **Gap**: si la vela ABRE más allá del nivel a favor del fill, el fill es
+     al OPEN de esa vela (nunca a un precio no transitado).
+   - **Vela ambigua en la entrada** (cruza el nivel Y el SL en la misma vela
+     M15): se asume fill + STOP en esa vela (conservador).
+   - Sin cruce dentro del deadline → `confirmada_sin_fill` (registrada).
 
-Invalidación previa (cierre M15 a través de la invalidación de la zona H4
-antes del iBOS) → descarte registrado.
+Invalidación (cierre M15 a través de la invalidación de la zona H4 antes del
+iBOS) → descarte registrado con motivo.
 
-## 5. Riesgo, objetivo y gestión
+## 5. Arbitraje determinista (clarificación 2)
 
-- **Entrada**: precio del retest (mid de la zona derivada tocada).
-- **SL**: extremo de la reacción que originó el iBOS (el swing barrido) ±
-  buffer congelado (propuesta: **0,1%**).
-- **TP**: **weak cerrado del rango rector H4** (corrige M-2). Sin weak
-  cerrado → abstención.
-- **Filtro**: RR neto ≥ 2 con costos por mercado versionados (propuesta base
-  0,12% ida y vuelta; tabla por par en el protocolo).
-- Una posición virtual por mercado; salida completa; vela ambigua = STOP.
-- Exclusiones declaradas (m-2 de la auditoría): la regla docente universal de
-  dos entradas queda FUERA del objeto v2 (sigue amarilla en el playbook);
-  BE/parciales fuera (sin disparador universal enseñado).
+Con candidatos simultáneos, gana exactamente uno y el resto se registra como
+`descartada_por_arbitraje` con referencia al ganador:
 
-## 6. Causalidad total (cierra C-1 y el hallazgo de la re-auditoría)
+- **Zonas H4 elegibles tocadas en la misma vela M15**: gana la de
+  `available_at` más antiguo; empate → OB sobre FVG; empate → la de borde
+  proximal más cercano al precio de cierre del toque; empate → la de menor
+  precio `lo` (determinista final).
+- **iBOS M15**: el PRIMERO (por índice de vela) que cumpla toma-izquierda.
+- **Zona derivada**: el OB del desplazamiento; si no existe OB, el FVG más
+  cercano al origen del desplazamiento; si hay varios FVG, el de
+  `available_at` más antiguo.
+- **Retest/fill**: el primer cruce (por índice de vela).
+- **Posición única por mercado**: mientras hay posición u orden límite viva,
+  ningún candidato nuevo entra a arbitraje (se registra
+  `posición_u_orden_viva`).
+- La orden límite viva se CANCELA si: vence el deadline total, la dirección
+  rectora expira/cambia, o el SL implícito queda cruzado antes del fill.
 
-- `available_at` en TODO evento multi-TF (ya implementado y auditado).
-- **PROHIBIDO cualquier operador relativo al final de la serie**: nada de
-  `[-N:]` sobre zonas, trades ni eventos (el `MAX_ZONES_SIM` de v1 queda
-  eliminado). Los límites de cómputo solo pueden ser causales por evento:
-  TTL de zona desde `avail_t` (propuesta: **500 velas H4** para zonas H4) y
-  ventanas de confirmación/retest desde el toque.
-- **Gate de aceptación**: test de invariancia por prefijo sobre ventana real
-  (≥2000 velas M15 de BTC, >300 zonas) — exactamente la reproducción de la
-  re-auditoría — más un test sintético con expulsión forzada. Si el prefijo
-  cambia un trade cerrado, la implementación no se acepta.
-- Tests discriminantes (corrigen las debilidades que señaló Codex): el
-  escenario de toque prematuro debe FALLAR contra una versión con
-  disponibilidad por apertura (se prueba parametrizando la disponibilidad),
-  y la aserción de `avail_t` exige el delta EXACTO de la TF.
+## 6. Tabla de disponibilidad por evento (clarificación 3)
 
-## 7. Cohorte forward: ledger append-only (corrige M-6)
+| Evento | `available_at` |
+|---|---|
+| Sweep del origen (H4) | cierre de la vela H4 cuya mecha barre |
+| Strong del rango | cierre de la vela H4 del BOS con cuerpo que lo consagra |
+| Weak cerrado | cierre de la vela H4 del iBOS de finalización |
+| Dirección / BOS H4 | cierre de su vela H4 |
+| Fractal ≥50% (gate) | cierre de la vela H4 cuya mecha/cuerpo alcanza el 50% |
+| Zona H4 (OB/FVG) | cierre de la 3ª vela del FVG (H4) |
+| Toque de zona H4 | cierre de la vela M15 del toque (las decisiones parten ahí) |
+| Toma de liquidez izquierda | cierre de la vela M15 que barre |
+| iBOS M15 | cierre de su vela M15 |
+| Zona derivada | cierre de la vela M15 que la completa |
+| Orden límite de entrada | = `available_at` de la zona derivada |
+| Fill | intra-vela M15 posterior al alta de la orden (regla §4.5) |
+| SL/TP | intra-vela; vela ambigua = STOP |
+| Expiraciones (dirección, TTL, deadline) | contadas en CIERRES de su TF |
 
-- **Recolector en el Mac mini** (máquina canónica), servicio launchd propio
-  (`com.hugo.nexux-bot3-forward`), que cada 15 min consulta
-  `nexux.cl/m/bot3/api/book` por mercado y **appendea** a
+Regla general: **ningún evento es consumible antes de su `available_at`; nada
+puede seleccionarse usando el final de la serie** (sin `[-N:]`: el
+`MAX_ZONES_SIM` de v1 queda eliminado; los límites de cómputo son solo TTL y
+deadlines causales).
+
+## 7. Riesgo, objetivo y gestión
+
+- **SL**: extremo de la reacción que originó el iBOS ± buffer 0,1% `[U0]`.
+- **TP**: weak cerrado del rango rector H4. Sin weak cerrado → abstención.
+- **Filtro**: RR neto ≥ 2 (compatible con S06, no umbral demostrado) con
+  costos por mercado versionados (base 0,12% ida y vuelta `[U0]`; tabla por
+  par en el protocolo).
+- Salida completa en SL o TP; vela ambigua = STOP.
+
+## 8. Cohorte forward: ledger append-only
+
+- Recolector launchd en el Mac mini (`com.hugo.nexux-bot3-forward`), pull de
+  `nexux.cl/m/bot3/api/book` cada 15 min, append a
   `crisol/nexux/data/bot3_forward/ledger.jsonl`:
-  - `trade_id` estable = hash de (mercado, tf, dir, zona H4 `avail_t`,
-    `t_entrada`, contrato_hash);
-  - eventos append-only: `descubierto`, `cerrado` (nunca se reescribe);
-  - provenance por evento: hash del contrato v2, commit de código, fuente y
-    `as_of` de las velas, timestamp local del pull;
-  - gaps del recolector registrados explícitamente (`gap_detectado`).
-- El simulador sigue existiendo como VISTA reproducible; **la cohorte
-  evaluable es el ledger**, no la recomputación.
-- **Frontera forward** = timestamp del primer pull exitoso posterior al
-  despliegue verificado de v2 (nunca una fecha anterior al deploy — corrige
-  la frontera inválida de v1).
+  `trade_id` = hash(mercado, dir, `available_at` zona H4, vela de fill,
+  contrato_hash); eventos `descubierto`/`cerrado`/`gap_detectado` inmutables;
+  provenance (hash contrato, commit, fuente y `as_of` de velas, ts del pull).
+- El simulador es VISTA reproducible; **la cohorte evaluable es el ledger**.
+- **Frontera forward** = primer pull exitoso posterior al despliegue
+  verificado de v2.
 
-## 8. Evaluación (única)
+## 9. Evaluación (clarificación 4)
 
-- Corte: **≥50 trades cerrados en el ledger por mercado, o 2026-12-31**
-  (lo primero). Nota: con el embudo completo (retest incluido) la frecuencia
-  bajará vs v1; octubre es el checkpoint del ecosistema, no el corte de Bot3.v2
-  — en la ventana de octubre solo se reporta avance del ledger, sin decidir.
-- Multiplicidad declarada: 7 mercados × 1 fila (H4→M15). Métricas por mercado
-  y agregado; cualquier lectura por mercado lleva corrección por multiplicidad
-  (Holm), como en el laboratorio.
-- Si el corte llega con n bajo: se reporta con intervalos y NO se promueve ni
-  descarta; se decide extender o cerrar como `insuficiente`.
-- Resultado positivo NO autoriza Bot/Testnet/Live: exige protocolo propio.
+- **Primario (único):** el AGREGADO de los 7 mercados — se detiene en
+  **50 cierres totales en el ledger o 2026-12-31**, lo primero. Una sola
+  evaluación al detenerse; sin lecturas intermedias con valor decisional
+  (octubre = checkpoint informativo del ecosistema, no corte).
+- **Dependencia:** intervalos del agregado por bloques temporales (block
+  bootstrap semanal) — operaciones simultáneas en pares correlacionados no se
+  tratan como independientes.
+- **Secundarios:** métricas por mercado, corregidas por multiplicidad (Holm),
+  solo descriptivas.
+- n bajo al corte → reporte con intervalos, sin promoción ni descarte;
+  decidir extender o cerrar `insuficiente`.
+- Resultado positivo NO autoriza Bot/Testnet/Live.
 
-## 9. Parámetros que Hugo debe congelar en el protocolo v2
+## 10. Parámetros a congelar (todos `[U0]` salvo indicación — clarificación 5)
 
-| Parámetro | Propuesta | Nota |
+Ninguno de estos valores fue enseñado en el curso; son decisiones
+operacionales pre-registradas de este submodelo (baseline). El resultado
+valida ESTA parametrización, no "el método docente abstracto".
+
+| Parámetro | Propuesta rev.2 | Etiqueta |
 |---|---|---|
-| Antigüedad máxima dirección H4 | 180 velas H4 (30 días) | pedido explícito de Hugo |
-| Ventana confirmación M15 | 48 velas (12 h) | reemplaza el 30 arbitrario de v1 |
-| Ventana retest zona derivada | 32 velas (8 h) | nueva (entrada del curso) |
-| TTL zona H4 | 500 velas H4 | causal desde avail_t |
-| Buffer SL | 0,1% | U0 del curso, default declarado |
-| Costos por par | 0,12% base + tabla | versionados por mercado |
-| Umbral evaluación | 50 cierres/mercado o 2026-12-31 | única |
-| Universo | 7 pares USDT actuales | igual a v1, pre-datos |
+| Expiración dirección H4 | 180 velas H4 (30 días) | U0 |
+| TTL zona H4 | 180 velas H4 (alineado a la dirección) | U0 |
+| Deadline total toque→fill | 64 velas M15 (16 h) | U0 |
+| Ventana iBOS dentro del deadline | ≤48 velas M15 | U0 (máximo inicial) |
+| Buffer SL | 0,1% | U0 |
+| RR neto mínimo | 2,0 | compatible S06, no demostrado |
+| Costos | 0,12% base + tabla por par | U0, versionados |
+| Corte | 50 cierres TOTALES o 2026-12-31 | U0 |
+| Universo | 7 pares USDT (pre-datos) | U0 |
 
-Con estos valores aprobados (o corregidos por Hugo), el paso 4 es escribir el
-protocolo v2 pre-registrado con hash, y recién entonces implementar (paso 5),
-re-auditar (paso 6), desplegar verificado (paso 7) y abrir la cohorte desde
-cero (paso 8).
+## 11. Gates de aceptación de la implementación
+
+1. Invariancia por prefijo sobre ventana real (≥2000 velas M15 BTC, >300
+   zonas — la reproducción de la re-auditoría) + sintético con expulsión
+   forzada: un trade cerrado que cambie = implementación rechazada.
+2. Tests DISCRIMINANTES: la disponibilidad por apertura (bug C-1) debe hacer
+   FALLAR el test correspondiente; `avail_t` con delta EXACTO por TF.
+3. Determinismo de arbitraje: dos corridas y un reordenamiento de detección
+   producen el mismo libro.
+4. Ledger: reinicio del recolector sin duplicar `trade_id` ni reescribir.
+5. Re-auditoría completa de Codex (paso 6) antes del despliegue.
+
+---
+
+**Pendiente para el freeze (decisión de Hugo):** aprobar la tabla del §10 y
+las reglas de fill (§4.5) y arbitraje (§5). Con eso se escribe el protocolo
+v2 pre-registrado (hash SHA-256 sobre el texto congelado) y recién entonces
+se implementa.
