@@ -1,0 +1,96 @@
+{
+  "schema_version": "bitcoin-traders-course-manifest.v1",
+  "captured_at": "2026-08-17T14:08:51Z",
+  "source": {
+    "platform": "Google Classroom",
+    "course": "BOOTCAMP MAYO 2025",
+    "publisher": "Bitcoin Traders",
+    "classroom_url": "https://classroom.google.com/c/Nzg1MDExNzI3MTM5",
+    "access": "private user-authorized"
+  },
+  "artifact_policy": {
+    "media_in_repository": false,
+    "local_cache": "/Users/hugh/crisol/.course-cache/bitcoin-traders-bootcamp-2025",
+    "redistribution": false
+  },
+  "total_duration_seconds": 80122.066,
+  "sessions": [
+    {
+      "number": 1,
+      "title": "Conocimientos Previos",
+      "duration_seconds": 6438.439,
+      "audio_bytes": 104200685,
+      "audio_sha256": "d432989a8dcb7bd97167b2c24db3e1878f0b3656ef0fced386ab575f942b85d7"
+    },
+    {
+      "number": 2,
+      "title": "Fractalidad",
+      "duration_seconds": 7242.199,
+      "audio_bytes": 117208681,
+      "audio_sha256": "6ff4228ce7a33cf5ef566eb0ed7c66c0b2532b80b10fcfc60f2e76986741af07"
+    },
+    {
+      "number": 3,
+      "title": "Rangos Operativos",
+      "duration_seconds": 7475.066,
+      "audio_bytes": 120977432,
+      "audio_sha256": "8fad3090c0265f24f56512048c61c6bcaab63a6b357c4bf8ed28de92f891acb6"
+    },
+    {
+      "number": 4,
+      "title": "Oferta y Demanda (OB + Imbalance)",
+      "duration_seconds": 7827.299,
+      "audio_bytes": 126677744,
+      "audio_sha256": "235858aab9c0d1ecc164b86ffa0f7327a92c4b28e45a2451942fee996d3b8fb7"
+    },
+    {
+      "number": 5,
+      "title": "Liquidez Institucional",
+      "duration_seconds": 6249.099,
+      "audio_bytes": 101136497,
+      "audio_sha256": "5f7ad6cad8a5592bc570d6e1dbd4b36d358aa3622f66dea53baf98f3cf1bf742"
+    },
+    {
+      "number": 6,
+      "title": "Criterios de Entrada",
+      "duration_seconds": 8748.699,
+      "audio_bytes": 141589888,
+      "audio_sha256": "4e8eeb6da4404b97bd9d6298db1a49880e76f043aadc51d1654a6568edea001c"
+    },
+    {
+      "number": 7,
+      "title": "OB de Alta Reaccion",
+      "duration_seconds": 6661.533,
+      "audio_bytes": 107811343,
+      "audio_sha256": "242797b2ae0ad13b571e78d33070676bcd0f7abf52039439cef2d072d86b16f1"
+    },
+    {
+      "number": 8,
+      "title": "Bloques Trampa, iBOS Valido & Liquidez",
+      "duration_seconds": 5528.92,
+      "audio_bytes": 89481039,
+      "audio_sha256": "c25648387c9b0fd005eaebf15a567fd183eec914cc0fe78990183e20d7e6685a"
+    },
+    {
+      "number": 9,
+      "title": "Sistema de Trading (Clase Practica)",
+      "duration_seconds": 6553.499,
+      "audio_bytes": 106062775,
+      "audio_sha256": "c8c6c27ac51a8d5b11163af4107e6cdf5046f260b0a2af338898cbc7feee5f5a"
+    },
+    {
+      "number": 10,
+      "title": "Backtesting Avanzado (Gestion)",
+      "duration_seconds": 6674.633,
+      "audio_bytes": 108023252,
+      "audio_sha256": "b33acde2fbccc59ce952f0840748af06d015443c5fb35ccc9ddfd3e32bc5ec1c"
+    },
+    {
+      "number": 11,
+      "title": "Gestion de Riesgo y Plan de Trading Profesional",
+      "duration_seconds": 10722.68,
+      "audio_bytes": 173536384,
+      "audio_sha256": "9f62517c084a378a388873808ec8af42c9c21ee4fc43ddef83a73848d10dfaa5"
+    }
+  ]
+}
