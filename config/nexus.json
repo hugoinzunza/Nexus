@@ -141,6 +141,25 @@
       ],
       "_nota": "Laboratorio Bot2 de Accion del precio. Solo simulacion causal; no importa ejecutor, credenciales ni ordenes."
     },
+    "bot3": {
+      "enabled": true,
+      "pairs": [
+        "ADAUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "SOLUSDT",
+        "XRPUSDT"
+      ],
+      "timeframes": [
+        "15m",
+        "1h"
+      ],
+      "max_bars": 8000,
+      "_nota": "Bot3 paper de la estrategia del curso BTA (playbook.v1). Diario virtual aislado por simulacion causal; sin ejecutor, credenciales ni ordenes; no toca diario real, Bot ni ECON-COHORT-001.",
+      "_contrato_nota": "v1 2026-08-17 (decision Hugo, universo ampliado pre-datos el mismo dia): zona OB/FVG (TF vista o rector H4/D) tocada + iBOS con cuerpo <=30 velas, solo a favor del rector; SL invalidacion+0.1%; TP liquidez opuesta sin barrer mas cercana as-of; net RR>=2 con costos 0.12% redondos; una posicion por mercado; vela ambigua = STOP. Evaluacion UNICA a >=50 cierres por mercado (o 2026-10-31, lo primero). Parametros = defaults visuales del playbook (semaforo amarillo), NO promesa de edge; research_only."
+    },
     "hypothesis_lab": {
       "enabled": true,
       "_nota": "Vista de solo lectura para estudios causales y observadores forward. No importa ejecutores ni expone endpoints de escritura."
