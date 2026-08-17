@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
+  <meta name="theme-color" content="#090b10">
+  <title>Bot3 · Curso BTA · NexUX</title>
+  <link rel="stylesheet" href="/static/nexux-shell.css">
+  <link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+  <main>
+    <header class="head">
+      <div><p>BOT PAPER · DIARIO AISLADO</p><h1>Bot3 · Curso BTA</h1></div>
+      <div class="controls">
+        <select id="symbol" aria-label="Par"></select>
+        <select id="tf" aria-label="Temporalidad"></select>
+      </div>
+    </header>
+    <p class="warning"><strong>RESEARCH ONLY</strong> · estrategia del curso (playbook.v1) · simulación causal · sin señal · sin credenciales · sin órdenes reales · no toca diario/Bot/cohortes</p>
+
+    <section class="metrics" id="metrics"></section>
+
+    <section class="split">
+      <article class="panel">
+        <header><div><h2>Diario virtual</h2><p id="book-sub">Zona tocada + iBOS confirmado, a favor del rector. Vela ambigua = STOP.</p></div></header>
+        <div class="table-wrap"><table><thead><tr>
+          <th>Entrada</th><th>Lado</th><th>Zona</th><th>Entry</th><th>SL</th><th>TP</th><th>RR neto</th><th>Estado</th><th>R</th>
+        </tr></thead><tbody id="trades"></tbody></table></div>
+      </article>
+      <article class="panel">
+        <header><div><h2>Qué está descartando</h2><p>Los rechazos también son resultado.</p></div></header>
+        <div id="rejections" class="rejects"></div>
+      </article>
+    </section>
+
+    <section class="panel rules">
+      <header><div><h2>Contrato congelado (v1 · 2026-08-17)</h2><p>No cambia según el resultado. Evaluación única a ≥50 cierres por mercado.</p></div></header>
+      <div class="rule-grid">
+        <div><strong>Zona</strong><span>OB/FVG fresco de la TF vista o del rector (H4/D)</span></div>
+        <div><strong>Confirmación</strong><span>iBOS con cuerpo tras el toque, ≤30 velas</span></div>
+        <div><strong>Dirección</strong><span>solo a favor del rector vigente (BOS con cuerpo)</span></div>
+        <div><strong>SL</strong><span>invalidación de la zona + 0,1%</span></div>
+        <div><strong>TP</strong><span>liquidez opuesta sin barrer más cercana (as-of)</span></div>
+        <div><strong>Filtro</strong><span>RR neto ≥ 2 (costos 0,12% ida y vuelta)</span></div>
+        <div><strong>Gestión</strong><span>una posición virtual por mercado · salida completa</span></div>
+        <div><strong>Honestidad</strong><span>vela que toca SL y TP cuenta como STOP</span></div>
+      </div>
+    </section>
+  </main>
+  <script src="/static/nexux-shell.js"></script>
+  <script src="app.js?v=1"></script>
+</body>
+</html>
