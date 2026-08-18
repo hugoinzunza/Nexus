@@ -18,8 +18,11 @@ import hashlib
 import json
 
 # --- Identidad del contrato ------------------------------------------------
-CONTRATO_HASH = "9d24166a33aa74af7f2b2dd7d0bdf4e2d16866e13eec7c48e7b1480512001530"
-PROTOCOLO = "BOT3_V9"
+CONTRATO_HASH = "bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d"
+PROTOCOLO = "BOT3_V13"
+# v13 CONFORME (docs/BOT3_V13_PROTOCOLO.md): añade el ciclo del candidato
+# vivo (CF-38..CF-40), el compromiso de contenido CF-41, el `ganador` del
+# arbitraje CF-42 y dos tipos al registro CF-43. Base v9 vigente.
 
 # --- Universo y temporalidades (orden canónico alfabético) -----------------
 MERCADOS = ("ADAUSDT", "BNBUSDT", "BTCUSDT", "DOGEUSDT",
@@ -148,6 +151,8 @@ TIPOS: dict[str, str] = {
     "gap_ambiguo": FAM_JERARQUIA,
     "confirmada_sin_fill": FAM_JERARQUIA,
     "descartada_por_arbitraje": FAM_JERARQUIA,
+    "candidato_expirado": FAM_JERARQUIA,     # CF-43 (v13)
+    "candidato_invalidado": FAM_JERARQUIA,   # CF-43 (v13)
     "abierta_al_corte": FAM_JERARQUIA,      # id = trade
     "orden_al_corte": FAM_JERARQUIA,        # id = order
     # Descarte con zona

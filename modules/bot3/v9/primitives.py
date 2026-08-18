@@ -272,3 +272,64 @@ def direccion_vigente(velas: list[dict], dur: int, expira_velas: int,
     if (len(velas) - 1) - e["j"] > expira_velas:
         return None, "direccion_expirada"
     return ("long" if e["dir"] == "up" else "short"), None
+
+
+# --- Ciclo del candidato (v13: CF-39) --------------------------------------
+def zona_derivada(velas: list[dict], j_ibos: int, largo: bool, dur: int,
+                  swings_int=None):
+    """Zona creada POR EL DESPLAZAMIENTO del iBOS (CF-39.3, normativo).
+
+    - `j_origen` = idx del ÚLTIMO swing INT con `confirm_idx ≤ j_ibos` e
+      `idx < j_ibos`, tomado LITERALMENTE del lado: LONG → swing LOW;
+      SHORT → swing HIGH.
+    - Desplazamiento = velas `[j_origen, j_ibos]`.
+    - **OB del desplazamiento** = la ÚLTIMA vela del tramo con cuerpo
+      OPUESTO al trade (largo: `c < o`); su caja es `[l, h]`.
+    - **Fallback FVG**: si no hay vela de cuerpo opuesto, el FVG de la
+      dirección con vela de formación en `(j_origen, j_ibos]` de `idx`
+      MÍNIMO (el más cercano al origen); empate → menor `lo`.
+
+    Devuelve dict con `lo`, `hi`, `kind`, `zone_formation_at` y
+    `order_available_at` (= cierre de `j_ibos`, CF-39.4), o None.
+    """
+    sh, sl = swings_int if swings_int is not None else swing_points(velas, INT_PIV)
+    lado = sl if largo else sh
+    previos = [p for p in lado
+               if p["confirm_idx"] <= j_ibos and p["idx"] < j_ibos]
+    if not previos:
+        return None
+    j_origen = previos[-1]["idx"]
+    order_avail = int(velas[j_ibos]["t"]) + dur
+
+    for i in range(j_ibos, j_origen - 1, -1):        # OB: la ÚLTIMA opuesta
+        v = velas[i]
+        opuesta = (v["c"] < v["o"]) if largo else (v["c"] > v["o"])
+        if opuesta:
+            return {"kind": "ob", "lo": Q(v["l"]), "hi": Q(v["h"]),
+                    "zone_formation_at": int(v["t"]) + dur,
+                    "order_available_at": order_avail, "j_origen": j_origen}
+
+    candidatas = [f for f in find_fvgs(velas, j_origen + 1, j_ibos, largo)
+                  if j_origen < f["idx"] <= j_ibos]
+    if not candidatas:
+        return None
+    f = min(candidatas, key=lambda x: (x["idx"], Q(x["lo"])))
+    return {"kind": "fvg", "lo": Q(f["lo"]), "hi": Q(f["hi"]),
+            "zone_formation_at": int(velas[f["idx"]]["t"]) + dur,
+            "order_available_at": order_avail, "j_origen": j_origen}
+
+
+def primera_toma(velas: list[dict], j_toque: int, hasta: int, largo: bool,
+                 swings_int=None):
+    """`j_toma` (CF-39.1): la PRIMERA vela `k > j_toque` que BARRE un swing
+    INT del lado correspondiente **disponible antes de `k`**
+    (`confirm_idx < k`, disponibilidad causal M-3). None si aún no ocurre."""
+    sh, sl = swings_int if swings_int is not None else swing_points(velas, INT_PIV)
+    lado = sl if largo else sh
+    for k in range(j_toque + 1, min(hasta, len(velas))):
+        for p in lado:
+            if p["confirm_idx"] >= k or p["idx"] >= k:
+                continue
+            if barre(velas[k], p["price"], es_low=largo):
+                return k
+    return None

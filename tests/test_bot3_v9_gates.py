@@ -413,7 +413,7 @@ def test_contrato_hash_congelado():
     """El contrato implementado es exactamente el declarado CONFORME."""
     import hashlib
     ruta = os.path.join(os.path.dirname(__file__), "..", "docs",
-                        "BOT3_V9_PROTOCOLO.md")
+                        "BOT3_V13_PROTOCOLO.md")
     with open(ruta, "rb") as fh:
         assert hashlib.sha256(fh.read()).hexdigest() == C.CONTRATO_HASH
 
@@ -460,3 +460,63 @@ def test_b1_hueco_h4_posterior_no_altera_el_pasado():
         resultados.append(motor._calcular_h4("BTCUSDT", T)["motivo"])
     assert resultados[0] == resultados[1], \
         f"el hueco futuro cambió el pasado: {resultados}"
+
+
+# ------------------------------ v13: ciclo del candidato (CF-38..CF-43) ---
+def test_cf43_tipos_nuevos_y_vectores():
+    CAND = "3" * 64
+    assert C.event_id("candidato_expirado", contrato=CT, id=CAND) == \
+        "7cc8eda9b1b9f43a99634abd927ea881c2edb37197b6478a56600ec0945e59b8"
+    assert C.event_id("candidato_invalidado", contrato=CT, id=CAND) == \
+        "8131681cbb2c46aab6489aadabb2b03e1ecd32c7cc52c7b3a3e140682da34c71"
+
+
+def test_cf39_zona_derivada_ob_del_desplazamiento():
+    """El OB del desplazamiento (última vela de cuerpo opuesto en
+    [j_origen, j_ibos]) gana sobre cualquier FVG, y sus dos sellos
+    temporales son distintos: formación (histórica) vs disponibilidad."""
+    from modules.bot3.v9 import primitives as P
+    t0 = 0
+    velas = []
+    # tramo bajista → swing low en idx 6 → impulso alcista hasta idx 14
+    for i, (o, h, l, c) in enumerate([
+        (10, 10.2, 9.8, 9.9), (9.9, 10.0, 9.5, 9.6), (9.6, 9.7, 9.2, 9.3),
+        (9.3, 9.4, 8.9, 9.0), (9.0, 9.1, 8.6, 8.7), (8.7, 8.8, 8.3, 8.4),
+        (8.4, 8.5, 8.0, 8.1),                                   # 6: mínimo
+        (8.1, 8.6, 8.05, 8.5), (8.5, 9.0, 8.45, 8.9),
+        (8.9, 9.4, 8.85, 8.8),                                  # 9: opuesta (OB)
+        (8.8, 9.9, 8.75, 9.8), (9.8, 10.4, 9.75, 10.3),
+        (10.3, 10.9, 10.25, 10.8), (10.8, 11.4, 10.75, 11.3),
+        (11.3, 11.9, 11.25, 11.8),                              # 14: iBOS
+    ]):
+        velas.append(vela(t0 + i * DUR, o, h, l, c))
+    deriv = P.zona_derivada(velas, 14, largo=True, dur=DUR)
+    assert deriv is not None
+    assert deriv["kind"] == "ob"
+    assert deriv["order_available_at"] == int(velas[14]["t"]) + DUR
+    assert deriv["zone_formation_at"] < deriv["order_available_at"]
+
+
+def test_cf39_toma_exige_disponibilidad_causal():
+    """Un swing con `confirm_idx ≥ k` no sirve como liquidez tomada por la
+    vela `k` (M-3)."""
+    from modules.bot3.v9 import primitives as P
+    velas = [vela(i * DUR, 10, 10.2, 9.8, 10) for i in range(20)]
+    velas[10] = vela(10 * DUR, 10, 10.2, 9.0, 10)      # mínimo profundo
+    velas[12] = vela(12 * DUR, 10, 10.2, 8.5, 10)      # barre 9.0
+    # El swing low de idx 10 confirma en 13; la vela 12 NO puede tomarlo.
+    assert P.primera_toma(velas, 0, 13, largo=True) is None
+
+
+def test_cf40_particion_de_eventos_por_estado():
+    """Una orden creada nunca emite `candidato_*`, y un candidato nunca
+    emite `orden_*`: los tipos están particionados por estado (CF-38)."""
+    from modules.bot3.v9.ledger import Ledger as L
+    led = L()
+    led.append("candidato_expirado", mercado="BTCUSDT", id="a" * 64,
+               effective_at=1, finalized_at=1)
+    led.append("orden_cancelada", mercado="BTCUSDT", id="b" * 64,
+               effective_at=1, finalized_at=1)
+    tipos = {e["tipo"] for e in led.eventos}
+    assert tipos == {"candidato_expirado", "orden_cancelada"}
+    assert len({e["event_id"] for e in led.eventos}) == 2

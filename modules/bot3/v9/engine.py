@@ -5,7 +5,11 @@ CF-8 (funding causal), CF-13 (épocas), CF-14 (ciclo de 8 fases con cálculo
 puro antes de aplicar), CF-15 (raw vs Q), CF-16 (`ahora`), CF-18
 (trayectoria indeterminada), CF-19/CF-23 (lotes globales y finalidad),
 CF-20 (fill+STOP), CF-24 (bootstrap), CF-34 (temporalidad triple y heads
-duales), CF-35 (corte administrativo total).
+duales), CF-35 (corte administrativo total), y del protocolo v13:
+CF-38 (estado `candidato_vivo` y partición de eventos), CF-39 (cronología
+POST-toque determinista: j_toma → primer iBOS con zona derivada → orden),
+CF-40 (Fase 7 desdoblada con precedencia única) y CF-42 (`ganador` del
+arbitraje).
 
 El motor no ejecuta órdenes ni conoce credenciales: produce eventos.
 """
@@ -120,12 +124,18 @@ def resultado_r(P_in: float, P_out: float, E: float, S: float, largo: bool,
 
 # --- Estado por mercado ----------------------------------------------------
 class EstadoMercado:
-    """Máquina flat → orden_viva → posicion (+ transitorio salida_detectada)."""
+    """Máquina de estados CF-38 (v13):
+
+    `flat → candidato_vivo → orden_viva → posicion → (salida_detectada) → flat`
+
+    Los eventos están PARTICIONADOS por estado: un candidato jamás emite
+    `orden_*` y una orden jamás emite `candidato_*`."""
 
     def __init__(self, mercado: str):
         self.mercado = mercado
         self.estado = "flat"
         self.degradado = False
+        self.candidato = None    # CF-38: dict del candidato vivo
         self.orden = None        # dict con E,S,T,ids,deadline,largo,...
         self.posicion = None     # dict con P_in, E, S, T, ids, close_fill,...
         self.salida = None       # transitorio de la fase 1a
@@ -233,7 +243,12 @@ class Motor:
 
         # Hueco que intersecta: CF-18 fail-closed.
         if cubre == "hueco":
-            if st.estado == "orden_viva":
+            if st.estado == "candidato_vivo":
+                self._emit("candidato_expirado", T, mercado, finalized_at=fin,
+                           id=st.candidato["candidate_id"], motivo="hueco_m15")
+                st.candidato = None
+                st.estado = "flat"
+            elif st.estado == "orden_viva":
                 self._emit("orden_cancelada", T, mercado, finalized_at=fin,
                            id=st.orden["order_id"], motivo="hueco_m15")
                 st.orden = None
@@ -321,9 +336,13 @@ class Motor:
                 st.estado = "flat"
 
         # FASE 6 — aplicar estado estructural (implícito: `calc` es la vista).
-        # FASE 7 — toques, arbitraje y creación de orden (solo flat).
+        # FASE 7a — candidato vivo (CF-40): invalidación → orden → deadline
+        # → dirección/hueco, en ese orden normativo único.
+        if st.estado == "candidato_vivo":
+            self._fase7a(mercado, T, fin, ep, k, calc, st)
+        # FASE 7b — nuevo candidato (nunca orden en la vela del toque).
         if st.estado == "flat" and not st.degradado:
-            self._fase7(mercado, T, fin, ep, k, calc, st)
+            self._fase7b(mercado, T, fin, ep, k, calc, st)
 
     # --- Fase 2: cálculo puro --------------------------------------------
     def _calcular(self, mercado: str, T: int) -> dict:
@@ -399,8 +418,10 @@ class Motor:
         st.estado = "flat"
 
     # --- Fase 7: toque, confirmación M15, arbitraje y orden --------------
-    def _fase7(self, mercado: str, T: int, fin: int, ep: list[dict], k: int,
-               calc: dict, st: EstadoMercado) -> None:
+    def _fase7b(self, mercado: str, T: int, fin: int, ep: list[dict], k: int,
+                calc: dict, st: EstadoMercado) -> None:
+        """Detecta toque, arbitra y CREA EL CANDIDATO. Nunca crea orden en la
+        misma vela del toque (CF-40)."""
         direccion, rango = calc["direccion"], calc["rango"]
         if direccion is None or rango is None:
             self._emit("abstencion", T, mercado, finalized_at=fin,
@@ -437,79 +458,122 @@ class Motor:
                     abs(proximal - vela["c"]), z["lo"])
         elegibles.sort(key=orden_arb)
         ganadora, clave = elegibles[0]
+        cid_ganador = candidate_id(mercado, direccion, ganadora["available_at"],
+                                   ganadora["lo"], ganadora["hi"], T)
         for z, _k in elegibles[1:]:
+            # CF-42: referencia obligatoria al ganador.
             self._emit("descartada_por_arbitraje", T, mercado, finalized_at=fin,
                        id=candidate_id(mercado, direccion, z["available_at"],
-                                       z["lo"], z["hi"], T))
+                                       z["lo"], z["hi"], T),
+                       ganador=cid_ganador)
         # La frescura se consume con el TOQUE (también en bootstrap).
         for _z, clave_z in elegibles:
             st.zonas_tocadas.add(clave_z)
 
-        cid = candidate_id(mercado, direccion, ganadora["available_at"],
-                           ganadora["lo"], ganadora["hi"], T)
+        cid = cid_ganador
         self._emit("candidato", T, mercado, finalized_at=fin, id=cid)
+        # CF-38: nace el candidato vivo; la confirmación ocurre en velas
+        # POSTERIORES (CF-39). La frescura ya se consumió con el toque.
+        st.candidato = {
+            "candidate_id": cid, "zona": ganadora, "dir": direccion,
+            "largo": direccion == "long", "j_toque": k - 1,
+            "close_toque": T, "deadline_close": T + DEADLINE_M15 * DUR_M15,
+            "weak": rango["weak"],
+        }
+        st.estado = "candidato_vivo"
 
-        # Confirmación M15 dentro del deadline: se resuelve en velas futuras,
-        # por lo que se registra como candidato con ventana viva.
-        st.orden = None
-        conf = self._confirmar(ep, k, ganadora, direccion, T)
-        if conf is None:
-            return
-        E, S, deriv = conf
-        Tp = rango["weak"]                      # TP = weak rector CERRADO
-        coherente = (S < E < Tp) if direccion == "long" else (Tp < E < S)
-        if not coherente:
-            return
-        if rr_a_priori(E, S, Tp) < RR_MIN:
-            self._emit("descarte", T, mercado, finalized_at=fin,
-                       motivo="rr_insuficiente", zona_avail=ganadora["available_at"],
-                       zona_lo=ganadora["lo"], zona_hi=ganadora["hi"])
-            return
-        oid = order_id(cid, deriv["available_at"], deriv["lo"], deriv["hi"])
-        st.orden = {"order_id": oid, "candidate_id": cid, "E": E, "S": S,
-                    "T": Tp, "largo": direccion == "long", "dir": direccion,
-                    "deadline_close": T + DEADLINE_M15 * DUR_M15}
-        st.estado = "orden_viva"
-        self._emit("orden_creada", T, mercado, finalized_at=fin, id=oid,
-                   entrada=E, sl=S, tp=Tp)
+    # --- Fase 7a: ciclo del candidato vivo (CF-39/CF-40) -----------------
+    def _fase7a(self, mercado: str, T: int, fin: int, ep: list[dict], k: int,
+                calc: dict, st: EstadoMercado) -> None:
+        cand = st.candidato
+        vela = ep[k - 1]
+        z = cand["zona"]
+        largo = cand["largo"]
 
-    def _confirmar(self, ep: list[dict], k: int, zona: dict, direccion: str,
-                   T: int):
-        """iBOS válido S08 sobre las velas M15 ya cerradas: toma de liquidez
-        a la izquierda + ruptura con cuerpo + zona derivada. Devuelve
-        (E, S, zona_derivada) o None. El TP lo fija el weak rector."""
-        largo = direccion == "long"
-        ini = max(0, k - VENTANA_IBOS_M15)
+        # (a) INVALIDACIÓN: cierre M15 a través de la invalidación de la zona.
+        far = z["lo"] if largo else z["hi"]
+        if (vela["c"] < far) if largo else (vela["c"] > far):
+            self._emit("candidato_invalidado", T, mercado, finalized_at=fin,
+                       id=cand["candidate_id"])
+            st.candidato = None
+            st.estado = "flat"
+            return
+
+        # (b) ORDEN: par ganador (CF-39.2) con zona derivada completada ≤ T.
+        par = self._par_ganador(ep, k, cand)
+        if par is not None:
+            E, S, deriv = par
+            Tp = cand["weak"]
+            coherente = (S < E < Tp) if largo else (Tp < E < S)
+            if coherente and rr_a_priori(E, S, Tp) >= RR_MIN:
+                oid = order_id(cand["candidate_id"],
+                               deriv["order_available_at"],
+                               deriv["lo"], deriv["hi"])
+                self._emit("orden_creada", T, mercado, finalized_at=fin,
+                           id=oid, entrada=E, sl=S, tp=Tp,
+                           zone_formation_at=deriv["zone_formation_at"],
+                           order_available_at=deriv["order_available_at"])
+                st.candidato = None
+                # CF-40(b): orden creada EN la vela del deadline no queda viva.
+                if T >= cand["deadline_close"]:
+                    self._emit("confirmada_sin_fill", T, mercado,
+                               finalized_at=fin, id=oid, motivo="deadline")
+                    st.orden = None
+                    st.estado = "flat"
+                    return
+                st.orden = {"order_id": oid, "candidate_id": cand["candidate_id"],
+                            "E": E, "S": S, "T": Tp, "largo": largo,
+                            "dir": cand["dir"],
+                            "deadline_close": cand["deadline_close"]}
+                st.estado = "orden_viva"
+                return
+            # El par existe pero no es operable: el candidato sigue vivo.
+
+        # (c) DEADLINE.
+        if T >= cand["deadline_close"]:
+            self._emit("candidato_expirado", T, mercado, finalized_at=fin,
+                       id=cand["candidate_id"], motivo="deadline")
+            st.candidato = None
+            st.estado = "flat"
+            return
+
+        # (d) DIRECCIÓN.
+        if calc["direccion"] != cand["dir"]:
+            self._emit("candidato_expirado", T, mercado, finalized_at=fin,
+                       id=cand["candidate_id"], motivo="direccion")
+            st.candidato = None
+            st.estado = "flat"
+
+    def _par_ganador(self, ep: list[dict], k: int, cand: dict):
+        """CF-39.2: primer iBOS posterior a `j_toma` (≤48 velas del toque)
+        que TENGA zona derivada. Devuelve (E, S, deriv) o None."""
+        largo = cand["largo"]
+        j_toque = cand["j_toque"]
+        ini = max(0, j_toque - 4 * INT_PIV)
         seg = ep[ini:k]
         if len(seg) < 3 * INT_PIV:
             return None
-        sh, sl = P.swing_points(seg, INT_PIV)
-        previos = (sl if largo else sh)
-        if not previos:
+        off = j_toque - ini                       # índice del toque en `seg`
+        swings = P.swing_points(seg, INT_PIV)
+        limite = min(len(seg), off + VENTANA_IBOS_M15 + 1)
+        j_toma = P.primera_toma(seg, off, limite, largo, swings_int=swings)
+        if j_toma is None:
             return None
-        # Toma de liquidez a la izquierda: la pierna que entra a la zona barrió.
-        tomo = any(P.barre(seg[-1], p["price"], es_low=largo)
-                   or any(P.barre(v, p["price"], es_low=largo) for v in seg[-6:])
-                   for p in previos[-3:])
-        if not tomo:
-            return None
-        eventos = [e for e in P.bos_events(seg, INT_PIV)
-                   if e["dir"] == ("up" if largo else "down")]
-        if not eventos:
-            return None
-        ib = eventos[-1]
-        derivadas = [z for z in P.zonas_de_epoca(seg[:ib["j"] + 1], DUR_M15)
-                     if z["dir"] == direccion]
-        if not derivadas:
-            return None
-        deriv = sorted(derivadas,
-                       key=lambda z: (0 if z["kind"] == "ob" else 1,
-                                      z["available_at"]))[0]
-        E = Q(deriv["hi"] if largo else deriv["lo"])       # borde proximal
-        extremo = min(v["l"] for v in seg[ib["j"]:]) if largo \
-            else max(v["h"] for v in seg[ib["j"]:])
-        S = Q(extremo * (1 - SL_BUFFER)) if largo else Q(extremo * (1 + SL_BUFFER))
-        return E, S, deriv
+        eventos = [e for e in P.bos_events(seg, INT_PIV, swings=swings)
+                   if e["dir"] == ("up" if largo else "down")
+                   and e["j"] > j_toma and e["j"] <= off + VENTANA_IBOS_M15]
+        for e in eventos:                          # orden creciente de j
+            deriv = P.zona_derivada(seg, e["j"], largo, DUR_M15,
+                                    swings_int=swings)
+            if deriv is None:
+                continue                            # se descarta y sigue
+            E = Q(deriv["hi"] if largo else deriv["lo"])
+            extremo = min(v["l"] for v in seg[e["j"]:]) if largo \
+                else max(v["h"] for v in seg[e["j"]:])
+            S = Q(extremo * (1 - SL_BUFFER)) if largo \
+                else Q(extremo * (1 + SL_BUFFER))
+            return E, S, deriv
+        return None
 
     # --- Fase 8: corte ----------------------------------------------------
     def _fase8(self, T: int) -> None:
@@ -538,6 +602,8 @@ class Motor:
             if st.estado in ("posicion", "salida_detectada") and st.posicion:
                 self._emit("abierta_al_corte", T, mercado,
                            id=st.posicion["trade_id"])
+            elif st.estado == "candidato_vivo":
+                pass                     # un candidato sin orden no se registra
             elif st.estado == "orden_viva" and st.orden:
                 self._emit("orden_al_corte", T, mercado,
                            id=st.orden["order_id"])
