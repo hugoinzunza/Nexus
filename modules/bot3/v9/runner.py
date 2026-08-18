@@ -232,21 +232,13 @@ def huella_parametros() -> str:
     return sha256_hex(canon({k: getattr(CT, k) for k in PARAMS_CONGELADOS}))
 
 
-def identidad_cohorte(mercados, commit: str, bootstrap_hasta, ledger_ruta,
-                      arbol_sucio: bool = False):
+def identidad_cohorte(mercados, commit: str, bootstrap_hasta, ledger_ruta):
     """Identidad que define ESTA cohorte. Cambiar cualquiera de estos
-    valores es una cohorte distinta (CF-11/CF-21).
-
-    `arbol_sucio` viaja en la identidad a propósito: si alguien alguna vez
-    corrió con el guardia de árbol limpio desactivado, la cohorte queda
-    marcada para siempre y NO puede después presentarse como una cohorte con
-    ancla de código auténtica. La salida de la excepción es visible, no
-    silenciosa."""
+    valores es una cohorte distinta (CF-11/CF-21)."""
     return {"contrato": CONTRATO_HASH, "commit": commit,
             "universo": sorted(mercados),
             "bootstrap_hasta": bootstrap_hasta,
             "ledger_ruta": ledger_ruta,
-            "arbol_sucio": bool(arbol_sucio),
             "parametros_sha": huella_parametros()}
 
 
@@ -419,8 +411,7 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
            bootstrap_hasta: int | None = None,
            reloj_ms: int | None = None,
            estado_dir: str | None = None,
-           permitir_snapshot_externo: bool = False,
-           permitir_arbol_sucio: bool = False) -> tuple[Motor, Ledger]:
+           permitir_snapshot_externo: bool = False) -> tuple[Motor, Ledger]:
     """Corre el motor por lotes globales de `close_time` M15.
 
     Con `estado_dir`, los almacenes se PERSISTEN y se rehidratan en el
@@ -447,8 +438,9 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
             raise ValueError(
                 "con `estado_dir` hay que persistir el ledger "
                 "(`ledger_ruta`): si no, la cohorte no sobrevive al reinicio")
-        if not permitir_arbol_sucio:
-            validar_arbol_limpio(ROOT)
+        # CF-28 sin excepciones: no hay bandera para saltarse esto. Una
+        # cohorte evaluable NO puede arrancar con código sin autenticar.
+        validar_arbol_limpio(ROOT)
         # Un ancla de provenance tiene que ser un commit Git real y el HEAD
         # ejecutado (CF-28), validado contra el repositorio del CÓDIGO.
         validar_commit(commit, ROOT)
@@ -456,8 +448,14 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
         # ledger, para que un reinicio con otra configuración no alcance a
         # escribir nada.
         identidad = identidad_cohorte(mercados, commit, bootstrap_hasta,
-                                      ledger_ruta, permitir_arbol_sucio)
+                                      ledger_ruta)
         validar_cohorte(estado_dir, identidad)
+        # B1 (re-auditoría 2): la identidad se PERSISTE aquí, antes del
+        # ledger y antes de crear un solo almacén. Escribirla al final dejaba
+        # una ventana real: si el primer arranque materializaba M15 y moría
+        # construyendo H4, el manifiesto quedaba sin `cohorte` y el arranque
+        # siguiente aceptaba otra frontera sobre el mismo estado.
+        escribir_manifiesto(estado_dir, leer_manifiesto(estado_dir), identidad)
     led = Ledger(ledger_ruta, commit=commit)
     # El commit del despliegue SÍ viaja a la construcción: es lo que activa
     # la verificación CF-28 en la ruta productiva.
@@ -466,24 +464,30 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
                  permitir_snapshot_externo=permitir_snapshot_externo)
     m15 = construir_almacenes(root, mercados, "15m", limite, **comun)
     h4 = construir_almacenes(root, mercados, "4h", limite, **comun)
-    if estado_dir and identidad is not None:
-        escribir_manifiesto(estado_dir, leer_manifiesto(estado_dir), identidad)
     mercados_ok = tuple(sorted(set(m15) & set(h4)))
     motor = Motor(m15, h4, mercados_ok, led, bootstrap_hasta=bootstrap_hasta)
-    # CF-31/CF-34: los huecos LOCALES declarados al ingerir se emiten por la
-    # vía canónica del motor, para que lleven heads, commit y processed_at
-    # como cualquier otro evento causal (antes se escribían directo al
-    # ledger y les faltaba toda esa provenance).
+    # CF-31/CF-34: los huecos LOCALES se emiten por la vía canónica del motor
+    # para que lleven heads, commit y processed_at como cualquier otro evento
+    # causal (antes se escribían directo al ledger, sin esa provenance).
+    #
+    # La fuente son los marcadores SELLADOS EN EL ALMACÉN, no los declarados
+    # en ESTA corrida: si el proceso murió entre el sellado del gap y su
+    # append al ledger, al reiniciar el marcador ya está en el almacén y no
+    # vuelve a declararse, así que su evento se perdía para siempre. Recorrer
+    # los registros repone todo marcador local, y `event_id` hace que la
+    # reemisión sea idempotente.
     motor.iniciar_ciclo()
     try:
         for tf_h, almacenes_tf in (("15m", m15), ("4h", h4)):
             for mercado in mercados_ok:
-                for h in getattr(almacenes_tf[mercado], "huecos_declarados", []):
-                    motor._emit("hueco_detectado", h["detected_at"], mercado,
-                                finalized_at=h["detected_at"],
-                                efectivo=h["desde"], tf=tf_h,
-                                desde=h["desde"], hasta=h["hasta"],
-                                motivo="local", detected_at=h["detected_at"])
+                for r in almacenes_tf[mercado].registros:
+                    if r["tipo"] != "gap" or r.get("motivo") != "local":
+                        continue
+                    motor._emit("hueco_detectado", r["detected_at"], mercado,
+                                finalized_at=r["detected_at"],
+                                efectivo=r["desde"], tf=tf_h,
+                                desde=r["desde"], hasta=r["hasta"],
+                                motivo="local", detected_at=r["detected_at"])
     finally:
         motor.finalizar_ciclo()
     cierres = sorted({int(v["t"]) + DUR_M15

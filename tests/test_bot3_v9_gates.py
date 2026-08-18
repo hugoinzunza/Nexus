@@ -1644,7 +1644,7 @@ def test_b6_dedupe_falla_con_payload_incompatible():
                    processed_at=100, heads_por_mercado={"A": "DIFERENTE"})
 
 
-def test_b6_correr_activa_la_verificacion_de_commit(tmp_path):
+def test_b6_correr_activa_la_verificacion_de_commit(monkeypatch, tmp_path):
     """END-TO-END por `correr()`: el commit del despliegue debe viajar a la
     construcción de almacenes, de modo que recuperar con OTRO commit falle.
     Antes la validación existía pero la ruta productiva no la activaba."""
@@ -1661,6 +1661,7 @@ def test_b6_correr_activa_la_verificacion_de_commit(tmp_path):
         json.dump(filas, open(R.ruta_snapshot(raiz, "BTCUSDT", tf), "w",
                               encoding="utf-8"))
     d = str(tmp_path / "estado")
+    _sin_guardia_arbol(monkeypatch)
     head = R.commit_actual(R.ROOT)
     if head is None:
         pytest.skip("runtime sin metadata Git")
@@ -1669,7 +1670,7 @@ def test_b6_correr_activa_la_verificacion_de_commit(tmp_path):
                             capture_output=True, text=True).stdout.strip()
     # `dev` y cualquier texto arbitrario NO son commits: rechazados
     base = dict(estado_dir=d, permitir_snapshot_externo=True,
-                permitir_arbol_sucio=True, bootstrap_hasta=1,
+                bootstrap_hasta=1,
                 ledger_ruta=str(tmp_path / "l.jsonl"))
     with pytest.raises(ValueError, match="SHA-1 Git canónico"):
         R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, **base)
@@ -1681,7 +1682,7 @@ def test_b6_correr_activa_la_verificacion_de_commit(tmp_path):
                  **base)
     # HEAD real: crea y luego recupera bien
     persist = dict(estado_dir=d, permitir_snapshot_externo=True,
-                   permitir_arbol_sucio=True, bootstrap_hasta=1,
+                   bootstrap_hasta=1,
                    ledger_ruta=str(tmp_path / "l.jsonl"))
     R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, commit=head, **persist)
     R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, commit=head, **persist)
@@ -1708,11 +1709,13 @@ def _head_o_skip():
     return head
 
 
-def test_int_commit_debe_ser_head_y_contener_el_snapshot(tmp_path):
+def test_int_commit_debe_ser_head_y_contener_el_snapshot(monkeypatch,
+                                                         tmp_path):
     """CF-28: el commit no solo debe existir — debe ser el HEAD ejecutado y
     CONTENER el snapshot con esos bytes exactos."""
     import pytest
     from modules.bot3.v9 import runner as R
+    _sin_guardia_arbol(monkeypatch)
     head = _head_o_skip()
     vacio = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"   # árbol vacío de Git
     with pytest.raises(ValueError):
@@ -1727,16 +1730,16 @@ def test_int_commit_debe_ser_head_y_contener_el_snapshot(tmp_path):
             R.validar_snapshot_en_commit(str(tmp_path), head, ruta)
 
 
-def test_int_identidad_de_cohorte_falla_antes_de_escribir(tmp_path):
+def test_int_identidad_de_cohorte_falla_antes_de_escribir(monkeypatch, tmp_path):
     """La identidad (contrato, universo, frontera, params, ledger) se valida
     ANTES del primer append: un reinicio con otra frontera no puede dejar
     una segunda `frontera` en el ledger."""
     import pytest
     from modules.bot3.v9 import runner as R
+    _sin_guardia_arbol(monkeypatch)
     head = _head_o_skip()
     d = str(tmp_path / "estado"); lr = str(tmp_path / "l.jsonl")
-    base = dict(estado_dir=d, commit=head, ledger_ruta=lr, hasta=0,
-                permitir_arbol_sucio=True)
+    base = dict(estado_dir=d, commit=head, ledger_ruta=lr, hasta=0)
     R.correr(mercados=("BTCUSDT",), bootstrap_hasta=111, **base)
     antes = open(lr, encoding="utf-8").read()
     with pytest.raises(ValueError, match="identidad de la cohorte"):
@@ -1765,18 +1768,18 @@ def test_int_universo_no_se_reduce_en_silencio(tmp_path):
         {"BTCUSDT"}
 
 
-def test_int_almacenes_intercambiados_son_rechazados(tmp_path):
+def test_int_almacenes_intercambiados_son_rechazados(monkeypatch, tmp_path):
     """Un almacén sellado no dice a qué mercado pertenece: el manifiesto
     registra su `head` y la recuperación lo exige. Intercambiar BTC y ETH
     debe fallar (antes se aceptaba historia cruzada)."""
     import pytest
     import shutil
     from modules.bot3.v9 import runner as R
+    _sin_guardia_arbol(monkeypatch)
     head = _head_o_skip()
     d = str(tmp_path / "estado")
     base = dict(estado_dir=d, commit=head, hasta=0, bootstrap_hasta=1,
-                ledger_ruta=str(tmp_path / "l.jsonl"),
-                permitir_arbol_sucio=True)
+                ledger_ruta=str(tmp_path / "l.jsonl"))
     R.correr(mercados=("BTCUSDT", "ETHUSDT"), **base)
     a = R.ruta_estado(d, "BTCUSDT", "15m")
     b = R.ruta_estado(d, "ETHUSDT", "15m")
@@ -1786,7 +1789,7 @@ def test_int_almacenes_intercambiados_son_rechazados(tmp_path):
         R.correr(mercados=("BTCUSDT", "ETHUSDT"), **base)
 
 
-def test_int_hueco_local_llega_al_ledger(tmp_path):
+def test_int_hueco_local_llega_al_ledger(monkeypatch, tmp_path):
     """CF-31/CF-37: un marcador de hueco LOCAL creado al ingerir debe
     aparecer como `hueco_detectado` en el ledger (antes solo existía en el
     almacén y la trazabilidad se rompía)."""
@@ -1797,6 +1800,7 @@ def test_int_hueco_local_llega_al_ledger(tmp_path):
     src = R.ruta_snapshot(R.ROOT, "BTCUSDT", "15m")
     if not os.path.exists(src):
         pytest.skip("sin klines versionadas")
+    _sin_guardia_arbol(monkeypatch)
     head = _head_o_skip()
     raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
     filas = json.load(open(src, encoding="utf-8"))[:300]
@@ -1811,8 +1815,7 @@ def test_int_hueco_local_llega_al_ledger(tmp_path):
     motor, led = R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0,
                           estado_dir=str(tmp_path / "e"), commit=head,
                           ledger_ruta=lr, bootstrap_hasta=1,
-                          permitir_snapshot_externo=True,
-                          permitir_arbol_sucio=True)
+                          permitir_snapshot_externo=True)
     gaps = [r for r in motor.m15["BTCUSDT"].registros if r["tipo"] == "gap"]
     evs = [e for e in led.eventos if e["tipo"] == "hueco_detectado"]
     assert gaps and evs
@@ -1823,6 +1826,16 @@ def test_int_hueco_local_llega_al_ledger(tmp_path):
     for campo in ("processed_at", "input_head_asof_T", "input_commit_asof_T",
                   "provenance_head_at_finality"):
         assert campo in ev, campo
+
+
+def _sin_guardia_arbol(monkeypatch):
+    """Desactiva el guardia de árbol limpio SOLO en pruebas.
+
+    No existe bandera de producción para esto (P1 de la re-auditoría): la
+    única forma de saltarse CF-28 es parchear el módulo, algo que un operador
+    no puede hacer. Los gates que ejercitan el guardia mismo NO usan esto."""
+    from modules.bot3.v9 import runner as R
+    monkeypatch.setattr(R, "validar_arbol_limpio", lambda *a, **k: None)
 
 
 def _repo_tmp(tmp_path):
@@ -1914,23 +1927,96 @@ def test_int_manifiesto_conserva_la_cohorte_y_se_escribe_atomico(tmp_path):
     assert sorted(os.listdir(d)) == [R.MANIFIESTO]
 
 
-def test_int_la_excepcion_de_arbol_sucio_marca_la_cohorte(tmp_path):
-    """El bypass del guardia de árbol limpio no es gratis: viaja en la
-    identidad de la cohorte, así que un libro producido con el guardia
-    apagado no puede después presentarse como uno con ancla auténtica."""
+def test_int_no_existe_bandera_para_saltarse_el_arbol_limpio():
+    """P1 (re-auditoría 2): el bypass operacional se ELIMINÓ. Marcar la
+    cohorte como sucia evitaba que se presentara luego como limpia, pero no
+    satisface CF-28: una cohorte evaluable no puede arrancar con código sin
+    autenticar. Ya no hay parámetro que lo permita."""
+    import inspect
+    from modules.bot3.v9 import runner as R
+    firma = inspect.signature(R.correr).parameters
+    assert "permitir_arbol_sucio" not in firma
+    assert "arbol_sucio" not in R.identidad_cohorte(
+        ("BTCUSDT",), "a" * 40, 1, "/tmp/l.jsonl")
+    # y el guardia no es opcional dentro del cuerpo del modo persistente
+    fuente = inspect.getsource(R.correr)
+    assert "validar_arbol_limpio(ROOT)" in fuente
+    assert "if not " not in fuente.split("validar_arbol_limpio")[0][-40:]
+
+
+def test_int_hueco_sellado_se_reemite_tras_caida(monkeypatch, tmp_path):
+    """B2 (re-auditoría 2): si el proceso muere entre el sellado del gap en
+    el almacén y su append al ledger, al reiniciar el marcador YA está
+    sellado y `declarar_hueco_local` no lo vuelve a producir. Emitir desde
+    los huecos de la corrida perdía el evento para siempre; emitir desde los
+    registros SELLADOS lo repone."""
     import json
     import pytest
     from modules.bot3.v9 import runner as R
+    _sin_guardia_arbol(monkeypatch)
+    head = _head_o_skip()
+    src = R.ruta_snapshot(R.ROOT, "BTCUSDT", "15m")
+    if not os.path.exists(src):
+        pytest.skip("sin klines versionadas")
+    raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
+    filas = json.load(open(src, encoding="utf-8"))[:300]
+    del filas[100]                                   # hueco artificial
+    json.dump(filas, open(R.ruta_snapshot(raiz, "BTCUSDT", "15m"), "w",
+                          encoding="utf-8"))
+    json.dump(json.load(open(R.ruta_snapshot(R.ROOT, "BTCUSDT", "4h"),
+                             encoding="utf-8"))[:300],
+              open(R.ruta_snapshot(raiz, "BTCUSDT", "4h"), "w",
+                   encoding="utf-8"))
+    est = str(tmp_path / "e"); lr = str(tmp_path / "l.jsonl")
+    base = dict(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=est,
+                commit=head, ledger_ruta=lr, bootstrap_hasta=1,
+                permitir_snapshot_externo=True)
+    motor, led = R.correr(**base)
+    huecos = [e for e in led.eventos if e["tipo"] == "hueco_detectado"]
+    assert huecos, "el escenario debe producir al menos un hueco local"
+
+    # CAÍDA: el almacén quedó sellado en disco, el append al ledger se perdió.
+    os.remove(lr)
+    _, led2 = R.correr(**base)
+    huecos2 = [e for e in led2.eventos if e["tipo"] == "hueco_detectado"]
+    assert huecos2, "tras la caída el hueco sellado DEBE reemitirse"
+    ids = {e["event_id"] for e in huecos}
+    assert {e["event_id"] for e in huecos2} == ids     # mismos event_id
+
+    # Y la reemisión es idempotente: un tercer arranque no duplica nada.
+    _, led3 = R.correr(**base)
+    assert [e["event_id"] for e in led3.eventos
+            if e["tipo"] == "hueco_detectado"] == \
+        [e["event_id"] for e in huecos2]
+    assert len(led3.eventos) == len(led2.eventos)
+
+
+def test_int_la_cohorte_se_persiste_antes_que_cualquier_almacen(monkeypatch,
+                                                                tmp_path):
+    """B1 (re-auditoría 2): la identidad se escribía DESPUÉS de construir M15
+    y H4. Un primer arranque que materializaba M15 y moría en H4 dejaba el
+    manifiesto sin `cohorte`, y el arranque siguiente aceptaba otra frontera
+    sobre el mismo estado. Ahora se persiste antes del ledger y de todo
+    almacén."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    _sin_guardia_arbol(monkeypatch)
     head = _head_o_skip()
     d = str(tmp_path / "estado"); lr = str(tmp_path / "l.jsonl")
-    base = dict(mercados=("BTCUSDT",), hasta=0, estado_dir=d, commit=head,
-                ledger_ruta=lr, bootstrap_hasta=1)
-    assert R.identidad_cohorte(("BTCUSDT",), head, 1, lr, True) != \
-        R.identidad_cohorte(("BTCUSDT",), head, 1, lr, False)
-    R.correr(permitir_arbol_sucio=True, **base)
+
+    def cae(*a, **k):                       # el arranque muere construyendo
+        raise FileNotFoundError("snapshot fuente ausente para BTCUSDT_4h")
+
+    monkeypatch.setattr(R, "construir_almacenes", cae)
+    with pytest.raises(FileNotFoundError):
+        R.correr(mercados=("BTCUSDT",), hasta=0, estado_dir=d, commit=head,
+                 ledger_ruta=lr, bootstrap_hasta=111)
+    monkeypatch.undo()
+    _sin_guardia_arbol(monkeypatch)
     crudo = json.load(open(os.path.join(d, R.MANIFIESTO), encoding="utf-8"))
-    assert crudo["cohorte"]["arbol_sucio"] is True     # queda marcado
-    # el mismo estado NO puede continuarse fingiendo que el árbol estaba limpio
+    assert crudo["cohorte"]["bootstrap_hasta"] == 111   # sobrevivió a la caída
+    # y por eso el arranque siguiente NO puede cambiar la frontera
     with pytest.raises(ValueError, match="identidad de la cohorte"):
-        R.validar_cohorte(d, R.identidad_cohorte(("BTCUSDT",), head, 1, lr,
-                                                 False))
+        R.correr(mercados=("BTCUSDT",), hasta=0, estado_dir=d, commit=head,
+                 ledger_ruta=lr, bootstrap_hasta=222)
