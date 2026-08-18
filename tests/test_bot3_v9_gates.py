@@ -685,14 +685,83 @@ def test_b2_orden_viva_cierra_en_el_deadline_exacto():
     assert st.estado == "flat"
 
 
-def test_b2_historia_previa_al_recorte_cuenta():
-    """P1-b: la ventana recortada ya no existe. Con la época completa la
-    toma se detecta; con un prefijo que excluye el swing, no."""
+def _epoca_swing_lejano():
+    """Época donde el ÚNICO swing barrible está a 14 velas del toque:
+    swing low → subida MONÓTONA de 16 velas (sin pivotes) → toque →
+    barrido de ese low → swing high → retroceso con vela opuesta →
+    iBOS con cuerpo. Con el recorte viejo (`j_toque − 12`) ese swing queda
+    fuera y no habría toma; con la época causal completa, sí."""
+    velas = []
+    for i in range(PAD):
+        b = 20.0 - i * 0.05
+        velas.append(vela(i * DUR, b, b + 0.02, b - 0.06, b - 0.04))
+    patron = [
+        (10.55, 10.60, 10.30, 10.35), (10.35, 10.40, 9.60, 9.65),
+        (9.65, 9.70, 8.80, 8.85), (8.85, 8.90, 8.40, 8.45),
+        (8.45, 8.50, 8.00, 8.10),                      # 4: SWING LOW 8.00
+    ]
+    lo = 8.05
+    for _ in range(16):                                # 5..20: subida monótona
+        lo += 0.10
+        patron.append((lo, lo + 0.12, lo - 0.02, lo + 0.10))
+    patron.append((lo + 0.10, lo + 0.15, 7.90, lo + 0.05))          # 21: BARRIDO
+    patron += [(lo + 0.05, lo + 0.30, lo + 0.00, lo + 0.25),
+               (lo + 0.25, lo + 0.50, lo + 0.20, lo + 0.45)]
+    top = lo + 0.45
+    patron += [(top, top + 0.60, top - 0.05, top + 0.50),           # 24: SWING HIGH
+               (top + 0.50, top + 0.55, top + 0.20, top + 0.25),
+               (top + 0.25, top + 0.30, top + 0.05, top + 0.10),
+               (top + 0.10, top + 0.15, top - 0.02, top - 0.01),    # 27: opuesta → OB
+               (top - 0.01, top + 0.25, top + 0.00, top + 0.20),
+               (top + 0.20, top + 0.45, top + 0.15, top + 0.40),
+               (top + 0.40, top + 0.65, top + 0.35, top + 0.60),
+               (top + 0.60, top + 1.30, top + 0.55, top + 1.20),    # 31: iBOS
+               (top + 1.20, top + 1.50, top + 1.15, top + 1.45),
+               (top + 1.45, top + 1.75, top + 1.40, top + 1.70)]
+    for i, pr in enumerate(patron):
+        velas.append(vela((PAD + i) * DUR, *pr))
+    return velas
+
+
+def test_b2_historia_lejana_cuenta_en_el_motor():
+    """P1-b vía MOTOR: con el swing barrible a 14 velas del toque,
+    `_par_ganador` encuentra el par. Emulando el recorte viejo
+    (`j_toque − 4·INT_PIV`) NO lo encontraría — el gate discrimina."""
     from modules.bot3.v9 import primitives as P
-    ep = _epoca_confirmacion()
-    assert P.primera_toma(ep, PAD, len(ep), largo=True) == J_TOMA
-    recorte = ep[J_TOMA - 2:]                    # excluye el swing low
-    assert P.primera_toma(recorte, 0, len(recorte), largo=True) != 2
+    ep = _epoca_swing_lejano()
+    j_toque = PAD + 18
+    motor, _ = _motor_con(ep)
+    st = _candidato(motor.estados["BTCUSDT"], ep, j_toque=j_toque, weak=30.0)
+    par = motor._par_ganador(ep, len(ep), st.candidato)
+    assert par is not None, "la época causal completa debe hallar el par"
+    # Emulación EXACTA del recorte eliminado: la toma desaparece.
+    ini = j_toque - 4 * C.INT_PIV
+    seg = ep[ini:len(ep)]
+    assert P.primera_toma(seg, j_toque - ini, len(seg), largo=True) is None
+
+
+def test_b2_order_id_del_motor_usa_order_available_at():
+    """P2 vía MOTOR: el `order_id` EMITIDO se construye con
+    `order_available_at` (cierre del iBOS), no con `zone_formation_at`."""
+    ep = _epoca_swing_lejano()
+    motor, led = _motor_con(ep)
+    st = _candidato(motor.estados["BTCUSDT"], ep, j_toque=PAD + 18, weak=30.0)
+    cid = st.candidato["candidate_id"]
+    par = motor._par_ganador(ep, len(ep), st.candidato)
+    assert par is not None
+    _Ev, _Sv, deriv = par
+    T = int(ep[-1]["t"]) + DUR
+    motor._fase7a("BTCUSDT", T, T, ep, len(ep), CALC_OK, st)
+    emitidos = [e for e in led.eventos if e["tipo"] == "orden_creada"]
+    assert len(emitidos) == 1
+    esperado = C.order_id(cid, deriv["order_available_at"],
+                          deriv["lo"], deriv["hi"])
+    con_formacion = C.order_id(cid, deriv["zone_formation_at"],
+                               deriv["lo"], deriv["hi"])
+    assert emitidos[0]["id"] == esperado
+    assert emitidos[0]["id"] != con_formacion
+    assert emitidos[0]["order_available_at"] == deriv["order_available_at"]
+    assert emitidos[0]["zone_formation_at"] == deriv["zone_formation_at"]
 
 
 def test_b2_dos_ibos_misma_caja_producen_order_id_distintos():

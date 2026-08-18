@@ -575,8 +575,12 @@ class Motor:
             if deriv is None:
                 continue                            # se descarta y sigue
             E = Q(deriv["hi"] if largo else deriv["lo"])
-            extremo = min(v["l"] for v in seg[e["j"]:]) if largo \
-                else max(v["h"] for v in seg[e["j"]:])
+            # SL = extremo de la REACCIÓN que originó el iBOS, es decir del
+            # DESPLAZAMIENTO [j_origen, j_ibos] (no del tramo posterior al
+            # iBOS, que dejaba el stop del lado equivocado de la entrada).
+            tramo = seg[deriv["j_origen"]:e["j"] + 1]
+            extremo = min(v["l"] for v in tramo) if largo \
+                else max(v["h"] for v in tramo)
             S = Q(extremo * (1 - SL_BUFFER)) if largo \
                 else Q(extremo * (1 + SL_BUFFER))
             return E, S, deriv
