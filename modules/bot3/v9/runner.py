@@ -54,6 +54,28 @@ def validar_commit(commit: str, root: str) -> str:
     return commit
 
 
+ALCANCE_CODIGO = "modules/bot3/v9"
+
+
+def validar_arbol_limpio(root: str, alcance: str = ALCANCE_CODIGO) -> None:
+    """CF-28: el commit debe autenticar el CÓDIGO EJECUTADO.
+
+    Verificar que el argumento es el HEAD no basta: el árbol de trabajo puede
+    tener cambios sin commitear en el alcance de Bot3, y entonces el libro lo
+    produce código que ese commit no describe."""
+    if not _hay_git(root):
+        return
+    import subprocess
+    r = subprocess.run(["git", "-C", root, "status", "--porcelain", "--",
+                        alcance], capture_output=True, text=True)
+    sucio = [l for l in r.stdout.splitlines() if l.strip()]
+    if sucio:
+        raise ValueError(
+            f"el árbol de {alcance} tiene cambios sin commitear: el commit "
+            f"no autentica el código ejecutado — "
+            f"{', '.join(l[3:] for l in sucio[:4])}")
+
+
 def blob_en_commit(root: str, commit: str, ruta: str) -> str | None:
     """SHA del blob que ese commit tiene en `ruta` (None si no lo contiene)."""
     import subprocess
@@ -170,21 +192,28 @@ def escribir_manifiesto(estado_dir: str, almacenes: dict,
     idempotente si el proceso cayó entre la creación y el append al
     ledger."""
     os.makedirs(estado_dir, exist_ok=True)
-    with open(os.path.join(estado_dir, MANIFIESTO), "w", encoding="utf-8") as fh:
-        previo = {}
-        ruta_m = os.path.join(estado_dir, MANIFIESTO)
-        cuerpo = {"almacenes": almacenes}
-        if cohorte is not None:
-            cuerpo["cohorte"] = cohorte
-        elif os.path.exists(ruta_m):
-            try:
-                with open(ruta_m, encoding="utf-8") as prev:
-                    previo = json.load(prev)
-            except (OSError, json.JSONDecodeError):
-                previo = {}
-            if previo.get("cohorte"):
-                cuerpo["cohorte"] = previo["cohorte"]
+    ruta_m = os.path.join(estado_dir, MANIFIESTO)
+    # Se lee ANTES de tocar el archivo: abrirlo en modo "w" lo truncaba y la
+    # cohorte que se pretendía conservar ya no estaba.
+    previo = {}
+    if os.path.exists(ruta_m):
+        try:
+            with open(ruta_m, encoding="utf-8") as fh:
+                previo = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            previo = {}
+    cuerpo = {"almacenes": almacenes}
+    conservada = cohorte if cohorte is not None else previo.get("cohorte")
+    if conservada:
+        cuerpo["cohorte"] = conservada
+    # Escritura ATÓMICA: temporal + fsync + replace. Un fallo a mitad no puede
+    # dejar un manifiesto truncado o sin cohorte.
+    tmp = ruta_m + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(cuerpo, fh, sort_keys=True, separators=(",", ":"))
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, ruta_m)
 
 
 PARAMS_CONGELADOS = ("GENESIS_H4", "EPOCA_M15_MIN_VELAS", "WATERMARK_LOCAL_N",
@@ -203,13 +232,21 @@ def huella_parametros() -> str:
     return sha256_hex(canon({k: getattr(CT, k) for k in PARAMS_CONGELADOS}))
 
 
-def identidad_cohorte(mercados, commit: str, bootstrap_hasta, ledger_ruta):
+def identidad_cohorte(mercados, commit: str, bootstrap_hasta, ledger_ruta,
+                      arbol_sucio: bool = False):
     """Identidad que define ESTA cohorte. Cambiar cualquiera de estos
-    valores es una cohorte distinta (CF-11/CF-21)."""
+    valores es una cohorte distinta (CF-11/CF-21).
+
+    `arbol_sucio` viaja en la identidad a propósito: si alguien alguna vez
+    corrió con el guardia de árbol limpio desactivado, la cohorte queda
+    marcada para siempre y NO puede después presentarse como una cohorte con
+    ancla de código auténtica. La salida de la excepción es visible, no
+    silenciosa."""
     return {"contrato": CONTRATO_HASH, "commit": commit,
             "universo": sorted(mercados),
             "bootstrap_hasta": bootstrap_hasta,
             "ledger_ruta": ledger_ruta,
+            "arbol_sucio": bool(arbol_sucio),
             "parametros_sha": huella_parametros()}
 
 
@@ -345,6 +382,7 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
             if reg_hueco is None:
                 break
             huecos.append((mercado, reg_hueco))
+        alm.huecos_declarados = [h for m, h in huecos if m == mercado]
         almacenes[mercado] = alm
     if estado_dir:
         for nombre, prov in registro.items():        # B4: head vigente
@@ -366,12 +404,6 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                           snapshot_sha256=prov.get("snapshot_sha256"),
                           commit_snapshot=prov.get("commit_snapshot"),
                           hash_acum_inicial=prov.get("hash_acum_inicial"))
-        for mercado, reg_h in huecos:        # CF-31/CF-37: hueco al ledger
-            ledger.append("hueco_detectado", mercado=mercado, tf=tf,
-                          desde=reg_h["desde"], hasta=reg_h["hasta"],
-                          effective_at=reg_h["desde"],
-                          finalized_at=reg_h["detected_at"],
-                          motivo="local", detected_at=reg_h["detected_at"])
         for alm in almacenes.values():       # CF-26: incidencias de ingestión
             for inc in alm.incidencias:
                 ledger.append(inc["tipo"], mercado=inc["mercado"],
@@ -387,7 +419,8 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
            bootstrap_hasta: int | None = None,
            reloj_ms: int | None = None,
            estado_dir: str | None = None,
-           permitir_snapshot_externo: bool = False) -> tuple[Motor, Ledger]:
+           permitir_snapshot_externo: bool = False,
+           permitir_arbol_sucio: bool = False) -> tuple[Motor, Ledger]:
     """Corre el motor por lotes globales de `close_time` M15.
 
     Con `estado_dir`, los almacenes se PERSISTEN y se rehidratan en el
@@ -395,6 +428,27 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
     en vez de reconstruirlo."""
     identidad = None
     if estado_dir:
+        # MODO PERSISTENTE (cohorte real): prohibido todo lo que produzca una
+        # historia distinta bajo la misma identidad.
+        if limite is not None:
+            raise ValueError(
+                "`limite` está prohibido con `estado_dir`: recorta el "
+                "almacén y produce una historia distinta bajo la misma "
+                "identidad de cohorte")
+        if desde is not None:
+            raise ValueError(
+                "`desde` está prohibido con `estado_dir`: saltarse lotes "
+                "impide reconstruir causalmente el estado del motor")
+        if bootstrap_hasta is None:
+            raise ValueError(
+                "una cohorte forward exige `bootstrap_hasta` (T_frontera): "
+                "sin frontera no hay separación backtest/forward")
+        if ledger_ruta is None:
+            raise ValueError(
+                "con `estado_dir` hay que persistir el ledger "
+                "(`ledger_ruta`): si no, la cohorte no sobrevive al reinicio")
+        if not permitir_arbol_sucio:
+            validar_arbol_limpio(ROOT)
         # Un ancla de provenance tiene que ser un commit Git real y el HEAD
         # ejecutado (CF-28), validado contra el repositorio del CÓDIGO.
         validar_commit(commit, ROOT)
@@ -402,7 +456,7 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
         # ledger, para que un reinicio con otra configuración no alcance a
         # escribir nada.
         identidad = identidad_cohorte(mercados, commit, bootstrap_hasta,
-                                      ledger_ruta)
+                                      ledger_ruta, permitir_arbol_sucio)
         validar_cohorte(estado_dir, identidad)
     led = Ledger(ledger_ruta, commit=commit)
     # El commit del despliegue SÍ viaja a la construcción: es lo que activa
@@ -416,6 +470,22 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
         escribir_manifiesto(estado_dir, leer_manifiesto(estado_dir), identidad)
     mercados_ok = tuple(sorted(set(m15) & set(h4)))
     motor = Motor(m15, h4, mercados_ok, led, bootstrap_hasta=bootstrap_hasta)
+    # CF-31/CF-34: los huecos LOCALES declarados al ingerir se emiten por la
+    # vía canónica del motor, para que lleven heads, commit y processed_at
+    # como cualquier otro evento causal (antes se escribían directo al
+    # ledger y les faltaba toda esa provenance).
+    motor.iniciar_ciclo()
+    try:
+        for tf_h, almacenes_tf in (("15m", m15), ("4h", h4)):
+            for mercado in mercados_ok:
+                for h in getattr(almacenes_tf[mercado], "huecos_declarados", []):
+                    motor._emit("hueco_detectado", h["detected_at"], mercado,
+                                finalized_at=h["detected_at"],
+                                efectivo=h["desde"], tf=tf_h,
+                                desde=h["desde"], hasta=h["hasta"],
+                                motivo="local", detected_at=h["detected_at"])
+    finally:
+        motor.finalizar_ciclo()
     cierres = sorted({int(v["t"]) + DUR_M15
                       for m in mercados_ok for v in m15[m].velas})
     for T in cierres:
