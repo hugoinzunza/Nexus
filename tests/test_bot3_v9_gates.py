@@ -1552,7 +1552,11 @@ def test_b6_manifiesto_distingue_las_tres_situaciones(tmp_path):
     # el manifiesto GUARDA la provenance para poder reemitir el nacimiento
     prov = manif["BTCUSDT_15m"]
     assert prov["snapshot_sha256"] and prov["hash_acum_inicial"] == S.SEMILLA
-    assert [e["tipo"] for e in led.eventos] == ["nacimiento"]
+    # con `limite` el ancla queda antes de las velas ofrecidas: además del
+    # nacimiento se declara (y ahora se REGISTRA) el hueco local
+    tipos = [e["tipo"] for e in led.eventos]
+    assert tipos.count("nacimiento") == 1
+    assert set(tipos) <= {"nacimiento", "hueco_detectado"}
     b = R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
                               estado_dir=d)["BTCUSDT"]
     assert a.head == b.head                       # recuperación fiel
@@ -1601,24 +1605,28 @@ def test_b6_snapshot_alterado_bloquea_la_recuperacion(tmp_path):
     filas = json.load(open(origen, encoding="utf-8"))[:300]
     json.dump(filas, open(dest, "w", encoding="utf-8"))
     d = str(tmp_path / "estado")
-    R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d, ledger=L())
+    R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d, ledger=L(),
+                          permitir_snapshot_externo=True)
     # (a) snapshot alterado
     alterado = [dict(f) for f in filas]
     alterado[10]["c"] = alterado[10]["c"] + 1.0
     json.dump(alterado, open(dest, "w", encoding="utf-8"))
     with pytest.raises(ValueError, match="cambió desde el nacimiento"):
-        R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d)
+        R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d,
+                              permitir_snapshot_externo=True)
     # (b) commit distinto
     json.dump(filas, open(dest, "w", encoding="utf-8"))
     with pytest.raises(ValueError, match="commit del snapshot"):
         R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d,
-                              commit_snapshot="otro")
+                              commit_snapshot="otro",
+                              permitir_snapshot_externo=True)
     # (c) provenance incompleta
     manif = R.leer_manifiesto(d)
     manif["BTCUSDT_15m"].pop("snapshot_sha256")
     R.escribir_manifiesto(d, manif)
     with pytest.raises(ValueError, match="provenance incompleta"):
-        R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d)
+        R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d,
+                              permitir_snapshot_externo=True)
 
 
 def test_b6_dedupe_falla_con_payload_incompatible():
@@ -1671,10 +1679,133 @@ def test_b6_correr_activa_la_verificacion_de_commit(tmp_path):
                  commit="0" * 40)
     # HEAD real: crea y luego recupera bien
     R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
-             commit=head)
+             commit=head, permitir_snapshot_externo=True)
     R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
-             commit=head)
-    # otro commit REAL distinto: la recuperación lo rechaza
+             commit=head, permitir_snapshot_externo=True)
+    # un commit real PERO distinto del HEAD ejecutado: rechazado
+    with pytest.raises(ValueError, match="no es el HEAD ejecutado"):
+        R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
+                 commit=previo, permitir_snapshot_externo=True)
+    # y si el manifiesto registró OTRO commit, la recuperación lo rechaza
+    manif = R.leer_manifiesto(d)
+    manif["BTCUSDT_15m"]["commit_snapshot"] = previo
+    R.escribir_manifiesto(d, manif)
     with pytest.raises(ValueError, match="commit del snapshot"):
         R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
-                 commit=previo)
+                 commit=head, permitir_snapshot_externo=True)
+
+
+# ------------------------- Re-auditoría integrada B-2..B-6 ---------------
+def _head_o_skip():
+    import pytest
+    from modules.bot3.v9 import runner as R
+    head = R.commit_actual(R.ROOT)
+    if head is None:
+        pytest.skip("runtime sin metadata Git")
+    return head
+
+
+def test_int_commit_debe_ser_head_y_contener_el_snapshot(tmp_path):
+    """CF-28: el commit no solo debe existir — debe ser el HEAD ejecutado y
+    CONTENER el snapshot con esos bytes exactos."""
+    import pytest
+    from modules.bot3.v9 import runner as R
+    head = _head_o_skip()
+    vacio = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"   # árbol vacío de Git
+    with pytest.raises(ValueError):
+        R.correr(mercados=("BTCUSDT",), hasta=0,
+                 estado_dir=str(tmp_path / "e1"), commit=vacio)
+    ruta = R.ruta_snapshot(R.ROOT, "BTCUSDT", "15m")
+    if os.path.exists(ruta):
+        assert R.blob_en_commit(R.ROOT, head, ruta) == \
+            R.blob_del_archivo(R.ROOT, ruta)
+        # sin metadata Git y sin opt-out explícito, no se autentica en silencio
+        with pytest.raises(ValueError, match="permitir_snapshot_externo"):
+            R.validar_snapshot_en_commit(str(tmp_path), head, ruta)
+
+
+def test_int_identidad_de_cohorte_falla_antes_de_escribir(tmp_path):
+    """La identidad (contrato, universo, frontera, params, ledger) se valida
+    ANTES del primer append: un reinicio con otra frontera no puede dejar
+    una segunda `frontera` en el ledger."""
+    import pytest
+    from modules.bot3.v9 import runner as R
+    head = _head_o_skip()
+    d = str(tmp_path / "estado"); lr = str(tmp_path / "l.jsonl")
+    R.correr(mercados=("BTCUSDT",), hasta=0, estado_dir=d, commit=head,
+             ledger_ruta=lr, bootstrap_hasta=111)
+    antes = open(lr, encoding="utf-8").read()
+    with pytest.raises(ValueError, match="identidad de la cohorte"):
+        R.correr(mercados=("BTCUSDT",), hasta=0, estado_dir=d, commit=head,
+                 ledger_ruta=lr, bootstrap_hasta=222)
+    assert open(lr, encoding="utf-8").read() == antes      # ledger intacto
+    with pytest.raises(ValueError, match="identidad de la cohorte"):
+        R.correr(mercados=("BTCUSDT", "ETHUSDT"), hasta=0, estado_dir=d,
+                 commit=head, ledger_ruta=lr, bootstrap_hasta=111)
+
+
+def test_int_universo_no_se_reduce_en_silencio(tmp_path):
+    """Ni en el PRIMER arranque: si falta el snapshot de un mercado del
+    universo declarado, se falla cerrado."""
+    import pytest
+    import shutil
+    from modules.bot3.v9 import runner as R
+    raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
+    src = R.ruta_snapshot(R.ROOT, "BTCUSDT", "15m")
+    if not os.path.exists(src):
+        pytest.skip("sin klines versionadas")
+    shutil.copy(src, R.ruta_snapshot(raiz, "BTCUSDT", "15m"))
+    with pytest.raises(FileNotFoundError, match="universo"):
+        R.construir_almacenes(raiz, ("BTCUSDT", "ETHUSDT"), "15m",
+                              exigir_universo=True)
+    # sin exigir universo (uso de laboratorio) sigue siendo permisivo
+    assert set(R.construir_almacenes(raiz, ("BTCUSDT", "ETHUSDT"), "15m")) == \
+        {"BTCUSDT"}
+
+
+def test_int_almacenes_intercambiados_son_rechazados(tmp_path):
+    """Un almacén sellado no dice a qué mercado pertenece: el manifiesto
+    registra su `head` y la recuperación lo exige. Intercambiar BTC y ETH
+    debe fallar (antes se aceptaba historia cruzada)."""
+    import pytest
+    import shutil
+    from modules.bot3.v9 import runner as R
+    head = _head_o_skip()
+    d = str(tmp_path / "estado")
+    R.correr(mercados=("BTCUSDT", "ETHUSDT"), hasta=0, estado_dir=d,
+             commit=head)
+    a = R.ruta_estado(d, "BTCUSDT", "15m")
+    b = R.ruta_estado(d, "ETHUSDT", "15m")
+    tmp = str(tmp_path / "swap")
+    shutil.copy(a, tmp); shutil.copy(b, a); shutil.copy(tmp, b)
+    with pytest.raises(ValueError, match="no corresponde"):
+        R.correr(mercados=("BTCUSDT", "ETHUSDT"), hasta=0, estado_dir=d,
+                 commit=head)
+
+
+def test_int_hueco_local_llega_al_ledger(tmp_path):
+    """CF-31/CF-37: un marcador de hueco LOCAL creado al ingerir debe
+    aparecer como `hueco_detectado` en el ledger (antes solo existía en el
+    almacén y la trazabilidad se rompía)."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    from modules.bot3.v9.ledger import Ledger as L
+    src = R.ruta_snapshot(R.ROOT, "BTCUSDT", "15m")
+    if not os.path.exists(src):
+        pytest.skip("sin klines versionadas")
+    raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
+    filas = json.load(open(src, encoding="utf-8"))[:300]
+    del filas[100]                                   # hueco artificial
+    json.dump(filas, open(R.ruta_snapshot(raiz, "BTCUSDT", "15m"), "w",
+                          encoding="utf-8"))
+    led = L()
+    alms = R.construir_almacenes(raiz, ("BTCUSDT",), "15m", ledger=led,
+                                 estado_dir=str(tmp_path / "e"),
+                                 permitir_snapshot_externo=True)
+    gaps = [r for r in alms["BTCUSDT"].registros if r["tipo"] == "gap"]
+    evs = [e for e in led.eventos if e["tipo"] == "hueco_detectado"]
+    assert len(gaps) == 1 and len(evs) == 1
+    assert evs[0]["motivo"] == "local"
+    assert evs[0]["desde"] == gaps[0]["desde"]
+    assert evs[0]["finalized_at"] == gaps[0]["detected_at"]

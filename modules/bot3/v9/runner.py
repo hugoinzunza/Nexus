@@ -10,7 +10,8 @@ import json
 import os
 
 from . import store as S
-from .contract import GENESIS_H4, MERCADOS, TF_MS
+from . import contract as CT
+from .contract import CONTRATO_HASH, GENESIS_H4, MERCADOS, TF_MS, canon, sha256_hex
 from .engine import DUR_M15, Motor
 from .ledger import Ledger
 
@@ -43,7 +44,58 @@ def validar_commit(commit: str, root: str) -> str:
         if r.returncode != 0:
             raise ValueError(
                 f"`commit` {commit} no existe como commit en {root}")
+        head = commit_actual(root)
+        if head is not None and head != commit:
+            # El ancla debe ser el codigo EJECUTADO, no cualquier commit del
+            # historial: si no, un commit antiguo (que ni siquiera contiene el
+            # snapshot) podria anclar el estado.
+            raise ValueError(
+                f"`commit` {commit} no es el HEAD ejecutado ({head})")
     return commit
+
+
+def blob_en_commit(root: str, commit: str, ruta: str) -> str | None:
+    """SHA del blob que ese commit tiene en `ruta` (None si no lo contiene)."""
+    import subprocess
+    rel = os.path.relpath(ruta, root)
+    r = subprocess.run(["git", "-C", root, "rev-parse", f"{commit}:{rel}"],
+                       capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def blob_del_archivo(root: str, ruta: str) -> str | None:
+    import subprocess
+    r = subprocess.run(["git", "-C", root, "hash-object", ruta],
+                       capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def validar_snapshot_en_commit(root: str, commit: str, ruta: str,
+                               permitir_externo: bool = False) -> None:
+    """CF-28: los BYTES del snapshot deben corresponder a ese commit.
+
+    Verificar que el commit existe no basta: debe CONTENER el snapshot y su
+    contenido debe coincidir. Si el snapshot vive fuera del repositorio, la
+    verificación es imposible y se exige `permitir_externo` explícito — nunca
+    se omite en silencio."""
+    if not _hay_git(root):
+        if not permitir_externo:
+            raise ValueError(
+                f"sin metadata Git en {root} no se puede autenticar "
+                f"{ruta}; pasar `permitir_snapshot_externo=True` si el "
+                f"build lo verifica por fuera")
+        return
+    esperado = blob_en_commit(root, commit, ruta)
+    if esperado is None:
+        if permitir_externo:
+            return
+        raise ValueError(
+            f"el commit {commit[:12]}… no contiene {ruta}")
+    actual = blob_del_archivo(root, ruta)
+    if actual != esperado:
+        raise ValueError(
+            f"los bytes de {ruta} no corresponden al commit {commit[:12]}…: "
+            f"{actual} != {esperado}")
 
 
 def _hay_git(root: str) -> bool:
@@ -111,15 +163,74 @@ def leer_manifiesto(estado_dir: str) -> dict:
     return alm if isinstance(alm, dict) else {n: {} for n in alm}
 
 
-def escribir_manifiesto(estado_dir: str, almacenes: dict) -> None:
+def escribir_manifiesto(estado_dir: str, almacenes: dict,
+                        cohorte: dict | None = None) -> None:
     """El manifiesto GUARDA la provenance de cada almacén (ancla, snapshot,
     commit y hash inicial) para poder reemitir `nacimiento` de forma
     idempotente si el proceso cayó entre la creación y el append al
     ledger."""
     os.makedirs(estado_dir, exist_ok=True)
     with open(os.path.join(estado_dir, MANIFIESTO), "w", encoding="utf-8") as fh:
-        json.dump({"almacenes": almacenes}, fh, sort_keys=True,
-                  separators=(",", ":"))
+        previo = {}
+        ruta_m = os.path.join(estado_dir, MANIFIESTO)
+        cuerpo = {"almacenes": almacenes}
+        if cohorte is not None:
+            cuerpo["cohorte"] = cohorte
+        elif os.path.exists(ruta_m):
+            try:
+                with open(ruta_m, encoding="utf-8") as prev:
+                    previo = json.load(prev)
+            except (OSError, json.JSONDecodeError):
+                previo = {}
+            if previo.get("cohorte"):
+                cuerpo["cohorte"] = previo["cohorte"]
+        json.dump(cuerpo, fh, sort_keys=True, separators=(",", ":"))
+
+
+PARAMS_CONGELADOS = ("GENESIS_H4", "EPOCA_M15_MIN_VELAS", "WATERMARK_LOCAL_N",
+                     "WATERMARK_EXCHANGE_Q", "WATERMARK_EXCHANGE_N",
+                     "STRUCT_PIV", "INT_PIV", "SWEEP_LOOKBACK_SWINGS",
+                     "DIR_EXPIRA_H4", "TTL_ZONA_H4", "DEADLINE_M15",
+                     "VENTANA_IBOS_M15", "OB_LOOKBACK", "SL_BUFFER", "RR_MIN",
+                     "FEE_MAKER", "FEE_TAKER", "SLIPPAGE_STOP", "FUNDING_RATE",
+                     "T_CORTE", "CORTE_N_CIERRES", "CORTE_MIN_SEMANAS_ISO",
+                     "CORTE_ADMIN_GRACIA_MS", "BOOTSTRAP_REPLICAS",
+                     "BOOTSTRAP_SEMILLA")
+
+
+def huella_parametros() -> str:
+    """SHA-256 de los parámetros congelados efectivos del contrato."""
+    return sha256_hex(canon({k: getattr(CT, k) for k in PARAMS_CONGELADOS}))
+
+
+def identidad_cohorte(mercados, commit: str, bootstrap_hasta, ledger_ruta):
+    """Identidad que define ESTA cohorte. Cambiar cualquiera de estos
+    valores es una cohorte distinta (CF-11/CF-21)."""
+    return {"contrato": CONTRATO_HASH, "commit": commit,
+            "universo": sorted(mercados),
+            "bootstrap_hasta": bootstrap_hasta,
+            "ledger_ruta": ledger_ruta,
+            "parametros_sha": huella_parametros()}
+
+
+def validar_cohorte(estado_dir: str, identidad: dict) -> None:
+    """FAIL-FAST: se compara ANTES de crear el ledger y de cualquier append.
+    Antes, reiniciar con otra `T_frontera` alcanzaba a escribir una segunda
+    `frontera` y dejaba el ledger modificado (fail-late)."""
+    ruta = os.path.join(estado_dir, MANIFIESTO)
+    if not os.path.exists(ruta):
+        return
+    with open(ruta, encoding="utf-8") as fh:
+        previa = json.load(fh).get("cohorte")
+    if not previa:
+        return
+    difs = sorted(k for k in set(previa) | set(identidad)
+                  if previa.get(k) != identidad.get(k))
+    if difs:
+        raise ValueError(
+            f"la identidad de la cohorte en {estado_dir} no coincide en "
+            f"{difs}: reiniciar con otra configuración sería una cohorte "
+            f"distinta")
 
 
 def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
@@ -127,7 +238,9 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                         extra: dict | None = None,
                         estado_dir: str | None = None,
                         ledger=None,
-                        commit_snapshot: str | None = None) -> dict:
+                        commit_snapshot: str | None = None,
+                        exigir_universo: bool = False,
+                        permitir_snapshot_externo: bool = False) -> dict:
     """Construye los almacenes ingiriendo el snapshot versionado (CF-28) y,
     opcionalmente, velas adicionales (push) por mercado.
 
@@ -138,6 +251,7 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
     dur = TF_MS[tf]
     declarados = leer_manifiesto(estado_dir) if estado_dir else {}
     registro: dict = dict(declarados)
+    huecos: list = []
     for mercado in mercados:
         nombre = f"{mercado}_{tf}"
         declarado = estado_dir is not None and nombre in declarados
@@ -151,6 +265,13 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                 raise FileNotFoundError(
                     f"snapshot fuente ausente para {nombre}, que el "
                     f"manifiesto de {estado_dir} declara sellado")
+            if estado_dir or exigir_universo:
+                # El universo es parte de la identidad de la cohorte: no
+                # puede pasar de 7 a 6 mercados en silencio ni en el PRIMER
+                # arranque (antes se hacía `continue`).
+                raise FileNotFoundError(
+                    f"snapshot fuente ausente para {nombre}: el universo "
+                    f"declarado exige ese mercado")
             continue
         filas = sorted(filas, key=lambda r: int(r["t"]))
         if tf == "4h":
@@ -184,8 +305,22 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                         f"commit del snapshot de {nombre} no coincide: "
                         f"{commit_snapshot} != {commit_reg} (registrado)")
             alm = S.Almacen.cargar(mercado, tf, ruta, requerido=declarado)
+            if declarado:
+                # El archivo no dice a qué mercado pertenece: se ata al head
+                # que el manifiesto registró al cerrar la corrida anterior.
+                # Sin esto, intercambiar dos almacenes sellados pasaba
+                # inadvertido (cadenas formalmente válidas, historia cruzada).
+                head_reg = declarados[nombre].get("head")
+                if head_reg and alm.head != head_reg:
+                    raise ValueError(
+                        f"el archivo de {nombre} no corresponde: head "
+                        f"{alm.head[:12]}… != {head_reg[:12]}… (registrado)")
             if not alm.registros:
                 alm.nacer_en(ancla)
+            if commit_snapshot:
+                validar_snapshot_en_commit(
+                    root, commit_snapshot, ruta_snapshot(root, mercado, tf),
+                    permitir_externo=permitir_snapshot_externo)
             if nombre not in registro:
                 snap = ruta_snapshot(root, mercado, tf)
                 registro[nombre] = {
@@ -205,10 +340,17 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
         if extra and mercado in extra:
             alm.ofrecer(extra[mercado], "push")
         alm.drenar()
-        while alm.declarar_hueco_local():
-            pass
+        while True:
+            reg_hueco = alm.declarar_hueco_local()
+            if reg_hueco is None:
+                break
+            huecos.append((mercado, reg_hueco))
         almacenes[mercado] = alm
     if estado_dir:
+        for nombre, prov in registro.items():        # B4: head vigente
+            m = prov.get("mercado")
+            if prov.get("tf") == tf and m in almacenes:
+                prov["head"] = almacenes[m].head
         escribir_manifiesto(estado_dir, registro)
     if ledger is not None:
         # CF-28: se reemite el `nacimiento` de TODO almacén del manifiesto de
@@ -224,6 +366,12 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                           snapshot_sha256=prov.get("snapshot_sha256"),
                           commit_snapshot=prov.get("commit_snapshot"),
                           hash_acum_inicial=prov.get("hash_acum_inicial"))
+        for mercado, reg_h in huecos:        # CF-31/CF-37: hueco al ledger
+            ledger.append("hueco_detectado", mercado=mercado, tf=tf,
+                          desde=reg_h["desde"], hasta=reg_h["hasta"],
+                          effective_at=reg_h["desde"],
+                          finalized_at=reg_h["detected_at"],
+                          motivo="local", detected_at=reg_h["detected_at"])
         for alm in almacenes.values():       # CF-26: incidencias de ingestión
             for inc in alm.incidencias:
                 ledger.append(inc["tipo"], mercado=inc["mercado"],
@@ -238,28 +386,34 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
            ledger_ruta: str | None = None, commit: str = "dev",
            bootstrap_hasta: int | None = None,
            reloj_ms: int | None = None,
-           estado_dir: str | None = None) -> tuple[Motor, Ledger]:
+           estado_dir: str | None = None,
+           permitir_snapshot_externo: bool = False) -> tuple[Motor, Ledger]:
     """Corre el motor por lotes globales de `close_time` M15.
 
     Con `estado_dir`, los almacenes se PERSISTEN y se rehidratan en el
     siguiente arranque (B-6): un reinicio real reutiliza el push ya sellado
     en vez de reconstruirlo."""
+    identidad = None
     if estado_dir:
-        # Un ancla de provenance tiene que ser un commit Git real: un
-        # placeholder (o cualquier texto) volvería inservible la
-        # verificación CF-28 al recuperar.
-        # Se valida contra el repositorio del CÓDIGO (ROOT): el commit ancla
-        # la versión que produjo el snapshot, no el directorio de datos.
+        # Un ancla de provenance tiene que ser un commit Git real y el HEAD
+        # ejecutado (CF-28), validado contra el repositorio del CÓDIGO.
         validar_commit(commit, ROOT)
+        # FAIL-FAST: la identidad de la cohorte se compara ANTES de crear el
+        # ledger, para que un reinicio con otra configuración no alcance a
+        # escribir nada.
+        identidad = identidad_cohorte(mercados, commit, bootstrap_hasta,
+                                      ledger_ruta)
+        validar_cohorte(estado_dir, identidad)
     led = Ledger(ledger_ruta, commit=commit)
     # El commit del despliegue SÍ viaja a la construcción: es lo que activa
     # la verificación CF-28 en la ruta productiva.
-    m15 = construir_almacenes(root, mercados, "15m", limite,
-                              estado_dir=estado_dir, ledger=led,
-                              commit_snapshot=commit)
-    h4 = construir_almacenes(root, mercados, "4h", limite,
-                             estado_dir=estado_dir, ledger=led,
-                             commit_snapshot=commit)
+    comun = dict(estado_dir=estado_dir, ledger=led, commit_snapshot=commit,
+                 exigir_universo=True,
+                 permitir_snapshot_externo=permitir_snapshot_externo)
+    m15 = construir_almacenes(root, mercados, "15m", limite, **comun)
+    h4 = construir_almacenes(root, mercados, "4h", limite, **comun)
+    if estado_dir and identidad is not None:
+        escribir_manifiesto(estado_dir, leer_manifiesto(estado_dir), identidad)
     mercados_ok = tuple(sorted(set(m15) & set(h4)))
     motor = Motor(m15, h4, mercados_ok, led, bootstrap_hasta=bootstrap_hasta)
     cierres = sorted({int(v["t"]) + DUR_M15
