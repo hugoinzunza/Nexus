@@ -102,6 +102,27 @@ class Ledger:
     def por_tipo(self, tipo: str) -> list[dict]:
         return [e for e in self.eventos if e["tipo"] == tipo]
 
+    def tiene_hueco_exchange(self, mercado: str, desde: int) -> bool:
+        """¿Este marcador exchange YA está documentado en el libro?
+
+        Se consulta por (mercado, desde) y NO por `event_id`: el evento
+        original pudo emitirse en un `T` que la recuperación no puede
+        re-derivar, y reponerlo entonces duplicaría el hueco en vez de
+        completarlo."""
+        return any(e["tipo"] == "hueco_detectado"
+                   and e.get("motivo") == "exchange"
+                   and e.get("mercado") == mercado
+                   and e.get("desde") == int(desde)
+                   for e in self.eventos)
+
+    def tiene_degradacion(self, mercado: str, detected_at: int) -> bool:
+        """¿La degradación de ESTE marcador ya está en el libro? Se consulta
+        por `detected_at`, que sí es recuperable del marcador sellado."""
+        return any(e["tipo"] == "mercado_degradado"
+                   and e.get("mercado") == mercado
+                   and e.get("detected_at") == int(detected_at)
+                   for e in self.eventos)
+
     def cierres(self) -> list[dict]:
         return self.por_tipo("cerrado")
 

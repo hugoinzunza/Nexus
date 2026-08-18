@@ -2020,3 +2020,125 @@ def test_int_la_cohorte_se_persiste_antes_que_cualquier_almacen(monkeypatch,
     with pytest.raises(ValueError, match="identidad de la cohorte"):
         R.correr(mercados=("BTCUSDT",), hasta=0, estado_dir=d, commit=head,
                  ledger_ruta=lr, bootstrap_hasta=222)
+
+
+def _limpio(ev):
+    """Evento sin telemetría (CF-34): lo que debe coincidir vivo vs replay."""
+    return {k: v for k, v in ev.items() if k not in ("processed_at", "commit")}
+
+
+def test_int_marcador_exchange_se_recupera_en_toda_la_matriz_de_caidas():
+    """Blocker exchange: en un reinicio sobre un almacén que ya contiene un
+    gap `exchange`, `watermark_exchange` omite el mercado porque el lote ya
+    está cubierto — y el mercado volvía a `degradado=False` con sus eventos
+    perdidos. Se cubre la matriz completa de caídas."""
+    t0 = C.GENESIS_H4 + 400 * C.TF_MS["4h"]
+    DUR = C.TF_MS["15m"]
+    motor, led = _mundo_epoca_habilitada(t0=t0)
+    T = t0 + 201 * DUR
+    assert motor.watermark_exchange(T) == ["BTCUSDT"]        # camino VIVO
+    assert motor.estados["BTCUSDT"].degradado is True
+    vivos = [_limpio(e) for e in led.eventos
+             if e["tipo"] in ("hueco_detectado", "mercado_degradado")]
+    assert [e["tipo"] for e in vivos] == ["hueco_detectado",
+                                          "mercado_degradado"]
+    reg = [r for r in motor.m15["BTCUSDT"].registros if r["tipo"] == "gap"][-1]
+    assert reg["desde"] == T - DUR          # el T normativo es derivable
+
+    # Matriz: qué alcanzó a escribirse antes de la caída.
+    matriz = {
+        "nada": [],                                        # sella y muere
+        "solo_hueco": ["hueco_detectado"],                 # muere entre ambos
+        "ambos": ["hueco_detectado", "mercado_degradado"],  # muere después
+    }
+    for caso, escritos in matriz.items():
+        led2 = Ledger()
+        for e in led.eventos:
+            if e["tipo"] in ("hueco_detectado", "mercado_degradado") \
+                    and e["tipo"] not in escritos:
+                continue
+            led2.eventos.append(dict(e)); led2._ids.add(e["event_id"])
+        m2 = E.Motor(motor.m15, motor.h4, motor.mercados, led2,
+                     bootstrap_hasta=motor.bootstrap_hasta)
+        assert m2.estados["BTCUSDT"].degradado is False     # arranca sano
+        m2.iniciar_ciclo()
+        try:
+            assert m2.recuperar_exchange(T) == ["BTCUSDT"], caso
+        finally:
+            m2.finalizar_ciclo()
+        # 1) el ESTADO del motor queda como en vivo
+        assert m2.estados["BTCUSDT"].degradado is True, caso
+        # 2) y el LIBRO queda idéntico al vivo, sin duplicar ni faltar
+        rec = [_limpio(e) for e in led2.eventos
+               if e["tipo"] in ("hueco_detectado", "mercado_degradado")]
+        assert rec == vivos, caso
+        # 3) el watermark ya no tiene nada que hacer (lote cubierto)
+        m2.iniciar_ciclo()
+        try:
+            assert m2.watermark_exchange(T) == []
+        finally:
+            m2.finalizar_ciclo()
+        assert [_limpio(e) for e in led2.eventos
+                if e["tipo"] in ("hueco_detectado",
+                                 "mercado_degradado")] == vivos, caso
+
+
+def test_int_la_recuperacion_exchange_no_altera_el_camino_vivo():
+    """`recuperar_exchange` corre ANTES del watermark en cada lote: en una
+    corrida en vivo el marcador todavía no existe, así que debe ser un no-op
+    exacto — no puede degradar ni emitir nada por su cuenta."""
+    t0 = C.GENESIS_H4 + 400 * C.TF_MS["4h"]
+    DUR = C.TF_MS["15m"]
+    motor, led = _mundo_epoca_habilitada(t0=t0)
+    T = t0 + 201 * DUR
+    motor.iniciar_ciclo()
+    try:
+        assert motor.recuperar_exchange(T) == []      # sin marcador: no-op
+    finally:
+        motor.finalizar_ciclo()
+    assert led.eventos == [] or all(
+        e["tipo"] not in ("hueco_detectado", "mercado_degradado")
+        for e in led.eventos)
+    assert motor.estados["BTCUSDT"].degradado is False
+
+
+def test_int_el_runner_recupera_antes_de_evaluar_el_lote(monkeypatch, tmp_path):
+    """El cableado importa tanto como el método: la recuperación debe correr
+    ANTES de `lote_finalizable`/`watermark_exchange`, o el lote se evaluaría
+    con el mercado indebidamente sano."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    from modules.bot3.v9 import engine as EE
+    _sin_guardia_arbol(monkeypatch)
+    head = _head_o_skip()
+    for m in ("BTCUSDT", "ETHUSDT"):
+        if not os.path.exists(R.ruta_snapshot(R.ROOT, m, "15m")):
+            pytest.skip("sin klines versionadas")
+    raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
+    for tf in ("15m", "4h"):
+        filas = json.load(open(R.ruta_snapshot(R.ROOT, "BTCUSDT", tf),
+                               encoding="utf-8"))[:400]
+        json.dump(filas, open(R.ruta_snapshot(raiz, "BTCUSDT", tf), "w",
+                              encoding="utf-8"))
+    orden = []
+    for nombre in ("recuperar_exchange", "lote_finalizable",
+                   "watermark_exchange"):
+        original = getattr(EE.Motor, nombre)
+
+        def envuelto(self, T, _n=nombre, _o=original):
+            orden.append(_n)
+            return _o(self, T)
+
+        monkeypatch.setattr(EE.Motor, nombre, envuelto)
+    R.correr(root=raiz, mercados=("BTCUSDT",), hasta=None, estado_dir=None,
+             commit=head, bootstrap_hasta=1, limite=None)
+    assert orden, "el escenario debe procesar al menos un lote"
+    # en TODO lote, la recuperación precede a la evaluación
+    assert orden[0] == "recuperar_exchange"
+    for i, n in enumerate(orden):
+        if n in ("lote_finalizable", "watermark_exchange"):
+            assert "recuperar_exchange" in orden[:i]
+    for i, n in enumerate(orden):
+        if n == "recuperar_exchange" and i:
+            assert orden[i - 1] != "recuperar_exchange"

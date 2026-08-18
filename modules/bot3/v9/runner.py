@@ -501,6 +501,10 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
         # watermark y por el lote que libera.
         motor.iniciar_ciclo()
         try:
+            # CF-29: primero se RESTAURA lo que un marcador exchange ya
+            # sellado implica (degradación + eventos), y recién después se
+            # evalúa el watermark. En vivo es un no-op.
+            motor.recuperar_exchange(T)
             if not motor.lote_finalizable(T):
                 # CF-29/CF-23: un mercado silencioso no bloquea para siempre
                 # — se intenta el watermark global y se reevalúa.

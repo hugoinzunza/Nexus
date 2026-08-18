@@ -376,6 +376,47 @@ class Motor:
             degradados.append(mercado)
         return degradados
 
+    def recuperar_exchange(self, T: int) -> list[str]:
+        """CF-29 (recuperación): restaura la degradación producida por un
+        marcador exchange YA SELLADO en el almacén.
+
+        Sin esto, un reinicio divergía del vivo: `watermark_exchange` ve el
+        lote cubierto por el marcador y hace `continue`, así que el mercado
+        volvía a `degradado=False` y sus eventos no se reponían. El mercado
+        quedaba tratado como sano SIN haber obtenido época nueva.
+
+        Se ejecuta ANTES del watermark, así que en una corrida en vivo es un
+        no-op (el marcador aún no existe) y no cambia el camino normativo.
+        """
+        self._asegurar_ciclo()
+        idx_t = T - DUR_M15
+        repuestos = []
+        for mercado in self.mercados:
+            reg = self.m15[mercado].marcador_en(idx_t, "exchange")
+            if reg is None:
+                continue
+            st = self.estados[mercado]
+            if st.degradado:
+                continue
+            # El estado se restaura SIEMPRE: es lo que impide que el mercado
+            # opere como sano sin época nueva. La reemisión, en cambio, solo
+            # si el libro no documenta ya este marcador.
+            st.degradado = True
+            repuestos.append(mercado)
+            # Cada evento se repone POR SEPARADO: una caída entre los dos
+            # dejaba el hueco documentado y la degradación no, y un guardia
+            # único habría dado el libro por completo.
+            det = reg["detected_at"]
+            if not self.ledger.tiene_hueco_exchange(mercado, reg["desde"]):
+                self._emit("hueco_detectado", T, mercado, finalized_at=det,
+                           desde=reg["desde"], hasta=reg["hasta"], tf="15m",
+                           motivo="exchange", detected_at=det,
+                           prueba=self.m15[mercado].prueba_marcador(reg))
+            if not self.ledger.tiene_degradacion(mercado, det):
+                self._emit("mercado_degradado", T, mercado, finalized_at=det,
+                           detected_at=det)
+        return repuestos
+
     def _reingreso(self, mercado: str, T: int, fin: int) -> None:
         """Un mercado degradado reingresa solo con una ÉPOCA NUEVA habilitada
         (CF-29): nunca continúa la anterior."""

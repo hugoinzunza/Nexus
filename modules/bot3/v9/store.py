@@ -76,6 +76,9 @@ class Almacen:
         # rangos de hueco y caché de épocas invalidada en cada append.
         self._por_t: dict[int, dict] = {}
         self._huecos: list[tuple[int, int]] = []
+        # Marcadores por `desde`: permite recuperar un hueco SELLADO en O(1)
+        # durante el replay, sin recorrer el almacén en cada lote.
+        self._gap_por_desde: dict[int, dict] = {}
         self._ts: list[int] = []
         self._epocas_cache: list[list[dict]] | None = None
         # Índices O(log n) para las consultas causales (mismos resultados que
@@ -126,6 +129,7 @@ class Almacen:
                            desde=int(desde), hasta=int(hasta), motivo=motivo,
                            detected_at=detected_at(prueba))
         self._huecos.append((int(desde), int(hasta)))
+        self._gap_por_desde[int(desde)] = reg
         self.ultimo_t = int(hasta)
         self._epocas_cache = None
         return reg
@@ -192,6 +196,7 @@ class Almacen:
                     alm.ultimo_t = vela["t"]
                 else:
                     alm._huecos.append((reg["desde"], reg["hasta"]))
+                    alm._gap_por_desde[reg["desde"]] = reg
                     alm.ultimo_t = reg["hasta"]
         alm._epocas_cache = None
         return alm
@@ -262,6 +267,20 @@ class Almacen:
             return None
         t_min = min(self._buffer)
         return (siguiente, t_min - self.dur)
+
+    def marcador_en(self, desde: int, motivo: str | None = None):
+        """Marcador SELLADO que empieza exactamente en `desde` (None si no
+        hay). Es la puerta de la recuperación: tras un reinicio el hueco ya
+        está en el almacén y no vuelve a declararse."""
+        reg = self._gap_por_desde.get(int(desde))
+        if reg is None or (motivo is not None and reg["motivo"] != motivo):
+            return None
+        return reg
+
+    def prueba_marcador(self, reg: dict):
+        """`prueba` del marcador, leída del PAYLOAD firmado — es lo único
+        cubierto por la cadena de hashes (mismo criterio que `cargar`)."""
+        return json.loads(reg["payload"])["prueba"]
 
     def prueba_local(self) -> list[int] | None:
         """Los N primeros `close_time` cronológicos propios que satisfacen el
