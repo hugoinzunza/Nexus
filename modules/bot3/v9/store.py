@@ -213,6 +213,24 @@ class Almacen:
                     break
         return cur
 
+    def commit_asof(self, t: int) -> str:
+        """`input_commit_asof_T` (CF-41 v13): `hash_acum` del ÚLTIMO registro
+        de tipo VELA con `t_vela + dur ≤ t`.
+
+        Identifica EXACTAMENTE el conjunto de velas consumidas —incluidas las
+        posteriores a un hueco, porque esa cadena ya incorpora los marcadores
+        intermedios— sin afirmar que el hueco fuera conocido antes de tiempo:
+        es provenance de contenido, no conocimiento del modelo."""
+        cur = SEMILLA
+        for reg in self.registros:
+            if reg["tipo"] != "vela":
+                continue                     # los marcadores no lo detienen
+            if reg["t"] + self.dur <= t:
+                cur = reg["hash_acum"]
+            else:
+                break
+        return cur
+
     def head_finality(self, finalized_at: int) -> str:
         """`provenance_head_at_finality`: head del prefijo que INCLUYE el
         marcador/prueba que liberó el lote (CF-34)."""

@@ -148,7 +148,8 @@ class Motor:
     """Orquesta los lotes globales por `close_time` M15 (CF-19/CF-23)."""
 
     def __init__(self, almacenes_m15: dict, almacenes_h4: dict,
-                 mercados: tuple, ledger, bootstrap_hasta: int | None = None):
+                 mercados: tuple, ledger, bootstrap_hasta: int | None = None,
+                 reloj=None):
         self.m15 = almacenes_m15
         self.h4 = almacenes_h4
         self.mercados = tuple(sorted(mercados))
@@ -160,6 +161,11 @@ class Motor:
         self.cortado = False
         self._frontera_cruzada = bootstrap_hasta is None   # sin bootstrap, ya
         self._epocas_anunciadas: set[tuple] = set()
+        # CF-34: `processed_at` es el reloj OBSERVADO en que el motor
+        # materializa el evento (telemetría pura: no entra en identidades ni
+        # decisiones). Inyectable para que los gates sean deterministas.
+        self.reloj = reloj if reloj is not None else (
+            lambda: int(__import__("time").time() * 1000))
 
     # --- utilidades -------------------------------------------------------
     def _emitiendo(self, T: int) -> bool:
@@ -184,15 +190,18 @@ class Motor:
             # `effective_at`. La provenance sí usa la finalidad.
             heads = {
                 "input_head_asof_T": self.m15[mercado].head_asof(ef),
+                "input_commit_asof_T": self.m15[mercado].commit_asof(ef),
                 "provenance_head_at_finality": self.m15[mercado].head_finality(fin),
                 "h4_head_asof_T": self.h4[mercado].head_asof(ef),
+                "h4_commit_asof_T": self.h4[mercado].commit_asof(ef),
             }
             ep = self.m15[mercado].epoca_de(ef - DUR_M15)
             if ep:
                 heads["epoca_m15_t0"] = int(ep[0]["t"])
         return self.ledger.append(tipo, mercado=mercado, effective_at=ef,
                            finalized_at=fin,
-                           processed_at=T if processed_at is None else processed_at,
+                           processed_at=(self.reloj() if processed_at is None
+                                         else processed_at),
                            **heads, **campos)
 
     def _epoca_habilitada(self, mercado: str, T: int):
@@ -266,6 +275,21 @@ class Motor:
             return False
         return True
 
+    def finalidad(self, T: int) -> int:
+        """CF-34 `finalized_at`: timestamp de MERCADO que hizo FINALIZABLE el
+        lote — `T` si estaba completo, o el `detected_at` del marcador que lo
+        liberó si hubo que esperar el watermark. La latencia científica
+        determinista es `finalized_at − effective_at`."""
+        fin = T
+        idx_t = T - DUR_M15
+        for m in self.mercados:
+            for reg in self.m15[m].registros:
+                if reg["tipo"] != "gap":
+                    continue
+                if reg["desde"] <= idx_t <= reg["hasta"]:
+                    fin = max(fin, reg["detected_at"])
+        return fin
+
     def procesar_lote(self, T: int, finalized_at: int | None = None) -> None:
         """Fases 1–7 por mercado en orden canónico + Fase 8 global."""
         if self.cortado:
@@ -273,7 +297,7 @@ class Motor:
         if T > T_CORTE:                      # pre-gate temporal (CF-19)
             self._cerrar_por_tiempo(T)
             return
-        fin = T if finalized_at is None else finalized_at
+        fin = self.finalidad(T) if finalized_at is None else finalized_at
         if not self._frontera_cruzada and T > self.bootstrap_hasta:
             self._cruzar_frontera(T, fin)
         for mercado in self.mercados:

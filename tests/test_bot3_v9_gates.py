@@ -1078,3 +1078,71 @@ def test_b4_hueco_confirmado_cuenta_como_sin_datos():
     assert ev["mercados_sin_datos"] == ["BTCUSDT"]
     assert ev["mercados_con_hueco"] == ["BTCUSDT"]
     assert ev["mercados_pendientes"] == []
+
+
+# ----------------------------------------------------------- B-5 ---------
+def test_b5_commit_asof_identifica_velas_post_hueco():
+    """CF-41: `input_commit_asof_T` es el `hash_acum` de la ÚLTIMA VELA con
+    cierre ≤ T e identifica las velas consumidas incluso DESPUÉS de un
+    hueco, mientras `input_head_asof_T` (conocimiento) aún no lo incorpora."""
+    t0 = 1646092800000
+    alm = S.Almacen("BTCUSDT", "15m"); alm.nacer_en(t0)
+    alm.ofrecer([vela(t0, 1, 2, 0.5, 1.5)], "push"); alm.drenar()
+    alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in (2, 3, 4, 5)],
+                "push")
+    alm.drenar()
+    reg = alm.declarar_hueco_local()
+    detected = reg["detected_at"]
+    T = t0 + 4 * DUR                       # ya cerraron velas post-hueco
+    h1 = S.encadenar(S.SEMILLA, S.ser_vela(vela(t0, 1, 2, 0.5, 1.5)))
+    # Conocimiento: el marcador aún no es consumible (detected_at > T).
+    assert detected > T
+    assert alm.head_asof(T) == h1
+    # Contenido: el commit SÍ cubre las velas post-hueco consumidas en T.
+    commit = alm.commit_asof(T)
+    assert commit != h1
+    assert commit == next(r["hash_acum"] for r in reversed(alm.registros)
+                          if r["tipo"] == "vela" and r["t"] + DUR <= T)
+
+
+def test_b5_finalidad_usa_detected_at_del_marcador():
+    """CF-34: un lote liberado por watermark lleva `finalized_at` =
+    `detected_at` del marcador, no `T`; la latencia determinista es
+    `finalized_at − effective_at`."""
+    t0 = 1646092800000
+    motor, led = _mundo_epoca_habilitada(t0=t0)
+    T = t0 + 201 * DUR
+    assert motor.finalidad(T) == T           # sin marcador aún
+    motor.watermark_exchange(T)
+    fin = motor.finalidad(T)
+    reg = [r for r in motor.m15["BTCUSDT"].registros if r["tipo"] == "gap"][-1]
+    assert fin == reg["detected_at"] > T
+    motor.procesar_lote(T)
+    lote = next(e for e in led.eventos if e["tipo"] == "lote_finalizado")
+    assert lote["finalized_at"] == fin
+    assert lote["finalized_at"] - lote["effective_at"] > 0   # latencia real
+
+
+def test_b5_processed_at_es_reloj_observado():
+    """CF-34: `processed_at` es el reloj OBSERVADO del ciclo, distinto del
+    tiempo de mercado, y es telemetría pura (no entra en `event_id`)."""
+    from modules.bot3.v9.ledger import Ledger as L
+    ep = _epoca_confirmacion()
+    alm = S.Almacen("BTCUSDT", "15m"); alm.nacer_en(int(ep[0]["t"]))
+    alm.ofrecer(ep, "push"); alm.drenar()
+    led = L()
+    RELOJ = 1_900_000_000_000
+    motor = E.Motor({"BTCUSDT": alm}, {"BTCUSDT": alm}, ("BTCUSDT",), led,
+                    reloj=lambda: RELOJ)
+    T = int(ep[-1]["t"]) + DUR
+    motor.procesar_lote(T)
+    ev = led.eventos[0]
+    assert ev["processed_at"] == RELOJ
+    assert ev["processed_at"] != ev["effective_at"]
+    # La identidad NO depende del reloj: mismo evento con otro reloj → mismo id.
+    led2 = L()
+    motor2 = E.Motor({"BTCUSDT": alm}, {"BTCUSDT": alm}, ("BTCUSDT",), led2,
+                     reloj=lambda: RELOJ + 999_999)
+    motor2.procesar_lote(T)
+    assert [e["event_id"] for e in led.eventos] == \
+           [e["event_id"] for e in led2.eventos]
