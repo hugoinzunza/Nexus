@@ -1044,3 +1044,37 @@ def test_b4_id_t_es_lista_cerrada():
                     id_t=50, epoca_t0=50)
     assert "id_t" not in ev
     assert ev["event_id"] == C.event_id("epoca_m15", mercado="BTCUSDT", t=50)
+
+
+def test_b4_hueco_confirmado_cuenta_como_sin_datos():
+    """Un marcador de `hueco` es ausencia CONFIRMADA: debe aparecer en
+    `mercados_sin_datos` (y desglosado en `mercados_con_hueco`), nunca
+    clasificado como cubierto."""
+    from modules.bot3.v9.ledger import Ledger as L
+    t_ini = CIERRE_ALINEADO - 30 * DUR
+    alms = {}
+    for m in C.MERCADOS:
+        alm = S.Almacen(m, "15m"); alm.nacer_en(t_ini)
+        # 34 velas: se extienden más allá de T_corte para que el hueco de
+        # BTC (en la vela que cierra en CIERRE_ALINEADO) tenga los 3 cierres
+        # posteriores que exige el watermark local.
+        if m == "BTCUSDT":
+            faltante = CIERRE_ALINEADO - DUR
+            velas = [vela(t_ini + i * DUR, 1, 2, 0.5, 1.5) for i in range(34)
+                     if t_ini + i * DUR != faltante]
+        else:
+            velas = [vela(t_ini + i * DUR, 1, 2, 0.5, 1.5) for i in range(34)]
+        alm.ofrecer(velas, "push"); alm.drenar()
+        alm.declarar_hueco_local()
+        alms[m] = alm
+    assert alms["BTCUSDT"].cubre(CIERRE_ALINEADO - DUR) == "hueco"
+    assert alms["ETHUSDT"].cubre(CIERRE_ALINEADO - DUR) == "vela"
+    led = L()
+    motor = E.Motor(alms, alms, C.MERCADOS, led)
+    motor.lotes_finalizados = [CIERRE_ALINEADO - 20 * DUR]
+    assert motor.cerrar_administrativo(
+        C.T_CORTE + C.CORTE_ADMIN_GRACIA_MS + 1) is True
+    ev = next(e for e in led.eventos if e["tipo"] == "corte_administrativo")
+    assert ev["mercados_sin_datos"] == ["BTCUSDT"]
+    assert ev["mercados_con_hueco"] == ["BTCUSDT"]
+    assert ev["mercados_pendientes"] == []

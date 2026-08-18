@@ -353,9 +353,14 @@ class Motor:
         #    es DONDE SE EVALÚA la cobertura. Usar el lote para la evidencia
         #    ocultaba a los mercados que dejaron de publicar DESPUÉS de él.
         cierre_evidencia = (T_CORTE // DUR_M15) * DUR_M15
-        faltantes = [m for m in self.mercados
-                     if self.m15[m].cubre(cierre_evidencia - DUR_M15)
-                     == "pendiente"]
+        # Un `hueco` es ausencia CONFIRMADA de la vela, no cobertura: para la
+        # evidencia del corte, "sin datos" es todo lo que no sea `vela`. Se
+        # publican además desglosados para no perder la distinción.
+        estados_ev = {m: self.m15[m].cubre(cierre_evidencia - DUR_M15)
+                      for m in self.mercados}
+        pendientes = [m for m, e in estados_ev.items() if e == "pendiente"]
+        con_hueco = [m for m, e in estados_ev.items() if e == "hueco"]
+        faltantes = sorted(pendientes + con_hueco)
         ancla = ultimo if ultimo is not None else T_CORTE
         for mercado in self.mercados:                # estado congelado
             st = self.estados[mercado]
@@ -375,7 +380,9 @@ class Motor:
         self._emit("corte_administrativo", ancla, efectivo=T_CORTE,
                    reloj=reloj_ms, ultimo_lote_finalizado=ultimo,
                    cierre_evidencia=cierre_evidencia,
-                   mercados_sin_datos=faltantes)
+                   mercados_sin_datos=faltantes,
+                   mercados_pendientes=sorted(pendientes),
+                   mercados_con_hueco=sorted(con_hueco))
         self.cortado = True
         self.motivo_corte = "administrativo"
         return True
