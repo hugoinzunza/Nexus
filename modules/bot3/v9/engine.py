@@ -156,6 +156,8 @@ class Motor:
         self.cierres: list[dict] = []            # cohorte evaluable
         self.lotes_finalizados: list[int] = []
         self.cortado = False
+        self._frontera_cruzada = bootstrap_hasta is None   # sin bootstrap, ya
+        self._epocas_anunciadas: set[tuple] = set()
 
     # --- utilidades -------------------------------------------------------
     def _emitiendo(self, T: int) -> bool:
@@ -165,9 +167,12 @@ class Motor:
 
     def _emit(self, tipo: str, T: int, mercado: str | None = None,
               finalized_at: int | None = None, processed_at: int | None = None,
-              **campos) -> None:
+              efectivo: int | None = None, **campos) -> None:
+        """`efectivo` permite anclar el `effective_at` a un instante distinto
+        del lote (lo usan los eventos de frontera, CF-21/CF-24)."""
         if not self._emitiendo(T):
             return
+        ef = T if efectivo is None else efectivo
         fin = T if finalized_at is None else finalized_at
         heads = {}
         if mercado:
@@ -178,8 +183,8 @@ class Motor:
             }
             ep = self.m15[mercado].epoca_de(T - DUR_M15)
             if ep:
-                heads["epoca_m15"] = int(ep[0]["t"])
-        self.ledger.append(tipo, mercado=mercado, effective_at=T,
+                heads["epoca_m15_t0"] = int(ep[0]["t"])
+        self.ledger.append(tipo, mercado=mercado, effective_at=ef,
                            finalized_at=fin,
                            processed_at=T if processed_at is None else processed_at,
                            **heads, **campos)
@@ -229,11 +234,47 @@ class Motor:
             self._cerrar_por_tiempo(T)
             return
         fin = T if finalized_at is None else finalized_at
+        if not self._frontera_cruzada and T > self.bootstrap_hasta:
+            self._cruzar_frontera(T, fin)
         for mercado in self.mercados:
+            self._anunciar_epoca(mercado, T, fin)
             self._procesar_mercado(mercado, T, fin)
         self._emit("lote_finalizado", T, finalized_at=fin)
         self.lotes_finalizados.append(T)
         self._fase8(T)
+
+    def _cruzar_frontera(self, T: int, fin: int) -> None:
+        """CF-21/CF-24: al cruzar `T_frontera`, TODO mercado queda `flat`.
+        El bootstrap ya ejecutó sus transiciones con efecto completo sobre
+        estado, frescura, mitigación, TTL e invalidación; lo único que NO
+        viaja al ledger evaluable es lo ocurrido antes de la frontera. Las
+        zonas NO se resucitan: `zonas_tocadas` persiste íntegro."""
+        F = self.bootstrap_hasta
+        self._frontera_cruzada = True
+        self._emit("frontera", T, finalized_at=fin, efectivo=F)
+        for mercado in self.mercados:
+            st = self.estados[mercado]
+            previo = st.estado
+            st.candidato = None
+            st.orden = None
+            st.posicion = None
+            st.salida = None
+            st.estado = "flat"
+            self._emit("estado_inicial", T, mercado, finalized_at=fin,
+                       efectivo=F, estado_previo=previo,
+                       zonas_consumidas=len(st.zonas_tocadas))
+
+    def _anunciar_epoca(self, mercado: str, T: int, fin: int) -> None:
+        """CF-13: registra la época M15 la primera vez que queda habilitada."""
+        ventana = self._epoca_habilitada(mercado, T)
+        if ventana is None:
+            return
+        t0 = int(ventana[0][0]["t"])
+        clave = (mercado, t0)
+        if clave in self._epocas_anunciadas:
+            return
+        self._epocas_anunciadas.add(clave)
+        self._emit("epoca_m15", T, mercado, finalized_at=fin, efectivo=t0)
 
     def _procesar_mercado(self, mercado: str, T: int, fin: int) -> None:
         st = self.estados[mercado]

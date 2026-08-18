@@ -771,3 +771,88 @@ def test_b2_dos_ibos_misma_caja_producen_order_id_distintos():
     o1 = C.order_id("c" * 64, 1_000_000, caja["lo"], caja["hi"])
     o2 = C.order_id("c" * 64, 2_000_000, caja["lo"], caja["hi"])
     assert o1 != o2
+
+
+# ------------------------------------- B-3: frontera y estado inicial -----
+def _motor_bootstrap(ep, frontera):
+    from modules.bot3.v9.ledger import Ledger as L
+    alm = S.Almacen("BTCUSDT", "15m"); alm.nacer_en(int(ep[0]["t"]))
+    alm.ofrecer(ep, "push"); alm.drenar()
+    led = L()
+    return E.Motor({"BTCUSDT": alm}, {"BTCUSDT": alm}, ("BTCUSDT",), led,
+                   bootstrap_hasta=frontera), led
+
+
+def test_b3_bootstrap_no_emite_pero_cruza_a_flat():
+    """CF-21/CF-24: antes de la frontera no se emite nada; al cruzarla se
+    emiten `frontera` + `estado_inicial` y TODO mercado queda `flat`."""
+    ep = _epoca_confirmacion()
+    frontera = int(ep[-3]["t"]) + DUR
+    motor, led = _motor_bootstrap(ep, frontera)
+    st = motor.estados["BTCUSDT"]
+    # Estado sintético "heredado" del bootstrap: una posición viva.
+    st.estado = "posicion"
+    # Niveles lejanos: la posición NO sale durante el lote de bootstrap.
+    st.posicion = {"trade_id": "t" * 64, "E": 5.0, "S": 1.0, "T": 100.0,
+                   "largo": True, "P_in": 5.0, "close_fill": 0,
+                   "ultimo_cierre_sellado": 0}
+    motor.procesar_lote(frontera)                 # aún bootstrap
+    assert led.eventos == []
+    T = frontera + DUR
+    motor.procesar_lote(T)                        # primer lote posterior
+    tipos = [e["tipo"] for e in led.eventos]
+    assert tipos.count("frontera") == 1
+    assert tipos.count("estado_inicial") == 1
+    assert st.estado == "flat"
+    assert st.posicion is None
+    ini = next(e for e in led.eventos if e["tipo"] == "estado_inicial")
+    assert ini["estado_previo"] == "posicion"
+    assert ini["effective_at"] == frontera        # anclado a T_frontera
+
+
+def test_b3_frontera_se_emite_una_sola_vez():
+    ep = _epoca_confirmacion()
+    frontera = int(ep[-4]["t"]) + DUR
+    motor, led = _motor_bootstrap(ep, frontera)
+    for T in (frontera + DUR, frontera + 2 * DUR, frontera + 3 * DUR):
+        motor.procesar_lote(T)
+    assert [e["tipo"] for e in led.eventos].count("frontera") == 1
+
+
+def test_b3_frescura_sobrevive_a_la_frontera_en_el_motor():
+    """CF-24 real (reemplaza el gate vacuo): una zona consumida durante el
+    bootstrap NO puede generar candidato después de la frontera."""
+    ep = _epoca_confirmacion()
+    frontera = int(ep[-3]["t"]) + DUR
+    motor, led = _motor_bootstrap(ep, frontera)
+    st = motor.estados["BTCUSDT"]
+    zona = {"kind": "ob", "dir": "long", "lo": 8.0, "hi": 12.0,
+            "available_at": 0}
+    calc = {"direccion": "long", "rango": {"weak": 30.0, "eq": 20.0},
+            "zonas": [zona], "fractal": {"available_at": 0}, "motivo": None}
+    T = frontera + DUR
+    motor._cruzar_frontera(T, T)
+    led.eventos.clear(); led._ids.clear()
+    # Zona ya tocada durante el bootstrap (frescura consumida).
+    clave = (zona["kind"], zona["dir"], zona["lo"], zona["hi"],
+             zona["available_at"])
+    st.zonas_tocadas.add(clave)
+    motor._fase7b("BTCUSDT", T, T, ep, len(ep), calc, st)
+    assert st.estado == "flat"
+    assert not any(e["tipo"] == "candidato" for e in led.eventos)
+    # Sin la frescura consumida, la MISMA vela sí genera candidato.
+    st.zonas_tocadas.discard(clave)
+    motor._fase7b("BTCUSDT", T, T, ep, len(ep), calc, st)
+    assert st.estado == "candidato_vivo"
+    assert any(e["tipo"] == "candidato" for e in led.eventos)
+
+
+def test_b3_epoca_m15_se_anuncia_una_vez():
+    ep = _epoca_confirmacion()
+    motor, led = _motor_con(ep)
+    T0 = int(ep[-1]["t"]) + DUR
+    for T in (T0 - 2 * DUR, T0 - DUR, T0):
+        motor._anunciar_epoca("BTCUSDT", T, T)
+    evs = [e for e in led.eventos if e["tipo"] == "epoca_m15"]
+    assert len(evs) == 1
+    assert evs[0]["effective_at"] == int(ep[0]["t"])
