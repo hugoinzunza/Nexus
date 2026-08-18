@@ -221,9 +221,21 @@ class Almacen:
                 self._buffer[t] = (prio, v)
 
     def _incidencia(self, t: int, vela: dict) -> None:
-        existente = next((v for v in self.velas if int(v["t"]) == t), None)
-        difiere = existente is not None and ser_vela(existente) != ser_vela(vela)
-        tipo = "vela_revisada" if difiere else "vela_no_incorporada"
+        """Registra una incidencia de ingestión (CF-22/CF-26).
+
+        Búsqueda O(1) por índice: el barrido lineal hacía cuadrático el
+        reinicio (el runner reofrece el snapshot completo sobre un almacén
+        ya sellado). Y una REOFERTA IDÉNTICA no es incidencia: solo lo son
+        el contenido distinto (`vela_revisada`) y la vela que ya no puede
+        incorporarse porque su instante quedó sellado en un hueco
+        (`vela_no_incorporada`)."""
+        existente = self._por_t.get(t)
+        if existente is not None:
+            if ser_vela(existente) == ser_vela(vela):
+                return                       # reingesta benigna del snapshot
+            tipo = "vela_revisada"
+        else:
+            tipo = "vela_no_incorporada"
         self.incidencias.append({
             "tipo": tipo, "mercado": self.mercado, "tf": self.tf, "t": t,
             "contenido_sha": sha256_hex(ser_vela(vela)),

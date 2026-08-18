@@ -1353,6 +1353,18 @@ def _guion(ruta_ledger, reloj=1_900_000_000_000):
                 "zonas": [zona], "fractal": {"available_at": 0},
                 "motivo": None}
         motor._fase7b("ETHUSDT", T, T, ep, 205, calc, st)
+        # Terminal de jerarquía: el candidato muere en su deadline.
+        st.candidato["deadline_close"] = T
+        motor._fase7a("ETHUSDT", T, T, ep, 205, calc, st)
+        # Descarte con zona (RR insuficiente): weak pegado a la entrada.
+        st2 = motor.estados["SOLUSDT"]
+        motor._emit("descarte", T, "SOLUSDT", motivo="rr_insuficiente",
+                    zona_avail=0, zona_lo=0.4, zona_hi=2.5)
+        # Nacimiento e incidencias de ingestión (CF-26/CF-28).
+        # emitido en el lote T (post-frontera) pero EFECTIVO en el ancla
+        motor._emit("nacimiento", T, "XRPUSDT", tf="15m", efectivo=t0)
+        led.append("vela_revisada", mercado="XRPUSDT", tf="15m",
+                   effective_at=t0, id="a" * 64)
     finally:
         motor.finalizar_ciclo()
     motor.lotes_finalizados = [T]
@@ -1360,14 +1372,26 @@ def _guion(ruta_ledger, reloj=1_900_000_000_000):
     return led
 
 
-def test_b6_guion_cubre_varias_familias(tmp_path):
-    """El guion de recuperación debe ejercitar familias diversas: si solo
-    produjera barreras y abstenciones, la matriz no acreditaría nada."""
+def test_b6_guion_declara_su_cobertura_real(tmp_path):
+    """Cobertura HONESTA del guion: se declara qué familias del registro
+    CF-37 ejercita y cuáles NO, para que la matriz no aparente más de lo
+    que prueba. `cobertura` (degradacion_de_cobertura) queda fuera porque
+    exige velas posteriores a T_corte y tiene su propio gate dedicado."""
     led = _guion(str(tmp_path / "g.jsonl"))
     tipos = {e["tipo"] for e in led.eventos}
-    assert {"lote_finalizado", "frontera", "estado_inicial", "epoca_m15",
-            "hueco_detectado", "mercado_degradado", "candidato",
-            "corte_administrativo"} <= tipos, tipos
+    familias = {C.TIPOS[t] for t in tipos}
+    esperadas = {C.FAM_BARRERA, C.FAM_MERCADO, C.FAM_ABSTENCION,
+                 C.FAM_HUECO, C.FAM_JERARQUIA, C.FAM_DESCARTE,
+                 C.FAM_NACIMIENTO, C.FAM_INCIDENCIA}
+    assert familias == esperadas, familias
+    # Dentro de `jerarquia`, al menos candidato y un TERMINAL.
+    jer = {t for t in tipos if C.TIPOS[t] == C.FAM_JERARQUIA}
+    assert "candidato" in jer
+    assert jer & {"candidato_expirado", "candidato_invalidado",
+                  "orden_creada", "confirmada_sin_fill"}
+    # La familia no cubierta aquí tiene gate propio:
+    assert C.FAM_COBERTURA not in familias
+    assert "test_b4_corte_administrativo_con_evidencia" in globals()
 
 
 def test_b6_matriz_de_crash_por_evento(tmp_path):
@@ -1449,3 +1473,45 @@ def test_b6_primer_arranque_vs_estado_ausente(tmp_path):
     assert S.Almacen.cargar("X", "15m", ruta).registros == []
     with pytest.raises(FileNotFoundError):
         S.Almacen.cargar("X", "15m", ruta, requerido=True)
+
+
+def test_b6_reinicio_no_es_cuadratico_ni_inventa_incidencias():
+    """El reinicio reofrece el snapshot completo sobre el almacén sellado:
+    debe costar ~lineal y NO registrar incidencias por reingesta idéntica."""
+    import time
+
+    def medir(n):
+        alm = S.Almacen("X", "15m"); alm.nacer_en(0)
+        velas = [vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(n)]
+        alm.ofrecer(velas, "push"); alm.drenar()
+        ini = time.perf_counter()
+        alm.ofrecer(velas, "versionado"); alm.drenar()
+        return time.perf_counter() - ini, len(alm.incidencias)
+
+    t_chico, inc_chico = medir(2000)
+    t_grande, inc_grande = medir(8000)
+    assert inc_chico == inc_grande == 0          # reingesta idéntica = benigna
+    assert t_grande < t_chico * 8, f"escala mal: {t_chico:.3f} vs {t_grande:.3f}"
+
+
+def test_b6_manifiesto_distingue_las_tres_situaciones(tmp_path):
+    """directorio nuevo → crea; recuperación → rehidrata; directorio
+    PARCIAL (declarado pero ausente) → falla cerrado."""
+    import pytest
+    from modules.bot3.v9 import runner as R
+    from modules.bot3.v9.ledger import Ledger as L
+    if not R.leer_versionado(R.ROOT, "BTCUSDT", "15m"):
+        pytest.skip("sin klines versionadas")
+    d = str(tmp_path / "estado")
+    led = L()
+    a = R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
+                              estado_dir=d, ledger=led)["BTCUSDT"]
+    assert R.leer_manifiesto(d) == {"BTCUSDT_15m"}
+    assert [e["tipo"] for e in led.eventos] == ["nacimiento"]
+    b = R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
+                              estado_dir=d)["BTCUSDT"]
+    assert a.head == b.head                       # recuperación fiel
+    os.remove(R.ruta_estado(d, "BTCUSDT", "15m"))
+    with pytest.raises(FileNotFoundError):        # directorio parcial
+        R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
+                              estado_dir=d)
