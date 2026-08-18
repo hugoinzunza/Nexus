@@ -28,9 +28,14 @@ def leer_versionado(root: str, mercado: str, tf: str) -> list[dict]:
     return filas if isinstance(filas, list) else []
 
 
+def ruta_estado(estado_dir: str, mercado: str, tf: str) -> str:
+    return os.path.join(estado_dir, f"{mercado}_{tf}.jsonl")
+
+
 def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                         limite: int | None = None,
-                        extra: dict | None = None) -> dict:
+                        extra: dict | None = None,
+                        estado_dir: str | None = None) -> dict:
     """Construye los almacenes ingiriendo el snapshot versionado (CF-28) y,
     opcionalmente, velas adicionales (push) por mercado.
 
@@ -49,8 +54,17 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
             ancla = GENESIS_H4
         else:
             ancla = int(filas[0]["t"])
-        alm = S.Almacen(mercado, tf)
-        alm.nacer_en(ancla)
+        if estado_dir:
+            # RECUPERACIÓN (B-6): si existe estado sellado se rehidrata —con
+            # verificación de cadena y metadatos— y se sigue ingiriendo sobre
+            # él. Nunca se reescribe lo ya sellado.
+            ruta = ruta_estado(estado_dir, mercado, tf)
+            alm = S.Almacen.cargar(mercado, tf, ruta)
+            if not alm.registros:
+                alm.nacer_en(ancla)
+        else:
+            alm = S.Almacen(mercado, tf)
+            alm.nacer_en(ancla)
         ofrecidas = filas if limite is None else filas[-limite:]
         # El ancla manda: nada anterior puede entrar (CF-22/CF-28).
         alm.ofrecer(ofrecidas, "versionado")
@@ -67,10 +81,17 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
            desde: int | None = None, limite: int | None = None,
            ledger_ruta: str | None = None, commit: str = "dev",
            bootstrap_hasta: int | None = None,
-           reloj_ms: int | None = None) -> tuple[Motor, Ledger]:
-    """Corre el motor por lotes globales de `close_time` M15."""
-    m15 = construir_almacenes(root, mercados, "15m", limite)
-    h4 = construir_almacenes(root, mercados, "4h", limite)
+           reloj_ms: int | None = None,
+           estado_dir: str | None = None) -> tuple[Motor, Ledger]:
+    """Corre el motor por lotes globales de `close_time` M15.
+
+    Con `estado_dir`, los almacenes se PERSISTEN y se rehidratan en el
+    siguiente arranque (B-6): un reinicio real reutiliza el push ya sellado
+    en vez de reconstruirlo."""
+    m15 = construir_almacenes(root, mercados, "15m", limite,
+                              estado_dir=estado_dir)
+    h4 = construir_almacenes(root, mercados, "4h", limite,
+                             estado_dir=estado_dir)
     mercados_ok = tuple(sorted(set(m15) & set(h4)))
     led = Ledger(ledger_ruta, commit=commit)
     motor = Motor(m15, h4, mercados_ok, led, bootstrap_hasta=bootstrap_hasta)

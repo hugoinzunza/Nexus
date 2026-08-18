@@ -132,7 +132,8 @@ class Almacen:
 
     # --- rehidratación (B-6) ---------------------------------------------
     @classmethod
-    def cargar(cls, mercado: str, tf: str, ruta: str) -> "Almacen":
+    def cargar(cls, mercado: str, tf: str, ruta: str,
+               requerido: bool = False) -> "Almacen":
         """Reconstruye el almacén desde su archivo append-only.
 
         Reconstruye TODOS los índices (`_prefix_max`, `_vela_hashes`,
@@ -141,6 +142,11 @@ class Almacen:
         archivo alterado no se carga en silencio."""
         alm = cls(mercado, tf, ruta=ruta)
         if not os.path.exists(ruta):
+            if requerido:
+                # Distinguir PRIMER ARRANQUE de archivo esperado ausente: un
+                # almacén vacío silencioso podría reescribir historia sellada.
+                raise FileNotFoundError(
+                    f"se esperaba estado sellado en {ruta} y no existe")
             return alm
         prev = SEMILLA
         with open(ruta, encoding="utf-8") as fh:
@@ -148,17 +154,36 @@ class Almacen:
                 linea = linea.strip()
                 if not linea:
                     continue
-                reg = json.loads(linea)
-                esperado = encadenar(prev, reg["payload"])
-                if reg["hash_acum"] != esperado:
+                crudo = json.loads(linea)
+                payload = crudo["payload"]
+                esperado = encadenar(prev, payload)
+                if crudo["hash_acum"] != esperado:
                     raise ValueError(
                         f"cadena rota en {ruta}:{n} — el almacén fue alterado")
-                prev = reg["hash_acum"]
+                prev = crudo["hash_acum"]
+                # Los metadatos NO se leen del archivo: se DERIVAN del payload,
+                # que es lo único cubierto por el hash. Además se exige que los
+                # externos coincidan, para que una manipulación de `t`, `desde`,
+                # `hasta` o `detected_at` no pase inadvertida.
+                datos = json.loads(payload)
+                if datos.get("gap") is True:
+                    reg = {"tipo": "gap", "payload": payload,
+                           "hash_acum": prev, "desde": int(datos["desde"]),
+                           "hasta": int(datos["hasta"]),
+                           "motivo": datos["motivo"],
+                           "detected_at": detected_at(datos["prueba"])}
+                else:
+                    reg = {"tipo": "vela", "payload": payload,
+                           "hash_acum": prev, "t": int(datos["t"])}
+                for campo, valor in reg.items():
+                    if campo in crudo and crudo[campo] != valor:
+                        raise ValueError(
+                            f"metadato alterado en {ruta}:{n} — {campo}: "
+                            f"{crudo[campo]!r} != {valor!r} (derivado)")
                 alm.registros.append(reg)
                 alm._indexar(reg)
                 if reg["tipo"] == "vela":
-                    datos = json.loads(reg["payload"])
-                    vela = {"t": int(datos["t"]),
+                    vela = {"t": reg["t"],
                             **{k: float(datos[k]) for k in "ohlcv"}}
                     alm.velas.append(vela)
                     alm._vela_hashes.append(reg["hash_acum"])

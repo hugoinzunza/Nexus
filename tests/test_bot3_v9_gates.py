@@ -1320,24 +1320,73 @@ def _corrida(ruta_ledger, ep, lotes, reloj=1_900_000_000_000):
     return motor, led
 
 
-def test_b6_reinicio_produce_el_mismo_libro(tmp_path):
-    """Matriz de crash END-TO-END: interrumpir tras cada lote y reanudar
-    debe producir un ledger IDÉNTICO al de la corrida completa —sin
-    duplicados ni omisiones— gracias al determinismo del motor y al dedupe
-    por `event_id` contra lo ya escrito."""
-    ep = _epoca_confirmacion()
-    lotes = [int(ep[-1]["t"]) + DUR - k * DUR for k in range(4, 0, -1)]
+def _guion(ruta_ledger, reloj=1_900_000_000_000):
+    """Guion determinista que ejercita MUCHAS familias del registro CF-37:
+    bootstrap y frontera, época, watermark de exchange (hueco + degradación),
+    candidato/orden/terminal, lotes y corte administrativo."""
+    from modules.bot3.v9.ledger import Ledger as L
+    t0 = 1646092800000
+    alms = {}
+    for m in C.MERCADOS:
+        alm = S.Almacen(m, "15m"); alm.nacer_en(t0)
+        n = 200 if m == "BTCUSDT" else 210
+        alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(n)],
+                    "push")
+        alm.drenar()
+        alms[m] = alm
+    led = L(ruta_ledger, commit="test")
+    frontera = t0 + 199 * DUR
+    motor = E.Motor(alms, alms, C.MERCADOS, led, bootstrap_hasta=frontera,
+                    reloj=lambda: reloj)
+    T = t0 + 201 * DUR
+    motor.iniciar_ciclo(reloj)
+    try:
+        motor.watermark_exchange(T)          # hueco_detectado + degradado
+        motor.procesar_lote(T)               # frontera + estado_inicial + época
+        st = motor.estados["ETHUSDT"]        # candidato → orden → terminal
+        ep = alms["ETHUSDT"].velas
+        zona = {"kind": "ob", "dir": "long", "lo": 0.4, "hi": 2.5,
+                "available_at": 0}
+        # eq por ENCIMA del medio de la zona: en largo la zona debe estar en
+        # descuento para ser elegible.
+        calc = {"direccion": "long", "rango": {"weak": 30.0, "eq": 2.0},
+                "zonas": [zona], "fractal": {"available_at": 0},
+                "motivo": None}
+        motor._fase7b("ETHUSDT", T, T, ep, 205, calc, st)
+    finally:
+        motor.finalizar_ciclo()
+    motor.lotes_finalizados = [T]
+    motor.cerrar_administrativo(C.T_CORTE + C.CORTE_ADMIN_GRACIA_MS + 1)
+    return led
+
+
+def test_b6_guion_cubre_varias_familias(tmp_path):
+    """El guion de recuperación debe ejercitar familias diversas: si solo
+    produjera barreras y abstenciones, la matriz no acreditaría nada."""
+    led = _guion(str(tmp_path / "g.jsonl"))
+    tipos = {e["tipo"] for e in led.eventos}
+    assert {"lote_finalizado", "frontera", "estado_inicial", "epoca_m15",
+            "hueco_detectado", "mercado_degradado", "candidato",
+            "corte_administrativo"} <= tipos, tipos
+
+
+def test_b6_matriz_de_crash_por_evento(tmp_path):
+    """CF-30/CF-23: cortar el ledger DESPUÉS DE CADA EVENTO (incluida la
+    barrera) y reanudar debe reproducir exactamente el mismo libro, sin
+    duplicados ni omisiones."""
     completo = str(tmp_path / "full.jsonl")
-    _, led_full = _corrida(completo, ep, lotes)
+    led_full = _guion(completo)
     esperado = [e["event_id"] for e in led_full.eventos]
-    assert esperado, "el escenario debe producir eventos"
-    for corte in range(len(lotes) + 1):
-        ruta = str(tmp_path / f"crash_{corte}.jsonl")
-        _corrida(ruta, ep, lotes[:corte])          # "crash" tras `corte` lotes
-        _, led_reanudado = _corrida(ruta, ep, lotes)   # reanudación completa
-        assert [e["event_id"] for e in led_reanudado.eventos] == esperado
-        assert len(set(e["event_id"] for e in led_reanudado.eventos)) == \
-            len(esperado)
+    lineas = open(completo, encoding="utf-8").read().splitlines()
+    assert len(lineas) == len(esperado) >= 8
+    for corte in range(len(lineas) + 1):
+        ruta = str(tmp_path / f"c_{corte}.jsonl")
+        with open(ruta, "w", encoding="utf-8") as fh:   # "crash" tras `corte`
+            fh.write("\n".join(lineas[:corte]) + ("\n" if corte else ""))
+        led = _guion(ruta)                              # reanudación
+        ids = [e["event_id"] for e in led.eventos]
+        assert ids == esperado, f"divergencia al reanudar tras {corte} eventos"
+        assert len(set(ids)) == len(ids)
 
 
 def test_b6_barrera_de_recuperacion_identifica_el_ultimo_lote(tmp_path):
@@ -1353,3 +1402,50 @@ def test_b6_barrera_de_recuperacion_identifica_el_ultimo_lote(tmp_path):
                 if e["tipo"] == "lote_finalizado"]
     assert barreras == lotes[:2]
     assert max(barreras) == lotes[1]
+
+
+def test_b6_runner_rehidrata_el_estado_sellado(tmp_path):
+    """Un reinicio REAL del runner reutiliza el push ya sellado: mismo head
+    y sin reescritura (antes `construir_almacenes` creaba almacenes sin
+    ruta y `Almacen.cargar` no se usaba en producción)."""
+    from modules.bot3.v9 import runner as R
+    if not R.leer_versionado(R.ROOT, "BTCUSDT", "15m"):
+        import pytest
+        pytest.skip("sin klines versionadas")
+    d = str(tmp_path / "estado")
+    a = R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=300,
+                              estado_dir=d)["BTCUSDT"]
+    b = R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=300,
+                              estado_dir=d)["BTCUSDT"]
+    assert a.head == b.head
+    assert len(a.velas) == len(b.velas) == 300
+    assert b.ruta and os.path.exists(b.ruta)
+
+
+def test_b6_metadato_alterado_no_pasa(tmp_path):
+    """Reproducción del blocker: alterar SOLO el `t` externo, conservando
+    payload y hash, debe ser detectado (los metadatos se derivan del
+    payload, que es lo único cubierto por el hash)."""
+    import json
+    import pytest
+    ruta = str(tmp_path / "X_15m.jsonl")
+    a = S.Almacen("X", "15m", ruta=ruta); a.nacer_en(0)
+    a.ofrecer([vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(6)], "push")
+    a.drenar()
+    lineas = open(ruta, encoding="utf-8").read().splitlines()
+    reg = json.loads(lineas[2])
+    reg["t"] = reg["t"] + 7777                     # payload y hash intactos
+    lineas[2] = json.dumps(reg, sort_keys=True, separators=(",", ":"))
+    open(ruta, "w", encoding="utf-8").write("\n".join(lineas) + "\n")
+    with pytest.raises(ValueError, match="metadato alterado"):
+        S.Almacen.cargar("X", "15m", ruta)
+
+
+def test_b6_primer_arranque_vs_estado_ausente(tmp_path):
+    """`requerido=True` distingue 'primer arranque' de 'archivo esperado
+    ausente': lo segundo no puede resolverse con un almacén vacío."""
+    import pytest
+    ruta = str(tmp_path / "nada.jsonl")
+    assert S.Almacen.cargar("X", "15m", ruta).registros == []
+    with pytest.raises(FileNotFoundError):
+        S.Almacen.cargar("X", "15m", ruta, requerido=True)
