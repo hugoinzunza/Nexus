@@ -508,15 +508,197 @@ def test_cf39_toma_exige_disponibilidad_causal():
     assert P.primera_toma(velas, 0, 13, largo=True) is None
 
 
-def test_cf40_particion_de_eventos_por_estado():
-    """Una orden creada nunca emite `candidato_*`, y un candidato nunca
-    emite `orden_*`: los tipos están particionados por estado (CF-38)."""
+# --- Gates DISCRIMINANTES del ciclo del candidato (ejercitan el motor) ----
+#
+# Se conducen a través de `_fase7a`/`_par_ganador` reales con una época
+# sintética y un `calc` inyectado: prueban la LÓGICA del motor, no un ledger
+# rellenado a mano.
+
+PAD = 190          # relleno para superar EPOCA_M15_MIN_VELAS sin crear pivotes
+
+
+def _epoca_confirmacion():
+    """Época M15 con estructura REAL de confirmación:
+
+    relleno descendente monótono (sin pivotes) → swing low → rebote →
+    vela que BARRE ese low (toma de liquidez) → swing high → retroceso con
+    vela de cuerpo opuesto (OB del desplazamiento) → impulso que rompe el
+    high CON CUERPO (iBOS) → continuación.
+    """
+    velas = []
+    for i in range(PAD):                       # descenso monótono: 0 pivotes
+        base = 20.0 - i * 0.05
+        velas.append(vela(i * DUR, base, base + 0.02, base - 0.06, base - 0.04))
+    patron = [
+        (10.55, 10.60, 10.30, 10.35),          # 190
+        (10.35, 10.40, 9.90, 9.95),            # 191
+        (9.95, 10.00, 9.40, 9.45),             # 192
+        (9.45, 9.50, 8.80, 8.85),              # 193
+        (8.85, 8.90, 8.00, 8.10),              # 194: SWING LOW (8.00)
+        (8.10, 8.60, 8.05, 8.55),              # 195
+        (8.55, 9.00, 8.50, 8.95),              # 196
+        (8.95, 9.30, 8.90, 9.25),              # 197
+        (9.25, 9.40, 7.90, 9.30),              # 198: BARRE el 8.00 (toma)
+        (9.30, 9.60, 9.28, 9.55),              # 199
+        (9.55, 10.00, 9.50, 9.95),             # 200
+        (9.95, 10.50, 9.92, 10.40),            # 201: SWING HIGH (10.50)
+        (10.40, 10.45, 10.10, 10.15),          # 202
+        (10.15, 10.20, 9.90, 9.95),            # 203: cuerpo OPUESTO → OB
+        (9.95, 10.10, 9.92, 10.05),            # 204: SWING LOW (9.92)
+        (10.05, 10.30, 10.00, 10.25),          # 205
+        (10.25, 10.90, 10.20, 10.80),          # 206: iBOS (cierra > 10.50)
+        (10.80, 11.20, 10.75, 11.10),          # 207
+        (11.10, 11.50, 11.05, 11.40),          # 208
+        (11.40, 11.80, 11.35, 11.70),          # 209
+    ]
+    for k, pr in enumerate(patron):
+        velas.append(vela((PAD + k) * DUR, *pr))
+    return velas
+
+
+J_LOW, J_TOMA, J_HIGH, J_OB, J_IBOS = PAD + 4, PAD + 8, PAD + 11, PAD + 13, PAD + 16
+
+
+def _motor_con(ep):
     from modules.bot3.v9.ledger import Ledger as L
+    alm = S.Almacen("BTCUSDT", "15m"); alm.nacer_en(int(ep[0]["t"]))
+    alm.ofrecer(ep, "push"); alm.drenar()
     led = L()
-    led.append("candidato_expirado", mercado="BTCUSDT", id="a" * 64,
-               effective_at=1, finalized_at=1)
-    led.append("orden_cancelada", mercado="BTCUSDT", id="b" * 64,
-               effective_at=1, finalized_at=1)
-    tipos = {e["tipo"] for e in led.eventos}
-    assert tipos == {"candidato_expirado", "orden_cancelada"}
-    assert len({e["event_id"] for e in led.eventos}) == 2
+    return E.Motor({"BTCUSDT": alm}, {"BTCUSDT": alm}, ("BTCUSDT",), led), led
+
+
+def _candidato(st, ep, j_toque, deadline_velas=E.DEADLINE_M15, weak=20.0):
+    st.estado = "candidato_vivo"
+    st.candidato = {
+        "candidate_id": "c" * 64, "mercado": "BTCUSDT",
+        "zona": {"kind": "ob", "dir": "long", "lo": 8.0, "hi": 9.5,
+                 "available_at": 0},
+        "dir": "long", "largo": True, "j_toque": j_toque,
+        "close_toque": int(ep[j_toque]["t"]) + DUR,
+        "deadline_close": int(ep[j_toque]["t"]) + DUR + deadline_velas * DUR,
+        "weak": weak,
+    }
+    return st
+
+
+CALC_OK = {"direccion": "long", "rango": {"weak": 20.0, "eq": 9.0},
+           "zonas": [], "fractal": {"available_at": 0}, "motivo": None}
+
+
+def test_b2_estructura_del_escenario():
+    """El escenario sintético tiene la estructura que los demás gates
+    asumen: low, toma, high, OB e iBOS en sus índices."""
+    from modules.bot3.v9 import primitives as P
+    ep = _epoca_confirmacion()
+    sh, sl = P.swing_points(ep, C.INT_PIV)
+    assert any(p["idx"] == J_LOW and p["price"] == 8.00 for p in sl)
+    assert any(p["idx"] == J_HIGH and p["price"] == 10.50 for p in sh)
+    assert P.primera_toma(ep, PAD, len(ep), largo=True) == J_TOMA
+    ups = [e["j"] for e in P.bos_events(ep, C.INT_PIV) if e["dir"] == "up"]
+    assert J_IBOS in ups
+
+
+def test_b2_ibos_previo_al_toque_no_produce_orden():
+    """Un iBOS ANTERIOR al toque no puede confirmar (defecto B-2)."""
+    ep = _epoca_confirmacion()
+    motor, _ = _motor_con(ep)
+    st = _candidato(motor.estados["BTCUSDT"], ep, j_toque=J_IBOS + 1)
+    assert motor._par_ganador(ep, len(ep), st.candidato) is None
+
+
+def test_b2_ibos_posterior_al_toque_si_confirma():
+    """Toque ANTES del barrido y del iBOS → par ganador; la zona derivada es
+    el OB del desplazamiento y sus dos sellos son distintos."""
+    ep = _epoca_confirmacion()
+    motor, led = _motor_con(ep)
+    st = _candidato(motor.estados["BTCUSDT"], ep, j_toque=PAD + 6)
+    par = motor._par_ganador(ep, len(ep), st.candidato)
+    assert par is not None
+    Ev, Sv, deriv = par
+    assert deriv["kind"] == "ob"
+    assert deriv["zone_formation_at"] == int(ep[J_OB]["t"]) + DUR
+    assert deriv["order_available_at"] == int(ep[J_IBOS]["t"]) + DUR
+    assert deriv["zone_formation_at"] < deriv["order_available_at"]
+    assert Sv < Ev
+
+
+def test_b2_transicion_sin_eventos_cruzados():
+    """candidato → orden: ningún `candidato_*` tras crear la orden."""
+    ep = _epoca_confirmacion()
+    motor, led = _motor_con(ep)
+    st = _candidato(motor.estados["BTCUSDT"], ep, j_toque=PAD + 6)
+    T = int(ep[-1]["t"]) + DUR
+    motor._fase7a("BTCUSDT", T, T, ep, len(ep), CALC_OK, st)
+    assert st.estado == "orden_viva" and st.candidato is None
+    tipos = [e["tipo"] for e in led.eventos]
+    assert tipos.count("orden_creada") == 1
+    assert not any(t.startswith("candidato_") for t in tipos)
+
+
+def test_b2_orden_en_el_deadline_no_sobrevive():
+    """Zona derivada completada EN la vela del deadline → `orden_creada` +
+    `confirmada_sin_fill` en la misma vela, estado `flat` (CF-40 b)."""
+    ep = _epoca_confirmacion()
+    motor, led = _motor_con(ep)
+    st = motor.estados["BTCUSDT"]
+    j_toque = PAD + 6
+    _candidato(st, ep, j_toque, deadline_velas=(len(ep) - 1) - j_toque)
+    T = int(ep[-1]["t"]) + DUR
+    assert st.candidato["deadline_close"] == T
+    motor._fase7a("BTCUSDT", T, T, ep, len(ep), CALC_OK, st)
+    assert [e["tipo"] for e in led.eventos] == ["orden_creada",
+                                                "confirmada_sin_fill"]
+    assert st.estado == "flat" and st.orden is None
+
+
+def test_b2_candidato_expira_exactamente_en_el_deadline():
+    """Sin par ganador, el candidato muere EN la vela del deadline."""
+    ep = _epoca_confirmacion()
+    motor, led = _motor_con(ep)
+    st = motor.estados["BTCUSDT"]
+    j_toque = J_IBOS + 1
+    _candidato(st, ep, j_toque, deadline_velas=(len(ep) - 1) - j_toque)
+    T = st.candidato["deadline_close"]
+    motor._fase7a("BTCUSDT", T, T, ep, len(ep), CALC_OK, st)
+    assert st.estado == "flat"
+    ev = [e for e in led.eventos if e["tipo"] == "candidato_expirado"]
+    assert len(ev) == 1 and ev[0]["motivo"] == "deadline"
+
+
+def test_b2_orden_viva_cierra_en_el_deadline_exacto():
+    """Orden preexistente sin fill: su terminal sale EN el cierre exacto del
+    deadline y es `confirmada_sin_fill`, no `orden_cancelada(direccion)`."""
+    ep = _epoca_confirmacion()
+    motor, led = _motor_con(ep)
+    st = motor.estados["BTCUSDT"]
+    T = int(ep[-1]["t"]) + DUR
+    st.estado = "orden_viva"
+    # Niveles muy por DEBAJO del precio: la orden nunca se toca (ni fill ni
+    # gap), así el terminal que debe salir es el del deadline.
+    st.orden = {"order_id": "o" * 64, "candidate_id": "c" * 64,
+                "E": 5.0, "S": 4.95, "T": 20.0, "largo": True,
+                "dir": "long", "deadline_close": T}
+    motor._procesar_mercado("BTCUSDT", T, T)
+    tipos = [e["tipo"] for e in led.eventos]
+    assert "confirmada_sin_fill" in tipos
+    assert "orden_cancelada" not in tipos
+    assert st.estado == "flat"
+
+
+def test_b2_historia_previa_al_recorte_cuenta():
+    """P1-b: la ventana recortada ya no existe. Con la época completa la
+    toma se detecta; con un prefijo que excluye el swing, no."""
+    from modules.bot3.v9 import primitives as P
+    ep = _epoca_confirmacion()
+    assert P.primera_toma(ep, PAD, len(ep), largo=True) == J_TOMA
+    recorte = ep[J_TOMA - 2:]                    # excluye el swing low
+    assert P.primera_toma(recorte, 0, len(recorte), largo=True) != 2
+
+
+def test_b2_dos_ibos_misma_caja_producen_order_id_distintos():
+    """`order_available_at` (cierre del iBOS) entra en `order_id`: dos iBOS
+    distintos sobre la MISMA caja producen identidades distintas."""
+    caja = dict(lo=9.4, hi=9.8)
+    o1 = C.order_id("c" * 64, 1_000_000, caja["lo"], caja["hi"])
+    o2 = C.order_id("c" * 64, 2_000_000, caja["lo"], caja["hi"])
+    assert o1 != o2

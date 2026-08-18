@@ -324,7 +324,11 @@ class Motor:
         if st.estado == "orden_viva":
             o = st.orden
             motivo = None
-            if T > o["deadline_close"]:
+            # CF-38/v13: el deadline se resuelve AL AGOTARSE (>=), no una
+            # vela después; y precede a la cancelación por dirección para
+            # que el terminal sea unívoco. La vela del deadline ya tuvo su
+            # oportunidad de fill en la Fase 1b (que usa >).
+            if T >= o["deadline_close"]:
                 motivo = "deadline"
             elif calc["direccion"] != o["dir"]:
                 motivo = "direccion"
@@ -476,6 +480,7 @@ class Motor:
         # POSTERIORES (CF-39). La frescura ya se consumió con el toque.
         st.candidato = {
             "candidate_id": cid, "zona": ganadora, "dir": direccion,
+            "mercado": mercado,
             "largo": direccion == "long", "j_toque": k - 1,
             "close_toque": T, "deadline_close": T + DEADLINE_M15 * DUR_M15,
             "weak": rango["weak"],
@@ -549,12 +554,14 @@ class Motor:
         que TENGA zona derivada. Devuelve (E, S, deriv) o None."""
         largo = cand["largo"]
         j_toque = cand["j_toque"]
-        ini = max(0, j_toque - 4 * INT_PIV)
-        seg = ep[ini:k]
+        # CF-39 exige los swings INT CAUSALES de la ÉPOCA: no se recorta la
+        # historia previa al toque (un recorte cambiaba j_toma, reiniciaba el
+        # estado de bos_events y podía alterar qué iBOS resulta primero).
+        seg = ep[:k]
         if len(seg) < 3 * INT_PIV:
             return None
-        off = j_toque - ini                       # índice del toque en `seg`
-        swings = P.swing_points(seg, INT_PIV)
+        off = j_toque
+        swings = self._swings_m15(cand["mercado"], seg)
         limite = min(len(seg), off + VENTANA_IBOS_M15 + 1)
         j_toma = P.primera_toma(seg, off, limite, largo, swings_int=swings)
         if j_toma is None:
@@ -574,6 +581,24 @@ class Motor:
                 else Q(extremo * (1 + SL_BUFFER))
             return E, S, deriv
         return None
+
+    def _swings_m15(self, mercado: str, seg: list[dict]):
+        """Swings INT del prefijo `seg` de la época. Se obtienen filtrando los
+        de la serie completa por `confirm_idx` (equivalencia exacta,
+        `primitives.swings_prefijo`) para no rehacer O(n·L) por lote."""
+        alm = self.m15.get(mercado)
+        if alm is None or not alm.velas:
+            return P.swing_points(seg, INT_PIV)
+        ep0 = alm.epoca_de(int(seg[0]["t"]))
+        if ep0 is None or ep0[0] is not seg[0]:
+            return P.swing_points(seg, INT_PIV)
+        cache = getattr(self, "_swm15", None)
+        if cache is None:
+            cache = self._swm15 = {}
+        hit = cache.get(mercado)
+        if hit is None or hit[0] is not ep0:
+            hit = cache[mercado] = (ep0, P.swing_points(ep0, INT_PIV))
+        return P.swings_prefijo(hit[1], len(seg))
 
     # --- Fase 8: corte ----------------------------------------------------
     def _fase8(self, T: int) -> None:
