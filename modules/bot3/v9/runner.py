@@ -19,6 +19,52 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
 TF_ARCHIVO = {"15m": "15m", "4h": "4h"}
 
 
+SHA_GIT = 40                     # SHA-1 canónico de Git
+
+
+def validar_commit(commit: str, root: str) -> str:
+    """CF-28: el ancla de provenance debe ser un commit Git REAL.
+
+    Exige SHA-1 canónico (40 hex minúscula) y, si el runtime tiene
+    metadata Git, que el objeto exista y sea un commit. Sin `.git` (por
+    ejemplo en un contenedor de despliegue) se acepta el SHA bien formado y
+    la verificación queda delegada al proceso de build, que es el que
+    conoce el árbol de origen."""
+    if not isinstance(commit, str) or len(commit) != SHA_GIT or \
+            any(c not in "0123456789abcdef" for c in commit):
+        raise ValueError(
+            f"`commit` debe ser un SHA-1 Git canónico (40 hex minúscula), "
+            f"no {commit!r}")
+    if _hay_git(root):
+        import subprocess
+        r = subprocess.run(["git", "-C", root, "cat-file", "-e",
+                            f"{commit}^{{commit}}"],
+                           capture_output=True)
+        if r.returncode != 0:
+            raise ValueError(
+                f"`commit` {commit} no existe como commit en {root}")
+    return commit
+
+
+def _hay_git(root: str) -> bool:
+    """Metadata Git disponible. Se consulta a `git`, no a `.git/`: en un
+    worktree `.git` es un ARCHIVO, no un directorio."""
+    import subprocess
+    r = subprocess.run(["git", "-C", root, "rev-parse", "--git-dir"],
+                       capture_output=True)
+    return r.returncode == 0
+
+
+def commit_actual(root: str) -> str | None:
+    """`HEAD` del repositorio, si el runtime tiene metadata Git."""
+    if not _hay_git(root):
+        return None
+    import subprocess
+    r = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"],
+                       capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
 def ruta_snapshot(root: str, mercado: str, tf: str) -> str:
     return os.path.join(root, "data", f"klines_{mercado}_{TF_ARCHIVO[tf]}.json")
 
@@ -198,11 +244,13 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
     Con `estado_dir`, los almacenes se PERSISTEN y se rehidratan en el
     siguiente arranque (B-6): un reinicio real reutiliza el push ya sellado
     en vez de reconstruirlo."""
-    if estado_dir and commit == "dev":
-        # Un commit placeholder no puede anclar la provenance de un estado
-        # persistido: haría inservible la verificación CF-28 al recuperar.
-        raise ValueError(
-            "con `estado_dir` hay que pasar un `commit` real, no 'dev'")
+    if estado_dir:
+        # Un ancla de provenance tiene que ser un commit Git real: un
+        # placeholder (o cualquier texto) volvería inservible la
+        # verificación CF-28 al recuperar.
+        # Se valida contra el repositorio del CÓDIGO (ROOT): el commit ancla
+        # la versión que produjo el snapshot, no el directorio de datos.
+        validar_commit(commit, ROOT)
     led = Ledger(ledger_ruta, commit=commit)
     # El commit del despliegue SÍ viaja a la construcción: es lo que activa
     # la verificación CF-28 en la ruta productiva.

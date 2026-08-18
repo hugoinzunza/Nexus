@@ -1653,13 +1653,28 @@ def test_b6_correr_activa_la_verificacion_de_commit(tmp_path):
         json.dump(filas, open(R.ruta_snapshot(raiz, "BTCUSDT", tf), "w",
                               encoding="utf-8"))
     d = str(tmp_path / "estado")
-    # `dev` no puede anclar provenance de un estado persistido
-    with pytest.raises(ValueError, match="commit"):
+    head = R.commit_actual(R.ROOT)
+    if head is None:
+        pytest.skip("runtime sin metadata Git")
+    import subprocess
+    previo = subprocess.run(["git", "-C", R.ROOT, "rev-parse", "HEAD~1"],
+                            capture_output=True, text=True).stdout.strip()
+    # `dev` y cualquier texto arbitrario NO son commits: rechazados
+    with pytest.raises(ValueError, match="SHA-1 Git canónico"):
         R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d)
+    with pytest.raises(ValueError, match="SHA-1 Git canónico"):
+        R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
+                 commit="commit-A")
+    # SHA bien formado pero inexistente: rechazado por el chequeo Git
+    with pytest.raises(ValueError, match="no existe como commit"):
+        R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
+                 commit="0" * 40)
+    # HEAD real: crea y luego recupera bien
     R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
-             commit="commit-A")
+             commit=head)
     R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
-             commit="commit-A")                      # mismo commit: OK
+             commit=head)
+    # otro commit REAL distinto: la recuperación lo rechaza
     with pytest.raises(ValueError, match="commit del snapshot"):
         R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
-                 commit="commit-B")
+                 commit=previo)
