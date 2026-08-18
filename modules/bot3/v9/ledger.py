@@ -66,6 +66,24 @@ class Ledger:
             raise ValueError(f"`id_t` no permitido para el tipo {tipo!r}")
         eid = self._clave(tipo, campos)
         if eid in self._ids:
+            # Reaparición: DEBE ser el mismo evento. Un mismo `event_id` con
+            # payload distinto significa que el replay no es determinista, y
+            # descartarlo en silencio ocultaría esa divergencia. `commit` y
+            # `processed_at` se excluyen: son metadatos de build y telemetría
+            # (CF-34), no contenido del evento.
+            previo = next(e for e in self.eventos if e["event_id"] == eid)
+            nuevo = {k: v for k, v in campos.items()
+                     if v is not None and k != "id_t"}
+            volatiles = {"processed_at", "commit"}
+            a = {k: v for k, v in previo.items()
+                 if k not in volatiles | {"event_id", "tipo", "protocolo",
+                                          "contrato"}}
+            b = {k: v for k, v in nuevo.items() if k not in volatiles}
+            if a != b:
+                difs = {k for k in set(a) | set(b) if a.get(k) != b.get(k)}
+                raise ValueError(
+                    f"evento {tipo} {eid[:12]}… reaparece con payload "
+                    f"distinto en los campos {sorted(difs)}")
             return None
         # `id_t` es un detalle de identidad: no se persiste en el evento.
         ev = {"event_id": eid, "tipo": tipo, "protocolo": PROTOCOLO,

@@ -1437,16 +1437,20 @@ def test_b6_matriz_de_crash_por_evento(tmp_path):
     duplicados ni omisiones."""
     completo = str(tmp_path / "full.jsonl")
     led_full = _guion(completo)
-    esperado = [e["event_id"] for e in led_full.eventos]
     lineas = open(completo, encoding="utf-8").read().splitlines()
-    assert len(lineas) == len(esperado) >= 8
+    firma = led_full.firma()
+    assert len(lineas) == len(led_full.eventos) >= 8
     for corte in range(len(lineas) + 1):
         ruta = str(tmp_path / f"c_{corte}.jsonl")
         with open(ruta, "w", encoding="utf-8") as fh:   # "crash" tras `corte`
             fh.write("\n".join(lineas[:corte]) + ("\n" if corte else ""))
         led = _guion(ruta)                              # reanudación
+        # Igualdad BYTE A BYTE, no solo de `event_id`: heads, precios, R,
+        # provenance y temporalidad deben coincidir exactamente.
+        assert open(ruta, encoding="utf-8").read().splitlines() == lineas, \
+            f"el archivo divergio al reanudar tras {corte} eventos"
+        assert led.firma() == firma
         ids = [e["event_id"] for e in led.eventos]
-        assert ids == esperado, f"divergencia al reanudar tras {corte} eventos"
         assert len(set(ids)) == len(ids)
 
 
@@ -1579,3 +1583,54 @@ def test_b6_nacimiento_se_repone_tras_crash(tmp_path):
     R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
                           estado_dir=d, ledger=led)        # otra vez
     assert len([e for e in led.eventos if e["tipo"] == "nacimiento"]) == 1
+
+
+def test_b6_snapshot_alterado_bloquea_la_recuperacion(tmp_path):
+    """CF-28 en RECUPERACIÓN: si el snapshot cambió desde el nacimiento (o
+    el commit solicitado no coincide, o falta provenance), el arranque debe
+    fallar cerrado en vez de rehidratar sobre otra historia."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    from modules.bot3.v9.ledger import Ledger as L
+    origen = R.ruta_snapshot(R.ROOT, "BTCUSDT", "15m")
+    if not os.path.exists(origen):
+        pytest.skip("sin klines versionadas")
+    raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
+    dest = R.ruta_snapshot(raiz, "BTCUSDT", "15m")
+    filas = json.load(open(origen, encoding="utf-8"))[:300]
+    json.dump(filas, open(dest, "w", encoding="utf-8"))
+    d = str(tmp_path / "estado")
+    R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d, ledger=L())
+    # (a) snapshot alterado
+    alterado = [dict(f) for f in filas]
+    alterado[10]["c"] = alterado[10]["c"] + 1.0
+    json.dump(alterado, open(dest, "w", encoding="utf-8"))
+    with pytest.raises(ValueError, match="cambió desde el nacimiento"):
+        R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d)
+    # (b) commit distinto
+    json.dump(filas, open(dest, "w", encoding="utf-8"))
+    with pytest.raises(ValueError, match="commit del snapshot"):
+        R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d,
+                              commit_snapshot="otro")
+    # (c) provenance incompleta
+    manif = R.leer_manifiesto(d)
+    manif["BTCUSDT_15m"].pop("snapshot_sha256")
+    R.escribir_manifiesto(d, manif)
+    with pytest.raises(ValueError, match="provenance incompleta"):
+        R.construir_almacenes(raiz, ("BTCUSDT",), "15m", estado_dir=d)
+
+
+def test_b6_dedupe_falla_con_payload_incompatible():
+    """Un mismo `event_id` que reaparece con payload distinto revela un
+    replay no determinista: debe fallar, no descartarse en silencio.
+    `commit` y `processed_at` se excluyen por ser build/telemetría."""
+    import pytest
+    led = Ledger()
+    led.append("lote_finalizado", effective_at=1, finalized_at=1,
+               processed_at=100, heads_por_mercado={"A": "x"})
+    assert led.append("lote_finalizado", effective_at=1, finalized_at=1,
+                      processed_at=999, heads_por_mercado={"A": "x"}) is None
+    with pytest.raises(ValueError, match="payload distinto"):
+        led.append("lote_finalizado", effective_at=1, finalized_at=1,
+                   processed_at=100, heads_por_mercado={"A": "DIFERENTE"})

@@ -117,6 +117,26 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
             # archivo es obligatorio (fallo cerrado si desapareció); si no
             # está declarado, es primer arranque y se crea.
             ruta = ruta_estado(estado_dir, mercado, tf)
+            if declarado:
+                # CF-28: en una RECUPERACIÓN declarada, el snapshot debe ser
+                # el mismo que se registró al nacer. Cargar uno distinto
+                # cambiaría el ancla y la historia bajo un estado sellado.
+                prov = declarados[nombre]
+                sha_actual = sha_snapshot(ruta_snapshot(root, mercado, tf))
+                sha_reg = prov.get("snapshot_sha256")
+                commit_reg = prov.get("commit_snapshot")
+                if not sha_reg or not commit_reg:
+                    raise ValueError(
+                        f"provenance incompleta para {nombre} en el "
+                        f"manifiesto: falta snapshot_sha256 o commit_snapshot")
+                if sha_actual != sha_reg:
+                    raise ValueError(
+                        f"snapshot de {nombre} cambió desde el nacimiento: "
+                        f"{sha_actual} != {sha_reg} (registrado)")
+                if commit_snapshot is not None and commit_snapshot != commit_reg:
+                    raise ValueError(
+                        f"commit del snapshot de {nombre} no coincide: "
+                        f"{commit_snapshot} != {commit_reg} (registrado)")
             alm = S.Almacen.cargar(mercado, tf, ruta, requerido=declarado)
             if not alm.registros:
                 alm.nacer_en(ancla)
