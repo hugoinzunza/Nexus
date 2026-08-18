@@ -219,6 +219,29 @@ class Motor:
             return None
         return (ep, lo)
 
+    def _epoca_habilitada_previa(self, mercado: str, T: int):
+        """Última época del mercado con ≥`EPOCA_M15_MIN_VELAS` velas cerradas
+        en `T`, AUNQUE `T` no esté cubierto por ella.
+
+        Es lo que hay que mirar en un mercado SILENCIOSO: su `T` no pertenece
+        a ninguna época (justamente falta esa vela), y usar
+        `_epoca_habilitada` lo dejaba fuera del watermark para siempre."""
+        alm = self.m15[mercado]
+        mejor = None
+        for ep in alm.epocas():
+            if int(ep[0]["t"]) + DUR_M15 > T:
+                break
+            lo, hi = 0, len(ep)
+            while lo < hi:
+                mid = (lo + hi) // 2
+                if int(ep[mid]["t"]) <= T - DUR_M15:
+                    lo = mid + 1
+                else:
+                    hi = mid
+            if lo >= EPOCA_M15_MIN_VELAS:
+                mejor = (ep, lo)
+        return mejor
+
     # --- lote (CF-19/CF-23) ----------------------------------------------
     def lote_finalizable(self, T: int) -> bool:
         """Finalizable sii cada mercado tiene vela en T, un marcador de hueco
@@ -227,7 +250,11 @@ class Motor:
             estado = self.m15[m].cubre(T - DUR_M15)
             if estado == "vela" or estado == "hueco":
                 continue
-            if self._epoca_habilitada(m, T) is None:
+            # Un mercado SILENCIOSO no tiene época que contenga `T` (falta esa
+            # vela): hay que mirar su última época habilitada PREVIA. Usar
+            # `_epoca_habilitada` lo hacía caer en el caso (c) y el lote se
+            # finalizaba ignorando la ausencia, sin declarar el hueco.
+            if self._epoca_habilitada_previa(m, T) is None:
                 continue
             return False
         return True
@@ -263,7 +290,7 @@ class Motor:
             alm = self.m15[mercado]
             if alm.cubre(idx_t) != "pendiente":
                 continue
-            if self._epoca_habilitada(mercado, T) is None:
+            if self._epoca_habilitada_previa(mercado, T) is None:
                 continue
             prueba = prueba_exchange(self.m15, mercado, T)
             if prueba is None:
@@ -313,8 +340,13 @@ class Motor:
             return False
         previos = [t for t in self.lotes_finalizados if t <= T_CORTE]
         ultimo = max(previos) if previos else None
+        # T_CORTE no cae en la grilla M15 (termina en .999): el instante a
+        # consultar es el último CIERRE alineado ≤ T_CORTE — preferentemente
+        # el del último lote finalizado.
+        cierre_ref = ultimo if ultimo is not None \
+            else (T_CORTE // DUR_M15) * DUR_M15
         faltantes = [m for m in self.mercados
-                     if self.m15[m].cubre(T_CORTE - DUR_M15) == "pendiente"]
+                     if self.m15[m].cubre(cierre_ref - DUR_M15) == "pendiente"]
         ancla = ultimo if ultimo is not None else T_CORTE
         for mercado in self.mercados:                # estado congelado
             st = self.estados[mercado]

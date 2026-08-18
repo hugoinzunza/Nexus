@@ -896,19 +896,54 @@ def _mundo_silencio(silencioso="BTCUSDT", velas_ok=8, velas_mudo=1,
     return E.Motor(alms, alms, C.MERCADOS, led), led
 
 
+def _mundo_epoca_habilitada(silencioso="BTCUSDT", t0=1646092800000):
+    """7 mercados con ÉPOCA HABILITADA (≥200 velas); uno enmudece justo
+    después de alcanzarla."""
+    from modules.bot3.v9.ledger import Ledger as L
+    alms = {}
+    for m in C.MERCADOS:
+        alm = S.Almacen(m, "15m"); alm.nacer_en(t0)
+        n = 200 if m == silencioso else 210
+        alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(n)],
+                    "push")
+        alm.drenar()
+        alms[m] = alm
+    led = L()
+    return E.Motor(alms, alms, C.MERCADOS, led), led
+
+
 def test_b4_watermark_exchange_degrada_y_desbloquea():
-    """CF-29: con quorum, el mercado silencioso se declara en hueco por
-    `exchange`, queda DEGRADADO y el lote pasa a ser finalizable."""
-    motor, led = _mundo_silencio()
-    T = 1646092800000 + 2 * DUR          # lote donde BTC ya no tiene vela
-    # Época no habilitada (<200 velas) → el lote es finalizable por (c);
-    # forzamos la evaluación del watermark igualmente.
+    """CF-29 camino PRINCIPAL con una ausencia real: el mercado silencioso
+    tiene época habilitada ANTES del hueco, hay quorum, y el watermark debe
+    declarar, degradar, registrar y desbloquear el lote."""
+    t0 = 1646092800000
+    motor, led = _mundo_epoca_habilitada(t0=t0)
+    T = t0 + 201 * DUR                      # falta la vela de BTC
+    alm = motor.m15["BTCUSDT"]
+    assert alm.cubre(T - DUR) == "pendiente"
+    assert not motor.lote_finalizable(T)     # bloqueado antes del watermark
     degradados = motor.watermark_exchange(T)
-    if not degradados:                    # sin época habilitada no aplica
-        motor.estados["BTCUSDT"].degradado = False
-    prueba = S.prueba_exchange(motor.m15, "BTCUSDT", T)
-    assert prueba is not None and len(prueba) == C.WATERMARK_EXCHANGE_Q
-    assert list(prueba) == sorted(prueba)         # orden alfabético canónico
+    assert degradados == ["BTCUSDT"]                       # mercado incluido
+    assert alm.cubre(T - DUR) == "hueco"                   # marcador exchange
+    assert motor.estados["BTCUSDT"].degradado is True      # estado degradado
+    reg = [r for r in alm.registros if r["tipo"] == "gap"]
+    assert reg and reg[-1]["motivo"] == "exchange"
+    tipos = [e["tipo"] for e in led.eventos]
+    assert "hueco_detectado" in tipos and "mercado_degradado" in tipos
+    hd = next(e for e in led.eventos if e["tipo"] == "hueco_detectado")
+    assert hd["motivo"] == "exchange" and len(hd["prueba"]) == C.WATERMARK_EXCHANGE_Q
+    assert motor.lote_finalizable(T)                       # lote procesable
+
+
+def test_b4_epoca_previa_es_la_que_habilita_el_watermark():
+    """`_epoca_habilitada` falla en un mercado silencioso (T no pertenece a
+    ninguna época); la que corresponde es la ÚLTIMA época previa al hueco."""
+    t0 = 1646092800000
+    motor, _ = _mundo_epoca_habilitada(t0=t0)
+    T = t0 + 201 * DUR
+    assert motor._epoca_habilitada("BTCUSDT", T) is None
+    previa = motor._epoca_habilitada_previa("BTCUSDT", T)
+    assert previa is not None and previa[1] >= C.EPOCA_M15_MIN_VELAS
 
 
 def test_b4_sin_quorum_no_declara_ni_degrada():
@@ -957,6 +992,10 @@ def test_b4_corte_administrativo_con_evidencia():
     degr = [e for e in led.eventos if e["tipo"] == "degradacion_de_cobertura"]
     assert any(e["mercado"] == "ADAUSDT" for e in degr)
     assert motor.motivo_corte == "administrativo"
+    # T_CORTE no cae en la grilla M15: el conteo de faltantes debe usar un
+    # cierre ALINEADO, no declarar falsamente a los siete mercados.
+    assert C.T_CORTE % DUR != 0
+    assert set(ev["mercados_sin_datos"]) != set(C.MERCADOS)
 
 
 def test_b4_corte_administrativo_no_aplica_si_hubo_lote_posterior():
