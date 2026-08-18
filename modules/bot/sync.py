@@ -123,8 +123,6 @@ class BotSync:
             "watching": self._watching(),
             "fundamental": fundamental,
         }
-        if self.testnet_executor:
-            snapshot["testnet"] = self._testnet_snapshot()
         return snapshot
 
     def _testnet_snapshot(self) -> dict:

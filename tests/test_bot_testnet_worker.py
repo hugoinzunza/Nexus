@@ -120,7 +120,7 @@ def test_comando_testnet_toca_solo_su_kill(monkeypatch, tmp_path):
     assert not testnet_kill.exists()
 
 
-def test_snapshot_publica_testnet_separado(monkeypatch, tmp_path):
+def test_snapshot_no_publica_testnet_retirado(monkeypatch, tmp_path):
     class _Client:
         def balance_usdt(self):
             return {"balance": 4999.0, "available": 4900.0, "unrealized_pnl": 1.5}
@@ -152,9 +152,7 @@ def test_snapshot_publica_testnet_separado(monkeypatch, tmp_path):
     ).snapshot()
 
     assert snapshot["live"] is False
-    assert snapshot["testnet"]["live_virtual"] is True
-    assert snapshot["testnet"]["account"]["balance"] == 4999.0
-    assert snapshot["testnet"]["trades"] == []
+    assert "testnet" not in snapshot
 
 
 def test_snapshot_testnet_enriquece_posicion_con_plan_stop_nativo_y_parciales(tmp_path):
@@ -308,17 +306,11 @@ def test_readiness_falla_si_hay_incidente_critico(tmp_path):
     assert readiness["status"] == "failed"
 
 
-def test_panel_identifica_testnet_como_fondos_virtuales():
+def test_panel_no_expone_testnet_retirado():
     root = Path(__file__).parents[1]
     html = (root / "modules/bot/public/index.html").read_text()
     js = (root / "modules/bot/public/app.js").read_text()
 
-    assert "Binance Demo, fondos virtuales" in html
-    assert "Órdenes reales contra saldo virtual" in js
-    assert "function testnet(data)" in js
-    assert "Validación live" in js
-    assert "no activa live automáticamente" in js
-    assert "Operaciones abiertas" in js
-    assert "uPnL abierto" in js
-    assert "SL confirmado en Binance" in js
-    assert "TP final" in js
+    assert "Binance Demo, fondos virtuales" not in html
+    assert 'id="testnet"' not in html
+    assert "cards(data); testnet(data); phase1(data)" not in js

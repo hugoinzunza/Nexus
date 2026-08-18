@@ -491,7 +491,7 @@ async function load() {
     const r = await fetch("/m/bot/api/state", { cache: "no-store" });
     if (r.status === 401) { location.href = "/login"; return; }
     const data = await r.json();
-    header(data); fundamental(data); watchdog(data); cards(data); testnet(data); phase1(data); position(data); watching(data); orders(data); trades(data);
+    header(data); fundamental(data); watchdog(data); cards(data); phase1(data); position(data); watching(data); orders(data); trades(data);
     // Los precios se piden DESPUES del primer pintado para no retrasar la pantalla, y
     // la seccion se repinta cuando llegan. Sin esto la tabla mostraria "—" para
     // siempre en la primera carga.
