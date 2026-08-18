@@ -5,6 +5,7 @@ públicas versionadas y el push del VPS (CF-22: prioridad versionado > push).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 
@@ -18,8 +19,23 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
 TF_ARCHIVO = {"15m": "15m", "4h": "4h"}
 
 
+def ruta_snapshot(root: str, mercado: str, tf: str) -> str:
+    return os.path.join(root, "data", f"klines_{mercado}_{TF_ARCHIVO[tf]}.json")
+
+
+def sha_snapshot(ruta: str) -> str | None:
+    """SHA-256 del archivo de snapshot versionado (provenance CF-28)."""
+    if not os.path.exists(ruta):
+        return None
+    h = hashlib.sha256()
+    with open(ruta, "rb") as fh:
+        for bloque in iter(lambda: fh.read(1 << 20), b""):
+            h.update(bloque)
+    return h.hexdigest()
+
+
 def leer_versionado(root: str, mercado: str, tf: str) -> list[dict]:
-    ruta = os.path.join(root, "data", f"klines_{mercado}_{TF_ARCHIVO[tf]}.json")
+    ruta = ruta_snapshot(root, mercado, tf)
     try:
         with open(ruta, encoding="utf-8") as fh:
             filas = json.load(fh)
@@ -59,7 +75,8 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                         limite: int | None = None,
                         extra: dict | None = None,
                         estado_dir: str | None = None,
-                        ledger=None) -> dict:
+                        ledger=None,
+                        commit_snapshot: str | None = None) -> dict:
     """Construye los almacenes ingiriendo el snapshot versionado (CF-28) y,
     opcionalmente, velas adicionales (push) por mercado.
 
@@ -72,8 +89,18 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
     nuevos: set = set()
     nacidos: list = []
     for mercado in mercados:
+        nombre = f"{mercado}_{tf}"
+        declarado = estado_dir is not None and nombre in declarados
         filas = leer_versionado(root, mercado, tf)
         if not filas:
+            # Un mercado DECLARADO no puede desaparecer del universo en
+            # silencio por una ausencia transitoria del snapshot fuente:
+            # fallo cerrado (antes se hacía `continue` y `mercados_ok` se
+            # reducía sin dejar rastro).
+            if declarado:
+                raise FileNotFoundError(
+                    f"snapshot fuente ausente para {nombre}, que el "
+                    f"manifiesto de {estado_dir} declara sellado")
             continue
         filas = sorted(filas, key=lambda r: int(r["t"]))
         if tf == "4h":
@@ -86,13 +113,11 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
             # archivo es obligatorio (fallo cerrado si desapareció); si no
             # está declarado, es primer arranque y se crea.
             ruta = ruta_estado(estado_dir, mercado, tf)
-            nombre = f"{mercado}_{tf}"
-            alm = S.Almacen.cargar(mercado, tf, ruta,
-                                   requerido=nombre in declarados)
+            alm = S.Almacen.cargar(mercado, tf, ruta, requerido=declarado)
             nuevos.add(nombre)
             if not alm.registros:
                 alm.nacer_en(ancla)
-                nacidos.append((alm, ancla))
+                nacidos.append((alm, ancla, ruta_snapshot(root, mercado, tf)))
         else:
             alm = S.Almacen(mercado, tf)
             alm.nacer_en(ancla)
@@ -108,9 +133,16 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
     if estado_dir:
         escribir_manifiesto(estado_dir, declarados | nuevos)
     if ledger is not None:
-        for alm, ancla in nacidos:           # CF-28: nacimiento del almacén
+        for alm, ancla, ruta_snap in nacidos:   # CF-28: nacimiento
+            # Provenance EXIGIDA por CF-28: no basta la ruta local — se
+            # registran el commit del snapshot, su SHA-256 y el `hash_acum`
+            # inicial de la cadena.
             ledger.append("nacimiento", mercado=alm.mercado, tf=tf,
-                          effective_at=ancla, ruta=alm.ruta)
+                          effective_at=ancla, ruta=alm.ruta,
+                          snapshot_ruta=ruta_snap,
+                          snapshot_sha256=sha_snapshot(ruta_snap),
+                          commit_snapshot=commit_snapshot or ledger.commit,
+                          hash_acum_inicial=S.SEMILLA)
         for alm in almacenes.values():       # CF-26: incidencias de ingestión
             for inc in alm.incidencias:
                 ledger.append(inc["tipo"], mercado=inc["mercado"],

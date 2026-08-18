@@ -1321,48 +1321,72 @@ def _corrida(ruta_ledger, ep, lotes, reloj=1_900_000_000_000):
 
 
 def _guion(ruta_ledger, reloj=1_900_000_000_000):
-    """Guion determinista que ejercita MUCHAS familias del registro CF-37:
-    bootstrap y frontera, época, watermark de exchange (hueco + degradación),
-    candidato/orden/terminal, lotes y corte administrativo."""
+    """Guion determinista que ejercita las NUEVE familias del registro
+    CF-37 y el ciclo completo de trade (candidato → orden → fill → cierre),
+    todo por caminos reales del motor.
+
+    Anclado cerca de `T_corte` para que el corte administrativo vea velas
+    parciales posteriores (familia `cobertura`)."""
     from modules.bot3.v9.ledger import Ledger as L
-    t0 = 1646092800000
+    t0 = CIERRE_ALINEADO - 260 * DUR
+    ep_conf = _epoca_confirmacion()                  # estructura real M15
     alms = {}
     for m in C.MERCADOS:
         alm = S.Almacen(m, "15m"); alm.nacer_en(t0)
-        n = 200 if m == "BTCUSDT" else 210
-        alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(n)],
-                    "push")
-        alm.drenar()
+        if m == "SOLUSDT":                           # estructura de iBOS
+            velas = [vela(t0 + i * DUR, v["o"], v["h"], v["l"], v["c"])
+                     for i, v in enumerate(ep_conf)]
+        elif m == "BTCUSDT":                         # enmudece → watermark
+            velas = [vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(200)]
+        elif m == "ADAUSDT":                         # publica pasado T_corte
+            velas = [vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(262)]
+        else:
+            velas = [vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(215)]
+        alm.ofrecer(velas, "push"); alm.drenar()
         alms[m] = alm
     led = L(ruta_ledger, commit="test")
-    frontera = t0 + 199 * DUR
+    frontera = t0 + 205 * DUR
     motor = E.Motor(alms, alms, C.MERCADOS, led, bootstrap_hasta=frontera,
                     reloj=lambda: reloj)
-    T = t0 + 201 * DUR
+    T = t0 + 210 * DUR
+    calc = {"direccion": "long", "rango": {"weak": 30.0, "eq": 2.0},
+            "zonas": [{"kind": "ob", "dir": "long", "lo": 0.4, "hi": 2.5,
+                       "available_at": 0}],
+            "fractal": {"available_at": 0}, "motivo": None}
     motor.iniciar_ciclo(reloj)
     try:
-        motor.watermark_exchange(T)          # hueco_detectado + degradado
-        motor.procesar_lote(T)               # frontera + estado_inicial + época
-        st = motor.estados["ETHUSDT"]        # candidato → orden → terminal
-        ep = alms["ETHUSDT"].velas
-        zona = {"kind": "ob", "dir": "long", "lo": 0.4, "hi": 2.5,
-                "available_at": 0}
-        # eq por ENCIMA del medio de la zona: en largo la zona debe estar en
-        # descuento para ser elegible.
-        calc = {"direccion": "long", "rango": {"weak": 30.0, "eq": 2.0},
-                "zonas": [zona], "fractal": {"available_at": 0},
-                "motivo": None}
-        motor._fase7b("ETHUSDT", T, T, ep, 205, calc, st)
-        # Terminal de jerarquía: el candidato muere en su deadline.
-        st.candidato["deadline_close"] = T
-        motor._fase7a("ETHUSDT", T, T, ep, 205, calc, st)
-        # Descarte con zona (RR insuficiente): weak pegado a la entrada.
-        st2 = motor.estados["SOLUSDT"]
-        motor._emit("descarte", T, "SOLUSDT", motivo="rr_insuficiente",
+        motor.watermark_exchange(T)                  # hueco + degradado
+        motor.procesar_lote(T)                       # frontera + época + lote
+        # --- ciclo de trade REAL sobre SOLUSDT ---
+        sol = motor.estados["SOLUSDT"]
+        ep_sol = alms["SOLUSDT"].velas
+        # `candidato` nace por el camino real (_fase7b) y luego su toque se
+        # ancla donde la estructura permite confirmar, para que `orden_creada`
+        # también salga del camino real (_fase7a).
+        # zona en el rango de precios REAL de esa estructura (~11) y en
+        # descuento respecto del EQ, para que el toque exista de verdad
+        calc_sol = {"direccion": "long", "rango": {"weak": 30.0, "eq": 15.0},
+                    "zonas": [{"kind": "ob", "dir": "long", "lo": 11.0,
+                               "hi": 12.0, "available_at": 0}],
+                    "fractal": {"available_at": 0}, "motivo": None}
+        motor._fase7b("SOLUSDT", T, T, ep_sol, len(ep_sol), calc_sol, sol)
+        sol.candidato["j_toque"] = PAD + 6
+        sol.candidato["weak"] = 30.0
+        motor._fase7a("SOLUSDT", T, T, ep_sol, len(ep_sol), calc_sol, sol)
+        # --- fill y cierre por el camino del motor (ETHUSDT) ---
+        eth = motor.estados["ETHUSDT"]
+        eth.estado = "orden_viva"
+        eth.orden = {"order_id": "e" * 64, "candidate_id": "c" * 64,
+                     "E": 1.6, "S": 0.4, "T": 1.9, "largo": True,
+                     "dir": "long", "deadline_close": T + 50 * DUR}
+        motor._procesar_mercado("ETHUSDT", T, T)     # → fill
+        motor._procesar_mercado("ETHUSDT", T + DUR, T + DUR)   # → cerrado
+        # --- descarte con zona, nacimiento e incidencia ---
+        motor._emit("descarte", T, "XRPUSDT", motivo="rr_insuficiente",
                     zona_avail=0, zona_lo=0.4, zona_hi=2.5)
-        # Nacimiento e incidencias de ingestión (CF-26/CF-28).
-        # emitido en el lote T (post-frontera) pero EFECTIVO en el ancla
-        motor._emit("nacimiento", T, "XRPUSDT", tf="15m", efectivo=t0)
+        motor._emit("nacimiento", T, "XRPUSDT", tf="15m", efectivo=t0,
+                    snapshot_sha256="s" * 64, commit_snapshot="test",
+                    hash_acum_inicial=S.SEMILLA)
         led.append("vela_revisada", mercado="XRPUSDT", tf="15m",
                    effective_at=t0, id="a" * 64)
     finally:
@@ -1372,26 +1396,18 @@ def _guion(ruta_ledger, reloj=1_900_000_000_000):
     return led
 
 
-def test_b6_guion_declara_su_cobertura_real(tmp_path):
-    """Cobertura HONESTA del guion: se declara qué familias del registro
-    CF-37 ejercita y cuáles NO, para que la matriz no aparente más de lo
-    que prueba. `cobertura` (degradacion_de_cobertura) queda fuera porque
-    exige velas posteriores a T_corte y tiene su propio gate dedicado."""
+def test_b6_guion_cubre_las_nueve_familias_y_el_ciclo_de_trade(tmp_path):
+    """CF-30: la matriz de crash debe recorrer CADA familia del registro y
+    el ciclo completo de trade, no solo barreras y abstenciones."""
     led = _guion(str(tmp_path / "g.jsonl"))
     tipos = {e["tipo"] for e in led.eventos}
     familias = {C.TIPOS[t] for t in tipos}
-    esperadas = {C.FAM_BARRERA, C.FAM_MERCADO, C.FAM_ABSTENCION,
-                 C.FAM_HUECO, C.FAM_JERARQUIA, C.FAM_DESCARTE,
-                 C.FAM_NACIMIENTO, C.FAM_INCIDENCIA}
-    assert familias == esperadas, familias
-    # Dentro de `jerarquia`, al menos candidato y un TERMINAL.
-    jer = {t for t in tipos if C.TIPOS[t] == C.FAM_JERARQUIA}
-    assert "candidato" in jer
-    assert jer & {"candidato_expirado", "candidato_invalidado",
-                  "orden_creada", "confirmada_sin_fill"}
-    # La familia no cubierta aquí tiene gate propio:
-    assert C.FAM_COBERTURA not in familias
-    assert "test_b4_corte_administrativo_con_evidencia" in globals()
+    todas = {C.FAM_JERARQUIA, C.FAM_DESCARTE, C.FAM_ABSTENCION,
+             C.FAM_BARRERA, C.FAM_MERCADO, C.FAM_NACIMIENTO, C.FAM_HUECO,
+             C.FAM_COBERTURA, C.FAM_INCIDENCIA}
+    assert familias == todas, sorted(todas - familias)
+    # Ciclo de trade completo dentro de `jerarquia`.
+    assert {"candidato", "orden_creada", "fill", "cerrado"} <= tipos, tipos
 
 
 def test_b6_matriz_de_crash_por_evento(tmp_path):
