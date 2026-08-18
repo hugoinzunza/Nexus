@@ -18,7 +18,9 @@ from __future__ import annotations
 import bisect
 
 from . import primitives as P
+from .store import prueba_exchange
 from .contract import (
+    CORTE_ADMIN_GRACIA_MS,
     CORTE_MIN_SEMANAS_ISO, CORTE_N_CIERRES, DEADLINE_M15, DIR_EXPIRA_H4,
     GENESIS_H4,
     EPOCA_M15_MIN_VELAS, FEE_MAKER, FEE_TAKER, FUNDING_HORAS_UTC,
@@ -241,11 +243,100 @@ class Motor:
         if not self._frontera_cruzada and T > self.bootstrap_hasta:
             self._cruzar_frontera(T, fin)
         for mercado in self.mercados:
+            self._reingreso(mercado, T, fin)
             self._anunciar_epoca(mercado, T, fin)
             self._procesar_mercado(mercado, T, fin)
         self._emit("lote_finalizado", T, finalized_at=fin)
         self.lotes_finalizados.append(T)
         self._fase8(T)
+
+    def watermark_exchange(self, T: int) -> list[str]:
+        """CF-29: ante un mercado SILENCIOSO en el lote `T`, si ≥Q mercados de
+        referencia ya publicaron N cierres sincronizados posteriores, declara
+        su hueco (`motivo="exchange"`), lo marca DEGRADADO y lo registra.
+
+        Devuelve la lista de mercados degradados en esta pasada. Es lo que
+        hace que la finalidad del lote progrese sin esperar indefinidamente."""
+        degradados = []
+        idx_t = T - DUR_M15
+        for mercado in self.mercados:
+            alm = self.m15[mercado]
+            if alm.cubre(idx_t) != "pendiente":
+                continue
+            if self._epoca_habilitada(mercado, T) is None:
+                continue
+            prueba = prueba_exchange(self.m15, mercado, T)
+            if prueba is None:
+                continue                      # sin quorum: se sigue esperando
+            hueco = alm.hueco_pendiente()
+            desde = hueco[0] if hueco else idx_t
+            hasta = hueco[1] if hueco else idx_t
+            reg = alm.declarar_hueco_exchange(desde, hasta, prueba)
+            st = self.estados[mercado]
+            st.degradado = True
+            self._emit("hueco_detectado", T, mercado, desde=desde, hasta=hasta,
+                       tf="15m", motivo="exchange",
+                       detected_at=reg["detected_at"], prueba=prueba)
+            self._emit("mercado_degradado", T, mercado,
+                       detected_at=reg["detected_at"])
+            degradados.append(mercado)
+        return degradados
+
+    def _reingreso(self, mercado: str, T: int, fin: int) -> None:
+        """Un mercado degradado reingresa solo con una ÉPOCA NUEVA habilitada
+        (CF-29): nunca continúa la anterior."""
+        st = self.estados[mercado]
+        if not st.degradado:
+            return
+        ventana = self._epoca_habilitada(mercado, T)
+        if ventana is None:
+            return
+        t0 = int(ventana[0][0]["t"])
+        if (mercado, t0) in self._epocas_anunciadas:
+            return                                   # es la época previa
+        st.degradado = False
+        self._emit("mercado_reingresado", T, mercado, finalized_at=fin)
+
+    # --- Corte administrativo total (CF-35) -------------------------------
+    def cerrar_administrativo(self, reloj_ms: int) -> bool:
+        """CF-35: si el reloj supera `T_corte + 24 h` y NO existe ningún lote
+        global finalizado posterior a `T_corte`, se cierra el experimento
+        contra el ÚLTIMO lote finalizado ≤ `T_corte`, con su evidencia.
+
+        Las velas parciales posteriores quedan FUERA de la cohorte y se
+        reportan como `degradacion_de_cobertura`."""
+        if self.cortado:
+            return False
+        if any(t > T_CORTE for t in self.lotes_finalizados):
+            return False                       # la vía normal sigue vigente
+        if reloj_ms <= T_CORTE + CORTE_ADMIN_GRACIA_MS:
+            return False
+        previos = [t for t in self.lotes_finalizados if t <= T_CORTE]
+        ultimo = max(previos) if previos else None
+        faltantes = [m for m in self.mercados
+                     if self.m15[m].cubre(T_CORTE - DUR_M15) == "pendiente"]
+        ancla = ultimo if ultimo is not None else T_CORTE
+        for mercado in self.mercados:                # estado congelado
+            st = self.estados[mercado]
+            if st.estado in ("posicion", "salida_detectada") and st.posicion:
+                self._emit("abierta_al_corte", ancla, mercado,
+                           efectivo=T_CORTE, id=st.posicion["trade_id"])
+            elif st.estado == "orden_viva" and st.orden:
+                self._emit("orden_al_corte", ancla, mercado, efectivo=T_CORTE,
+                           id=st.orden["order_id"])
+        for mercado in self.mercados:                # cobertura degradada
+            posteriores = [int(v["t"]) for v in self.m15[mercado].velas
+                           if int(v["t"]) + DUR_M15 > T_CORTE]
+            if posteriores:
+                self._emit("degradacion_de_cobertura", ancla, mercado,
+                           efectivo=T_CORTE, desde=min(posteriores),
+                           hasta=max(posteriores))
+        self._emit("corte_administrativo", ancla, efectivo=T_CORTE,
+                   reloj=reloj_ms, ultimo_lote_finalizado=ultimo,
+                   mercados_sin_datos=faltantes)
+        self.cortado = True
+        self.motivo_corte = "administrativo"
+        return True
 
     def _cruzar_frontera(self, T: int, fin: int) -> None:
         """CF-21/CF-24: al cruzar `T_frontera`, TODO mercado queda `flat`.

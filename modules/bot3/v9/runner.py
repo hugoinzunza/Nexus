@@ -66,7 +66,8 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
 def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
            desde: int | None = None, limite: int | None = None,
            ledger_ruta: str | None = None, commit: str = "dev",
-           bootstrap_hasta: int | None = None) -> tuple[Motor, Ledger]:
+           bootstrap_hasta: int | None = None,
+           reloj_ms: int | None = None) -> tuple[Motor, Ledger]:
     """Corre el motor por lotes globales de `close_time` M15."""
     m15 = construir_almacenes(root, mercados, "15m", limite)
     h4 = construir_almacenes(root, mercados, "4h", limite)
@@ -81,8 +82,16 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
         if hasta is not None and T > hasta:
             break
         if not motor.lote_finalizable(T):
-            continue
+            # CF-29/CF-23: un mercado silencioso no bloquea para siempre —
+            # se intenta el watermark global de exchange y se reevalúa.
+            motor.watermark_exchange(T)
+            if not motor.lote_finalizable(T):
+                continue
         motor.procesar_lote(T)
         if motor.cortado:
             break
+    # CF-35: sin lote global finalizado posterior a T_corte y con el reloj
+    # pasado la gracia, el experimento se cierra administrativamente.
+    if not motor.cortado and reloj_ms is not None:
+        motor.cerrar_administrativo(reloj_ms)
     return motor, led

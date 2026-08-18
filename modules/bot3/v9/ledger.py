@@ -40,13 +40,17 @@ class Ledger:
                 self.eventos.append(ev)
                 self._ids.add(ev["event_id"])
 
+    # Tipos cuya IDENTIDAD usa un instante propio distinto del `effective_at`
+    # causal. Es una lista CERRADA: `id_t` no es un escape genérico.
+    ID_T_PERMITIDO = ("epoca_m15",)
+
     def _clave(self, tipo: str, campos: dict) -> str:
-        # `id_t` permite que la IDENTIDAD use un instante propio (p. ej. el
-        # `t0` de una época) distinto del `effective_at` causal del evento.
+        t = campos.get("effective_at")
+        if tipo in self.ID_T_PERMITIDO and campos.get("id_t") is not None:
+            t = campos["id_t"]
         return event_id(
             tipo, contrato=CONTRATO_HASH, id=campos.get("id"),
-            mercado=campos.get("mercado"),
-            t=campos.get("id_t", campos.get("effective_at")),
+            mercado=campos.get("mercado"), t=t,
             tf=campos.get("tf"), motivo=campos.get("motivo"),
             desde=campos.get("desde"), hasta=campos.get("hasta"),
             zona_avail=campos.get("zona_avail"), zona_lo=campos.get("zona_lo"),
@@ -58,12 +62,16 @@ class Ledger:
         `event_id` ya existe (idempotencia tras crash)."""
         if tipo not in TIPOS:
             raise ValueError(f"tipo fuera del registro cerrado CF-37: {tipo!r}")
+        if campos.get("id_t") is not None and tipo not in self.ID_T_PERMITIDO:
+            raise ValueError(f"`id_t` no permitido para el tipo {tipo!r}")
         eid = self._clave(tipo, campos)
         if eid in self._ids:
             return None
+        # `id_t` es un detalle de identidad: no se persiste en el evento.
         ev = {"event_id": eid, "tipo": tipo, "protocolo": PROTOCOLO,
               "contrato": CONTRATO_HASH, "commit": self.commit,
-              **{k: v for k, v in campos.items() if v is not None}}
+              **{k: v for k, v in campos.items()
+                 if v is not None and k != "id_t"}}
         self.eventos.append(ev)
         self._ids.add(eid)
         if self.ruta:

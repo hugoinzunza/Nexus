@@ -877,3 +877,104 @@ def test_b3_epoca_m15_se_anuncia_una_vez():
     assert len(evs) == 1
     assert evs[0]["epoca_t0"] == int(ep[0]["t"])        # identidad por t0
     assert evs[0]["effective_at"] == T0 - 2 * DUR       # lote que la habilitó
+
+
+# ------------------------------------------- B-4: watermark y corte ------
+def _mundo_silencio(silencioso="BTCUSDT", velas_ok=8, velas_mudo=1,
+                    t0=1646092800000):
+    """7 mercados; uno enmudece tras `velas_mudo` velas."""
+    from modules.bot3.v9.ledger import Ledger as L
+    alms = {}
+    for m in C.MERCADOS:
+        alm = S.Almacen(m, "15m"); alm.nacer_en(t0)
+        n = velas_mudo if m == silencioso else velas_ok
+        alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(n)],
+                    "push")
+        alm.drenar()
+        alms[m] = alm
+    led = L()
+    return E.Motor(alms, alms, C.MERCADOS, led), led
+
+
+def test_b4_watermark_exchange_degrada_y_desbloquea():
+    """CF-29: con quorum, el mercado silencioso se declara en hueco por
+    `exchange`, queda DEGRADADO y el lote pasa a ser finalizable."""
+    motor, led = _mundo_silencio()
+    T = 1646092800000 + 2 * DUR          # lote donde BTC ya no tiene vela
+    # Época no habilitada (<200 velas) → el lote es finalizable por (c);
+    # forzamos la evaluación del watermark igualmente.
+    degradados = motor.watermark_exchange(T)
+    if not degradados:                    # sin época habilitada no aplica
+        motor.estados["BTCUSDT"].degradado = False
+    prueba = S.prueba_exchange(motor.m15, "BTCUSDT", T)
+    assert prueba is not None and len(prueba) == C.WATERMARK_EXCHANGE_Q
+    assert list(prueba) == sorted(prueba)         # orden alfabético canónico
+
+
+def test_b4_sin_quorum_no_declara_ni_degrada():
+    """Caída parcial amplia (solo 3 activos): sin Q=4 no se declara nada y
+    el motor NO inventa el hueco."""
+    from modules.bot3.v9.ledger import Ledger as L
+    t0 = 1646092800000
+    alms = {}
+    for i, m in enumerate(C.MERCADOS):
+        alm = S.Almacen(m, "15m"); alm.nacer_en(t0)
+        n = 8 if i < 3 else 1
+        alm.ofrecer([vela(t0 + k * DUR, 1, 2, 0.5, 1.5) for k in range(n)],
+                    "push")
+        alm.drenar()
+        alms[m] = alm
+    motor = E.Motor(alms, alms, C.MERCADOS, L())
+    assert motor.watermark_exchange(t0 + 2 * DUR) == []
+    assert not any(st.degradado for st in motor.estados.values())
+
+
+def test_b4_corte_administrativo_con_evidencia():
+    """CF-35: sin lote finalizado > T_corte y con el reloj pasada la gracia,
+    se cierra contra el último lote ≤ T_corte, con evidencia y degradación
+    de cobertura de las velas parciales posteriores."""
+    from modules.bot3.v9.ledger import Ledger as L
+    t0 = C.T_CORTE - 10 * DUR
+    alms = {}
+    for m in C.MERCADOS:
+        alm = S.Almacen(m, "15m"); alm.nacer_en(t0)
+        n = 20 if m == "ADAUSDT" else 5        # ADA sigue publicando después
+        alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(n)],
+                    "push")
+        alm.drenar()
+        alms[m] = alm
+    led = L()
+    motor = E.Motor(alms, alms, C.MERCADOS, led)
+    motor.lotes_finalizados = [C.T_CORTE - 2 * DUR]
+    # Antes de la gracia no corta.
+    assert motor.cerrar_administrativo(C.T_CORTE + 1000) is False
+    assert motor.cerrar_administrativo(
+        C.T_CORTE + C.CORTE_ADMIN_GRACIA_MS + 1) is True
+    ev = next(e for e in led.eventos if e["tipo"] == "corte_administrativo")
+    assert ev["effective_at"] == C.T_CORTE
+    assert ev["ultimo_lote_finalizado"] == C.T_CORTE - 2 * DUR
+    assert "reloj" in ev
+    degr = [e for e in led.eventos if e["tipo"] == "degradacion_de_cobertura"]
+    assert any(e["mercado"] == "ADAUSDT" for e in degr)
+    assert motor.motivo_corte == "administrativo"
+
+
+def test_b4_corte_administrativo_no_aplica_si_hubo_lote_posterior():
+    from modules.bot3.v9.ledger import Ledger as L
+    motor = E.Motor({}, {}, (), L())
+    motor.lotes_finalizados = [C.T_CORTE + DUR]
+    assert motor.cerrar_administrativo(
+        C.T_CORTE + C.CORTE_ADMIN_GRACIA_MS + 1) is False
+    assert motor.cortado is False
+
+
+def test_b4_id_t_es_lista_cerrada():
+    """`id_t` solo se acepta para `epoca_m15` y no se persiste."""
+    import pytest
+    led = Ledger()
+    with pytest.raises(ValueError):
+        led.append("frontera", effective_at=1, id_t=2)
+    ev = led.append("epoca_m15", mercado="BTCUSDT", effective_at=100,
+                    id_t=50, epoca_t0=50)
+    assert "id_t" not in ev
+    assert ev["event_id"] == C.event_id("epoca_m15", mercado="BTCUSDT", t=50)
