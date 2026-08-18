@@ -1262,3 +1262,94 @@ def test_b5_heads_no_son_cuadraticos():
 
     chico, grande = medir(500), medir(2000)
     assert grande < chico * 2.5, f"escala mal: {chico:.4f}s vs {grande:.4f}s"
+
+
+# ------------------------------------------------ B-6: recuperación ------
+def test_b6_almacen_rehidrata_con_indices_y_cadena(tmp_path):
+    """La recarga reconstruye registros, velas, épocas e ÍNDICES, y verifica
+    la cadena: `head_asof`/`commit_asof` deben coincidir instante a
+    instante con el almacén original."""
+    ruta = str(tmp_path / "BTCUSDT_15m.jsonl")
+    a = S.Almacen("BTCUSDT", "15m", ruta=ruta); a.nacer_en(0)
+    a.ofrecer([vela(i * DUR, 1 + i * 0.01, 2, 0.5, 1.5) for i in range(20)],
+              "push")
+    a.drenar()
+    a.ofrecer([vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(25, 45)], "push")
+    a.drenar(); a.declarar_hueco_local()
+    b = S.Almacen.cargar("BTCUSDT", "15m", ruta)
+    assert [r["hash_acum"] for r in a.registros] == \
+           [r["hash_acum"] for r in b.registros]
+    assert a.head == b.head
+    assert [len(e) for e in a.epocas()] == [len(e) for e in b.epocas()]
+    assert b._prefix_max == a._prefix_max and b._vela_hashes == a._vela_hashes
+    for t in range(0, 46 * DUR, DUR // 3):
+        assert a.head_asof(t) == b.head_asof(t)
+        assert a.commit_asof(t) == b.commit_asof(t)
+
+
+def test_b6_almacen_alterado_no_carga_en_silencio(tmp_path):
+    """Un archivo manipulado rompe la cadena y la carga DEBE fallar."""
+    import pytest
+    ruta = str(tmp_path / "X_15m.jsonl")
+    a = S.Almacen("X", "15m", ruta=ruta); a.nacer_en(0)
+    a.ofrecer([vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(5)], "push")
+    a.drenar()
+    lineas = open(ruta, encoding="utf-8").read().splitlines()
+    # el payload va escapado dentro de la línea JSON
+    assert '\\"l\\":\\"0.5\\"' in lineas[2]
+    lineas[2] = lineas[2].replace('\\"l\\":\\"0.5\\"', '\\"l\\":\\"0.4\\"')
+    open(ruta, "w", encoding="utf-8").write("\n".join(lineas) + "\n")
+    with pytest.raises(ValueError, match="cadena rota"):
+        S.Almacen.cargar("X", "15m", ruta)
+
+
+def _corrida(ruta_ledger, ep, lotes, reloj=1_900_000_000_000):
+    """Corre el motor sobre `lotes`, persistiendo en `ruta_ledger`."""
+    from modules.bot3.v9.ledger import Ledger as L
+    alm = S.Almacen("BTCUSDT", "15m"); alm.nacer_en(int(ep[0]["t"]))
+    alm.ofrecer(ep, "push"); alm.drenar()
+    led = L(ruta_ledger, commit="test")
+    motor = E.Motor({"BTCUSDT": alm}, {"BTCUSDT": alm}, ("BTCUSDT",), led,
+                    reloj=lambda: reloj)
+    for T in lotes:
+        motor.iniciar_ciclo(reloj)
+        try:
+            motor.procesar_lote(T)
+        finally:
+            motor.finalizar_ciclo()
+    return motor, led
+
+
+def test_b6_reinicio_produce_el_mismo_libro(tmp_path):
+    """Matriz de crash END-TO-END: interrumpir tras cada lote y reanudar
+    debe producir un ledger IDÉNTICO al de la corrida completa —sin
+    duplicados ni omisiones— gracias al determinismo del motor y al dedupe
+    por `event_id` contra lo ya escrito."""
+    ep = _epoca_confirmacion()
+    lotes = [int(ep[-1]["t"]) + DUR - k * DUR for k in range(4, 0, -1)]
+    completo = str(tmp_path / "full.jsonl")
+    _, led_full = _corrida(completo, ep, lotes)
+    esperado = [e["event_id"] for e in led_full.eventos]
+    assert esperado, "el escenario debe producir eventos"
+    for corte in range(len(lotes) + 1):
+        ruta = str(tmp_path / f"crash_{corte}.jsonl")
+        _corrida(ruta, ep, lotes[:corte])          # "crash" tras `corte` lotes
+        _, led_reanudado = _corrida(ruta, ep, lotes)   # reanudación completa
+        assert [e["event_id"] for e in led_reanudado.eventos] == esperado
+        assert len(set(e["event_id"] for e in led_reanudado.eventos)) == \
+            len(esperado)
+
+
+def test_b6_barrera_de_recuperacion_identifica_el_ultimo_lote(tmp_path):
+    """`lote_finalizado` es la barrera: tras un reinicio se puede saber
+    exactamente hasta dónde llegó el ciclo anterior."""
+    ep = _epoca_confirmacion()
+    lotes = [int(ep[-1]["t"]) + DUR - k * DUR for k in range(3, 0, -1)]
+    ruta = str(tmp_path / "l.jsonl")
+    _corrida(ruta, ep, lotes[:2])
+    from modules.bot3.v9.ledger import Ledger as L
+    releido = L(ruta)
+    barreras = [e["effective_at"] for e in releido.eventos
+                if e["tipo"] == "lote_finalizado"]
+    assert barreras == lotes[:2]
+    assert max(barreras) == lotes[1]

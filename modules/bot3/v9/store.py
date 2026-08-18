@@ -10,6 +10,7 @@ almacén es la única entrada del motor; su cadena de hashes lo prueba.
 """
 from __future__ import annotations
 
+import json
 import os
 
 from .contract import (
@@ -128,6 +129,47 @@ class Almacen:
         self.ultimo_t = int(hasta)
         self._epocas_cache = None
         return reg
+
+    # --- rehidratación (B-6) ---------------------------------------------
+    @classmethod
+    def cargar(cls, mercado: str, tf: str, ruta: str) -> "Almacen":
+        """Reconstruye el almacén desde su archivo append-only.
+
+        Reconstruye TODOS los índices (`_prefix_max`, `_vela_hashes`,
+        `_por_t`, `_ts`, `_huecos`) y VERIFICA la cadena: el `hash_acum` de
+        cada registro debe reproducirse desde el anterior y su payload. Un
+        archivo alterado no se carga en silencio."""
+        alm = cls(mercado, tf, ruta=ruta)
+        if not os.path.exists(ruta):
+            return alm
+        prev = SEMILLA
+        with open(ruta, encoding="utf-8") as fh:
+            for n, linea in enumerate(fh, 1):
+                linea = linea.strip()
+                if not linea:
+                    continue
+                reg = json.loads(linea)
+                esperado = encadenar(prev, reg["payload"])
+                if reg["hash_acum"] != esperado:
+                    raise ValueError(
+                        f"cadena rota en {ruta}:{n} — el almacén fue alterado")
+                prev = reg["hash_acum"]
+                alm.registros.append(reg)
+                alm._indexar(reg)
+                if reg["tipo"] == "vela":
+                    datos = json.loads(reg["payload"])
+                    vela = {"t": int(datos["t"]),
+                            **{k: float(datos[k]) for k in "ohlcv"}}
+                    alm.velas.append(vela)
+                    alm._vela_hashes.append(reg["hash_acum"])
+                    alm._por_t[vela["t"]] = vela
+                    alm._ts.append(vela["t"])
+                    alm.ultimo_t = vela["t"]
+                else:
+                    alm._huecos.append((reg["desde"], reg["hasta"]))
+                    alm.ultimo_t = reg["hasta"]
+        alm._epocas_cache = None
+        return alm
 
     # --- nacimiento (CF-28) ----------------------------------------------
     def nacer_en(self, ancla_t: int) -> None:
