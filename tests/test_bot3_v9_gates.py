@@ -1373,14 +1373,21 @@ def _guion(ruta_ledger, reloj=1_900_000_000_000):
         sol.candidato["j_toque"] = PAD + 6
         sol.candidato["weak"] = 30.0
         motor._fase7a("SOLUSDT", T, T, ep_sol, len(ep_sol), calc_sol, sol)
-        # --- fill y cierre por el camino del motor (ETHUSDT) ---
-        eth = motor.estados["ETHUSDT"]
-        eth.estado = "orden_viva"
-        eth.orden = {"order_id": "e" * 64, "candidate_id": "c" * 64,
-                     "E": 1.6, "S": 0.4, "T": 1.9, "largo": True,
-                     "dir": "long", "deadline_close": T + 50 * DUR}
-        motor._procesar_mercado("ETHUSDT", T, T)     # → fill
-        motor._procesar_mercado("ETHUSDT", T + DUR, T + DUR)   # → cerrado
+        # --- CADENA CONTINUA: la MISMA orden de SOLUSDT se llena y cierra ---
+        o = sol.orden
+        assert o is not None, "el guion exige que SOL cree su orden"
+        Ev, Sv, Tv = o["E"], o["S"], o["T"]
+        base = int(ep_sol[-1]["t"]) + DUR
+        # vela que retrocede hasta E sin tocar el SL → fill a E
+        alms["SOLUSDT"].ofrecer(
+            [vela(base, Ev + 0.5, Ev + 0.6, Ev - 0.01, Ev + 0.4)], "push")
+        alms["SOLUSDT"].drenar()
+        motor._procesar_mercado("SOLUSDT", base + DUR, base + DUR)
+        # vela que alcanza el TP → cierre de esa misma posición
+        alms["SOLUSDT"].ofrecer(
+            [vela(base + DUR, Ev + 0.4, Tv + 0.5, Ev + 0.3, Tv + 0.2)], "push")
+        alms["SOLUSDT"].drenar()
+        motor._procesar_mercado("SOLUSDT", base + 2 * DUR, base + 2 * DUR)
         # --- descarte con zona, nacimiento e incidencia ---
         motor._emit("descarte", T, "XRPUSDT", motivo="rr_insuficiente",
                     zona_avail=0, zona_lo=0.4, zona_hi=2.5)
@@ -1406,8 +1413,22 @@ def test_b6_guion_cubre_las_nueve_familias_y_el_ciclo_de_trade(tmp_path):
              C.FAM_BARRERA, C.FAM_MERCADO, C.FAM_NACIMIENTO, C.FAM_HUECO,
              C.FAM_COBERTURA, C.FAM_INCIDENCIA}
     assert familias == todas, sorted(todas - familias)
-    # Ciclo de trade completo dentro de `jerarquia`.
+    # CADENA CONTINUA en un MISMO mercado, con la jerarquía encadenada:
+    # candidato → orden_creada → fill → cerrado.
     assert {"candidato", "orden_creada", "fill", "cerrado"} <= tipos, tipos
+    por_tipo = {}
+    for e in led.eventos:
+        por_tipo.setdefault(e["tipo"], []).append(e)
+    cand = por_tipo["candidato"][0]
+    orden = por_tipo["orden_creada"][0]
+    fill = por_tipo["fill"][0]
+    cerrado = por_tipo["cerrado"][0]
+    assert cand["mercado"] == orden["mercado"] == fill["mercado"] == \
+        cerrado["mercado"] == "SOLUSDT"
+    # el trade llenado desciende de la orden creada por el MISMO recorrido
+    assert fill["id"] == C.trade_id(orden["id"], fill["effective_at"],
+                                    fill["precio"])
+    assert cerrado["id"] == fill["id"]
 
 
 def test_b6_matriz_de_crash_por_evento(tmp_path):
@@ -1522,7 +1543,11 @@ def test_b6_manifiesto_distingue_las_tres_situaciones(tmp_path):
     led = L()
     a = R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
                               estado_dir=d, ledger=led)["BTCUSDT"]
-    assert R.leer_manifiesto(d) == {"BTCUSDT_15m"}
+    manif = R.leer_manifiesto(d)
+    assert set(manif) == {"BTCUSDT_15m"}
+    # el manifiesto GUARDA la provenance para poder reemitir el nacimiento
+    prov = manif["BTCUSDT_15m"]
+    assert prov["snapshot_sha256"] and prov["hash_acum_inicial"] == S.SEMILLA
     assert [e["tipo"] for e in led.eventos] == ["nacimiento"]
     b = R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
                               estado_dir=d)["BTCUSDT"]
@@ -1531,3 +1556,26 @@ def test_b6_manifiesto_distingue_las_tres_situaciones(tmp_path):
     with pytest.raises(FileNotFoundError):        # directorio parcial
         R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
                               estado_dir=d)
+
+
+def test_b6_nacimiento_se_repone_tras_crash(tmp_path):
+    """Reproducción del blocker: si el proceso cae DESPUÉS de crear almacén
+    y manifiesto pero ANTES del append al ledger, el siguiente arranque debe
+    REPONER el `nacimiento` desde la provenance guardada (idempotente)."""
+    import pytest
+    from modules.bot3.v9 import runner as R
+    from modules.bot3.v9.ledger import Ledger as L
+    if not R.leer_versionado(R.ROOT, "BTCUSDT", "15m"):
+        pytest.skip("sin klines versionadas")
+    d = str(tmp_path / "estado")
+    R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
+                          estado_dir=d)                    # sin ledger = crash
+    led = L()
+    R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
+                          estado_dir=d, ledger=led)        # reinicio
+    nac = [e for e in led.eventos if e["tipo"] == "nacimiento"]
+    assert len(nac) == 1, "el nacimiento perdido debe reponerse"
+    assert nac[0]["snapshot_sha256"] and nac[0]["commit_snapshot"]
+    R.construir_almacenes(R.ROOT, ("BTCUSDT",), "15m", limite=200,
+                          estado_dir=d, ledger=led)        # otra vez
+    assert len([e for e in led.eventos if e["tipo"] == "nacimiento"]) == 1

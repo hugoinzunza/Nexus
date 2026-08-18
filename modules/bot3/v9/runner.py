@@ -51,7 +51,7 @@ def ruta_estado(estado_dir: str, mercado: str, tf: str) -> str:
     return os.path.join(estado_dir, f"{mercado}_{tf}.jsonl")
 
 
-def leer_manifiesto(estado_dir: str) -> set:
+def leer_manifiesto(estado_dir: str) -> dict:
     """Almacenes que este estado_dir DECLARA tener sellados. Distingue las
     tres situaciones operacionales (B-6):
       - directorio nuevo (sin manifiesto)  → creación completa;
@@ -59,16 +59,21 @@ def leer_manifiesto(estado_dir: str) -> set:
       - directorio parcial (declarado y ausente) → FALLO CERRADO."""
     ruta = os.path.join(estado_dir, MANIFIESTO)
     if not os.path.exists(ruta):
-        return set()
+        return {}
     with open(ruta, encoding="utf-8") as fh:
-        return set(json.load(fh).get("almacenes", []))
+        alm = json.load(fh).get("almacenes", {})
+    return alm if isinstance(alm, dict) else {n: {} for n in alm}
 
 
-def escribir_manifiesto(estado_dir: str, nombres: set) -> None:
+def escribir_manifiesto(estado_dir: str, almacenes: dict) -> None:
+    """El manifiesto GUARDA la provenance de cada almacén (ancla, snapshot,
+    commit y hash inicial) para poder reemitir `nacimiento` de forma
+    idempotente si el proceso cayó entre la creación y el append al
+    ledger."""
     os.makedirs(estado_dir, exist_ok=True)
     with open(os.path.join(estado_dir, MANIFIESTO), "w", encoding="utf-8") as fh:
-        json.dump({"almacenes": sorted(nombres)}, fh,
-                  sort_keys=True, separators=(",", ":"))
+        json.dump({"almacenes": almacenes}, fh, sort_keys=True,
+                  separators=(",", ":"))
 
 
 def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
@@ -85,9 +90,8 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
     el mismo libro sobre el tramo común."""
     almacenes = {}
     dur = TF_MS[tf]
-    declarados = leer_manifiesto(estado_dir) if estado_dir else set()
-    nuevos: set = set()
-    nacidos: list = []
+    declarados = leer_manifiesto(estado_dir) if estado_dir else {}
+    registro: dict = dict(declarados)
     for mercado in mercados:
         nombre = f"{mercado}_{tf}"
         declarado = estado_dir is not None and nombre in declarados
@@ -114,10 +118,18 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
             # está declarado, es primer arranque y se crea.
             ruta = ruta_estado(estado_dir, mercado, tf)
             alm = S.Almacen.cargar(mercado, tf, ruta, requerido=declarado)
-            nuevos.add(nombre)
             if not alm.registros:
                 alm.nacer_en(ancla)
-                nacidos.append((alm, ancla, ruta_snapshot(root, mercado, tf)))
+            if nombre not in registro:
+                snap = ruta_snapshot(root, mercado, tf)
+                registro[nombre] = {
+                    "mercado": mercado, "tf": tf, "ancla": int(ancla),
+                    "ruta": ruta, "snapshot_ruta": snap,
+                    "snapshot_sha256": sha_snapshot(snap),
+                    "commit_snapshot": commit_snapshot or (
+                        ledger.commit if ledger is not None else "dev"),
+                    "hash_acum_inicial": S.SEMILLA,
+                }
         else:
             alm = S.Almacen(mercado, tf)
             alm.nacer_en(ancla)
@@ -131,18 +143,21 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
             pass
         almacenes[mercado] = alm
     if estado_dir:
-        escribir_manifiesto(estado_dir, declarados | nuevos)
+        escribir_manifiesto(estado_dir, registro)
     if ledger is not None:
-        for alm, ancla, ruta_snap in nacidos:   # CF-28: nacimiento
-            # Provenance EXIGIDA por CF-28: no basta la ruta local — se
-            # registran el commit del snapshot, su SHA-256 y el `hash_acum`
-            # inicial de la cadena.
-            ledger.append("nacimiento", mercado=alm.mercado, tf=tf,
-                          effective_at=ancla, ruta=alm.ruta,
-                          snapshot_ruta=ruta_snap,
-                          snapshot_sha256=sha_snapshot(ruta_snap),
-                          commit_snapshot=commit_snapshot or ledger.commit,
-                          hash_acum_inicial=S.SEMILLA)
+        # CF-28: se reemite el `nacimiento` de TODO almacén del manifiesto de
+        # esta TF. Es idempotente por `event_id`, así que un crash entre la
+        # escritura del manifiesto y el append al ledger no pierde el evento:
+        # el siguiente arranque lo repone desde la provenance guardada.
+        for nombre, prov in sorted(registro.items()):
+            if prov.get("tf") != tf:
+                continue
+            ledger.append("nacimiento", mercado=prov["mercado"], tf=prov["tf"],
+                          effective_at=prov["ancla"], ruta=prov.get("ruta"),
+                          snapshot_ruta=prov.get("snapshot_ruta"),
+                          snapshot_sha256=prov.get("snapshot_sha256"),
+                          commit_snapshot=prov.get("commit_snapshot"),
+                          hash_acum_inicial=prov.get("hash_acum_inicial"))
         for alm in almacenes.values():       # CF-26: incidencias de ingestión
             for inc in alm.incidencias:
                 ledger.append(inc["tipo"], mercado=inc["mercado"],
