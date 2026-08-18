@@ -198,11 +198,20 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
     Con `estado_dir`, los almacenes se PERSISTEN y se rehidratan en el
     siguiente arranque (B-6): un reinicio real reutiliza el push ya sellado
     en vez de reconstruirlo."""
+    if estado_dir and commit == "dev":
+        # Un commit placeholder no puede anclar la provenance de un estado
+        # persistido: haría inservible la verificación CF-28 al recuperar.
+        raise ValueError(
+            "con `estado_dir` hay que pasar un `commit` real, no 'dev'")
     led = Ledger(ledger_ruta, commit=commit)
+    # El commit del despliegue SÍ viaja a la construcción: es lo que activa
+    # la verificación CF-28 en la ruta productiva.
     m15 = construir_almacenes(root, mercados, "15m", limite,
-                              estado_dir=estado_dir, ledger=led)
+                              estado_dir=estado_dir, ledger=led,
+                              commit_snapshot=commit)
     h4 = construir_almacenes(root, mercados, "4h", limite,
-                             estado_dir=estado_dir, ledger=led)
+                             estado_dir=estado_dir, ledger=led,
+                             commit_snapshot=commit)
     mercados_ok = tuple(sorted(set(m15) & set(h4)))
     motor = Motor(m15, h4, mercados_ok, led, bootstrap_hasta=bootstrap_hasta)
     cierres = sorted({int(v["t"]) + DUR_M15

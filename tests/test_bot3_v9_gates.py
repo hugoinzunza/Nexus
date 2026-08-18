@@ -1634,3 +1634,32 @@ def test_b6_dedupe_falla_con_payload_incompatible():
     with pytest.raises(ValueError, match="payload distinto"):
         led.append("lote_finalizado", effective_at=1, finalized_at=1,
                    processed_at=100, heads_por_mercado={"A": "DIFERENTE"})
+
+
+def test_b6_correr_activa_la_verificacion_de_commit(tmp_path):
+    """END-TO-END por `correr()`: el commit del despliegue debe viajar a la
+    construcción de almacenes, de modo que recuperar con OTRO commit falle.
+    Antes la validación existía pero la ruta productiva no la activaba."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    origen = R.ruta_snapshot(R.ROOT, "BTCUSDT", "15m")
+    origen_h4 = R.ruta_snapshot(R.ROOT, "BTCUSDT", "4h")
+    if not (os.path.exists(origen) and os.path.exists(origen_h4)):
+        pytest.skip("sin klines versionadas")
+    raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
+    for src, tf in ((origen, "15m"), (origen_h4, "4h")):
+        filas = json.load(open(src, encoding="utf-8"))[:300]
+        json.dump(filas, open(R.ruta_snapshot(raiz, "BTCUSDT", tf), "w",
+                              encoding="utf-8"))
+    d = str(tmp_path / "estado")
+    # `dev` no puede anclar provenance de un estado persistido
+    with pytest.raises(ValueError, match="commit"):
+        R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d)
+    R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
+             commit="commit-A")
+    R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
+             commit="commit-A")                      # mismo commit: OK
+    with pytest.raises(ValueError, match="commit del snapshot"):
+        R.correr(root=raiz, mercados=("BTCUSDT",), hasta=0, estado_dir=d,
+                 commit="commit-B")
