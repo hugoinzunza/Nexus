@@ -1202,3 +1202,63 @@ def test_b5_processed_at_es_atomico_por_ciclo():
     motor.iniciar_ciclo()
     motor.procesar_lote(T + DUR)
     assert len({e["processed_at"] for e in led.eventos}) == 2
+
+
+def test_b5_heads_indexados_equivalen_al_recorrido_lineal():
+    """Los índices O(log n) de `head_asof`/`commit_asof` deben devolver
+    EXACTAMENTE lo mismo que el recorrido lineal, también con huecos."""
+    t0 = 0
+    alm = S.Almacen("X", "15m"); alm.nacer_en(t0)
+    alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(30)],
+                "push")
+    alm.drenar()
+    alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(35, 60)],
+                "push")
+    alm.drenar(); alm.declarar_hueco_local()
+    assert any(r["tipo"] == "gap" for r in alm.registros)
+
+    def head_lineal(t):
+        cur = S.SEMILLA
+        for reg in alm.registros:
+            ok = (reg["t"] + alm.dur <= t) if reg["tipo"] == "vela" \
+                else (reg["detected_at"] <= t)
+            if ok:
+                cur = reg["hash_acum"]
+            else:
+                break
+        return cur
+
+    def commit_lineal(t):
+        cur = S.SEMILLA
+        for reg in alm.registros:
+            if reg["tipo"] != "vela":
+                continue
+            if reg["t"] + alm.dur <= t:
+                cur = reg["hash_acum"]
+            else:
+                break
+        return cur
+
+    for t in range(0, 62 * DUR, DUR // 2):
+        assert alm.head_asof(t) == head_lineal(t)
+        assert alm.commit_asof(t) == commit_lineal(t)
+
+
+def test_b5_heads_no_son_cuadraticos():
+    """Coste por consulta ~constante: 4× más registros no puede costar
+    ~4× por llamada (el recorrido lineal sí lo hacía)."""
+    import time
+
+    def medir(n):
+        alm = S.Almacen("X", "15m"); alm.nacer_en(0)
+        alm.ofrecer([vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(n)], "push")
+        alm.drenar()
+        t_fin = n * DUR
+        ini = time.perf_counter()
+        for _ in range(2000):
+            alm.head_asof(t_fin)
+            alm.commit_asof(t_fin)
+        return time.perf_counter() - ini
+
+    chico, grande = medir(500), medir(2000)
+    assert grande < chico * 2.5, f"escala mal: {chico:.4f}s vs {grande:.4f}s"

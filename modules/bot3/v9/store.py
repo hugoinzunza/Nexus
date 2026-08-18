@@ -77,16 +77,33 @@ class Almacen:
         self._huecos: list[tuple[int, int]] = []
         self._ts: list[int] = []
         self._epocas_cache: list[list[dict]] | None = None
+        # Índices O(log n) para las consultas causales (mismos resultados que
+        # el recorrido lineal, ver `test_b5_heads_indexados_equivalen`):
+        #  - `_prefix_max[i]` = instante mínimo en que el PREFIJO 0..i es
+        #    íntegramente consumible (máximo corrido de las disponibilidades:
+        #    cierre de la vela, o `detected_at` del marcador). Es no
+        #    decreciente, así que `head_asof` es un bisect.
+        #  - `_vela_hashes[k]` = `hash_acum` de la k-ésima VELA, para que
+        #    `commit_asof` sea un bisect sobre `_ts`.
+        self._prefix_max: list[int] = []
+        self._vela_hashes: list[str] = []
 
     # --- cadena ----------------------------------------------------------
     @property
     def head(self) -> str:
         return self.registros[-1]["hash_acum"] if self.registros else SEMILLA
 
+    def _indexar(self, reg: dict) -> None:
+        disp = (reg["t"] + self.dur) if reg["tipo"] == "vela" \
+            else reg["detected_at"]
+        previo = self._prefix_max[-1] if self._prefix_max else disp
+        self._prefix_max.append(max(previo, disp))
+
     def _append(self, tipo: str, payload: str, **extra) -> dict:
         reg = {"tipo": tipo, "payload": payload,
                "hash_acum": encadenar(self.head, payload), **extra}
         self.registros.append(reg)
+        self._indexar(reg)
         if self.ruta:
             os.makedirs(os.path.dirname(self.ruta), exist_ok=True)
             with open(self.ruta, "a", encoding="utf-8") as fh:
@@ -97,6 +114,7 @@ class Almacen:
         t = int(vela["t"])
         self._append("vela", ser_vela(vela), t=t)
         self.velas.append(vela)
+        self._vela_hashes.append(self.registros[-1]["hash_acum"])
         self._por_t[t] = vela
         self._ts.append(t)
         self.ultimo_t = t
@@ -199,19 +217,9 @@ class Almacen:
         """`input_head_asof_T`: head del último registro CONSUMIBLE en `t`
         (velas con `t_vela + dur ≤ t`; marcadores con `detected_at ≤ t`).
         Nunca el head físico del archivo (CF-32)."""
-        cur = SEMILLA
-        for reg in self.registros:
-            if reg["tipo"] == "vela":
-                if reg["t"] + self.dur <= t:
-                    cur = reg["hash_acum"]
-                else:
-                    break
-            else:
-                if reg["detected_at"] <= t:
-                    cur = reg["hash_acum"]
-                else:
-                    break
-        return cur
+        import bisect
+        k = bisect.bisect_right(self._prefix_max, t)
+        return self.registros[k - 1]["hash_acum"] if k else SEMILLA
 
     def commit_asof(self, t: int) -> str:
         """`input_commit_asof_T` (CF-41 v13): `hash_acum` del ÚLTIMO registro
@@ -221,15 +229,9 @@ class Almacen:
         posteriores a un hueco, porque esa cadena ya incorpora los marcadores
         intermedios— sin afirmar que el hueco fuera conocido antes de tiempo:
         es provenance de contenido, no conocimiento del modelo."""
-        cur = SEMILLA
-        for reg in self.registros:
-            if reg["tipo"] != "vela":
-                continue                     # los marcadores no lo detienen
-            if reg["t"] + self.dur <= t:
-                cur = reg["hash_acum"]
-            else:
-                break
-        return cur
+        import bisect
+        k = bisect.bisect_right(self._ts, t - self.dur)
+        return self._vela_hashes[k - 1] if k else SEMILLA
 
     def head_finality(self, finalized_at: int) -> str:
         """`provenance_head_at_finality`: head del prefijo que INCLUYE el
