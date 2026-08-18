@@ -416,3 +416,47 @@ def test_contrato_hash_congelado():
                         "BOT3_V9_PROTOCOLO.md")
     with open(ruta, "rb") as fh:
         assert hashlib.sha256(fh.read()).hexdigest() == C.CONTRATO_HASH
+
+
+# ---------------------------------- B-1 auditoría 2026-08-17 (look-ahead) --
+def test_b1_habilitacion_m15_no_mira_el_futuro_fisico():
+    """La habilitación de época se mide sobre velas CERRADAS en T, nunca
+    sobre el tamaño físico del almacén (que contiene futuro)."""
+    from modules.bot3.v9.ledger import Ledger as L
+    t0 = 1646092800000
+    alm = S.Almacen("BTCUSDT", "15m"); alm.nacer_en(t0)
+    alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(220)], "push")
+    alm.drenar()
+    motor = E.Motor({"BTCUSDT": alm}, {"BTCUSDT": alm}, ("BTCUSDT",), L())
+    assert motor._epoca_habilitada("BTCUSDT", t0 + 10 * DUR) is None
+    assert motor._epoca_habilitada("BTCUSDT", t0 + 199 * DUR) is None
+    ok = motor._epoca_habilitada("BTCUSDT", t0 + 200 * DUR)
+    assert ok is not None and ok[1] == 200
+
+
+def test_b1_hueco_h4_posterior_no_altera_el_pasado():
+    """Un hueco H4 POSTERIOR a T no puede volver `historia_insuficiente` un
+    instante anterior: la continuidad se evalúa sobre el prefijo causal."""
+    from modules.bot3.v9.ledger import Ledger as L
+    from modules.bot3.v9.engine import DUR_H4
+    g = C.GENESIS_H4
+    def h4_store(con_hueco_futuro):
+        alm = S.Almacen("BTCUSDT", "4h"); alm.nacer_en(g)
+        alm.ofrecer([vela(g + i * DUR_H4, 1 + i * 0.01, 2 + i * 0.01,
+                          0.5 + i * 0.01, 1.5 + i * 0.01) for i in range(60)],
+                    "push")
+        alm.drenar()
+        if con_hueco_futuro:      # hueco MUY posterior al T evaluado
+            alm.ofrecer([vela(g + i * DUR_H4, 1, 2, 0.5, 1.5)
+                         for i in (70, 71, 72)], "push")
+            alm.drenar(); alm.declarar_hueco_local()
+        return alm
+    T = g + 40 * DUR_H4
+    m15 = S.Almacen("BTCUSDT", "15m"); m15.nacer_en(g)
+    resultados = []
+    for con_hueco in (False, True):
+        motor = E.Motor({"BTCUSDT": m15}, {"BTCUSDT": h4_store(con_hueco)},
+                        ("BTCUSDT",), L())
+        resultados.append(motor._calcular_h4("BTCUSDT", T)["motivo"])
+    assert resultados[0] == resultados[1], \
+        f"el hueco futuro cambió el pasado: {resultados}"

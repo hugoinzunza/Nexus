@@ -182,7 +182,7 @@ class Motor:
         lote: los consumidores toman solo la cola que necesitan."""
         alm = self.m15[mercado]
         ep = alm.epoca_de(T - DUR_M15)
-        if ep is None or len(ep) < EPOCA_M15_MIN_VELAS:
+        if ep is None:
             return None
         lo, hi = 0, len(ep)
         while lo < hi:                           # bisect sin copiar la lista
@@ -191,7 +191,12 @@ class Motor:
                 lo = mid + 1
             else:
                 hi = mid
-        return (ep, lo) if lo else None
+        # La habilitación se mide sobre las velas CERRADAS en T, nunca sobre
+        # el tamaño físico de la época (que incluye futuro del almacén).
+        # Medirlo con `len(ep)` era look-ahead (auditoría 2026-08-17, B-1).
+        if lo < EPOCA_M15_MIN_VELAS:
+            return None
+        return (ep, lo)
 
     # --- lote (CF-19/CF-23) ----------------------------------------------
     def lote_finalizable(self, T: int) -> bool:
@@ -343,11 +348,14 @@ class Motor:
                  "rango": None, "zonas": [], "fractal": None}
         if len(h4) < 3 * P.STRUCT_PIV:
             return insuf
-        # CF-13: H4 exige ÉPOCA ÚNICA continua desde GENESIS_H4. Cualquier
-        # hueco (o un almacén que no arranque en génesis) deja el mercado en
-        # `historia_insuficiente` — sin excepciones ni ventanas alternativas.
-        # Esto es lo que hace irrelevante la profundidad de carga.
-        if int(h4[0]["t"]) != GENESIS_H4 or len(alm.epocas()) != 1:
+        # CF-13: H4 exige ÉPOCA ÚNICA continua desde GENESIS_H4 hasta `T`.
+        # La continuidad se evalúa SOLO sobre el prefijo causal: un hueco
+        # POSTERIOR a T no puede volver insuficiente un instante anterior
+        # (era look-ahead — auditoría 2026-08-17, B-1).
+        epocas = alm.epocas()
+        if not epocas or int(epocas[0][0]["t"]) != GENESIS_H4:
+            return insuf
+        if int(epocas[0][-1]["t"]) + DUR_H4 < T:     # T cae tras el 1er hueco
             return insuf
         n = len(h4)
         s_struct = P.swings_prefijo(alm.swings_full(P.STRUCT_PIV), n)
