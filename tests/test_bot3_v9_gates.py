@@ -819,30 +819,50 @@ def test_b3_frontera_se_emite_una_sola_vez():
     assert [e["tipo"] for e in led.eventos].count("frontera") == 1
 
 
-def test_b3_frescura_sobrevive_a_la_frontera_en_el_motor():
-    """CF-24 real (reemplaza el gate vacuo): una zona consumida durante el
-    bootstrap NO puede generar candidato después de la frontera."""
+ZONA_FRESCURA = {"kind": "ob", "dir": "long", "lo": 8.0, "hi": 12.0,
+                 "available_at": 0}
+CALC_FRESCURA = {"direccion": "long", "rango": {"weak": 30.0, "eq": 20.0},
+                 "zonas": [ZONA_FRESCURA], "fractal": {"available_at": 0},
+                 "motivo": None}
+CLAVE_FRESCURA = (ZONA_FRESCURA["kind"], ZONA_FRESCURA["dir"],
+                  ZONA_FRESCURA["lo"], ZONA_FRESCURA["hi"],
+                  ZONA_FRESCURA["available_at"])
+
+
+def test_b3_frescura_consumida_en_bootstrap_sobrevive_al_cruce():
+    """CF-24 real: la zona se consume ANTES de la frontera; tras cruzarla
+    debe seguir consumida y NO generar candidato."""
     ep = _epoca_confirmacion()
     frontera = int(ep[-3]["t"]) + DUR
     motor, led = _motor_bootstrap(ep, frontera)
     st = motor.estados["BTCUSDT"]
-    zona = {"kind": "ob", "dir": "long", "lo": 8.0, "hi": 12.0,
-            "available_at": 0}
-    calc = {"direccion": "long", "rango": {"weak": 30.0, "eq": 20.0},
-            "zonas": [zona], "fractal": {"available_at": 0}, "motivo": None}
+    # Consumo REAL durante el bootstrap: _fase7b marca la zona y no emite.
+    motor._fase7b("BTCUSDT", frontera, frontera, ep, len(ep) - 2,
+                  CALC_FRESCURA, st)
+    assert CLAVE_FRESCURA in st.zonas_tocadas
+    assert led.eventos == []                      # bootstrap no emite
+    st.estado = "flat"; st.candidato = None       # el bootstrap deja su estado
+    T = frontera + DUR
+    motor._cruzar_frontera(T, T)
+    assert CLAVE_FRESCURA in st.zonas_tocadas     # la frescura SOBREVIVE
+    led.eventos.clear(); led._ids.clear()
+    motor._fase7b("BTCUSDT", T, T, ep, len(ep), CALC_FRESCURA, st)
+    assert st.estado == "flat"
+    assert not any(e["tipo"] == "candidato" for e in led.eventos)
+
+
+def test_b3_control_zona_no_consumida_si_genera_candidato():
+    """Control en un motor SEPARADO (sin contaminación): la misma zona, sin
+    frescura consumida, sí produce candidato tras la frontera."""
+    ep = _epoca_confirmacion()
+    frontera = int(ep[-3]["t"]) + DUR
+    motor, led = _motor_bootstrap(ep, frontera)
+    st = motor.estados["BTCUSDT"]
     T = frontera + DUR
     motor._cruzar_frontera(T, T)
     led.eventos.clear(); led._ids.clear()
-    # Zona ya tocada durante el bootstrap (frescura consumida).
-    clave = (zona["kind"], zona["dir"], zona["lo"], zona["hi"],
-             zona["available_at"])
-    st.zonas_tocadas.add(clave)
-    motor._fase7b("BTCUSDT", T, T, ep, len(ep), calc, st)
-    assert st.estado == "flat"
-    assert not any(e["tipo"] == "candidato" for e in led.eventos)
-    # Sin la frescura consumida, la MISMA vela sí genera candidato.
-    st.zonas_tocadas.discard(clave)
-    motor._fase7b("BTCUSDT", T, T, ep, len(ep), calc, st)
+    assert CLAVE_FRESCURA not in st.zonas_tocadas
+    motor._fase7b("BTCUSDT", T, T, ep, len(ep), CALC_FRESCURA, st)
     assert st.estado == "candidato_vivo"
     assert any(e["tipo"] == "candidato" for e in led.eventos)
 
@@ -855,4 +875,5 @@ def test_b3_epoca_m15_se_anuncia_una_vez():
         motor._anunciar_epoca("BTCUSDT", T, T)
     evs = [e for e in led.eventos if e["tipo"] == "epoca_m15"]
     assert len(evs) == 1
-    assert evs[0]["effective_at"] == int(ep[0]["t"])
+    assert evs[0]["epoca_t0"] == int(ep[0]["t"])        # identidad por t0
+    assert evs[0]["effective_at"] == T0 - 2 * DUR       # lote que la habilitó

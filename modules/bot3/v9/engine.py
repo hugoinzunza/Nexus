@@ -176,15 +176,19 @@ class Motor:
         fin = T if finalized_at is None else finalized_at
         heads = {}
         if mercado:
+            # CF-34: los heads CAUSALES se calculan en el tiempo EFECTIVO del
+            # evento (`ef`), nunca en el lote que lo materializa: un evento
+            # retrotraído no puede portar información posterior a su
+            # `effective_at`. La provenance sí usa la finalidad.
             heads = {
-                "input_head_asof_T": self.m15[mercado].head_asof(T),
+                "input_head_asof_T": self.m15[mercado].head_asof(ef),
                 "provenance_head_at_finality": self.m15[mercado].head_finality(fin),
-                "h4_head_asof_T": self.h4[mercado].head_asof(T),
+                "h4_head_asof_T": self.h4[mercado].head_asof(ef),
             }
-            ep = self.m15[mercado].epoca_de(T - DUR_M15)
+            ep = self.m15[mercado].epoca_de(ef - DUR_M15)
             if ep:
                 heads["epoca_m15_t0"] = int(ep[0]["t"])
-        self.ledger.append(tipo, mercado=mercado, effective_at=ef,
+        return self.ledger.append(tipo, mercado=mercado, effective_at=ef,
                            finalized_at=fin,
                            processed_at=T if processed_at is None else processed_at,
                            **heads, **campos)
@@ -273,8 +277,14 @@ class Motor:
         clave = (mercado, t0)
         if clave in self._epocas_anunciadas:
             return
-        self._epocas_anunciadas.add(clave)
-        self._emit("epoca_m15", T, mercado, finalized_at=fin, efectivo=t0)
+        # Se marca SOLO tras una escritura efectiva: durante el bootstrap
+        # `_emit` no escribe, y marcarla ahí perdía el evento para siempre.
+        # La identidad usa el `t0` de la época (CF-30/CF-37); el tiempo
+        # efectivo es el lote en que quedó habilitada.
+        ev = self._emit("epoca_m15", T, mercado, finalized_at=fin,
+                        id_t=t0, epoca_t0=t0)
+        if ev is not None:
+            self._epocas_anunciadas.add(clave)
 
     def _procesar_mercado(self, mercado: str, T: int, fin: int) -> None:
         st = self.estados[mercado]

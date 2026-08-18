@@ -41,9 +41,12 @@ class Ledger:
                 self._ids.add(ev["event_id"])
 
     def _clave(self, tipo: str, campos: dict) -> str:
+        # `id_t` permite que la IDENTIDAD use un instante propio (p. ej. el
+        # `t0` de una época) distinto del `effective_at` causal del evento.
         return event_id(
             tipo, contrato=CONTRATO_HASH, id=campos.get("id"),
-            mercado=campos.get("mercado"), t=campos.get("effective_at"),
+            mercado=campos.get("mercado"),
+            t=campos.get("id_t", campos.get("effective_at")),
             tf=campos.get("tf"), motivo=campos.get("motivo"),
             desde=campos.get("desde"), hasta=campos.get("hasta"),
             zona_avail=campos.get("zona_avail"), zona_lo=campos.get("zona_lo"),
