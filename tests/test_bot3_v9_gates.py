@@ -1146,3 +1146,59 @@ def test_b5_processed_at_es_reloj_observado():
     motor2.procesar_lote(T)
     assert [e["event_id"] for e in led.eventos] == \
            [e["event_id"] for e in led2.eventos]
+
+
+def test_b5_eventos_del_watermark_llevan_la_finalidad():
+    """Los eventos que DOCUMENTAN la liberación (`hueco_detectado`,
+    `mercado_degradado`) deben llevar el mismo `finalized_at` que el lote
+    liberado: el `detected_at` de su prueba."""
+    t0 = 1646092800000
+    motor, led = _mundo_epoca_habilitada(t0=t0)
+    T = t0 + 201 * DUR
+    motor.watermark_exchange(T)
+    reg = [r for r in motor.m15["BTCUSDT"].registros if r["tipo"] == "gap"][-1]
+    det = reg["detected_at"]
+    for tipo in ("hueco_detectado", "mercado_degradado"):
+        ev = next(e for e in led.eventos if e["tipo"] == tipo)
+        assert ev["effective_at"] == T
+        assert ev["finalized_at"] == det > T
+    assert motor.finalidad(T) == det          # coincide con el lote
+
+
+def test_b5_barreras_globales_llevan_heads_por_mercado():
+    """`lote_finalizado`, `frontera` y `corte_administrativo` deben portar
+    los heads/commits de TODOS los mercados en orden canónico."""
+    t0 = 1646092800000
+    motor, led = _mundo_epoca_habilitada(t0=t0)
+    T = t0 + 150 * DUR
+    motor.procesar_lote(T)
+    lote = next(e for e in led.eventos if e["tipo"] == "lote_finalizado")
+    hpm = lote["heads_por_mercado"]
+    assert list(hpm) == sorted(C.MERCADOS)
+    for m, campos in hpm.items():
+        assert set(campos) == {"input_head_asof_T", "input_commit_asof_T",
+                               "provenance_head_at_finality",
+                               "h4_head_asof_T", "h4_commit_asof_T"}
+        assert campos["input_head_asof_T"] == motor.m15[m].head_asof(T)
+        assert campos["input_commit_asof_T"] == motor.m15[m].commit_asof(T)
+
+
+def test_b5_processed_at_es_atomico_por_ciclo():
+    """CF-34: el reloj se muestrea UNA vez por ciclo/pull y lo comparten
+    todos los eventos —incluidos los del watermark—, en vez de avanzar
+    evento a evento."""
+    t0 = 1646092800000
+    tics = iter(range(1_900_000_000_000, 1_900_000_001_000))
+    motor, led = _mundo_epoca_habilitada(t0=t0)
+    motor.reloj = lambda: next(tics)          # cada llamada avanza 1 ms
+    T = t0 + 201 * DUR
+    motor.iniciar_ciclo()
+    motor.watermark_exchange(T)
+    motor.procesar_lote(T)
+    sellos = {e["processed_at"] for e in led.eventos}
+    assert len(sellos) == 1, f"el reloj avanzó dentro del ciclo: {sorted(sellos)}"
+    motor.finalizar_ciclo()
+    # Un ciclo NUEVO sí toma un reloj nuevo.
+    motor.iniciar_ciclo()
+    motor.procesar_lote(T + DUR)
+    assert len({e["processed_at"] for e in led.eventos}) == 2

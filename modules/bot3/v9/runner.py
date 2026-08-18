@@ -81,13 +81,18 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
             continue
         if hasta is not None and T > hasta:
             break
+        # CF-34: un ciclo/pull = un reloj observado, compartido por el
+        # watermark y por el lote que libera.
+        motor.iniciar_ciclo()
         if not motor.lote_finalizable(T):
             # CF-29/CF-23: un mercado silencioso no bloquea para siempre —
             # se intenta el watermark global de exchange y se reevalúa.
             motor.watermark_exchange(T)
             if not motor.lote_finalizable(T):
+                motor.finalizar_ciclo()
                 continue
         motor.procesar_lote(T)
+        motor.finalizar_ciclo()
         if motor.cortado:
             break
     # CF-35: sin lote global finalizado posterior a T_corte y con el reloj

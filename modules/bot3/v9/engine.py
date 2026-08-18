@@ -166,6 +166,24 @@ class Motor:
         # decisiones). Inyectable para que los gates sean deterministas.
         self.reloj = reloj if reloj is not None else (
             lambda: int(__import__("time").time() * 1000))
+        self._reloj_ciclo = None      # muestreado UNA vez por ciclo/pull
+        self._ciclo_externo = False
+
+    # --- ciclo de reloj (CF-34) -------------------------------------------
+    def iniciar_ciclo(self, reloj_ms: int | None = None) -> int:
+        """Abre un ciclo/pull: el reloj observado se muestrea UNA sola vez y
+        lo comparten TODOS los eventos del ciclo (watermark incluido)."""
+        self._reloj_ciclo = self.reloj() if reloj_ms is None else reloj_ms
+        self._ciclo_externo = True
+        return self._reloj_ciclo
+
+    def finalizar_ciclo(self) -> None:
+        self._ciclo_externo = False
+        self._reloj_ciclo = None
+
+    def _asegurar_ciclo(self) -> None:
+        if not self._ciclo_externo:
+            self._reloj_ciclo = self.reloj()
 
     # --- utilidades -------------------------------------------------------
     def _emitiendo(self, T: int) -> bool:
@@ -183,6 +201,18 @@ class Motor:
         ef = T if efectivo is None else efectivo
         fin = T if finalized_at is None else finalized_at
         heads = {}
+        if mercado is None and self.mercados:
+            # Las barreras globales llevan los heads de TODOS los mercados,
+            # en orden canónico (el JSON canónico ordena las claves): sin
+            # esto, `lote_finalizado`/`frontera`/`corte_administrativo` no
+            # identificaban los bytes sobre los que se tomó la decisión.
+            heads = {"heads_por_mercado": {
+                m: {"input_head_asof_T": self.m15[m].head_asof(ef),
+                    "input_commit_asof_T": self.m15[m].commit_asof(ef),
+                    "provenance_head_at_finality": self.m15[m].head_finality(fin),
+                    "h4_head_asof_T": self.h4[m].head_asof(ef),
+                    "h4_commit_asof_T": self.h4[m].commit_asof(ef)}
+                for m in self.mercados}}
         if mercado:
             # CF-34: los heads CAUSALES se calculan en el tiempo EFECTIVO del
             # evento (`ef`), nunca en el lote que lo materializa: un evento
@@ -200,7 +230,8 @@ class Motor:
                 heads["epoca_m15_t0"] = int(ep[0]["t"])
         return self.ledger.append(tipo, mercado=mercado, effective_at=ef,
                            finalized_at=fin,
-                           processed_at=(self.reloj() if processed_at is None
+                           processed_at=(self._reloj_ciclo
+                                         if processed_at is None
                                          else processed_at),
                            **heads, **campos)
 
@@ -292,6 +323,7 @@ class Motor:
 
     def procesar_lote(self, T: int, finalized_at: int | None = None) -> None:
         """Fases 1–7 por mercado en orden canónico + Fase 8 global."""
+        self._asegurar_ciclo()
         if self.cortado:
             return
         if T > T_CORTE:                      # pre-gate temporal (CF-19)
@@ -315,6 +347,7 @@ class Motor:
 
         Devuelve la lista de mercados degradados en esta pasada. Es lo que
         hace que la finalidad del lote progrese sin esperar indefinidamente."""
+        self._asegurar_ciclo()
         degradados = []
         idx_t = T - DUR_M15
         for mercado in self.mercados:
@@ -332,11 +365,14 @@ class Motor:
             reg = alm.declarar_hueco_exchange(desde, hasta, prueba)
             st = self.estados[mercado]
             st.degradado = True
-            self._emit("hueco_detectado", T, mercado, desde=desde, hasta=hasta,
-                       tf="15m", motivo="exchange",
-                       detected_at=reg["detected_at"], prueba=prueba)
-            self._emit("mercado_degradado", T, mercado,
-                       detected_at=reg["detected_at"])
+            # Los eventos que DOCUMENTAN la liberación llevan la misma
+            # finalidad que el lote liberado: el `detected_at` de su prueba.
+            det = reg["detected_at"]
+            self._emit("hueco_detectado", T, mercado, finalized_at=det,
+                       desde=desde, hasta=hasta, tf="15m", motivo="exchange",
+                       detected_at=det, prueba=prueba)
+            self._emit("mercado_degradado", T, mercado, finalized_at=det,
+                       detected_at=det)
             degradados.append(mercado)
         return degradados
 
@@ -363,6 +399,7 @@ class Motor:
 
         Las velas parciales posteriores quedan FUERA de la cohorte y se
         reportan como `degradacion_de_cobertura`."""
+        self._asegurar_ciclo()
         if self.cortado:
             return False
         if any(t > T_CORTE for t in self.lotes_finalizados):
