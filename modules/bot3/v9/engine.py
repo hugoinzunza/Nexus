@@ -227,20 +227,27 @@ class Motor:
         a ninguna época (justamente falta esa vela), y usar
         `_epoca_habilitada` lo dejaba fuera del watermark para siempre."""
         alm = self.m15[mercado]
-        mejor = None
+        # La época INMEDIATAMENTE anterior a `T` (la última que comienza en
+        # `T` o antes). NO se recorre hacia atrás buscando una época vieja
+        # que alguna vez tuvo 200 velas: eso cruzaría una frontera
+        # estructural. Si esta época no alcanza el mínimo → no habilitada.
+        candidata = None
         for ep in alm.epocas():
             if int(ep[0]["t"]) + DUR_M15 > T:
                 break
-            lo, hi = 0, len(ep)
-            while lo < hi:
-                mid = (lo + hi) // 2
-                if int(ep[mid]["t"]) <= T - DUR_M15:
-                    lo = mid + 1
-                else:
-                    hi = mid
-            if lo >= EPOCA_M15_MIN_VELAS:
-                mejor = (ep, lo)
-        return mejor
+            candidata = ep
+        if candidata is None:
+            return None
+        lo, hi = 0, len(candidata)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if int(candidata[mid]["t"]) <= T - DUR_M15:
+                lo = mid + 1
+            else:
+                hi = mid
+        if lo < EPOCA_M15_MIN_VELAS:
+            return None
+        return (candidata, lo)
 
     # --- lote (CF-19/CF-23) ----------------------------------------------
     def lote_finalizable(self, T: int) -> bool:
@@ -340,13 +347,15 @@ class Motor:
             return False
         previos = [t for t in self.lotes_finalizados if t <= T_CORTE]
         ultimo = max(previos) if previos else None
-        # T_CORTE no cae en la grilla M15 (termina en .999): el instante a
-        # consultar es el último CIERRE alineado ≤ T_CORTE — preferentemente
-        # el del último lote finalizado.
-        cierre_ref = ultimo if ultimo is not None \
-            else (T_CORTE // DUR_M15) * DUR_M15
+        # DOS referencias distintas y deliberadas:
+        #  - `ancla` (= último lote finalizado) es DONDE SE CONGELA el estado;
+        #  - `cierre_evidencia` es el último cierre M15 ALINEADO ≤ T_CORTE, y
+        #    es DONDE SE EVALÚA la cobertura. Usar el lote para la evidencia
+        #    ocultaba a los mercados que dejaron de publicar DESPUÉS de él.
+        cierre_evidencia = (T_CORTE // DUR_M15) * DUR_M15
         faltantes = [m for m in self.mercados
-                     if self.m15[m].cubre(cierre_ref - DUR_M15) == "pendiente"]
+                     if self.m15[m].cubre(cierre_evidencia - DUR_M15)
+                     == "pendiente"]
         ancla = ultimo if ultimo is not None else T_CORTE
         for mercado in self.mercados:                # estado congelado
             st = self.estados[mercado]
@@ -365,6 +374,7 @@ class Motor:
                            hasta=max(posteriores))
         self._emit("corte_administrativo", ancla, efectivo=T_CORTE,
                    reloj=reloj_ms, ultimo_lote_finalizado=ultimo,
+                   cierre_evidencia=cierre_evidencia,
                    mercados_sin_datos=faltantes)
         self.cortado = True
         self.motivo_corte = "administrativo"

@@ -964,38 +964,65 @@ def test_b4_sin_quorum_no_declara_ni_degrada():
     assert not any(st.degradado for st in motor.estados.values())
 
 
+CIERRE_ALINEADO = (C.T_CORTE // DUR) * DUR      # último cierre M15 ≤ T_CORTE
+
+
 def test_b4_corte_administrativo_con_evidencia():
-    """CF-35: sin lote finalizado > T_corte y con el reloj pasada la gracia,
-    se cierra contra el último lote ≤ T_corte, con evidencia y degradación
-    de cobertura de las velas parciales posteriores."""
+    """CF-35 con fixture ALINEADO: el estado se congela en el último lote,
+    pero la EVIDENCIA de cobertura se evalúa en el último cierre M15
+    alineado ≤ T_corte. La lista de faltantes debe ser exacta."""
     from modules.bot3.v9.ledger import Ledger as L
-    t0 = C.T_CORTE - 10 * DUR
+    # ADA y BNB publican hasta el cierre alineado; el resto se corta antes.
     alms = {}
     for m in C.MERCADOS:
-        alm = S.Almacen(m, "15m"); alm.nacer_en(t0)
-        n = 20 if m == "ADAUSDT" else 5        # ADA sigue publicando después
-        alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(n)],
+        alm = S.Almacen(m, "15m")
+        # ADA y BNB siguen publicando incluso PASADO T_corte (velas
+        # parciales → degradación de cobertura); el resto calla antes.
+        n = 23 if m in ("ADAUSDT", "BNBUSDT") else 6
+        t_ini = CIERRE_ALINEADO - 20 * DUR
+        alm.nacer_en(t_ini)
+        alm.ofrecer([vela(t_ini + i * DUR, 1, 2, 0.5, 1.5) for i in range(n)],
                     "push")
         alm.drenar()
         alms[m] = alm
     led = L()
     motor = E.Motor(alms, alms, C.MERCADOS, led)
-    motor.lotes_finalizados = [C.T_CORTE - 2 * DUR]
-    # Antes de la gracia no corta.
+    ultimo_lote = CIERRE_ALINEADO - 15 * DUR      # todos cubrían en ese lote
+    motor.lotes_finalizados = [ultimo_lote]
     assert motor.cerrar_administrativo(C.T_CORTE + 1000) is False
     assert motor.cerrar_administrativo(
         C.T_CORTE + C.CORTE_ADMIN_GRACIA_MS + 1) is True
     ev = next(e for e in led.eventos if e["tipo"] == "corte_administrativo")
     assert ev["effective_at"] == C.T_CORTE
-    assert ev["ultimo_lote_finalizado"] == C.T_CORTE - 2 * DUR
+    assert ev["ultimo_lote_finalizado"] == ultimo_lote      # dónde se congela
+    assert ev["cierre_evidencia"] == CIERRE_ALINEADO        # dónde se evalúa
     assert "reloj" in ev
+    # Lista EXACTA: los que dejaron de publicar después del lote congelado
+    # deben aparecer, aunque en ese lote sí tuvieran cobertura.
+    assert sorted(ev["mercados_sin_datos"]) == sorted(
+        [m for m in C.MERCADOS if m not in ("ADAUSDT", "BNBUSDT")])
     degr = [e for e in led.eventos if e["tipo"] == "degradacion_de_cobertura"]
-    assert any(e["mercado"] == "ADAUSDT" for e in degr)
+    assert {e["mercado"] for e in degr} >= {"ADAUSDT", "BNBUSDT"}
     assert motor.motivo_corte == "administrativo"
-    # T_CORTE no cae en la grilla M15: el conteo de faltantes debe usar un
-    # cierre ALINEADO, no declarar falsamente a los siete mercados.
-    assert C.T_CORTE % DUR != 0
-    assert set(ev["mercados_sin_datos"]) != set(C.MERCADOS)
+
+
+def test_b4_epoca_nueva_corta_no_habilita_por_la_vieja():
+    """P1: una época vieja de 200 velas NO puede habilitar el watermark si
+    después nació una época nueva (tras un hueco) con menos del mínimo."""
+    from modules.bot3.v9.ledger import Ledger as L
+    t0 = 1646092800000
+    alm = S.Almacen("BTCUSDT", "15m"); alm.nacer_en(t0)
+    alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(200)],
+                "push")
+    alm.drenar()
+    alm.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(205, 215)],
+                "push")
+    alm.drenar(); alm.declarar_hueco_local()
+    assert [len(e) for e in alm.epocas()] == [200, 10]
+    motor = E.Motor({"BTCUSDT": alm}, {"BTCUSDT": alm}, ("BTCUSDT",), L())
+    T = t0 + 216 * DUR
+    assert motor._epoca_habilitada_previa("BTCUSDT", T) is None
+    assert motor.watermark_exchange(T) == []
 
 
 def test_b4_corte_administrativo_no_aplica_si_hubo_lote_posterior():
