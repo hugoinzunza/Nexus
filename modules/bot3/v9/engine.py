@@ -403,18 +403,34 @@ class Motor:
             # si el libro no documenta ya este marcador.
             st.degradado = True
             repuestos.append(mercado)
-            # Cada evento se repone POR SEPARADO: una caída entre los dos
-            # dejaba el hueco documentado y la degradación no, y un guardia
-            # único habría dado el libro por completo.
             det = reg["detected_at"]
-            if not self.ledger.tiene_hueco_exchange(mercado, reg["desde"]):
-                self._emit("hueco_detectado", T, mercado, finalized_at=det,
-                           desde=reg["desde"], hasta=reg["hasta"], tf="15m",
-                           motivo="exchange", detected_at=det,
-                           prueba=self.m15[mercado].prueba_marcador(reg))
-            if not self.ledger.tiene_degradacion(mercado, det):
-                self._emit("mercado_degradado", T, mercado, finalized_at=det,
-                           detected_at=det)
+            # Antes de reponer nada: si el libro YA documenta este marcador
+            # bajo otro `T`, la reemisión crearía un `event_id` distinto y
+            # duplicaría el hueco en vez de completarlo. Eso no se resuelve
+            # en silencio — el libro no es reconciliable y se falla cerrado.
+            for previo, cual in ((self.ledger.hueco_exchange(mercado,
+                                                             reg["desde"]),
+                                  "hueco_detectado"),
+                                 (self.ledger.degradacion(mercado, det),
+                                  "mercado_degradado")):
+                if previo is not None and previo.get("effective_at") != T:
+                    raise ValueError(
+                        f"{cual} de {mercado} en el libro tiene "
+                        f"effective_at={previo.get('effective_at')} y la "
+                        f"recuperación deriva T={T}: el marcador sellado no "
+                        f"reconstruye el evento original")
+            # Los DOS eventos se reemiten SIEMPRE. Saltarse `_emit` cuando el
+            # libro ya los tiene se saltaba justo la comprobación canónica de
+            # `Ledger.append`: ausente → se agrega; idéntico → dedupe; mismo
+            # `event_id` con payload distinto → ValueError. Un guardia
+            # parcial (mercado+desde) aceptaba un `hasta` o una `prueba`
+            # alterados sin verlos.
+            self._emit("hueco_detectado", T, mercado, finalized_at=det,
+                       desde=reg["desde"], hasta=reg["hasta"], tf="15m",
+                       motivo="exchange", detected_at=det,
+                       prueba=self.m15[mercado].prueba_marcador(reg))
+            self._emit("mercado_degradado", T, mercado, finalized_at=det,
+                       detected_at=det)
         return repuestos
 
     def _reingreso(self, mercado: str, T: int, fin: int) -> None:

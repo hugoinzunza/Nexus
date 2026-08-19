@@ -2142,3 +2142,147 @@ def test_int_el_runner_recupera_antes_de_evaluar_el_lote(monkeypatch, tmp_path):
     for i, n in enumerate(orden):
         if n == "recuperar_exchange" and i:
             assert orden[i - 1] != "recuperar_exchange"
+
+
+def _escenario_exchange(t0=None):
+    """Mundo con un marcador exchange YA sellado y su libro vivo."""
+    t0 = t0 if t0 is not None else C.GENESIS_H4 + 400 * C.TF_MS["4h"]
+    motor, led = _mundo_epoca_habilitada(t0=t0)
+    T = t0 + 201 * C.TF_MS["15m"]
+    assert motor.watermark_exchange(T) == ["BTCUSDT"]
+    return motor, led, T
+
+
+def _ledger_forjado(led, forjar):
+    """Ledger con los MISMOS `event_id` del libro vivo, pero con el payload
+    que `forjar` decida alterar. Simula un libro divergente en disco."""
+    led2 = Ledger()
+    for e in led.eventos:
+        ev = forjar(dict(e))
+        led2.eventos.append(ev)
+        led2._ids.add(ev["event_id"])
+    return led2
+
+
+def _recuperar(motor, led2, T):
+    m2 = E.Motor(motor.m15, motor.h4, motor.mercados, led2,
+                 bootstrap_hasta=motor.bootstrap_hasta)
+    m2.iniciar_ciclo()
+    try:
+        return m2, m2.recuperar_exchange(T)
+    finally:
+        m2.finalizar_ciclo()
+
+
+def test_int_hueco_exchange_con_payload_alterado_falla_cerrado():
+    """Un guardia parcial (mercado + desde) aceptaba un `hasta` o una
+    `prueba` alterados sin mirarlos: se saltaba justo la comprobación
+    canónica de `Ledger.append`. La reemisión debe ocurrir SIEMPRE y el
+    libro divergente debe fallar cerrado."""
+    import pytest
+    for campo, valor in (("hasta", 10 ** 13), ("prueba", {"XXX": [1, 2, 3]}),
+                         ("input_head_asof_T", "0" * 64),
+                         ("provenance_head_at_finality", "0" * 64)):
+        motor, led, T = _escenario_exchange()
+
+        def forjar(ev, _c=campo, _v=valor):
+            if ev["tipo"] == "hueco_detectado":
+                ev[_c] = _v
+            return ev
+
+        led2 = _ledger_forjado(led, forjar)
+        with pytest.raises(ValueError, match="payload distinto"):
+            _recuperar(motor, led2, T)
+
+
+def test_int_degradacion_con_finalidad_o_heads_alterados_falla_cerrado():
+    """Lo mismo para `mercado_degradado`: finalidad y heads son contenido del
+    evento, no telemetría."""
+    import pytest
+    for campo, valor in (("finalized_at", 10 ** 13),
+                         ("input_head_asof_T", "0" * 64),
+                         ("provenance_head_at_finality", "0" * 64),
+                         ("detected_at", 10 ** 13)):
+        motor, led, T = _escenario_exchange()
+
+        def forjar(ev, _c=campo, _v=valor):
+            if ev["tipo"] == "mercado_degradado":
+                ev[_c] = _v
+            return ev
+
+        led2 = _ledger_forjado(led, forjar)
+        with pytest.raises(ValueError, match="payload distinto|no reconstruye"):
+            _recuperar(motor, led2, T)
+
+
+def test_int_marcador_documentado_bajo_otro_T_no_se_duplica():
+    """Si el libro documenta el marcador con OTRO `effective_at`, reemitir
+    generaría un `event_id` distinto y DUPLICARÍA el hueco. El libro no es
+    reconciliable desde el marcador sellado: se falla cerrado."""
+    import pytest
+    motor, led, T = _escenario_exchange()
+
+    def forjar(ev):
+        if ev["tipo"] in ("hueco_detectado", "mercado_degradado"):
+            ev["effective_at"] = T + 7 * C.TF_MS["15m"]
+        return ev
+
+    led2 = _ledger_forjado(led, forjar)
+    with pytest.raises(ValueError, match="no reconstruye el evento original"):
+        _recuperar(motor, led2, T)
+
+
+def test_int_recuperacion_exchange_desde_archivos_reales(tmp_path):
+    """La matriz en memoria reconstruye objetos; este caso pasa por DISCO:
+    los almacenes se releen con `Almacen.cargar()` (que revalida la cadena) y
+    el libro con `Ledger(ruta)` (que reconstruye el índice de `event_id`
+    desde el archivo). Es el camino real de un reinicio."""
+    from modules.bot3.v9.contract import canon
+    motor, led, T = _escenario_exchange()
+    m15 = {}
+    for mercado, alm in motor.m15.items():
+        ruta = str(tmp_path / f"{mercado}_15m.jsonl")
+        with open(ruta, "w", encoding="utf-8") as fh:
+            for r in alm.registros:
+                fh.write(canon(dict(r)) + "\n")
+        # `cargar` revalida la cadena entera contra los payloads y deriva los
+        # metadatos: si el archivo estuviera alterado, moriría aquí.
+        m15[mercado] = S.Almacen.cargar(mercado, "15m", ruta, requerido=True)
+    h4 = m15                       # el escenario comparte almacén, como el vivo
+    # el marcador sobrevivió al viaje por disco, con su prueba firmada
+    reg = m15["BTCUSDT"].marcador_en(T - C.TF_MS["15m"], "exchange")
+    assert reg is not None and reg["motivo"] == "exchange"
+    assert m15["BTCUSDT"].prueba_marcador(reg) == \
+        motor.m15["BTCUSDT"].prueba_marcador(
+            motor.m15["BTCUSDT"].marcador_en(T - C.TF_MS["15m"], "exchange"))
+
+    # CAÍDA: el almacén quedó sellado en disco y el libro se perdió entero.
+    lr = str(tmp_path / "l.jsonl")
+    led2 = Ledger(lr)
+    m2 = E.Motor(m15, h4, motor.mercados, led2,
+                 bootstrap_hasta=motor.bootstrap_hasta)
+    assert m2.estados["BTCUSDT"].degradado is False
+    m2.iniciar_ciclo()
+    try:
+        assert m2.recuperar_exchange(T) == ["BTCUSDT"]
+    finally:
+        m2.finalizar_ciclo()
+    assert m2.estados["BTCUSDT"].degradado is True
+    vivos = [_limpio(e) for e in led.eventos
+             if e["tipo"] in ("hueco_detectado", "mercado_degradado")]
+    assert [_limpio(e) for e in led2.eventos] == vivos
+
+    # y un TERCER arranque, releyendo el libro DESDE EL ARCHIVO, no duplica
+    led3 = Ledger(lr)
+    assert len(led3.eventos) == len(led2.eventos)
+    m3 = E.Motor(m15, h4, motor.mercados, led3,
+                 bootstrap_hasta=motor.bootstrap_hasta)
+    m3.iniciar_ciclo()
+    try:
+        assert m3.recuperar_exchange(T) == ["BTCUSDT"]
+    finally:
+        m3.finalizar_ciclo()
+    assert m3.estados["BTCUSDT"].degradado is True
+    assert [_limpio(e) for e in led3.eventos] == vivos
+    assert len(open(lr, encoding="utf-8").read().strip().splitlines()) == \
+        len(vivos)

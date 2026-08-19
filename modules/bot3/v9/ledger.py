@@ -102,26 +102,30 @@ class Ledger:
     def por_tipo(self, tipo: str) -> list[dict]:
         return [e for e in self.eventos if e["tipo"] == tipo]
 
-    def tiene_hueco_exchange(self, mercado: str, desde: int) -> bool:
-        """¿Este marcador exchange YA está documentado en el libro?
+    def hueco_exchange(self, mercado: str, desde: int) -> dict | None:
+        """El `hueco_detectado` exchange de ESTE marcador, si el libro ya lo
+        documenta. Se busca por (mercado, desde) y NO por `event_id`, para
+        poder detectar que fue emitido bajo OTRO `T`.
 
-        Se consulta por (mercado, desde) y NO por `event_id`: el evento
-        original pudo emitirse en un `T` que la recuperación no puede
-        re-derivar, y reponerlo entonces duplicaría el hueco en vez de
-        completarlo."""
-        return any(e["tipo"] == "hueco_detectado"
-                   and e.get("motivo") == "exchange"
-                   and e.get("mercado") == mercado
-                   and e.get("desde") == int(desde)
-                   for e in self.eventos)
+        No sustituye la comprobación canónica: la reemisión ocurre igual, y
+        es `append()` quien falla cerrado si el payload difiere."""
+        for e in self.eventos:
+            if (e["tipo"] == "hueco_detectado"
+                    and e.get("motivo") == "exchange"
+                    and e.get("mercado") == mercado
+                    and e.get("desde") == int(desde)):
+                return e
+        return None
 
-    def tiene_degradacion(self, mercado: str, detected_at: int) -> bool:
-        """¿La degradación de ESTE marcador ya está en el libro? Se consulta
-        por `detected_at`, que sí es recuperable del marcador sellado."""
-        return any(e["tipo"] == "mercado_degradado"
-                   and e.get("mercado") == mercado
-                   and e.get("detected_at") == int(detected_at)
-                   for e in self.eventos)
+    def degradacion(self, mercado: str, detected_at: int) -> dict | None:
+        """El `mercado_degradado` de ESTE marcador, si ya está en el libro.
+        Se busca por `detected_at`, recuperable del marcador sellado."""
+        for e in self.eventos:
+            if (e["tipo"] == "mercado_degradado"
+                    and e.get("mercado") == mercado
+                    and e.get("detected_at") == int(detected_at)):
+                return e
+        return None
 
     def cierres(self) -> list[dict]:
         return self.por_tipo("cerrado")
