@@ -122,17 +122,28 @@ class Ledger:
         campo_t = self.ID_T_CAMPO.get(tipo)
         if campo_t is not None:
             # Simetría escritura/lectura: si la identidad usa un instante
-            # propio, el evento DEBE llevarlo persistido, o al releer no
-            # habría con qué verificar el `event_id`.
+            # propio, el evento DEBE llevarlo persistido Y la identidad debe
+            # calcularse con ESE valor. Validar `epoca_t0` sin usarlo dejaba
+            # escribir un archivo que `_releer` rechaza acto seguido: el id
+            # salía de `effective_at` y la relectura lo reconstruía desde
+            # `epoca_t0`.
             valor = campos.get(campo_t)
-            if not isinstance(valor, int) or isinstance(valor, bool):
+            if type(valor) is not int:          # `bool` es subclase de `int`
                 raise ValueError(
                     f"{tipo} exige `{campo_t}` entero: su identidad usa un "
                     f"instante propio y sin él el libro no es verificable")
-            if campos.get("id_t") is not None and campos["id_t"] != valor:
-                raise ValueError(
-                    f"{tipo}: `id_t` ({campos['id_t']}) y `{campo_t}` "
-                    f"({valor}) discrepan")
+            idt = campos.get("id_t")
+            if idt is not None:
+                if type(idt) is not int:
+                    raise ValueError(
+                        f"{tipo}: `id_t` debe ser entero, no {type(idt).__name__}")
+                if idt != valor:
+                    raise ValueError(
+                        f"{tipo}: `id_t` ({idt}) y `{campo_t}` ({valor}) "
+                        f"discrepan")
+            # Se DERIVA del campo persistido, venga o no `id_t`. `id_t` sigue
+            # excluido del evento, así que no cambia un byte del libro.
+            campos = {**campos, "id_t": valor}
         eid = self._clave(tipo, campos)
         if eid in self._ids:
             # Reaparición: DEBE ser el mismo evento. Un mismo `event_id` con

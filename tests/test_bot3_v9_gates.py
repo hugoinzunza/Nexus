@@ -2530,3 +2530,73 @@ def test_int_releer_rechaza_contrato_o_protocolo_ajenos(tmp_path):
         copia[0][campo] = valor
         with pytest.raises(ValueError, match=patron):
             Ledger(_libro_en_disco(tmp_path, copia, f"{campo}_{valor[:4]}.jsonl"))
+
+
+def test_int_append_deriva_el_instante_de_identidad_del_campo_persistido(
+        tmp_path):
+    """La frontera `append → disco → _releer` tiene que cerrar: validar
+    `epoca_t0` sin USARLO dejaba escribir un archivo que la relectura rechaza
+    acto seguido (el id salía de `effective_at`, la relectura lo reconstruía
+    desde `epoca_t0`)."""
+    import pytest
+    from modules.bot3.v9.contract import event_id, CONTRATO_HASH
+    ruta = str(tmp_path / "l.jsonl")
+    led = Ledger(ruta)
+    # SIN `id_t`: la identidad igual sale de `epoca_t0`, y el archivo se relee
+    ev = led.append("epoca_m15", mercado="BTCUSDT", effective_at=40,
+                    finalized_at=40, epoca_t0=4)
+    assert ev["event_id"] == event_id("epoca_m15", contrato=CONTRATO_HASH,
+                                      mercado="BTCUSDT", t=4)
+    assert "id_t" not in ev                      # no cambia un byte del libro
+    relectura = Ledger(ruta)
+    assert [e["event_id"] for e in relectura.eventos] == [ev["event_id"]]
+
+    # `bool` es subclase de `int`: True == 1 y False == 0 colaban
+    led2 = Ledger(str(tmp_path / "b.jsonl"))
+    for idt, t0 in ((True, 1), (False, 0)):
+        with pytest.raises(ValueError, match="debe ser entero"):
+            led2.append("epoca_m15", mercado="BTCUSDT", effective_at=40,
+                        finalized_at=40, id_t=idt, epoca_t0=t0)
+    for t0 in (True, False):
+        with pytest.raises(ValueError, match="exige `epoca_t0` entero"):
+            led2.append("epoca_m15", mercado="BTCUSDT", effective_at=40,
+                        finalized_at=40, epoca_t0=t0)
+    assert not os.path.exists(str(tmp_path / "b.jsonl"))
+
+    # y la identidad que ya emite el motor no se mueve
+    led3 = Ledger()
+    mismo = led3.append("epoca_m15", mercado="BTCUSDT", effective_at=40,
+                        finalized_at=40, id_t=4, epoca_t0=4)
+    assert mismo["event_id"] == ev["event_id"]
+
+
+def test_int_la_epoca_que_emite_el_motor_identifica_por_epoca_t0(tmp_path):
+    """Y con la salida REAL del motor: su `epoca_m15` tiene `effective_at`
+    distinto de `epoca_t0` (el anuncio ocurre lotes después del t0 de la
+    época), así que es exactamente el caso que la derivación decide. El
+    `event_id` debe salir de `epoca_t0`, y el libro debe releerse."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    from modules.bot3.v9.contract import event_id, CONTRATO_HASH
+    if not os.path.exists(R.ruta_snapshot(R.ROOT, "BTCUSDT", "15m")):
+        pytest.skip("sin klines versionadas")
+    raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
+    for tf in ("15m", "4h"):
+        filas = json.load(open(R.ruta_snapshot(R.ROOT, "BTCUSDT", tf),
+                               encoding="utf-8"))[:600]
+        json.dump(filas, open(R.ruta_snapshot(raiz, "BTCUSDT", tf), "w",
+                              encoding="utf-8"))
+    lr = str(tmp_path / "l.jsonl")
+    _, led = R.correr(root=raiz, mercados=("BTCUSDT",), bootstrap_hasta=1,
+                      ledger_ruta=lr)
+    eps = [e for e in led.eventos if e["tipo"] == "epoca_m15"]
+    assert eps, "el escenario debe anunciar al menos una época"
+    for e in eps:
+        assert e["effective_at"] != e["epoca_t0"]      # el caso que decide
+        assert e["event_id"] == event_id(
+            "epoca_m15", contrato=CONTRATO_HASH, mercado=e["mercado"],
+            t=e["epoca_t0"])
+    # y el archivo recién escrito se relee sin rechazos
+    assert [x["event_id"] for x in Ledger(lr).eventos] == \
+        [x["event_id"] for x in led.eventos]
