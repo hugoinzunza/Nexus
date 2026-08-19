@@ -24,6 +24,10 @@ class Ledger:
         self.commit = commit
         self.eventos: list[dict] = []
         self._ids: set[str] = set()
+        # Índice por identidad: el dedupe compara contra el evento previo, y
+        # buscarlo recorriendo la lista era O(n) por reaparición — es decir
+        # cuadrático justo en el reinicio, donde TODOS los eventos reaparecen.
+        self._por_id: dict[str, dict] = {}
         if ruta and os.path.exists(ruta):
             self._releer()
 
@@ -36,8 +40,8 @@ class Ledger:
         el mismo id entraban al índice y desde ahí gobernaban el dedupe de
         toda la corrida. Se recalcula cada identidad desde el payload y se
         falla cerrado."""
-        self.eventos, self._ids = [], set()
-        por_id: dict[str, dict] = {}
+        self.eventos, self._ids, self._por_id = [], set(), {}
+        por_id = self._por_id
         with open(self.ruta, encoding="utf-8") as fh:
             for n, linea in enumerate(fh, 1):
                 linea = linea.strip()
@@ -151,7 +155,7 @@ class Ledger:
             # descartarlo en silencio ocultaría esa divergencia. `commit` y
             # `processed_at` se excluyen: son metadatos de build y telemetría
             # (CF-34), no contenido del evento.
-            previo = next(e for e in self.eventos if e["event_id"] == eid)
+            previo = self._por_id[eid]
             nuevo = {k: v for k, v in campos.items()
                      if v is not None and k != "id_t"}
             volatiles = {"processed_at", "commit"}
@@ -172,6 +176,7 @@ class Ledger:
                  if v is not None and k != "id_t"}}
         self.eventos.append(ev)
         self._ids.add(eid)
+        self._por_id[eid] = ev
         if self.ruta:
             os.makedirs(os.path.dirname(self.ruta), exist_ok=True)
             with open(self.ruta, "a", encoding="utf-8") as fh:

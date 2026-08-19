@@ -543,13 +543,17 @@ class Motor:
         clave = (mercado, t0)
         if clave in self._epocas_anunciadas:
             return
-        # Se marca SOLO tras una escritura efectiva: durante el bootstrap
-        # `_emit` no escribe, y marcarla ahí perdía el evento para siempre.
         # La identidad usa el `t0` de la época (CF-30/CF-37); el tiempo
         # efectivo es el lote en que quedó habilitada.
         ev = self._emit("epoca_m15", T, mercado, finalized_at=fin,
                         id_t=t0, epoca_t0=t0)
-        if ev is not None:
+        # `_emit` devuelve None por DOS razones distintas y confundirlas
+        # rompía el reinicio: durante el bootstrap no escribe (y marcar ahí
+        # perdería el evento para siempre), pero tras un reinicio devuelve
+        # None por DEDUPE — el anuncio YA está en el libro. Sin distinguirlas,
+        # la época se re-anunciaba en el lote siguiente con otro
+        # `effective_at` y el libro moría por payload distinto.
+        if ev is not None or self._emitiendo(T):
             self._epocas_anunciadas.add(clave)
 
     def _procesar_mercado(self, mercado: str, T: int, fin: int) -> None:

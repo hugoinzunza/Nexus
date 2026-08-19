@@ -2058,7 +2058,7 @@ def test_int_marcador_exchange_se_recupera_en_toda_la_matriz_de_caidas():
             if e["tipo"] in ("hueco_detectado", "mercado_degradado") \
                     and e["tipo"] not in escritos:
                 continue
-            led2.eventos.append(dict(e)); led2._ids.add(e["event_id"])
+            _sembrar(led2, dict(e))
         m2 = E.Motor(motor.m15, motor.h4, motor.mercados, led2,
                      bootstrap_hasta=motor.bootstrap_hasta)
         assert m2.estados["BTCUSDT"].degradado is False     # arranca sano
@@ -2154,14 +2154,21 @@ def _escenario_exchange(t0=None):
     return motor, led, T
 
 
+def _sembrar(led, ev):
+    """Registra un evento en TODOS los índices del ledger, como haría
+    `append`. Sembrar solo `eventos`/`_ids` dejaba el libro incoherente."""
+    led.eventos.append(ev)
+    led._ids.add(ev["event_id"])
+    led._por_id[ev["event_id"]] = ev
+    return ev
+
+
 def _ledger_forjado(led, forjar):
     """Ledger con los MISMOS `event_id` del libro vivo, pero con el payload
     que `forjar` decida alterar. Simula un libro divergente en disco."""
     led2 = Ledger()
     for e in led.eventos:
-        ev = forjar(dict(e))
-        led2.eventos.append(ev)
-        led2._ids.add(ev["event_id"])
+        _sembrar(led2, forjar(dict(e)))
     return led2
 
 
@@ -2368,7 +2375,7 @@ def test_int_dos_huecos_del_mismo_marcador_fallan_cerrado():
     motor, led, T = _escenario_exchange()
     led2 = Ledger()
     for e in led.eventos:
-        led2.eventos.append(dict(e)); led2._ids.add(e["event_id"])
+        _sembrar(led2, dict(e))
     copia = dict(next(e for e in led.eventos
                       if e["tipo"] == "hueco_detectado"))
     copia["effective_at"] = copia["effective_at"] + C.TF_MS["15m"]
@@ -2600,3 +2607,63 @@ def test_int_la_epoca_que_emite_el_motor_identifica_por_epoca_t0(tmp_path):
     # y el archivo recién escrito se relee sin rechazos
     assert [x["event_id"] for x in Ledger(lr).eventos] == \
         [x["event_id"] for x in led.eventos]
+
+
+def test_int_reproceso_completo_es_idempotente_con_ledger_persistido(tmp_path):
+    """Reinicio real sobre el libro ya escrito: `_emit` devuelve None por
+    DEDUPE, no por bootstrap. Confundir las dos razones hacía que la época se
+    re-anunciara en el lote siguiente con otro `effective_at` y el libro
+    muriera por payload distinto. El reproceso debe dar la MISMA firma."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    if not os.path.exists(R.ruta_snapshot(R.ROOT, "BTCUSDT", "15m")):
+        pytest.skip("sin klines versionadas")
+    raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
+    for m in ("BTCUSDT", "ETHUSDT"):
+        for tf in ("15m", "4h"):
+            src = R.ruta_snapshot(R.ROOT, m, tf)
+            if not os.path.exists(src):
+                pytest.skip("sin klines versionadas")
+            json.dump(json.load(open(src, encoding="utf-8"))[:900],
+                      open(R.ruta_snapshot(raiz, m, tf), "w",
+                           encoding="utf-8"))
+    lr = str(tmp_path / "l.jsonl")
+    comun = dict(root=raiz, mercados=("BTCUSDT", "ETHUSDT"),
+                 bootstrap_hasta=1, ledger_ruta=lr)
+    _, led1 = R.correr(**comun)
+    assert [e for e in led1.eventos if e["tipo"] == "epoca_m15"], \
+        "el escenario debe anunciar al menos una época"
+    firma = led1.firma()
+    n = len(led1.eventos)
+    for _ in range(2):                    # dos reinicios seguidos
+        _, ledN = R.correr(**comun)
+        assert len(ledN.eventos) == n
+        assert ledN.firma() == firma
+    # el archivo tampoco creció
+    assert len(open(lr, encoding="utf-8").read().strip().splitlines()) == n
+
+
+def test_int_el_bootstrap_no_marca_la_epoca_como_anunciada():
+    """La otra mitad de la distinción: durante el bootstrap `_emit` no
+    escribe, y marcar ahí perdería el anuncio para siempre. La época debe
+    anunciarse recién después de la frontera."""
+    t0 = C.GENESIS_H4 + 400 * C.TF_MS["4h"]
+    motor, led, _ = _mundo_h4_propio(silencioso="NINGUNO")
+    T = t0 + 205 * DUR
+    motor.bootstrap_hasta = T + 10 * DUR          # todo el tramo es bootstrap
+    motor.iniciar_ciclo()
+    try:
+        motor._anunciar_epoca("BTCUSDT", T, T)
+    finally:
+        motor.finalizar_ciclo()
+    assert [e for e in led.eventos if e["tipo"] == "epoca_m15"] == []
+    assert motor._epocas_anunciadas == set()      # NO marcada: se reintentará
+    motor.bootstrap_hasta = T - DUR               # cruzada la frontera
+    motor.iniciar_ciclo()
+    try:
+        motor._anunciar_epoca("BTCUSDT", T, T)
+    finally:
+        motor.finalizar_ciclo()
+    assert len([e for e in led.eventos if e["tipo"] == "epoca_m15"]) == 1
+    assert motor._epocas_anunciadas                # ahora sí
