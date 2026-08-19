@@ -408,15 +408,23 @@ class Motor:
             # bajo otro `T`, la reemisión crearía un `event_id` distinto y
             # duplicaría el hueco en vez de completarlo. Eso no se resuelve
             # en silencio — el libro no es reconciliable y se falla cerrado.
-            for previo, cual in ((self.ledger.hueco_exchange(mercado,
-                                                             reg["desde"]),
-                                  "hueco_detectado"),
-                                 (self.ledger.degradacion(mercado, det),
-                                  "mercado_degradado")):
-                if previo is not None and previo.get("effective_at") != T:
+            for previos, cual in (
+                    (self.ledger.huecos_exchange(mercado, reg["desde"]),
+                     "hueco_detectado"),
+                    (self.ledger.degradaciones(mercado, det),
+                     "mercado_degradado")):
+                if len(previos) > 1:
+                    # Cardinalidad: un marcador documenta UN evento de cada
+                    # tipo. Quedarse con el primero dejaba pasar la
+                    # validación y ocultaba las copias siguientes.
+                    raise ValueError(
+                        f"el libro tiene {len(previos)} {cual} para el mismo "
+                        f"marcador de {mercado} (desde={reg['desde']}): "
+                        f"no es reconciliable")
+                if previos and previos[0].get("effective_at") != T:
                     raise ValueError(
                         f"{cual} de {mercado} en el libro tiene "
-                        f"effective_at={previo.get('effective_at')} y la "
+                        f"effective_at={previos[0].get('effective_at')} y la "
                         f"recuperación deriva T={T}: el marcador sellado no "
                         f"reconstruye el evento original")
             # Los DOS eventos se reemiten SIEMPRE. Saltarse `_emit` cuando el

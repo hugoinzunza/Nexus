@@ -2286,3 +2286,165 @@ def test_int_recuperacion_exchange_desde_archivos_reales(tmp_path):
     assert [_limpio(e) for e in led3.eventos] == vivos
     assert len(open(lr, encoding="utf-8").read().strip().splitlines()) == \
         len(vivos)
+
+
+def _libro_en_disco(tmp_path, eventos, nombre="l.jsonl"):
+    from modules.bot3.v9.contract import canon
+    ruta = str(tmp_path / nombre)
+    with open(ruta, "w", encoding="utf-8") as fh:
+        for e in eventos:
+            fh.write(canon(e) + "\n")
+    return ruta
+
+
+def test_int_releer_rechaza_event_id_alterado(tmp_path):
+    """`_releer` confiaba en el `event_id` ESCRITO: el archivo pasaba a ser
+    la autoridad de identidad y desde el índice gobernaba el dedupe de toda
+    la corrida. Ahora se recalcula desde el payload."""
+    import pytest
+    motor, led, T = _escenario_exchange()
+    evs = [dict(e) for e in led.eventos]
+    assert evs, "el escenario debe producir eventos"
+    evs[0]["event_id"] = "f" * 64                  # payload intacto, id falso
+    ruta = _libro_en_disco(tmp_path, evs)
+    with pytest.raises(ValueError, match="event_id alterado"):
+        Ledger(ruta)
+
+
+def test_int_releer_rechaza_lineas_repetidas_y_contenidos_en_conflicto(
+        tmp_path):
+    """Un libro append-only no es un multiconjunto: ni la misma línea dos
+    veces, ni dos contenidos bajo el mismo `event_id`."""
+    import pytest
+    motor, led, T = _escenario_exchange()
+    evs = [dict(e) for e in led.eventos]
+    Ledger(_libro_en_disco(tmp_path, evs, "ok.jsonl"))          # base sana
+
+    with pytest.raises(ValueError, match="línea duplicada"):
+        Ledger(_libro_en_disco(tmp_path, evs + [dict(evs[0])], "dup.jsonl"))
+
+    # `hueco_detectado` es FAM_HUECO: su `event_id` NO incluye `T`, así que
+    # una copia bajo otro `effective_at` comparte id y es un CONFLICTO.
+    hd = next(i for i, e in enumerate(evs) if e["tipo"] == "hueco_detectado")
+    copia = dict(evs[hd]); copia["effective_at"] = evs[hd]["effective_at"] + 1
+    with pytest.raises(ValueError, match="contenido distinto"):
+        Ledger(_libro_en_disco(tmp_path, evs + [copia], "conf.jsonl"))
+
+
+def test_int_dos_degradaciones_del_mismo_marcador_fallan_cerrado(tmp_path):
+    """`mercado_degradado` es FAM_MERCADO: su `event_id` SÍ incluye `T`, así
+    que dos copias bajo distinto `T` son dos ids VÁLIDOS y `_releer` no las
+    ve. La cardinalidad la impone la recuperación: un marcador documenta un
+    evento de cada tipo."""
+    import pytest
+    from modules.bot3.v9.contract import event_id, CONTRATO_HASH
+    motor, led, T = _escenario_exchange()
+    evs = [dict(e) for e in led.eventos]
+    md = next(i for i, e in enumerate(evs) if e["tipo"] == "mercado_degradado")
+    otro_T = evs[md]["effective_at"] + 3 * C.TF_MS["15m"]
+    copia = dict(evs[md])
+    copia["effective_at"] = otro_T
+    copia["event_id"] = event_id("mercado_degradado", contrato=CONTRATO_HASH,
+                                 mercado=copia["mercado"], t=otro_T)
+    ruta = _libro_en_disco(tmp_path, evs + [copia])
+    led2 = Ledger(ruta)                       # el libro se relee sin error…
+    assert len(led2.degradaciones(copia["mercado"],
+                                  copia["detected_at"])) == 2
+    m2 = E.Motor(motor.m15, motor.h4, motor.mercados, led2,
+                 bootstrap_hasta=motor.bootstrap_hasta)
+    m2.iniciar_ciclo()
+    try:                                      # …pero la recuperación no pasa
+        with pytest.raises(ValueError, match="no es reconciliable"):
+            m2.recuperar_exchange(T)
+    finally:
+        m2.finalizar_ciclo()
+
+
+def test_int_dos_huecos_del_mismo_marcador_fallan_cerrado():
+    """Y lo mismo por el lado del hueco, con el libro construido en memoria
+    (una ruta que `_releer` no cubre)."""
+    import pytest
+    motor, led, T = _escenario_exchange()
+    led2 = Ledger()
+    for e in led.eventos:
+        led2.eventos.append(dict(e)); led2._ids.add(e["event_id"])
+    copia = dict(next(e for e in led.eventos
+                      if e["tipo"] == "hueco_detectado"))
+    copia["effective_at"] = copia["effective_at"] + C.TF_MS["15m"]
+    led2.eventos.append(copia)
+    m2 = E.Motor(motor.m15, motor.h4, motor.mercados, led2,
+                 bootstrap_hasta=motor.bootstrap_hasta)
+    m2.iniciar_ciclo()
+    try:
+        with pytest.raises(ValueError, match="no es reconciliable"):
+            m2.recuperar_exchange(T)
+    finally:
+        m2.finalizar_ciclo()
+
+
+def _mundo_h4_propio(silencioso="BTCUSDT"):
+    """Como `_mundo_epoca_habilitada`, pero con almacenes H4 REALES y
+    separados. El fixture compartido (`Motor(alms, alms, …)`) hacía que los
+    `h4_*` heads fueran los del propio M15: cinco campos, dos cadenas."""
+    t0 = C.GENESIS_H4 + 400 * C.TF_MS["4h"]
+    DUR4 = C.TF_MS["4h"]
+    m15, h4 = {}, {}
+    for m in C.MERCADOS:
+        a = S.Almacen(m, "15m"); a.nacer_en(t0)
+        n = 200 if m == silencioso else 210
+        a.ofrecer([vela(t0 + i * DUR, 1, 2, 0.5, 1.5) for i in range(n)],
+                  "push")
+        a.drenar(); m15[m] = a
+        b = S.Almacen(m, "4h"); b.nacer_en(C.GENESIS_H4)
+        b.ofrecer([vela(C.GENESIS_H4 + i * DUR4, 1, 2, 0.5, 1.5)
+                   for i in range(420)], "push")
+        b.drenar(); h4[m] = b
+    led = Ledger()
+    return E.Motor(m15, h4, C.MERCADOS, led), led, t0
+
+
+def test_int_los_cinco_heads_se_derivan_de_cadenas_separadas(tmp_path):
+    """P2: con H4 propio, los `h4_*` heads deben salir de la cadena H4 y no
+    de la M15, y sobrevivir intactos a un viaje por disco."""
+    from modules.bot3.v9.contract import canon
+    motor, led, t0 = _mundo_h4_propio()
+    T = t0 + 201 * DUR
+    assert motor.watermark_exchange(T) == ["BTCUSDT"]
+    ev = next(e for e in led.eventos if e["tipo"] == "hueco_detectado")
+    CINCO = ("input_head_asof_T", "input_commit_asof_T",
+             "provenance_head_at_finality", "h4_head_asof_T",
+             "h4_commit_asof_T")
+    for c in CINCO:
+        assert ev.get(c) and len(ev[c]) == 64, c
+    # los H4 no son los M15: dos cadenas distintas, no un alias
+    assert ev["h4_head_asof_T"] != ev["input_head_asof_T"]
+    assert ev["h4_commit_asof_T"] != ev["input_commit_asof_T"]
+    ef, fin = ev["effective_at"], ev["finalized_at"]
+    assert ev["h4_head_asof_T"] == motor.h4["BTCUSDT"].head_asof(ef)
+    assert ev["h4_commit_asof_T"] == motor.h4["BTCUSDT"].commit_asof(ef)
+    assert ev["input_head_asof_T"] == motor.m15["BTCUSDT"].head_asof(ef)
+    assert ev["provenance_head_at_finality"] == \
+        motor.m15["BTCUSDT"].head_finality(fin)
+
+    # recuperación por disco con las DOS cadenas persistidas por separado
+    def guardar(alm, tf):
+        ruta = str(tmp_path / f"{alm.mercado}_{tf}.jsonl")
+        with open(ruta, "w", encoding="utf-8") as fh:
+            for r in alm.registros:
+                fh.write(canon(dict(r)) + "\n")
+        return S.Almacen.cargar(alm.mercado, tf, ruta, requerido=True)
+
+    m15b = {m: guardar(a, "15m") for m, a in motor.m15.items()}
+    h4b = {m: guardar(a, "4h") for m, a in motor.h4.items()}
+    led2 = Ledger(str(tmp_path / "l.jsonl"))
+    m2 = E.Motor(m15b, h4b, motor.mercados, led2,
+                 bootstrap_hasta=motor.bootstrap_hasta)
+    m2.iniciar_ciclo()
+    try:
+        assert m2.recuperar_exchange(T) == ["BTCUSDT"]
+    finally:
+        m2.finalizar_ciclo()
+    assert m2.estados["BTCUSDT"].degradado is True
+    vivos = [_limpio(e) for e in led.eventos
+             if e["tipo"] in ("hueco_detectado", "mercado_degradado")]
+    assert [_limpio(e) for e in led2.eventos] == vivos

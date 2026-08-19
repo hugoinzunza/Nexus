@@ -29,16 +29,45 @@ class Ledger:
 
     def _releer(self) -> None:
         """Reconstruye el índice desde el archivo (CF-30: el dedupe se hace
-        contra lo efectivamente escrito)."""
+        contra lo efectivamente escrito) VERIFICÁNDOLO.
+
+        Releer confiando en el `event_id` escrito convertía el archivo en la
+        autoridad: un id alterado, una línea repetida o dos contenidos bajo
+        el mismo id entraban al índice y desde ahí gobernaban el dedupe de
+        toda la corrida. Se recalcula cada identidad desde el payload y se
+        falla cerrado."""
         self.eventos, self._ids = [], set()
+        por_id: dict[str, dict] = {}
         with open(self.ruta, encoding="utf-8") as fh:
-            for linea in fh:
+            for n, linea in enumerate(fh, 1):
                 linea = linea.strip()
                 if not linea:
                     continue
                 ev = json.loads(linea)
+                eid = ev.get("event_id")
+                # `epoca_m15` deriva su identidad de `id_t`, que NO se
+                # persiste (es detalle de identidad, no contenido): para esa
+                # lista cerrada no se puede recalcular, pero sí exigir
+                # unicidad y coherencia de contenido.
+                if ev.get("tipo") not in self.ID_T_PERMITIDO:
+                    esperado = self._clave(ev["tipo"], ev)
+                    if eid != esperado:
+                        raise ValueError(
+                            f"event_id alterado en {self.ruta}:{n} — "
+                            f"{str(eid)[:12]}… no corresponde al payload "
+                            f"(debería ser {esperado[:12]}…)")
+                previo = por_id.get(eid)
+                if previo is not None:
+                    if canon(previo) == canon(ev):
+                        raise ValueError(
+                            f"línea duplicada en {self.ruta}:{n} — el libro "
+                            f"es append-only, no un multiconjunto")
+                    raise ValueError(
+                        f"event_id {str(eid)[:12]}… repetido en "
+                        f"{self.ruta}:{n} con contenido distinto")
+                por_id[eid] = ev
                 self.eventos.append(ev)
-                self._ids.add(ev["event_id"])
+                self._ids.add(eid)
 
     # Tipos cuya IDENTIDAD usa un instante propio distinto del `effective_at`
     # causal. Es una lista CERRADA: `id_t` no es un escape genérico.
@@ -102,30 +131,32 @@ class Ledger:
     def por_tipo(self, tipo: str) -> list[dict]:
         return [e for e in self.eventos if e["tipo"] == tipo]
 
-    def hueco_exchange(self, mercado: str, desde: int) -> dict | None:
+    def huecos_exchange(self, mercado: str, desde: int) -> list[dict]:
         """El `hueco_detectado` exchange de ESTE marcador, si el libro ya lo
         documenta. Se busca por (mercado, desde) y NO por `event_id`, para
         poder detectar que fue emitido bajo OTRO `T`.
 
+        Devuelve TODOS los matches, no el primero: si el libro tuviera dos
+        entradas para el mismo marcador, quedarse con la primera dejaba pasar
+        la validación y ocultaba la segunda.
+
         No sustituye la comprobación canónica: la reemisión ocurre igual, y
         es `append()` quien falla cerrado si el payload difiere."""
-        for e in self.eventos:
-            if (e["tipo"] == "hueco_detectado"
-                    and e.get("motivo") == "exchange"
-                    and e.get("mercado") == mercado
-                    and e.get("desde") == int(desde)):
-                return e
-        return None
+        return [e for e in self.eventos
+                if e["tipo"] == "hueco_detectado"
+                and e.get("motivo") == "exchange"
+                and e.get("mercado") == mercado
+                and e.get("desde") == int(desde)]
 
-    def degradacion(self, mercado: str, detected_at: int) -> dict | None:
-        """El `mercado_degradado` de ESTE marcador, si ya está en el libro.
-        Se busca por `detected_at`, recuperable del marcador sellado."""
-        for e in self.eventos:
-            if (e["tipo"] == "mercado_degradado"
-                    and e.get("mercado") == mercado
-                    and e.get("detected_at") == int(detected_at)):
-                return e
-        return None
+    def degradaciones(self, mercado: str, detected_at: int) -> list[dict]:
+        """Los `mercado_degradado` de ESTE marcador. Se busca por
+        `detected_at`, recuperable del marcador sellado. `mercado_degradado`
+        es FAM_MERCADO, así que su `event_id` SÍ incluye `T`: dos copias bajo
+        distinto `T` son dos ids distintos y `append()` no las vería."""
+        return [e for e in self.eventos
+                if e["tipo"] == "mercado_degradado"
+                and e.get("mercado") == mercado
+                and e.get("detected_at") == int(detected_at)]
 
     def cierres(self) -> list[dict]:
         return self.por_tipo("cerrado")
