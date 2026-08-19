@@ -300,7 +300,8 @@ def test_cf30_idempotencia_crash(tmp_path):
         ("lote_finalizado", dict(effective_at=1, finalized_at=1)),
         ("frontera", dict(effective_at=2, finalized_at=2)),
         ("estado_inicial", dict(mercado="BTCUSDT", effective_at=3, finalized_at=3)),
-        ("epoca_m15", dict(mercado="BTCUSDT", effective_at=4, finalized_at=4)),
+        ("epoca_m15", dict(mercado="BTCUSDT", effective_at=4, finalized_at=4,
+                           id_t=4, epoca_t0=4)),
         ("abstencion", dict(mercado="BTCUSDT", motivo="rango_sin_origen",
                             effective_at=5, finalized_at=5)),
         ("descarte", dict(mercado="BTCUSDT", motivo="rr_insuficiente",
@@ -2448,3 +2449,84 @@ def test_int_los_cinco_heads_se_derivan_de_cadenas_separadas(tmp_path):
     vivos = [_limpio(e) for e in led.eventos
              if e["tipo"] in ("hueco_detectado", "mercado_degradado")]
     assert [_limpio(e) for e in led2.eventos] == vivos
+
+
+def _libro_epoca(tmp_path, mutar=None, nombre="e.jsonl"):
+    """Libro en disco con un `epoca_m15` REAL emitido por el motor."""
+    from modules.bot3.v9.contract import canon
+    ruta = str(tmp_path / nombre)
+    led = Ledger()
+    led.append("epoca_m15", mercado="BTCUSDT", effective_at=40,
+               finalized_at=40, id_t=4, epoca_t0=4)
+    evs = [dict(e) for e in led.eventos]
+    if mutar is not None:
+        mutar(evs[0])
+    with open(ruta, "w", encoding="utf-8") as fh:
+        for e in evs:
+            fh.write(canon(e) + "\n")
+    return ruta
+
+
+def test_int_releer_verifica_tambien_la_identidad_de_epoca_m15(tmp_path):
+    """`epoca_m15` deriva su identidad de `id_t`, que no se persiste con ese
+    nombre — pero su VALOR sí queda en `epoca_t0`. La excepción que la
+    eximía de verificación era innecesaria y dejaba pasar ids alterados."""
+    import pytest
+    Ledger(_libro_epoca(tmp_path, nombre="ok.jsonl"))            # base sana
+
+    def id_falso(ev):
+        ev["event_id"] = "f" * 64
+
+    with pytest.raises(ValueError, match="event_id alterado"):
+        Ledger(_libro_epoca(tmp_path, id_falso, "id.jsonl"))
+
+    def sin_t0(ev):
+        del ev["epoca_t0"]
+
+    with pytest.raises(ValueError, match="identidad no es verificable"):
+        Ledger(_libro_epoca(tmp_path, sin_t0, "sin.jsonl"))
+
+    def t0_no_entero(ev):
+        ev["epoca_t0"] = "4"
+
+    with pytest.raises(ValueError, match="identidad no es verificable"):
+        Ledger(_libro_epoca(tmp_path, t0_no_entero, "str.jsonl"))
+
+    # `epoca_t0` alterado CONSERVANDO el id: el id deja de corresponder
+    def t0_alterado(ev):
+        ev["epoca_t0"] = 999
+
+    with pytest.raises(ValueError, match="event_id alterado"):
+        Ledger(_libro_epoca(tmp_path, t0_alterado, "t0.jsonl"))
+
+
+def test_int_append_exige_el_instante_de_identidad_persistido(tmp_path):
+    """Simetría escritura/lectura: si la identidad usa un instante propio, el
+    evento debe llevarlo persistido, o se escribiría un libro que la relectura
+    no puede verificar."""
+    import pytest
+    led = Ledger(str(tmp_path / "l.jsonl"))
+    with pytest.raises(ValueError, match="exige `epoca_t0` entero"):
+        led.append("epoca_m15", mercado="BTCUSDT", effective_at=40,
+                   finalized_at=40, id_t=4)
+    with pytest.raises(ValueError, match="discrepan"):
+        led.append("epoca_m15", mercado="BTCUSDT", effective_at=40,
+                   finalized_at=40, id_t=4, epoca_t0=5)
+    assert not os.path.exists(str(tmp_path / "l.jsonl"))   # no escribió nada
+
+
+def test_int_releer_rechaza_contrato_o_protocolo_ajenos(tmp_path):
+    """`contrato` y `protocolo` no son telemetría: son la autoridad
+    científica del libro. `_clave` recalcula con el CONTRATO_HASH vigente,
+    así que sin comprobarlos un libro ajeno entraba avalado por el id que
+    nosotros mismos le derivábamos."""
+    import pytest
+    motor, led, T = _escenario_exchange()
+    evs = [dict(e) for e in led.eventos]
+    for campo, valor, patron in (("contrato", "ALTERADO", "contrato ajeno"),
+                                 ("protocolo", "ALTERADO", "protocolo ajeno"),
+                                 ("contrato", "b" * 64, "contrato ajeno")):
+        copia = [dict(e) for e in evs]
+        copia[0][campo] = valor
+        with pytest.raises(ValueError, match=patron):
+            Ledger(_libro_en_disco(tmp_path, copia, f"{campo}_{valor[:4]}.jsonl"))

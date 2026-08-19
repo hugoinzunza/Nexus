@@ -45,17 +45,38 @@ class Ledger:
                     continue
                 ev = json.loads(linea)
                 eid = ev.get("event_id")
-                # `epoca_m15` deriva su identidad de `id_t`, que NO se
-                # persiste (es detalle de identidad, no contenido): para esa
-                # lista cerrada no se puede recalcular, pero sí exigir
-                # unicidad y coherencia de contenido.
-                if ev.get("tipo") not in self.ID_T_PERMITIDO:
-                    esperado = self._clave(ev["tipo"], ev)
-                    if eid != esperado:
+                # `contrato` y `protocolo` no son telemetría: son la
+                # autoridad científica del libro. `_clave` recalcula con el
+                # CONTRATO_HASH vigente, así que sin esta comprobación un
+                # libro de otro contrato entraba y quedaba avalado por el id
+                # que nosotros mismos le derivábamos.
+                if ev.get("contrato") != CONTRATO_HASH:
+                    raise ValueError(
+                        f"contrato ajeno en {self.ruta}:{n} — "
+                        f"{str(ev.get('contrato'))[:12]}… != "
+                        f"{CONTRATO_HASH[:12]}…")
+                if ev.get("protocolo") != PROTOCOLO:
+                    raise ValueError(
+                        f"protocolo ajeno en {self.ruta}:{n} — "
+                        f"{ev.get('protocolo')!r} != {PROTOCOLO!r}")
+                campos = dict(ev)
+                campo_t = self.ID_T_CAMPO.get(ev.get("tipo"))
+                if campo_t is not None:
+                    # La identidad usa un instante propio, guardado bajo otro
+                    # nombre. Se exige presente y entero: sin él no hay forma
+                    # de verificar el id, y aceptarlo sería el mismo agujero.
+                    valor = ev.get(campo_t)
+                    if not isinstance(valor, int) or isinstance(valor, bool):
                         raise ValueError(
-                            f"event_id alterado en {self.ruta}:{n} — "
-                            f"{str(eid)[:12]}… no corresponde al payload "
-                            f"(debería ser {esperado[:12]}…)")
+                            f"{ev['tipo']} en {self.ruta}:{n} sin `{campo_t}` "
+                            f"entero: su identidad no es verificable")
+                    campos["id_t"] = valor
+                esperado = self._clave(ev["tipo"], campos)
+                if eid != esperado:
+                    raise ValueError(
+                        f"event_id alterado en {self.ruta}:{n} — "
+                        f"{str(eid)[:12]}… no corresponde al payload "
+                        f"(debería ser {esperado[:12]}…)")
                 previo = por_id.get(eid)
                 if previo is not None:
                     if canon(previo) == canon(ev):
@@ -72,6 +93,11 @@ class Ledger:
     # Tipos cuya IDENTIDAD usa un instante propio distinto del `effective_at`
     # causal. Es una lista CERRADA: `id_t` no es un escape genérico.
     ID_T_PERMITIDO = ("epoca_m15",)
+
+    # `id_t` no se persiste con ese nombre, pero su VALOR sí queda en el
+    # evento. Este mapa dice dónde, y es lo que permite recalcular la
+    # identidad al releer sin cambiar un solo byte del libro.
+    ID_T_CAMPO = {"epoca_m15": "epoca_t0"}
 
     def _clave(self, tipo: str, campos: dict) -> str:
         t = campos.get("effective_at")
@@ -93,6 +119,20 @@ class Ledger:
             raise ValueError(f"tipo fuera del registro cerrado CF-37: {tipo!r}")
         if campos.get("id_t") is not None and tipo not in self.ID_T_PERMITIDO:
             raise ValueError(f"`id_t` no permitido para el tipo {tipo!r}")
+        campo_t = self.ID_T_CAMPO.get(tipo)
+        if campo_t is not None:
+            # Simetría escritura/lectura: si la identidad usa un instante
+            # propio, el evento DEBE llevarlo persistido, o al releer no
+            # habría con qué verificar el `event_id`.
+            valor = campos.get(campo_t)
+            if not isinstance(valor, int) or isinstance(valor, bool):
+                raise ValueError(
+                    f"{tipo} exige `{campo_t}` entero: su identidad usa un "
+                    f"instante propio y sin él el libro no es verificable")
+            if campos.get("id_t") is not None and campos["id_t"] != valor:
+                raise ValueError(
+                    f"{tipo}: `id_t` ({campos['id_t']}) y `{campo_t}` "
+                    f"({valor}) discrepan")
         eid = self._clave(tipo, campos)
         if eid in self._ids:
             # Reaparición: DEBE ser el mismo evento. Un mismo `event_id` con
