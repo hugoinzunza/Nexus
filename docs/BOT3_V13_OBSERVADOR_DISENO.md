@@ -1,11 +1,11 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.3
+# Bot3.v13 — Observador operativo · DISEÑO rev.4
 
 **Estado: DISEÑO. No implementado. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.3 responde a `docs/AUDITORIA_BOT3_V13_OBSERVADOR_DISENO_REV2.md` (3 blockers,
-3 majors, más la publicación atómica del nacimiento). Se pre-registra y se
-audita ANTES de escribir una línea de implementación.
+rev.4 responde a `docs/AUDITORIA_BOT3_V13_OBSERVADOR_DISENO_REV3.md` (3 blockers,
+3 majors). Se pre-registra y se audita ANTES de escribir una línea de
+implementación.
 
 ---
 
@@ -59,40 +59,69 @@ Recuperación: `cargar()` revalida la cadena desde `SEMILLA`; se verifica
 es sufijo append-only autenticado por la propia cadena. No queda nada que
 actualizar por ciclo, así que no hay transacción que coordinar.
 
-## 4. Nacimiento atómico desde staging *(rev.3)*
+## 4. Nacimiento atómico: un solo rename *(rev.4 — MAJOR 2)*
 
 Una caída durante el primer nacimiento no puede dejar unos almacenes
 interpretados como cohorte nacida y otros como primer arranque.
 
-```
-1. materializar los 14 almacenes COMPLETOS en state/staging/
-2. fsync de los 14 archivos
-3. escribir manifest.json.tmp con los 14 prefijos + identidad de cohorte
-4. fsync del tmp
-5. os.replace(staging/*, definitivo) para los 14
-6. fsync del directorio
-7. os.replace(manifest.json.tmp, manifest.json) + fsync del directorio
-```
-
-El manifiesto definitivo es el **único** testigo de nacimiento: mientras no
-exista, cualquier resto de `staging/` se descarta y se renace desde cero. Un
-manifiesto presente exige los 14 almacenes presentes y consistentes con sus
-prefijos; si falta uno, fallo cerrado.
-
-## 5. Orden de escritura por ciclo
+rev.3 hacía 14 `os.replace` uno a uno antes de publicar el manifiesto: una
+caída a mitad dejaba archivos ya definitivos y otros en staging, y la regla
+«descartar `staging/`» no los alcanzaba. Se publica **un directorio completo
+con un único rename**:
 
 ```
-drenar → fsync de cada almacén tocado → append al libro → fsync del libro
+1. materializar los 14 almacenes COMPLETOS en state/almacenes.new/
+2. fsync de los 14 archivos y del directorio almacenes.new/
+3. os.replace(state/almacenes.new, state/almacenes)   ← ATÓMICO, uno solo
+4. fsync del directorio state/
+5. escribir manifest.json.tmp → fsync → os.replace → fsync del directorio
 ```
 
-Recuperable en cualquier punto sin metadata adicional: los almacenes son
-cadenas append-only autenticadas y el libro es idempotente por `event_id`.
+`os.replace` sobre directorios es atómico dentro del mismo filesystem, y
+`state/almacenes` no existe antes del nacimiento. No hay estado intermedio con
+algunos almacenes publicados y otros no.
+
+El manifiesto definitivo es el **único** testigo de nacimiento. Mientras no
+exista, se descartan `almacenes.new/` **y** `almacenes/` —esta última en
+cuarentena, no borrada— y se renace desde cero. Un manifiesto presente exige
+los 14 almacenes presentes y consistentes con sus prefijos; si falta uno,
+fallo cerrado.
+
+## 5. Durabilidad: el almacén antes que el libro *(rev.4 — BLOCKER 2)*
+
+**Verificado: hoy no hay un solo `fsync` en `store.py` ni en `ledger.py`.**
+Nada es durable en ningún punto, y el orden en que el sistema operativo baja
+las páginas a disco es arbitrario.
+
+El orden de rev.3 —fsync de almacenes y *después* procesar— no alcanza:
+`watermark_exchange(T)` appendea un marcador al almacén DURANTE
+`procesar_lote` y emite `hueco_detectado`/`mercado_degradado` acto seguido. Una
+caída podía dejar durable el evento y perdido el marcador que lo justifica.
+
+Regla, para **cada** transición almacén→libro:
+
+```
+1. append del marcador al almacén
+2. flush + fsync de ESE almacén          ← antes de que exista el evento
+3. append de sus eventos al libro
+4. flush + fsync del libro al cerrar el ciclo
+```
+
+Implementación: `Almacen` gana un **modo durable** que hace `flush`+`fsync` en
+cada `_append`. Se activa solo en el observador, después del nacimiento; el
+replay de bootstrap corre sin él (un `fsync` por vela sobre ~1M velas es
+inviable, y ahí nada depende del orden porque no se emite al libro).
+
+Coste en operación: ~14 `fsync` por ciclo de 15 minutos. Despreciable.
+
+Esto cambia `store.py`, dentro del alcance de código de Bot3 → su propia ronda
+de auditoría de implementación. No es cambio de contrato.
 
 ---
 
 # Dependencia H4
 
-## 6. Precondición de frescura H4 *(rev.3, reescrito)*
+## 6. Precondición de frescura H4
 
 `lote_finalizable(T)` inspecciona SOLO M15 (`engine.py:293`). Verificado.
 
@@ -105,7 +134,7 @@ grilla H4 esté resuelta hasta `T`:
 
 `LAG_MAX` se evalúa **por mercado y por timeframe**: 14 evaluaciones.
 
-### 6.1 Watermark H4: solo local *(rev.3)*
+### 6.1 Watermark H4: solo local
 
 `prueba_local` y `hueco_pendiente` usan `self.dur`: son **genéricas por TF** y
 funcionan en H4 sin tocar nada (`store.py:285`). El observador usa esa
@@ -122,20 +151,68 @@ vía canónica del motor, con heads y finalidad completos.
 **Prohibido** reutilizar `mercado_degradado` / `mercado_reingresado` —que son
 M15 por CF-29— para fabricar continuidad H4.
 
-### 6.2 Consecuencia, que ya está en la máquina congelada *(rev.3)*
+### 6.2 Consecuencia, que ya está en la máquina congelada
 
 Un hueco H4 sellado parte las épocas, y `_calcular_h4` (`engine.py:688`) exige
 época única continua desde `GENESIS_H4`: ese mercado devuelve
 `historia_insuficiente` y se abstiene, **mientras los demás continúan**. No hay
 que definir nada nuevo: es la regla vigente.
 
-### 6.3 Coste aceptado *(rev.3)*
+### 6.3 Emisión del marcador H4 en el daemon largo *(rev.4)*
 
-Sellar un hueco H4 exige 3 cierres H4 posteriores: **hasta 12 horas** en las que
-el lote global no avanza. Es fail-closed y se acepta a propósito — la
-alternativa es decidir con un rector congelado, que es exactamente la
-divergencia que se quiere impedir. Al sellarse, el backlog se procesa en
-`catch-up` (§10). La cota se registra en el protocolo, no se descubre operando.
+Declarar el hueco en el almacén **no escribe por sí solo** el evento del libro:
+en `correr()` esa emisión ocurre una vez, al arrancar. El daemon largo cablea
+explícitamente, tras cada `declarar_hueco_local()` que devuelva un registro, la
+emisión de `hueco_detectado(tf="4h")` por la vía canónica del motor —con heads,
+finalidad y `event_id` completos— exactamente una vez.
+
+### 6.4 Latencia de sellado *(rev.4, corregido)*
+
+Sellar un hueco H4 exige 3 cierres H4 propios posteriores. Bajo **reanudación
+normal** eso son **12 h + `MARGEN_CIERRE` + una `CADENCIA`**, no 12 h exactas: la
+latencia real incluye el margen de cierre, la cadencia del ciclo, la red y
+cualquier prolongación del silencio.
+
+**No es una cota incondicional.** Si el mercado no vuelve a publicar, no hay
+tres cierres propios y el hueco no se sella nunca. Eso es §6.5.
+
+Durante la espera el lote global no avanza. Es fail-closed a propósito: la
+alternativa es decidir con un rector congelado. Al sellarse, el backlog se
+procesa en `catch-up` (§11).
+
+### 6.5 Salida del silencio H4 permanente *(rev.4 — BLOCKER 3)*
+
+Confirmado: con solo watermark local, un mercado permanentemente mudo bloquea a
+los siete para siempre. El `catch-up` no lo resuelve, porque depende de la misma
+fuente ausente.
+
+La auditoría ofrece dos salidas y recomienda la primera. **Se elige la segunda,
+y esta es la razón.**
+
+Un watermark exchange H4 no sería «puramente observacional». Su prueba produce
+un **marcador sellado en el almacén H4**, ese marcador entra en la cadena de
+hashes, parte las épocas y cambia lo que `_calcular_h4` decide. Es semántica
+causal nueva —Q, N, prueba, `detected_at`— inventada fuera del contrato
+congelado, sobre la TF que gobierna el rector. Después de ocho rondas
+estableciendo que inventar semántica es exactamente como se contamina la
+evidencia, no voy a hacerlo para comprar liveness.
+
+**La liveness se obtiene con un estado terminal, no con una prueba fabricada.**
+
+`SILENCIO_MAX_H4`, parámetro congelado en el protocolo:
+
+- silencio H4 de un mercado **por debajo** del umbral → se espera (§6.4);
+- silencio **por encima** → la cohorte termina como **`BLOCKED_INTEGRITY`**.
+
+`BLOCKED_INTEGRITY` se persiste con la misma mecánica atómica que `COMPLETED`
+(§13), sobrevive a launchd y se valida al arrancar. Pero **no es un corte
+evaluable**: no produce resultado, no se reporta como muestra, no se reabre
+automáticamente. Un mercado del universo que deja de publicar durante días es,
+en los hechos, un universo distinto del que se pre-registró; declararlo es más
+honesto que sellar su ausencia con una prueba que nos inventamos.
+
+El sistema siempre alcanza un estado terminal: `COMPLETED` o
+`BLOCKED_INTEGRITY`. Nunca queda vivo para siempre sin regla.
 
 **Por qué no rompe el determinismo.** Es una precondición sobre CUÁNDO llamar a
 `procesar_lote`, no sobre QUÉ decide el motor para un estado de almacén dado. En
@@ -147,7 +224,7 @@ frío lee ese mismo marcador. El motor no se toca.
 
 # Verificación de determinismo
 
-## 7. Dos primitivas de exclusión, no una *(rev.3 — BLOCKER 1)*
+## 7. Dos primitivas de exclusión, no una
 
 rev.2 se contradecía: el `flock` se retenía toda la vida del daemon y a la vez
 la captura pretendía adquirirlo. Se separan:
@@ -163,7 +240,7 @@ el directorio de estado); el daemon la atiende al cerrar el ciclo en curso. Si
 el proceso no está vivo, no hay captura: no existe forma de obtener una desde
 afuera, y eso es deliberado.
 
-## 8. `state_digest` completo *(rev.3 — BLOCKER 2 + MAJOR 2)*
+## 8. `state_digest` completo
 
 **El sufijo desafío se elimina.** rev.2 proponía alimentar «al motor vivo y al
 frío» con velas sintéticas: eso contaminaría el estado y el libro de la cohorte
@@ -187,17 +264,45 @@ comparación es vivo vs. frío en la misma barrera.
 **Excluidos por derivados**, se recomputan sin cambiar resultados:
 `_reloj_ciclo`, `_ciclo_externo`, `_cache_h4`, `_swm15`, y en el almacén
 `_epocas_cache`, `_por_t`, `_ts`, `_prefix_max`, `_vela_hashes`,
-`_gap_por_desde`, `_buffer`.
+`_gap_por_desde`.
 
-## 9. Captura y comparación *(rev.3)*
+### 8.1 `_buffer` no es derivado *(rev.4 — BLOCKER 1)*
 
-1. el daemon toma `cycle_barrier` al terminar el ciclo;
-2. `fsync` de los 14 almacenes y del libro;
+rev.3 lo excluía como si fuera caché. No lo es: ante un hueco, el buffer
+contiene velas futuras aún no selladas y determina los tres cierres de
+`prueba_local`, el `detected_at`, el rango exacto del marcador y el head
+siguiente de la cadena. Un motor vivo con buffer pendiente y un arranque en
+frío sin él pueden tener libro, heads y digest idénticos **y decidir distinto**
+en el evento siguiente.
+
+Tampoco puede incluirse en el digest: el buffer no se persiste, así que el
+clon frío nunca lo tendría, y persistirlo contradiría §12.
+
+**Regla: solo se certifica una barrera con los 14 buffers vacíos.**
+
+- algún buffer no vacío → se registra `verification_deferred` con el motivo, y
+  se espera a que drene o se selle;
+- **antes de reportar cualquier resultado** debe existir una verificación
+  exitosa POSTERIOR a la última deferencia. Una cohorte cuya última
+  verificación quedó diferida no tiene determinismo demostrado y no se reporta.
+
+## 9. Captura y comparación *(rev.4 — MAJOR 3)*
+
+El ciclo **ya retiene** `cycle_barrier` desde que abre (§12) y **la sigue
+reteniendo** durante fsync, digest y copia: no la readquiere. Con un mutex no
+reentrante, readquirirla sería un deadlock *(rev.4 — MAJOR 3)*.
+
+1. el ciclo termina de procesar, **sin soltar** `cycle_barrier`;
+2. si hay `verify.request` y los 14 buffers están vacíos (§8.1):
+   `fsync` de los 14 almacenes y del libro;
 3. calcula su `state_digest` vivo;
 4. copia almacenes + libro a scratch;
-5. suelta la barrera y sigue operando;
-6. **fuera del ciclo**, reconstruye en frío desde la copia y compara
+5. **recién ahí** suelta la barrera y sigue operando;
+6. **fuera de la barrera**, reconstruye en frío desde la copia y compara
    `firma()` del libro **y** `state_digest`.
+
+Si algún buffer no está vacío, se salta a (5) y se registra
+`verification_deferred`.
 
 El daemon real no recibe nada durante la verificación. Gate: heads, digest y
 libro del daemon deben quedar byte a byte iguales antes y después.
@@ -210,12 +315,23 @@ Divergencia = incidente, cohorte marcada, sin excepción.
 
 ## 10. Elegibilidad, reloj y paginación normativos
 
-**Reloj: el de Binance** (`/fapi/v1/time`), muestreado una vez por ciclo.
+**Dos relojes disjuntos, muestreados una vez por ciclo cada uno**
+*(rev.4 — MAJOR 1)*:
 
-- elegible sii `serverTime ≥ closeTime + 1 + MARGEN_CIERRE`;
-- `serverTime` indisponible → **no se ingiere nada en ese ciclo**. Nunca hay
-  fallback silencioso al reloj del Mac;
-- deriva contra el reloj local mayor que `DERIVA_MAX` → incidencia operacional
+| | qué es | qué hace |
+|---|---|---|
+| `eligibility_time` | `serverTime` de Binance (`/fapi/v1/time`) | **solo** filtra qué velas son elegibles |
+| `processed_at` | reloj local observado | **solo** telemetría de materialización (CF-34) |
+
+rev.3 pasaba `iniciar_ciclo(serverTime)`, lo que convertía el reloj de Binance
+en `processed_at`. Es incorrecto: CF-34 define `processed_at` como el reloj
+observado en que el motor materializa el evento. `eligibility_time` **nunca**
+entra por el parámetro que alimenta `_reloj_ciclo`.
+
+- elegible sii `eligibility_time ≥ closeTime + 1 + MARGEN_CIERRE`;
+- `eligibility_time` indisponible → **no se ingiere nada en ese ciclo**. Nunca
+  hay fallback silencioso al reloj del Mac;
+- `|eligibility_time − processed_at| > DERIVA_MAX` → incidencia operacional
   visible (un Mac con la hora rota tiene que verse, aunque no decida nada).
 
 **Paginación** *(rev.3 — MAJOR 1, borde corregido)*, por mercado y TF:
@@ -257,19 +373,20 @@ la telemetría como lo que fue.
 
 ```
 cada CADENCIA:
-  serverTime ← Binance                    (indisponible → fin del ciclo)
-  cycle_barrier.acquire()
-  iniciar_ciclo(serverTime)
+  eligibility_time ← Binance /fapi/v1/time   (indisponible → fin del ciclo)
+  cycle_barrier.acquire()                    # se retiene TODO el ciclo
+  iniciar_ciclo()                            # processed_at = reloj LOCAL
     para cada mercado × {M15, H4}:
       pull paginado (§10) desde ultimo_t − (RESOLAPE−1)·dur
-      filtrar a elegibles → alm.ofrecer(velas, "push") → alm.drenar()
-      declarar huecos locales cuando el watermark se cumpla
-    fsync de los almacenes tocados
+      filtrar por eligibility_time → alm.ofrecer(velas,"push") → alm.drenar()
+      si declarar_hueco_local() devuelve registro:
+        emitir hueco_detectado(tf) por la vía canónica  (§6.3)
     si NO catch-up y se cumple la precondición H4 (§6):
       procesar los lotes globales finalizables
+      # cada marcador creado aquí hace fsync de SU almacén antes del libro (§5)
     fsync del libro
   finalizar_ciclo()
-  atender verify.request si lo hay (§9)
+  atender verify.request si lo hay, SIN readquirir la barrera (§9)
   cycle_barrier.release()
 ```
 
@@ -288,7 +405,7 @@ nuevos. La deriva en RAM la controlan §8 y §9.
 
 # Terminación
 
-## 13. Marcador `COMPLETED` persistente y atómico *(rev.3 — MAJOR 3)*
+## 13. Estados terminales persistentes y atómicos
 
 Un health solo en RAM permitiría que launchd reiniciara el servicio y
 reconstruyera la cohorte como activa.
@@ -305,10 +422,15 @@ Al cortar el motor (por `CORTE_N_CIERRES` o `T_CORTE`):
 `completed.json` contiene identidad de cohorte, contrato, commit, motivo del
 corte, última barrera, los 14 heads y la firma del libro.
 
-**Al arrancar**, el marcador se valida antes de abrir ningún ciclo:
+**`blocked.json`** *(rev.4)* usa la misma mecánica atómica y el mismo contenido,
+con `motivo = "silencio_h4"` y el mercado responsable. Diferencia esencial: es
+un estado terminal **no evaluable** — no produce resultado ni muestra.
 
-- existe y coincide → health `COMPLETED`, no se ingiere nada;
-- corrupto o discrepante con almacenes/libro → fallo cerrado.
+**Al arrancar**, el marcador que exista se valida antes de abrir ningún ciclo:
+
+- existe y coincide → health `COMPLETED` / `BLOCKED_INTEGRITY`, no se ingiere;
+- corrupto o discrepante con almacenes/libro → fallo cerrado;
+- los dos presentes → fallo cerrado.
 
 Reactivar exige acta nueva, con identidad de cohorte nueva. Ninguna extensión ni
 cohorte nueva automática.
@@ -332,12 +454,13 @@ cohorte nueva automática.
 | Snapshot canónico alterado | fallo cerrado (ya vigente) |
 | Árbol de `modules/bot3/v9` sucio | fallo cerrado (ya vigente) |
 | Identidad de cohorte distinta | fallo cerrado (ya vigente) |
-| `completed.json` presente | no se reactiva (§13) |
+| Silencio H4 > `SILENCIO_MAX_H4` | `BLOCKED_INTEGRITY`, no evaluable (§6.5) |
+| `completed.json` o `blocked.json` presente | no se reactiva (§13) |
 
 ## 15. Parámetros a congelar en el protocolo
 
 `CADENCIA`, `MARGEN_CIERRE`, `RESOLAPE`, `LIMITE_PAGINA`, `LAG_MAX` (por TF),
-`DERIVA_MAX`, `BACKOFF_BASE`, `BACKOFF_MAX`, `BACKOFF_INTENTOS`,
+`DERIVA_MAX`, `SILENCIO_MAX_H4`, `BACKOFF_BASE`, `BACKOFF_MAX`, `BACKOFF_INTENTOS`,
 `TF_OBSERVADAS`, `UNIVERSO`, `ENDPOINT_KLINES`, `ENDPOINT_TIME`, rutas de
 estado, libro, lock, staging y marcador terminal, y `CADENCIA_VERIFICACION`.
 Ninguno se elige en operación.
@@ -362,22 +485,36 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
 2. M15 fresco con H4 atrasado o ausente → cero lotes procesados;
 3. `singleton_lock` retenido mientras la captura espera la barrera interna, y
    ninguna segunda instancia admitida durante la espera;
-4. verificación periódica → heads, digest y libro del daemon byte a byte
+4. solicitud de captura atendida **sin readquirir** el mutex (§9);
+5. verificación periódica → heads, digest y libro del daemon byte a byte
    iguales antes y después;
-5. digest cambia al alterar un cierre **intermedio** sin cambiar cardinalidad ni
+6. **verificación diferida con buffer no vacío**: un hueco con dos de las tres
+   velas probatorias en buffer NO puede producir un `determinism_ok` (§8.1);
+7. digest cambia al alterar un cierre **intermedio** sin cambiar cardinalidad ni
    último elemento;
-6. watermark H4 local con prueba reproducible; el mercado queda en
+8. **durabilidad almacén→libro**: caída tras cada uno de los cuatro pasos de §5
+   —incluido el marcador que crea `watermark_exchange` durante el lote— y la
+   recuperación produce exactamente el mismo almacén y el mismo libro;
+9. watermark H4 local con prueba reproducible; el mercado queda en
    `historia_insuficiente` **sin bloquear a los otros** una vez sellado;
-7. paginación alineada, progreso estricto y backlog multipágina;
-8. `serverTime` indisponible o desalineado del reloj del Mac;
-9. recuperación desde lag mayor que `LAG_MAX` sin procesar prematuramente;
-10. activación con cierres terminales H4 y M15 distintos;
-11. corte por N y corte temporal, seguidos de reinicio del servicio →
-    `COMPLETED` sobrevive; marcador corrupto → fallo cerrado;
-12. caída durante el nacimiento parcial de los 14 almacenes;
-13. continuo sobre N+1 vs. N + reinicio + push de N+1 → mismo libro y mismo
+10. hueco H4 local emite `hueco_detectado(tf="4h")` **exactamente una vez**, con
+    heads y finalidad correctos (§6.3);
+11. **silencio H4 total** más allá de `SILENCIO_MAX_H4` → `BLOCKED_INTEGRITY`
+    persistente, que sobrevive al reinicio y no se presenta como evaluable;
+12. separación `eligibility_time` / `processed_at`: ningún evento lleva el reloj
+    de Binance como `processed_at`;
+13. paginación alineada, progreso estricto y backlog multipágina;
+14. `eligibility_time` indisponible o desalineado del reloj del Mac;
+15. recuperación desde lag mayor que `LAG_MAX` sin procesar prematuramente;
+16. activación con cierres terminales H4 y M15 distintos;
+17. corte por N y corte temporal, seguidos de reinicio del servicio →
+    `COMPLETED` sobrevive; marcador corrupto → fallo cerrado; los dos
+    marcadores presentes → fallo cerrado;
+18. **caída después de cada uno de los renames del nacimiento**, incluido el
+    rename único del directorio (§4);
+19. continuo sobre N+1 vs. N + reinicio + push de N+1 → mismo libro y mismo
     `state_digest`;
-14. re-ingesta por push de una vela ya sellada desde el snapshot → **sin**
+20. re-ingesta por push de una vela ya sellada desde el snapshot → **sin**
     incidencia (mapeo idéntico).
 
 ## 18. Secuencia de activación
