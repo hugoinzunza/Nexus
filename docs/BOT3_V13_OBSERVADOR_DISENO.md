@@ -1,11 +1,13 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.7
+# Bot3.v13 — Observador operativo · DISEÑO rev.8
 
-**Estado: DISEÑO. No implementado. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.8 — revisión registral final, propuesto para congelar e
+implementar EN SCRATCH. No implementado. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.7 responde a `docs/AUDITORIA_BOT3_V13_OBSERVADOR_DISENO_REV6.md` (2 blockers,
-2 majors, 1 precisión). Las secciones fuera de esos hallazgos quedaron aceptadas
-en rev.6 y no se reabren. Se pre-registra y se audita ANTES de escribir una línea de
+rev.8 es la **revisión registral final** y responde a
+`docs/AUDITORIA_BOT3_V13_OBSERVADOR_DISENO_REV7.md`: resuelve la contradicción
+entre los gates 21 y 38, persiste `run_epoch` y cierra la protección de los dos
+artefactos persistentes. La arquitectura quedó aceptada en rev.7 y no se reabre. Se pre-registra y se audita ANTES de escribir una línea de
 implementación.
 
 ---
@@ -280,35 +282,42 @@ implementaciones honestas producirían `silencio.json` distintos.
 | `estado` | `activo` \| `resuelto` |
 | `primer_cierre` | el cierre H4 esperado que falta |
 | `ultimo_cierre_valido` | último cierre H4 sellado antes de la ausencia |
-| `observaciones` | lista ordenada de `eligibility_time` probatorios (§6.5.2) |
+| `observaciones` | lista ordenada de `{eligibility_time, run_epoch}` probatorios (§6.5.2) |
 | `evidencia_acumulada_ms` | **derivado**, no fuente de verdad (ver abajo) |
 | `offline_ms`, `offline_intervalos` | tiempo sin observar, registrado y no computado |
 
 #### Acumulación
 
+**`run_epoch`** *(rev.8)*: entero monotónico creciente, uno por **continuidad de
+ejecución** del daemon. Se incrementa en cada arranque y se persiste **en cada
+observación**. Sin él, tras un reinicio no hay forma de reconstruir qué
+intervalos aportaron cero, y el acumulado dejaba de ser derivable.
+
 ```
 al abrir la entrada (primera observación probatoria que falta la vela):
-    observaciones = [t];  aporta CERO
+    observaciones = [{t, e}];  aporta CERO
 
-en cada observación probatoria posterior t:
-    si t <= ultima_observacion:            # duplicado o retroceso de serverTime
+en cada observación probatoria posterior {t, e}:
+    si t <= ultima.eligibility_time:      # duplicado o retroceso de serverTime
         aporta CERO, NO se agrega a `observaciones`, NO mueve el puntero
-        si t < ultima_observacion: se registra incidencia operacional
-    si es la PRIMERA observación tras un (re)arranque del daemon:
-        aporta CERO                        # no hubo observación en ese intervalo
-        se agrega a `observaciones` y mueve el puntero
+        si t < ultima.eligibility_time: se registra incidencia operacional
+    si e != ultima.run_epoch:             # primera observación de esta corrida
+        aporta CERO                       # nadie observó ese intervalo
+        se agrega y mueve el puntero
     si no:
-        aporta min(t − ultima_observacion, TOPE_INTERVALO)
+        aporta min(t − ultima.eligibility_time, TOPE_INTERVALO)
 ```
 
-**El primer intervalo tras un arranque aporta cero, no el tope** *(rev.7)*. rev.6
-le daba `TOPE_INTERVALO`, y eso era evidencia que nadie observó. Con cero, el
-tiempo apagado no puede acumular **nada**, y `TOPE_INTERVALO` queda para lo que
-sí corresponde: acotar un intervalo largo dentro de una corrida viva.
+**El primer intervalo de cada corrida aporta cero, no el tope** *(rev.7,
+mantenido en rev.8)*. Darle el tope contaría como evidencia un intervalo que
+nadie observó. Con cero, el tiempo apagado no acumula **nada**, y
+`TOPE_INTERVALO` queda para lo que corresponde: acotar un intervalo largo dentro
+de una corrida viva.
 
-`evidencia_acumulada_ms` **se recomputa desde `observaciones` al rehidratar** y
-se compara con el valor persistido: si difieren, fallo cerrado. El acumulador no
-se cree, se deriva.
+`evidencia_acumulada_ms` **se recomputa desde `observaciones` al rehidratar** —y
+la recomputación es exacta **porque `run_epoch` está persistido**— y se compara
+con el valor guardado: si difieren, fallo cerrado. El acumulador no se cree, se
+deriva.
 
 #### Resolución
 
@@ -334,11 +343,16 @@ lados calculan el mismo digest sobre la alteración. Como este archivo decide
 - identidad de cohorte, `contrato` y `commit`;
 - **cadena de evidencia**: `h_0 = SEMILLA_SILENCIO`,
   `h_i = SHA-256(h_{i−1} ‖ canon(observacion_i))`, y el `h_n` final persistido;
+- **`doc_sha256`** *(rev.8)*: `SHA-256(canon(documento sin `doc_sha256`))`, que
+  cubre el **documento entero**. La cadena solo autentica `observaciones`, y
+  `estado`, `primer_cierre`, `ultimo_cierre_valido`, `offline_ms` y el propio
+  `evidencia_acumulada_ms` también deciden el terminal;
 - escritura atómica con `fsync` de archivo **y** de directorio.
 
-Al rehidratar se valida, **fail-closed**: schema, identidad, monotonicidad
-estricta de `observaciones`, recálculo de la cadena y recálculo del acumulado.
-Cualquier discrepancia detiene el observador; no produce «otro digest aceptado».
+Al rehidratar se valida, **fail-closed**: `doc_sha256`, schema, identidad,
+monotonicidad estricta de `eligibility_time`, monotonicidad no decreciente de
+`run_epoch`, recálculo de la cadena y recálculo del acumulado. Cualquier
+discrepancia detiene el observador; no produce «otro digest aceptado».
 
 ### 6.5.1.1 Qué evidencia viaja al terminal *(rev.7 — BLOCKER 2)*
 
@@ -354,11 +368,20 @@ las dos afirmaciones, y solo la primera es una invariancia:
 
 | | |
 |---|---|
-| **Invariante** | dadas **las mismas observaciones probatorias** (mismos `eligibility_time`), cualquier reagrupación en distinto número de llamadas internas o de ciclos produce **bytes idénticos** |
+| **Invariante** | dadas las mismas observaciones probatorias **dentro de una misma continuidad de ejecución** (mismo `run_epoch`), cualquier reagrupación en distinto número de llamadas internas o de ciclos produce **bytes idénticos** |
 | **Sensible a propósito** | observaciones **realmente ausentes o más espaciadas** retrasan el terminal, exactamente según la aritmética de `TOPE_INTERVALO`. Observar cada 60 min acumula 30 min por hora, y eso es correcto: la evidencia es lo observado, no lo transcurrido |
 
 Es decir: el terminal no depende de cómo se agrupan las observaciones, pero sí
-depende de cuáles hubo. Es la propiedad que se quiere.
+depende de cuáles hubo.
+
+**Un reinicio NO es una reagrupación** *(rev.8)*. rev.7 se contradecía: el gate
+21 pedía bytes idénticos «con reinicio intermedio» y el 38 pedía que el reinicio
+perdiera un intervalo. Las dos no pueden valer. Un reinicio **cambia el conjunto
+de observaciones efectivas** —introduce un `run_epoch` nuevo cuya primera
+observación aporta cero— y por lo tanto cae del lado sensible, no del
+invariante. La invariancia rige **dentro** de una continuidad; a través de un
+reinicio rige la pérdida del gate 38, que es estrictamente conservadora: una
+corrida partida acumula **menos** que la continua, nunca más.
 
 ### 6.5.2 Paginación H4 «válida y completa» *(rev.6 — precisión 1)*
 
@@ -621,6 +644,14 @@ hilos:
 | dos motivos concurrentes | `determinism_divergence` **precede** a `silencio_h4` — la integridad manda sobre la liveness |
 | request ya existente | **no se sobrescribe**; el motivo nuevo se anexa a `motivos_adicionales` y el ganador se decide por la precedencia de arriba |
 
+**La anexión también es una escritura, y va atómica** *(rev.8)*: se lee el
+request, se valida su `checksum`, se agrega el motivo, se recalcula el
+`checksum` y se publica por `tmp` → `fsync` → `os.replace` → `fsync` del
+directorio. Las anexiones concurrentes quedan serializadas por `cycle_barrier`,
+igual que la transición terminal (§9.1.1), así que no hay dos escritores. El
+`motivo` ganador **no cambia** por una anexión posterior: se decide por la
+precedencia de la tabla, no por orden de llegada.
+
 **La misma regla arbitra la carrera entre el resultado de la verificación y el
 corte del motor**: quien llega primero a `cycle_barrier` gana, y la zona de
 corte (§9.0) garantiza que el motor no puede cortar con una verificación que no
@@ -820,7 +851,7 @@ cohorte nueva automática.
 | Verificación no-`ok` **en** la zona de corte | no se procesa ningún lote (§9.0) |
 | `terminal.request` sin `blocked.json` al arrancar | se valida y se reanuda la transición, no se ingiere (§9.1.1) |
 | `completed.json` **y** `terminal.request` a la vez | fallo cerrado (§9.1.1) |
-| `silencio.json` con cadena, monotonicidad o acumulado inconsistentes | fallo cerrado (§6.5.1) |
+| `silencio.json` con `doc_sha256`, cadena, monotonicidad o acumulado inconsistentes | fallo cerrado (§6.5.1) |
 | Divergencia de determinismo | `BLOCKED_INTEGRITY(determinism_divergence)` (§9.1) |
 | `completed.json` o `blocked.json` presente | no se reactiva (§13) |
 
@@ -887,7 +918,8 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     incidencia (mapeo idéntico).
 21. **`SILENCIO_MAX_H4` normativo**: las **mismas observaciones probatorias**
     (mismos `eligibility_time`) reagrupadas en distinto número de ciclos o de
-    llamadas internas, con reinicio intermedio, producen **bytes idénticos**;
+    llamadas internas, **dentro de una misma continuidad de ejecución**,
+    producen **bytes idénticos**. Un reinicio NO entra acá: cae en el gate 38;
 22. errores HTTP, `eligibility_time` indisponible, daemon apagado y catch-up
     **no** avanzan el silencio H4;
 23. **torn write** en almacén y en libro: caída en bytes representativos de la
@@ -943,6 +975,16 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
 41. **cota de la zona de corte demostrada** contra el orden completo de fases
     del motor —`fill+STOP` en el mismo lote incluido— sobre los siete mercados:
     ningún lote produce más cierres que mercados con posición u orden viva.
+42. **`run_epoch` reconstruye el acumulado** *(rev.8)*: tras N reinicios, el
+    recálculo desde `observaciones` da exactamente el valor persistido. Sin
+    `run_epoch` el gate falla, que es lo que demuestra que hace falta;
+43. **`doc_sha256` cubre el documento entero**: alterar `estado`,
+    `primer_cierre`, `ultimo_cierre_valido`, `offline_ms` o
+    `evidencia_acumulada_ms` —campos que la cadena de evidencia NO cubre—
+    conservando JSON válido → fallo cerrado;
+44. **anexión atómica a `terminal.request`**: caída en cada paso de la anexión;
+    el `motivo` ganador no cambia por orden de llegada, solo por precedencia;
+    dos anexiones concurrentes quedan serializadas por `cycle_barrier`.
 
 ## 18. Secuencia de activación
 
