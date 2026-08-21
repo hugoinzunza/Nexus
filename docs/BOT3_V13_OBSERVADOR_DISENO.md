@@ -1,10 +1,10 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.5
+# Bot3.v13 — Observador operativo · DISEÑO rev.6
 
 **Estado: DISEÑO. No implementado. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.5 responde a `docs/AUDITORIA_BOT3_V13_OBSERVADOR_DISENO_REV4.md` (2 blockers,
-3 majors). Se pre-registra y se audita ANTES de escribir una línea de
+rev.6 responde a `docs/AUDITORIA_BOT3_V13_OBSERVADOR_DISENO_REV5.md` (4 blockers,
+1 major, 3 precisiones). Se pre-registra y se audita ANTES de escribir una línea de
 implementación.
 
 ---
@@ -130,14 +130,25 @@ Los dos archivos —almacén y libro— adoptan **el mismo encuadre**:
 <longitud_bytes>\t<sha256(payload)>\t<payload>\n
 ```
 
-Regla de lectura, única para ambos:
+**Gramática del encabezado**, normativa: `^([0-9]{1,9})\t([0-9a-f]{64})\t`.
+`longitud_bytes` es el tamaño exacto del `payload` en bytes UTF-8.
 
-| condición de la ÚLTIMA trama | interpretación | acción |
+Regla de lectura, única para ambos *(rev.6 — corregida)*. **El único criterio
+de truncación es la ausencia del `\n` final**:
+
+| condición | interpretación | acción |
 |---|---|---|
-| completa y hash correcto | registro bueno | se acepta |
-| bytes < longitud, o falta el `\n` final | **truncación** por caída | se trunca esa trama y se recupera por replay |
-| completa pero hash distinto | **corrupción** | **fallo cerrado** |
-| cualquier trama NO final rota | corrupción | **fallo cerrado** |
+| trama termina en `\n` y encabezado, longitud, hash, UTF-8 y payload son todos válidos | registro bueno | se acepta |
+| trama termina en `\n` y **cualquiera** de esos falla | **corrupción** | **fallo cerrado** |
+| ÚLTIMO segmento del archivo **sin `\n`** | **truncación** por caída | se descarta y se recupera por replay |
+| cualquier segmento NO final | nunca es truncable | **fallo cerrado** si falla algo |
+
+rev.5 clasificaba `bytes < longitud` como truncación, y eso era un agujero: un
+campo de longitud corrompido **hacia arriba** en una trama que sí termina en
+`\n` se habría descartado como torn write. El hash cubre el payload, no el
+encabezado, así que el encabezado no puede ser juez de su propia integridad.
+Con la regla nueva, el newline final —que el SO escribe al final de la trama—
+es el único testigo de completitud.
 
 La distinción truncación / corrupción es explícita: **no se ignora una última
 línea inválida sin clasificarla**. Solo la última trama incompleta puede
@@ -245,21 +256,73 @@ normativa *(rev.5)*:
 | **Reloj** | `eligibility_time` de Binance. Nunca `processed_at`, nunca «tiempo desde el último ciclo local» |
 | **Evidencia** | solo una respuesta válida y completa que no trae la vela hace avanzar el silencio. Error HTTP, timeout, `eligibility_time` indisponible y **daemon apagado** NO lo avanzan |
 | **Ámbito** | solo la cohorte activa, después de que la activación declaró los 14 streams frescos. **Nunca** durante el nacimiento ni durante el catch-up prefrontera |
-| **Comparador** | `eligibility_time − inicio > SILENCIO_MAX_H4`, en milisegundos exactos |
+| **Comparador** | `evidencia_acumulada_ms > SILENCIO_MAX_H4` (§6.5.1), NO una resta de relojes |
 | **Persistencia** | sidecar atómico `silencio.json` con el origen y su evidencia. **No se reinicia al relanzar el daemon** |
 
 `blocked.json` por este motivo lleva: mercado, TF, primer cierre faltante,
 último cierre H4 válido, instante de inicio, umbral, el `eligibility_time`
 decisivo y la evidencia de las consultas que lo sostienen.
 
-**Valor propuesto: `SILENCIO_MAX_H4 = 72 h`** (18 cierres H4). El argumento es
-a priori y no mira ningún silencio real: excede con holgura cualquier ventana
-de mantenimiento documentada de Binance, y queda por debajo del punto en que un
-mercado mudo deja de ser una interrupción y pasa a ser un deslistado. Un valor
-más corto bloquea cohortes por incidentes normales; uno más largo deja la
-cohorte detenida sin decidir. **Se congela antes de activar y no se elige
-después de ver un silencio**: hacerlo sería exactamente la contaminación que
-todo este protocolo intenta impedir.
+### 6.5.1 La evidencia se acumula; no se resta relojes *(rev.6 — BLOCKER 1)*
+
+rev.5 se contradecía: declaraba que el daemon apagado no avanza el silencio y a
+la vez comparaba `eligibility_time − inicio`. Con esa resta, un daemon apagado
+80 h que vuelve y recibe una paginación válida sin la vela bloqueaba en el acto:
+el periodo sin observar entraba entero en la cuenta.
+
+Se elige la semántica **«solo la evidencia válida avanza»**, y para que sea
+operativa el comparador deja de ser una resta:
+
+```
+en cada paginación VÁLIDA Y COMPLETA (§6.5.2) que NO trae la vela esperada:
+    t ← eligibility_time de esa consulta
+    evidencia_acumulada_ms += min(t − t_observacion_previa, TOPE_INTERVALO)
+    t_observacion_previa ← t
+```
+
+`TOPE_INTERVALO = 2 × CADENCIA`, congelado. El tope es lo que hace la regla
+honesta: un intervalo entre dos observaciones solo aporta lo que una cadencia
+normal habría aportado, así que **80 h apagado aportan como máximo una
+`TOPE_INTERVALO`**, no 80 h. Acumular 72 h de evidencia exige aproximadamente
+72 h de observación real.
+
+`silencio.json` persiste `inicio`, `t_observacion_previa`,
+`evidencia_acumulada_ms` y la lista de observaciones probatorias. No se
+reinicia al relanzar: se rehidrata.
+
+**Y el tiempo offline se registra igual** —`offline_ms` acumulado, con sus
+intervalos— aunque no cuente como evidencia. No cambia el comparador, pero deja
+visible el uso de apagar el daemon para congelar el reloj del silencio. Un
+incentivo perverso que no se puede eliminar por diseño, al menos se ve.
+
+### 6.5.2 Paginación H4 «válida y completa» *(rev.6 — precisión 1)*
+
+Cuenta como observación probatoria solo la que cumple **todas**:
+
+- se obtuvo `eligibility_time` en ese ciclo, y es el mismo watermark para toda
+  la consulta del mercado/TF;
+- la paginación recorrió desde `startTime_0` (§10) **hasta la página vacía
+  final**, con progreso estricto en cada paso;
+- ninguna página fue rechazada por orden, grilla, duplicado o TF;
+- ningún error HTTP ni timeout en ninguna página de esa secuencia.
+
+Si cualquiera falla, la consulta **no es evidencia**: no inicia el silencio, no
+lo avanza y no mueve `t_observacion_previa`.
+
+### 6.5.3 El umbral *(rev.6 — precisión 3)*
+
+**`SILENCIO_MAX_H4 = 72 h` (18 cierres H4) es una decisión operacional `[U0]`,
+no un hecho demostrado.** rev.5 la justificaba con ventanas de mantenimiento de
+Binance y un umbral de deslistado como si fueran datos; no tengo provenance
+documental congelada de ninguna de las dos cosas, así que retiro la afirmación.
+
+Lo que sí sostengo es la forma del compromiso: un valor más corto bloquea
+cohortes por incidentes normales, uno más largo deja la cohorte detenida sin
+decidir, y 72 h está en un orden de magnitud razonable entre ambos. Si se quiere
+respaldo documental, se congela junto con el protocolo y se cita ahí.
+
+**Se congela antes de activar y no se elige después de ver un silencio real**:
+hacerlo sería exactamente la contaminación que todo este protocolo impide.
 
 ### 6.6 Límite honesto de la liveness *(rev.5)*
 
@@ -324,6 +387,29 @@ comparación es vivo vs. frío en la misma barrera.
 `_epocas_cache`, `_por_t`, `_ts`, `_prefix_max`, `_vela_hashes`,
 `_gap_por_desde`.
 
+### 8.0 `observer_state_digest` *(rev.6 — BLOCKER 2)*
+
+`state_digest` cubre el motor y los almacenes, pero el estado de silencio
+(§6.5.1) también decide un futuro terminal y vivía fuera. Dos observadores con
+motor, almacenes, libro y buffers idénticos pueden tener origen o evidencia de
+silencio distintos: mismo digest, bloqueo en instantes distintos. Y el clon frío
+no puede reconstruirlo, porque una ausencia H4 permanente todavía **no** es un
+marcador sellado.
+
+```
+observer_state_digest = SHA-256( canon({
+    "motor": state_digest,          # §8
+    "silencio": <silencio.json canónico, completo>
+}) )
+```
+
+La captura (§9) copia y verifica **`silencio.json` bajo la misma barrera** que
+almacenes y libro, y la comparación vivo↔frío usa `observer_state_digest`.
+
+`verificacion.json` queda **fuera** del digest, a propósito: es el registro de
+la propia verificación y meterlo adentro crearía una dependencia circular. Sus
+invariantes de publicación se verifican aparte (§9.2).
+
 ### 8.1 `_buffer` no es derivado *(rev.4 — BLOCKER 1)*
 
 rev.3 lo excluía como si fuera caché. No lo es: ante un hueco, el buffer
@@ -362,6 +448,39 @@ reentrante, readquirirla sería un deadlock *(rev.4 — MAJOR 3)*.
 Si algún buffer no está vacío, se salta a (5) y se registra
 `verification_deferred` (§9.2).
 
+### 9.0 Zona de corte: no se procesa sin verificación `ok` *(rev.6 — BLOCKER 3)*
+
+rev.5 permitía seguir procesando con la verificación `pending` y solo prohibía
+publicar `completed.json`. Eso no alcanza: el motor emite `abierta_al_corte` y
+`orden_al_corte` **dentro del corte**, antes de que el observador publique nada.
+La secuencia «pending → el lote 50 corta → la comparación diverge → se publica
+`BLOCKED_INTEGRITY`» dejaba un terminal bloqueado **con eventos de cierre
+científico dentro**, contradiciendo §13.1.
+
+Demorar `completed.json` no sirve. Hay que impedir que el motor llegue a cortar.
+
+**Zona de corte**, evaluada por el observador ANTES de procesar cada lote `T`,
+con estado observable:
+
+```
+en_zona_de_corte(T)  ⟺
+    CORTE_N_CIERRES − len(motor.cierres) ≤ (nº de mercados con posición u orden viva)
+  ∨ T ≥ T_CORTE − CORTE_ADMIN_GRACIA_MS
+```
+
+Es deliberadamente conservadora: cubre todo lote en el que el corte **podría**
+ocurrir, sin predecir si ocurrirá.
+
+- **fuera** de la zona de corte → se procesa normalmente aunque la verificación
+  esté `pending`;
+- **dentro** de la zona → **no se procesa ningún lote** hasta que el estado de
+  verificación sea `ok` **y posterior a toda deferencia**. Se sigue ingiriendo
+  de forma durable, como en `catch-up`.
+
+Así, ningún evento terminal puede escribirse mientras el determinismo no esté
+demostrado, y la rama divergente termina con el libro **sin un solo evento de
+cierre nuevo**.
+
 ### 9.1 Divergencia detectada después de soltar la barrera *(rev.5 — MAJOR 3)*
 
 La comparación en frío ocurre fuera de la barrera y el daemon sigue operando,
@@ -378,6 +497,31 @@ Regla total:
 
 Una cohorte cuyo determinismo se rompió no se reporta, y ningún ciclo posterior
 la rehabilita.
+
+#### 9.1.1 La transición a bloqueo va serializada *(rev.6 — BLOCKER 4)*
+
+La comparación fría corre fuera de `cycle_barrier` y el daemon sigue operando,
+así que sin arbitraje una implementación publicaría el marcador antes del ciclo
+siguiente y otra después de varios: heads y firma distintos para la misma causa,
+y el `fsync` compitiendo con escrituras vivas. Transición única:
+
+```
+1. escribir terminal.request atómico          (persistente: sobrevive a la caída)
+2. adquirir cycle_barrier
+3. prohibir abrir ciclos nuevos                (flag verificado al inicio del ciclo)
+4. fsync de los 14 almacenes, del libro y de silencio.json
+5. capturar los 14 heads y la firma del libro
+6. publicar blocked.json atómico
+7. liberar la barrera y salir
+```
+
+Al arrancar, un `terminal.request` sin `blocked.json` significa que la caída
+ocurrió a mitad: se reanuda la transición desde (2), nunca se ingiere.
+
+**La misma regla arbitra la carrera entre el resultado de la verificación y el
+corte del motor**: quien llega primero a `cycle_barrier` gana, y la zona de
+corte (§9.0) garantiza que el motor no puede cortar con una verificación que no
+sea `ok`.
 
 ### 9.2 `verification_deferred` es sidecar, no evento *(rev.5 — MAJOR 2)*
 
@@ -513,6 +657,11 @@ Al cortar el motor (por `CORTE_N_CIERRES` o `T_CORTE`):
 `completed.json` contiene identidad de cohorte, contrato, commit, motivo del
 corte, última barrera, los 14 heads y la firma del libro.
 
+**Condición de publicación** *(rev.6 — precisión 2)*: `COMPLETED` exige que el
+estado de verificación sea **`ok` y posterior a toda deferencia**. No basta con
+la ausencia de `pending`: un `deferred` sin verificación exitosa posterior
+tampoco habilita el cierre.
+
 ### 13.1 `BLOCKED_INTEGRITY` NO ejecuta el cierre científico *(rev.5 — MAJOR 1)*
 
 rev.4 presentaba `blocked.json` como «la misma mecánica», y eso confundía dos
@@ -564,18 +713,20 @@ cohorte nueva automática.
 | Última trama truncada | se descarta y se recupera por replay (§5.1) |
 | Trama con hash distinto, o rota no final | fallo cerrado (§5.1) |
 | Silencio H4 > `SILENCIO_MAX_H4` | `BLOCKED_INTEGRITY(silencio_h4)`, no evaluable (§6.5) |
-| Verificación `pending` | se sigue ingiriendo; **no** se publica `COMPLETED` (§9.1) |
+| Verificación `pending` fuera de la zona de corte | se procesa normal; **no** se publica `COMPLETED` (§9.1) |
+| Verificación no-`ok` **en** la zona de corte | no se procesa ningún lote (§9.0) |
+| `terminal.request` sin `blocked.json` al arrancar | se reanuda la transición, no se ingiere (§9.1.1) |
 | Divergencia de determinismo | `BLOCKED_INTEGRITY(determinism_divergence)` (§9.1) |
 | `completed.json` o `blocked.json` presente | no se reactiva (§13) |
 
 ## 15. Parámetros a congelar en el protocolo
 
 `CADENCIA`, `MARGEN_CIERRE`, `RESOLAPE`, `LIMITE_PAGINA`, `LAG_MAX` (por TF),
-`DERIVA_MAX`, `SILENCIO_MAX_H4`, `BACKOFF_BASE`, `BACKOFF_MAX`, `BACKOFF_INTENTOS`,
+`DERIVA_MAX`, `SILENCIO_MAX_H4`, `TOPE_INTERVALO`, `BACKOFF_BASE`, `BACKOFF_MAX`, `BACKOFF_INTENTOS`,
 `TF_OBSERVADAS`, `UNIVERSO`, `ENDPOINT_KLINES`, `ENDPOINT_TIME`,
 `CADENCIA_VERIFICACION`, y las rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
-(`silencio.json`, `verificacion.json`).
+(`silencio.json`, `verificacion.json`) y `terminal.request`.
 Ninguno se elige en operación.
 
 `bootstrap_hasta` **no** es parámetro del observador: es la identidad de la
@@ -645,6 +796,27 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     exige una verificación exitosa posterior;
 27. divergencia detectada después de soltar la barrera → impide `COMPLETED` y
     termina en `BLOCKED_INTEGRITY(determinism_divergence)`.
+28. **semántica de silencio discriminante**: misma ausencia H4; la corrida A
+    observa continuamente y la B queda 80 h apagada. A bloquea al acumular la
+    evidencia; **B no**, y el terminal no depende del número de ciclos;
+29. `offline_ms` queda registrado en `silencio.json` aunque no cuente como
+    evidencia;
+30. paginación H4 incompleta (error HTTP en una página, o sin página vacía
+    final) **no** inicia ni avanza el silencio ni mueve `t_observacion_previa`;
+31. **`observer_state_digest`**: alterar solo el origen o la evidencia de
+    `silencio.json`, con motor, almacenes y libro intactos, **cambia el digest**;
+32. **zona de corte**: verificación `pending` justo antes del cierre 50 y justo
+    antes del corte temporal, con las dos ramas (igualdad y divergencia). En la
+    rama divergente el libro **no contiene ningún evento terminal nuevo**;
+33. **transición serializada**: inyectar la divergencia en cada frontera entre
+    ciclos produce exactamente el mismo estado, libro y `blocked.json`;
+34. caída a mitad de la transición terminal → al arrancar se reanuda desde la
+    barrera y no se ingiere;
+35. **encuadre**, gates por caso: longitud menor, longitud mayor, hash alterado,
+    encabezado fuera de gramática, payload UTF-8 incompleto, y cada uno con
+    `\n` presente y ausente. Solo el último segmento sin `\n` es truncable;
+36. `COMPLETED` rechazado con estado `deferred` sin verificación exitosa
+    posterior, no solo con `pending`.
 
 ## 18. Secuencia de activación
 
