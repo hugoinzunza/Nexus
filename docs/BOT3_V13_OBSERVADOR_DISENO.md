@@ -1,10 +1,11 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.6
+# Bot3.v13 — Observador operativo · DISEÑO rev.7
 
 **Estado: DISEÑO. No implementado. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.6 responde a `docs/AUDITORIA_BOT3_V13_OBSERVADOR_DISENO_REV5.md` (4 blockers,
-1 major, 3 precisiones). Se pre-registra y se audita ANTES de escribir una línea de
+rev.7 responde a `docs/AUDITORIA_BOT3_V13_OBSERVADOR_DISENO_REV6.md` (2 blockers,
+2 majors, 1 precisión). Las secciones fuera de esos hallazgos quedaron aceptadas
+en rev.6 y no se reabren. Se pre-registra y se audita ANTES de escribir una línea de
 implementación.
 
 ---
@@ -263,37 +264,101 @@ normativa *(rev.5)*:
 último cierre H4 válido, instante de inicio, umbral, el `eligibility_time`
 decisivo y la evidencia de las consultas que lo sostienen.
 
-### 6.5.1 La evidencia se acumula; no se resta relojes *(rev.6 — BLOCKER 1)*
+### 6.5.1 Máquina de silencio *(rev.7 — BLOCKER 1, reescrita)*
 
-rev.5 se contradecía: declaraba que el daemon apagado no avanza el silencio y a
-la vez comparaba `eligibility_time − inicio`. Con esa resta, un daemon apagado
-80 h que vuelve y recibe una paginación válida sin la vela bloqueaba en el acto:
-el periodo sin observar entraba entero en la cuenta.
+rev.6 arregló el comparador pero dejó la máquina incompleta: sin inicialización,
+sin resolución, sin multiplicidad, sin reloj anómalo y sin duplicados. Dos
+implementaciones honestas producirían `silencio.json` distintos.
 
-Se elige la semántica **«solo la evidencia válida avanza»**, y para que sea
-operativa el comparador deja de ser una resta:
+#### Estructura
+
+`silencio.json` es un **mapa canónico** con clave `(mercado, tf, primer_cierre)`
+—orden total: `mercado` asc, `tf` asc, `primer_cierre` asc— y cada entrada:
+
+| campo | qué es |
+|---|---|
+| `estado` | `activo` \| `resuelto` |
+| `primer_cierre` | el cierre H4 esperado que falta |
+| `ultimo_cierre_valido` | último cierre H4 sellado antes de la ausencia |
+| `observaciones` | lista ordenada de `eligibility_time` probatorios (§6.5.2) |
+| `evidencia_acumulada_ms` | **derivado**, no fuente de verdad (ver abajo) |
+| `offline_ms`, `offline_intervalos` | tiempo sin observar, registrado y no computado |
+
+#### Acumulación
 
 ```
-en cada paginación VÁLIDA Y COMPLETA (§6.5.2) que NO trae la vela esperada:
-    t ← eligibility_time de esa consulta
-    evidencia_acumulada_ms += min(t − t_observacion_previa, TOPE_INTERVALO)
-    t_observacion_previa ← t
+al abrir la entrada (primera observación probatoria que falta la vela):
+    observaciones = [t];  aporta CERO
+
+en cada observación probatoria posterior t:
+    si t <= ultima_observacion:            # duplicado o retroceso de serverTime
+        aporta CERO, NO se agrega a `observaciones`, NO mueve el puntero
+        si t < ultima_observacion: se registra incidencia operacional
+    si es la PRIMERA observación tras un (re)arranque del daemon:
+        aporta CERO                        # no hubo observación en ese intervalo
+        se agrega a `observaciones` y mueve el puntero
+    si no:
+        aporta min(t − ultima_observacion, TOPE_INTERVALO)
 ```
 
-`TOPE_INTERVALO = 2 × CADENCIA`, congelado. El tope es lo que hace la regla
-honesta: un intervalo entre dos observaciones solo aporta lo que una cadencia
-normal habría aportado, así que **80 h apagado aportan como máximo una
-`TOPE_INTERVALO`**, no 80 h. Acumular 72 h de evidencia exige aproximadamente
-72 h de observación real.
+**El primer intervalo tras un arranque aporta cero, no el tope** *(rev.7)*. rev.6
+le daba `TOPE_INTERVALO`, y eso era evidencia que nadie observó. Con cero, el
+tiempo apagado no puede acumular **nada**, y `TOPE_INTERVALO` queda para lo que
+sí corresponde: acotar un intervalo largo dentro de una corrida viva.
 
-`silencio.json` persiste `inicio`, `t_observacion_previa`,
-`evidencia_acumulada_ms` y la lista de observaciones probatorias. No se
-reinicia al relanzar: se rehidrata.
+`evidencia_acumulada_ms` **se recomputa desde `observaciones` al rehidratar** y
+se compara con el valor persistido: si difieren, fallo cerrado. El acumulador no
+se cree, se deriva.
 
-**Y el tiempo offline se registra igual** —`offline_ms` acumulado, con sus
-intervalos— aunque no cuente como evidencia. No cambia el comparador, pero deja
-visible el uso de apagar el daemon para congelar el reloj del silencio. Un
-incentivo perverso que no se puede eliminar por diseño, al menos se ve.
+#### Resolución
+
+Si la vela aparece antes de cruzar el umbral, la entrada pasa a `resuelto` —se
+conserva para auditoría, no se borra— y deja de gobernar. Si después falta otro
+cierre, es **otra clave**, con su propio contador desde cero.
+
+#### Selección del terminal
+
+Con varias entradas activas, gana la **primera que cruza el umbral**; empate a
+la misma observación, gana el menor en el orden total de la clave.
+`blocked.json` nombra a la ganadora y conserva el resumen de las demás. El orden
+de iteración no cambia un byte: el mapa es canónico.
+
+#### Autenticación *(rev.7 — MAJOR 1)*
+
+Incluir el sidecar en el digest evita omitirlo, pero no autentica su historia:
+un `silencio.json` alterado antes de la captura se copia al scratch y los dos
+lados calculan el mismo digest sobre la alteración. Como este archivo decide
+`BLOCKED_INTEGRITY`, lleva:
+
+- `schema_version` cerrada y versionada;
+- identidad de cohorte, `contrato` y `commit`;
+- **cadena de evidencia**: `h_0 = SEMILLA_SILENCIO`,
+  `h_i = SHA-256(h_{i−1} ‖ canon(observacion_i))`, y el `h_n` final persistido;
+- escritura atómica con `fsync` de archivo **y** de directorio.
+
+Al rehidratar se valida, **fail-closed**: schema, identidad, monotonicidad
+estricta de `observaciones`, recálculo de la cadena y recálculo del acumulado.
+Cualquier discrepancia detiene el observador; no produce «otro digest aceptado».
+
+### 6.5.1.1 Qué evidencia viaja al terminal *(rev.7 — BLOCKER 2)*
+
+`blocked.json` **no** lleva la lista cruda: lleva `h_n` (la cadena), el número de
+observaciones, la primera, la última y `evidencia_acumulada_ms`. La lista
+completa queda en `silencio.json`, que es el artefacto auditable.
+
+### 6.5.1.2 Qué es invariante y qué no *(rev.7 — BLOCKER 2)*
+
+rev.6 se contradecía: los gates exigían independencia del número de ciclos y el
+acumulador depende deliberadamente del calendario de observaciones. Se separan
+las dos afirmaciones, y solo la primera es una invariancia:
+
+| | |
+|---|---|
+| **Invariante** | dadas **las mismas observaciones probatorias** (mismos `eligibility_time`), cualquier reagrupación en distinto número de llamadas internas o de ciclos produce **bytes idénticos** |
+| **Sensible a propósito** | observaciones **realmente ausentes o más espaciadas** retrasan el terminal, exactamente según la aritmética de `TOPE_INTERVALO`. Observar cada 60 min acumula 30 min por hora, y eso es correcto: la evidencia es lo observado, no lo transcurrido |
+
+Es decir: el terminal no depende de cómo se agrupan las observaciones, pero sí
+depende de cuáles hubo. Es la propiedad que se quiere.
 
 ### 6.5.2 Paginación H4 «válida y completa» *(rev.6 — precisión 1)*
 
@@ -471,6 +536,19 @@ en_zona_de_corte(T)  ⟺
 Es deliberadamente conservadora: cubre todo lote en el que el corte **podría**
 ocurrir, sin predecir si ocurrirá.
 
+**Las dos cotas hay que demostrarlas, no afirmarlas** *(rev.7 — precisión)*:
+
+- la primera supone que **un lote no puede producir más cierres que mercados con
+  posición u orden viva**. Es plausible —un mercado cierra a lo sumo una
+  posición por lote— pero exige un gate contra el orden completo de fases,
+  incluido `fill+STOP` en el mismo lote (CF-20), posiciones, órdenes y
+  candidatos, sobre los siete mercados. Si una sola rama produjera más de un
+  cierre por estado vivo, la zona quedaría subestimada y el blocker 3 volvería;
+- la segunda, `T ≥ T_CORTE − CORTE_ADMIN_GRACIA_MS`, es conservadora **por
+  construcción y hay que rotularla así**: la gracia contractual ocurre *después*
+  del corte, así que restarla no representa el instante real de cierre — solo
+  garantiza entrar en la zona antes de tiempo, que es lo que se busca.
+
 - **fuera** de la zona de corte → se procesa normalmente aunque la verificación
   esté `pending`;
 - **dentro** de la zona → **no se procesa ningún lote** hasta que el estado de
@@ -515,8 +593,33 @@ y el `fsync` compitiendo con escrituras vivas. Transición única:
 7. liberar la barrera y salir
 ```
 
+**Contrato de `terminal.request`** *(rev.7 — MAJOR 2)*. El artefacto que
+permite reanudar necesita schema propio, o el reinicio no puede verificar qué
+autorizó el bloqueo:
+
+| campo | qué es |
+|---|---|
+| `schema_version` | cerrada y versionada |
+| `cohorte`, `contrato`, `commit` | identidad |
+| `motivo` | `silencio_h4` \| `determinism_divergence` |
+| `evidencia` | la que lo autorizó: `h_n` y resumen (§6.5.1.1), o digest y firma comparados |
+| `solicitado_en` | instante y barrera de la solicitud |
+| `estado_esperado` | los 14 heads, firma del libro y hash de los sidecars |
+| `checksum` | del propio request |
+
 Al arrancar, un `terminal.request` sin `blocked.json` significa que la caída
-ocurrió a mitad: se reanuda la transición desde (2), nunca se ingiere.
+ocurrió a mitad: se **valida fail-closed** (schema, identidad, checksum) y se
+reanuda la transición desde (2). Nunca se ingiere.
+
+**Precedencia**, congelada — no se resuelve por última escritura ni por orden de
+hilos:
+
+| situación | resolución |
+|---|---|
+| `blocked.json` presente | es terminal; el request se ignora y se archiva |
+| `completed.json` **y** `terminal.request` | **fallo cerrado**: contradicción que exige intervención humana |
+| dos motivos concurrentes | `determinism_divergence` **precede** a `silencio_h4` — la integridad manda sobre la liveness |
+| request ya existente | **no se sobrescribe**; el motivo nuevo se anexa a `motivos_adicionales` y el ganador se decide por la precedencia de arriba |
 
 **La misma regla arbitra la carrera entre el resultado de la verificación y el
 corte del motor**: quien llega primero a `cycle_barrier` gana, y la zona de
@@ -715,7 +818,9 @@ cohorte nueva automática.
 | Silencio H4 > `SILENCIO_MAX_H4` | `BLOCKED_INTEGRITY(silencio_h4)`, no evaluable (§6.5) |
 | Verificación `pending` fuera de la zona de corte | se procesa normal; **no** se publica `COMPLETED` (§9.1) |
 | Verificación no-`ok` **en** la zona de corte | no se procesa ningún lote (§9.0) |
-| `terminal.request` sin `blocked.json` al arrancar | se reanuda la transición, no se ingiere (§9.1.1) |
+| `terminal.request` sin `blocked.json` al arrancar | se valida y se reanuda la transición, no se ingiere (§9.1.1) |
+| `completed.json` **y** `terminal.request` a la vez | fallo cerrado (§9.1.1) |
+| `silencio.json` con cadena, monotonicidad o acumulado inconsistentes | fallo cerrado (§6.5.1) |
 | Divergencia de determinismo | `BLOCKED_INTEGRITY(determinism_divergence)` (§9.1) |
 | `completed.json` o `blocked.json` presente | no se reactiva (§13) |
 
@@ -780,9 +885,9 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     `state_digest`;
 20. re-ingesta por push de una vela ya sellada desde el snapshot → **sin**
     incidencia (mapeo idéntico).
-21. **`SILENCIO_MAX_H4` normativo**: la misma secuencia causal repartida en
-    distinto número de ciclos, y con un reinicio intermedio, produce el mismo
-    `blocked.json`;
+21. **`SILENCIO_MAX_H4` normativo**: las **mismas observaciones probatorias**
+    (mismos `eligibility_time`) reagrupadas en distinto número de ciclos o de
+    llamadas internas, con reinicio intermedio, producen **bytes idénticos**;
 22. errores HTTP, `eligibility_time` indisponible, daemon apagado y catch-up
     **no** avanzan el silencio H4;
 23. **torn write** en almacén y en libro: caída en bytes representativos de la
@@ -798,7 +903,9 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     termina en `BLOCKED_INTEGRITY(determinism_divergence)`.
 28. **semántica de silencio discriminante**: misma ausencia H4; la corrida A
     observa continuamente y la B queda 80 h apagada. A bloquea al acumular la
-    evidencia; **B no**, y el terminal no depende del número de ciclos;
+    evidencia; **B no**. Y el complemento: **quitar** observaciones retrasa el
+    terminal exactamente lo que predice `TOPE_INTERVALO` —no produce el mismo
+    terminal—, que es la sensibilidad buscada (§6.5.1.2);
 29. `offline_ms` queda registrado en `silencio.json` aunque no cuente como
     evidencia;
 30. paginación H4 incompleta (error HTTP en una página, o sin página vacía
@@ -817,6 +924,25 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     `\n` presente y ausente. Solo el último segmento sin `\n` es truncable;
 36. `COMPLETED` rechazado con estado `deferred` sin verificación exitosa
     posterior, no solo con `pending`.
+37. **máquina de silencio**, un gate por transición: primera ausencia (aporta
+    cero); backfill antes del umbral (pasa a `resuelto` y deja de gobernar);
+    dos mercados simultáneos; dos huecos del mismo mercado; observación
+    duplicada; `eligibility_time` repetido y **regresivo** (aportan cero y no
+    mueven el puntero); y reinicio en **cada** una de esas transiciones;
+38. **primer intervalo tras arranque aporta cero**, no `TOPE_INTERVALO`: una
+    corrida partida en dos por un reinicio acumula estrictamente menos que la
+    continua, y nunca más;
+39. **autenticación de `silencio.json`**: alterar cada campo decisional
+    conservando JSON válido → **fallo cerrado**, no otro digest aceptado.
+    Incluye cadena de evidencia rota, monotonicidad violada y acumulado que no
+    se deriva de `observaciones`;
+40. **`terminal.request`**: caída después de cada byte y de cada rename;
+    request alterado; request duplicado; dos motivos concurrentes
+    (`determinism_divergence` gana); carrera request-vs-`completed.json`
+    (fallo cerrado);
+41. **cota de la zona de corte demostrada** contra el orden completo de fases
+    del motor —`fill+STOP` en el mismo lote incluido— sobre los siete mercados:
+    ningún lote produce más cierres que mercados con posición u orden viva.
 
 ## 18. Secuencia de activación
 
