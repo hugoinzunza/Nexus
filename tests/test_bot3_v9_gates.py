@@ -2990,3 +2990,136 @@ def test_base_staging_huerfano_se_descarta(monkeypatch, tmp_path):
     R2.correr(**base)
     assert not os.path.exists(stage)
     assert R.leer_manifiesto(d)["BTCUSDT_15m"]["snapshot_head"]
+
+
+def test_base_el_nacimiento_no_se_publica_durante_el_staging(monkeypatch,
+                                                             tmp_path):
+    """§4: emitir `nacimiento` mientras los almacenes están en staging lo
+    publica antes de que sea un hecho. Una caída entre el rename y el
+    manifiesto dejaba eventos de nacimiento con el manifiesto vacío."""
+    import pytest
+    from modules.bot3.v9 import runner as R
+    R2, d, base = _estado_nacido(tmp_path, monkeypatch)
+    real = R.escribir_manifiesto
+    llamadas = []
+
+    def morir(*a, **k):
+        llamadas.append(1)
+        if len(llamadas) == 1:
+            return real(*a, **k)
+        raise RuntimeError("caída entre el rename y el manifiesto")
+
+    monkeypatch.setattr(R, "escribir_manifiesto", morir)
+    with pytest.raises(RuntimeError):
+        R2.correr(**base)
+    led = Ledger(base["ledger_ruta"])
+    assert [e for e in led.eventos if e["tipo"] == "nacimiento"] == []
+    monkeypatch.undo()
+    _sin_guardia_arbol(monkeypatch)
+    _, led2 = R2.correr(**base)
+    nac = [e for e in led2.eventos if e["tipo"] == "nacimiento"]
+    assert len(nac) == 2                       # BTCUSDT 15m y 4h, una vez cada uno
+    # y el prefijo viaja al LIBRO, que no es editable como el manifiesto
+    for e in nac:
+        assert e["snapshot_record_count"] >= 1
+        assert len(e["snapshot_head"]) == 64
+
+
+def test_base_fallo_de_escritura_no_adelanta_la_memoria(monkeypatch, tmp_path):
+    """Escribir después de mutar la memoria dejaba un registro fantasma: el
+    `head` avanzaba, el buffer se vaciaba y el archivo nunca lo recibía."""
+    import pytest
+    from modules.bot3.v9 import marco as MM
+    ruta = str(tmp_path / "X_15m.jsonl")
+    a = S.Almacen("X", "15m", ruta=ruta); a.nacer_en(0)
+    a.ofrecer([vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(4)], "push")
+    a.drenar()
+    cabeza, n = a.head, len(a.registros)
+
+    real = MM.escribir
+    monkeypatch.setattr(
+        MM, "escribir",
+        lambda *x, **k: (_ for _ in ()).throw(OSError(28, "ENOSPC")))
+    a.ofrecer([vela(4 * DUR, 1, 2, 0.5, 1.5)], "push")
+    with pytest.raises(OSError):
+        a.drenar()
+    assert a.head == cabeza and len(a.registros) == n     # sin fantasma
+    assert a.ultimo_t == (n - 1) * DUR                    # no avanzó
+    assert 4 * DUR in a._buffer                           # la vela sigue viva
+    monkeypatch.setattr(MM, "escribir", real)
+    a.drenar()                                            # el reintento entra
+    assert len(a.registros) == n + 1
+    assert len(S.Almacen.cargar("X", "15m", ruta).registros) == n + 1
+
+    # y lo mismo en el libro: el dedupe no puede fingir que ya está escrito
+    lr = str(tmp_path / "l.jsonl")
+    led = Ledger(lr)
+    monkeypatch.setattr(
+        MM, "escribir",
+        lambda *x, **k: (_ for _ in ()).throw(OSError(28, "ENOSPC")))
+    with pytest.raises(OSError):
+        led.append("lote_finalizado", effective_at=1, finalized_at=1)
+    assert led.eventos == [] and not os.path.exists(lr)
+    monkeypatch.setattr(MM, "escribir", real)
+    assert led.append("lote_finalizado", effective_at=1,
+                      finalized_at=1) is not None          # NO devuelve None
+    assert len(Ledger(lr).eventos) == 1
+
+
+def test_base_el_manifiesto_hace_durable_su_rename(monkeypatch, tmp_path):
+    """§4 paso 5: sin `fsync` del directorio, un corte de energía puede
+    perder la entrada y con ella el único testigo de nacimiento."""
+    from modules.bot3.v9 import runner as R
+    dirs = []
+    real = R._fsync_dir
+    monkeypatch.setattr(R, "_fsync_dir",
+                        lambda ruta: (dirs.append(ruta), real(ruta))[1])
+    R2, d, base = _estado_nacido(tmp_path, monkeypatch)
+    R2.correr(**base)
+    assert os.path.realpath(d) in [os.path.realpath(x) for x in dirs]
+    assert len(dirs) >= 3          # staging, estado tras el rename, manifiesto
+
+
+def test_base_prefijo_malformado_en_el_manifiesto_es_rechazado(monkeypatch,
+                                                               tmp_path):
+    """El manifiesto es un archivo EDITABLE. `0`, negativos y booleanos
+    pasaban, y con `0` la comprobación consultaba `registros[-1]` — el head
+    físico, justo lo que este cambio elimina."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    R2, d, base = _estado_nacido(tmp_path, monkeypatch)
+    R2.correr(**base)
+    ruta_m = os.path.join(d, R.MANIFIESTO)
+    original = json.load(open(ruta_m, encoding="utf-8"))
+
+    def con(campo, valor):
+        crudo = json.loads(json.dumps(original))
+        crudo["almacenes"]["BTCUSDT_15m"][campo] = valor
+        json.dump(crudo, open(ruta_m, "w", encoding="utf-8"))
+
+    for valor in (0, -1, True, "5", 1.0, None):
+        con("snapshot_record_count", valor)
+        with pytest.raises(ValueError, match="entero ≥ 1"):
+            R2.correr(**base)
+    for valor in ("", "ZZ", "a" * 63, "A" * 64, 7, None):
+        con("snapshot_head", valor)
+        with pytest.raises(ValueError, match="SHA-256 canónico"):
+            R2.correr(**base)
+
+
+def test_base_el_libro_desmiente_un_manifiesto_alterado(monkeypatch, tmp_path):
+    """Un prefijo bien formado pero FALSO no alcanza: el mismo prefijo viaja
+    en el evento `nacimiento`, y el libro es append-only."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    R2, d, base = _estado_nacido(tmp_path, monkeypatch)
+    R2.correr(**base)
+    ruta_m = os.path.join(d, R.MANIFIESTO)
+    crudo = json.load(open(ruta_m, encoding="utf-8"))
+    prov = crudo["almacenes"]["BTCUSDT_15m"]
+    prov["snapshot_record_count"] = max(1, prov["snapshot_record_count"] - 3)
+    json.dump(crudo, open(ruta_m, "w", encoding="utf-8"))
+    with pytest.raises(ValueError, match="no coincide con el libro"):
+        R2.correr(**base)

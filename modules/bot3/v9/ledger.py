@@ -179,11 +179,14 @@ class Ledger:
               "contrato": CONTRATO_HASH, "commit": self.commit,
               **{k: v for k, v in campos.items()
                  if v is not None and k != "id_t"}}
+        # Primero el DISCO, después la memoria: al revés, un fallo de
+        # escritura dejaba el evento en el índice y el reintento devolvía None
+        # por dedupe aunque el archivo nunca lo hubiera recibido.
+        if self.ruta:
+            marco.escribir(self.ruta, canon(ev), durable=self.durable)
         self.eventos.append(ev)
         self._ids.add(eid)
         self._por_id[eid] = ev
-        if self.ruta:
-            marco.escribir(self.ruta, canon(ev), durable=self.durable)
         return ev
 
     # --- consulta ---------------------------------------------------------
@@ -194,6 +197,10 @@ class Ledger:
 
     def por_tipo(self, tipo: str) -> list[dict]:
         return [e for e in self.eventos if e["tipo"] == tipo]
+
+    def por_id(self, eid: str) -> dict | None:
+        """El evento con ese `event_id`, si el libro lo tiene."""
+        return self._por_id.get(eid)
 
     def huecos_exchange(self, mercado: str, desde: int) -> list[dict]:
         """El `hueco_detectado` exchange de ESTE marcador, si el libro ya lo

@@ -110,13 +110,19 @@ class Almacen:
         self._prefix_max.append(max(previo, disp))
 
     def _append(self, tipo: str, payload: str, **extra) -> dict:
+        """Primero el DISCO, después la memoria.
+
+        Al revés, un fallo de escritura (ENOSPC, permisos) dejaba el registro
+        en `registros` y en los índices con el archivo intacto: un registro
+        fantasma que movía el `head` y hacía divergir la memoria del disco sin
+        que nada fallara después."""
         reg = {"tipo": tipo, "payload": payload,
                "hash_acum": encadenar(self.head, payload), **extra}
-        self.registros.append(reg)
-        self._indexar(reg)
         if self.ruta:
             marco.escribir(self.ruta, canon({k: v for k, v in reg.items()}),
                            durable=self.durable)
+        self.registros.append(reg)
+        self._indexar(reg)
         return reg
 
     def _append_vela(self, vela: dict) -> None:
@@ -261,10 +267,14 @@ class Almacen:
             return
         while True:
             siguiente = self.ultimo_t + self.dur
-            entrada = self._buffer.pop(siguiente, None)
+            entrada = self._buffer.get(siguiente)
             if entrada is None:
                 return
+            # El buffer se consume DESPUÉS del append exitoso: si la escritura
+            # falla, la vela sigue disponible para el reintento en vez de
+            # desaparecer de la memoria sin haber llegado al disco.
             self._append_vela(entrada[1])
+            self._buffer.pop(siguiente, None)
 
     def hueco_pendiente(self) -> tuple[int, int] | None:
         """Rango del hueco que bloquea el avance, si lo hay (sin declarar)."""

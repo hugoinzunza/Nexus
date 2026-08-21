@@ -168,6 +168,8 @@ def leer_versionado(root: str, mercado: str, tf: str) -> list[dict]:
 MANIFIESTO = "MANIFIESTO.json"
 
 
+RE_SHA256 = __import__("re").compile(r"[0-9a-f]{64}")
+
 CARPETA_ALMACENES = "almacenes"
 CARPETA_STAGING = "almacenes.new"
 
@@ -230,6 +232,10 @@ def escribir_manifiesto(estado_dir: str, almacenes: dict,
         fh.flush()
         os.fsync(fh.fileno())
     os.replace(tmp, ruta_m)
+    # El rename tampoco es durable por sí solo: sin `fsync` del directorio, un
+    # corte de energía puede perder la entrada y con ella el ÚNICO testigo de
+    # nacimiento (diseño rev.8 §4, paso 5).
+    _fsync_dir(estado_dir)
 
 
 PARAMS_CONGELADOS = ("GENESIS_H4", "EPOCA_M15_MIN_VELAS", "WATERMARK_LOCAL_N",
@@ -371,10 +377,32 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                 prov_n = declarados[nombre]
                 cuenta = prov_n.get("snapshot_record_count")
                 cabeza = prov_n.get("snapshot_head")
-                if cuenta is None or not cabeza:
+                # El manifiesto es un archivo EDITABLE: su forma se valida
+                # estrictamente. `0`, negativos y booleanos pasaban antes, y
+                # con `0` la comprobación consultaba `registros[-1]`, o sea el
+                # head físico — justo lo que este cambio elimina.
+                if type(cuenta) is not int or cuenta < 1:
                     raise ValueError(
-                        f"provenance incompleta para {nombre}: falta "
-                        f"snapshot_record_count o snapshot_head")
+                        f"provenance inválida para {nombre}: "
+                        f"snapshot_record_count={cuenta!r} no es un entero ≥ 1")
+                if not isinstance(cabeza, str) or not RE_SHA256.fullmatch(cabeza):
+                    raise ValueError(
+                        f"provenance inválida para {nombre}: snapshot_head "
+                        f"no es un SHA-256 canónico")
+                # Y el manifiesto NO es la única autoridad: el libro append-only
+                # lleva el mismo prefijo en el evento `nacimiento`.
+                if ledger is not None:
+                    nac = ledger.por_id(CT.event_id(
+                        "nacimiento", mercado=mercado, t=int(ancla), tf=tf))
+                    if nac is not None and (
+                            nac.get("snapshot_record_count") != cuenta
+                            or nac.get("snapshot_head") != cabeza):
+                        raise ValueError(
+                            f"el prefijo de nacimiento de {nombre} en el "
+                            f"manifiesto no coincide con el libro: "
+                            f"({cuenta}, {cabeza[:12]}…) != "
+                            f"({nac.get('snapshot_record_count')}, "
+                            f"{str(nac.get('snapshot_head'))[:12]}…)")
                 if len(alm.registros) < cuenta:
                     raise ValueError(
                         f"el archivo de {nombre} está truncado: "
@@ -432,26 +460,45 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
         if publicar_manifiesto:
             escribir_manifiesto(estado_dir, registro)
     if ledger is not None:
-        # CF-28: se reemite el `nacimiento` de TODO almacén del manifiesto de
-        # esta TF. Es idempotente por `event_id`, así que un crash entre la
-        # escritura del manifiesto y el append al ledger no pierde el evento:
-        # el siguiente arranque lo repone desde la provenance guardada.
-        for nombre, prov in sorted(registro.items()):
-            if prov.get("tf") != tf:
-                continue
-            ledger.append("nacimiento", mercado=prov["mercado"], tf=prov["tf"],
-                          effective_at=prov["ancla"], ruta=prov.get("ruta"),
-                          snapshot_ruta=prov.get("snapshot_ruta"),
-                          snapshot_sha256=prov.get("snapshot_sha256"),
-                          commit_snapshot=prov.get("commit_snapshot"),
-                          hash_acum_inicial=prov.get("hash_acum_inicial"))
-        for alm in almacenes.values():       # CF-26: incidencias de ingestión
-            for inc in alm.incidencias:
-                ledger.append(inc["tipo"], mercado=inc["mercado"],
-                              tf=inc["tf"], effective_at=inc["t"],
-                              id=inc["contenido_sha"])
-            alm.incidencias.clear()
+        emitir_nacimientos(ledger, registro, tf)
+        emitir_incidencias(ledger, almacenes)
     return almacenes
+
+
+def emitir_nacimientos(ledger, registro: dict, tf: str) -> None:
+    """CF-28: reemite el `nacimiento` de TODO almacén del manifiesto de esa
+    TF. Es idempotente por `event_id`, así que una caída entre la escritura
+    del manifiesto y el append al ledger no pierde el evento: el arranque
+    siguiente lo repone desde la provenance guardada.
+
+    Vive fuera de `construir_almacenes` porque durante el NACIMIENTO no puede
+    emitirse: los almacenes todavía están en staging y el manifiesto no
+    existe. Emitir ahí publicaba el nacimiento antes de que fuera un hecho
+    (rev.8 §4)."""
+    for nombre, prov in sorted(registro.items()):
+        if prov.get("tf") != tf:
+            continue
+        ledger.append("nacimiento", mercado=prov["mercado"], tf=prov["tf"],
+                      effective_at=prov["ancla"], ruta=prov.get("ruta"),
+                      snapshot_ruta=prov.get("snapshot_ruta"),
+                      snapshot_sha256=prov.get("snapshot_sha256"),
+                      commit_snapshot=prov.get("commit_snapshot"),
+                      hash_acum_inicial=prov.get("hash_acum_inicial"),
+                      # El prefijo viaja al LIBRO: así el manifiesto —que es
+                      # un archivo editable— deja de ser la única autoridad
+                      # sobre lo que se selló al nacer.
+                      snapshot_record_count=prov.get("snapshot_record_count"),
+                      snapshot_head=prov.get("snapshot_head"))
+
+
+def emitir_incidencias(ledger, almacenes: dict) -> None:
+    """CF-26: incidencias de ingestión acumuladas al ofrecer."""
+    for alm in almacenes.values():
+        for inc in alm.incidencias:
+            ledger.append(inc["tipo"], mercado=inc["mercado"],
+                          tf=inc["tf"], effective_at=inc["t"],
+                          id=inc["contenido_sha"])
+        alm.incidencias.clear()
 
 
 def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
@@ -533,8 +580,11 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
             os.replace(firme, destino if n == 0 else f"{destino}.{n}")
         os.makedirs(stage, exist_ok=True)
         registro: dict = {}
+        # SIN ledger: durante el staging el nacimiento todavía no es un
+        # hecho. Los eventos se emiten recién con el manifiesto ya durable.
         naciendo = dict(comun, carpeta=CARPETA_STAGING,
                         publicar_manifiesto=False, registro_out=registro)
+        naciendo["ledger"] = None
         m15 = construir_almacenes(root, mercados, "15m", limite, **naciendo)
         h4 = construir_almacenes(root, mercados, "4h", limite, **naciendo)
         for mapa in (m15, h4):
@@ -549,6 +599,10 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
             for mercado, alm in mapa.items():
                 alm.ruta = ruta_estado(estado_dir, mercado, tf_n)
         escribir_manifiesto(estado_dir, registro, identidad)
+        # Publicado y con testigo: recién ahora el nacimiento existe.
+        for tf_n, mapa in (("15m", m15), ("4h", h4)):
+            emitir_nacimientos(led, registro, tf_n)
+            emitir_incidencias(led, mapa)
     else:
         m15 = construir_almacenes(root, mercados, "15m", limite, **comun)
         h4 = construir_almacenes(root, mercados, "4h", limite, **comun)
