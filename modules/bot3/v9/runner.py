@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 
 from . import store as S
 from . import contract as CT
@@ -167,8 +168,23 @@ def leer_versionado(root: str, mercado: str, tf: str) -> list[dict]:
 MANIFIESTO = "MANIFIESTO.json"
 
 
-def ruta_estado(estado_dir: str, mercado: str, tf: str) -> str:
-    return os.path.join(estado_dir, f"{mercado}_{tf}.jsonl")
+CARPETA_ALMACENES = "almacenes"
+CARPETA_STAGING = "almacenes.new"
+
+
+def ruta_estado(estado_dir: str, mercado: str, tf: str,
+                carpeta: str = CARPETA_ALMACENES) -> str:
+    """Los 14 almacenes viven en UNA carpeta, para poder publicarlos con un
+    solo rename atómico en el nacimiento (diseño rev.8 §4)."""
+    return os.path.join(estado_dir, carpeta, f"{mercado}_{tf}.jsonl")
+
+
+def _fsync_dir(ruta: str) -> None:
+    fd = os.open(ruta, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def leer_manifiesto(estado_dir: str) -> dict:
@@ -269,7 +285,10 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                         ledger=None,
                         commit_snapshot: str | None = None,
                         exigir_universo: bool = False,
-                        permitir_snapshot_externo: bool = False) -> dict:
+                        permitir_snapshot_externo: bool = False,
+                        carpeta: str = CARPETA_ALMACENES,
+                        publicar_manifiesto: bool = True,
+                        registro_out: dict | None = None) -> dict:
     """Construye los almacenes ingiriendo el snapshot versionado (CF-28) y,
     opcionalmente, velas adicionales (push) por mercado.
 
@@ -312,7 +331,12 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
             # RECUPERACIÓN (B-6): si el manifiesto DECLARA este almacén, su
             # archivo es obligatorio (fallo cerrado si desapareció); si no
             # está declarado, es primer arranque y se crea.
-            ruta = ruta_estado(estado_dir, mercado, tf)
+            ruta = ruta_estado(estado_dir, mercado, tf, carpeta)
+            # La provenance SIEMPRE nombra la ruta DEFINITIVA: durante el
+            # nacimiento el archivo vive en staging, pero el evento
+            # `nacimiento` no puede citar una ubicación transitoria — sería
+            # otro payload para el mismo `event_id` al reprocesar.
+            ruta_prov = ruta_estado(estado_dir, mercado, tf)
             if declarado:
                 # CF-28: en una RECUPERACIÓN declarada, el snapshot debe ser
                 # el mismo que se registró al nacer. Cargar uno distinto
@@ -335,15 +359,33 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                         f"{commit_snapshot} != {commit_reg} (registrado)")
             alm = S.Almacen.cargar(mercado, tf, ruta, requerido=declarado)
             if declarado:
-                # El archivo no dice a qué mercado pertenece: se ata al head
-                # que el manifiesto registró al cerrar la corrida anterior.
-                # Sin esto, intercambiar dos almacenes sellados pasaba
-                # inadvertido (cadenas formalmente válidas, historia cruzada).
-                head_reg = declarados[nombre].get("head")
-                if head_reg and alm.head != head_reg:
+                # PREFIJO DE NACIMIENTO (rev.8 §3). El manifiesto ya no guarda
+                # el `head` físico —era su único campo mutable, y el primer
+                # push lo invalidaba—, sino el prefijo inmutable por CF-28. El
+                # sufijo posterior lo autentica la propia cadena, que `cargar`
+                # revalida entera desde SEMILLA.
+                #
+                # La detección de intercambio se conserva: el prefijo deriva
+                # del snapshot de ESE mercado, así que dos almacenes cruzados
+                # tienen prefijos distintos.
+                prov_n = declarados[nombre]
+                cuenta = prov_n.get("snapshot_record_count")
+                cabeza = prov_n.get("snapshot_head")
+                if cuenta is None or not cabeza:
                     raise ValueError(
-                        f"el archivo de {nombre} no corresponde: head "
-                        f"{alm.head[:12]}… != {head_reg[:12]}… (registrado)")
+                        f"provenance incompleta para {nombre}: falta "
+                        f"snapshot_record_count o snapshot_head")
+                if len(alm.registros) < cuenta:
+                    raise ValueError(
+                        f"el archivo de {nombre} está truncado: "
+                        f"{len(alm.registros)} registros < {cuenta} del "
+                        f"prefijo de nacimiento")
+                real = alm.registros[cuenta - 1]["hash_acum"]
+                if real != cabeza:
+                    raise ValueError(
+                        f"el archivo de {nombre} no corresponde: prefijo de "
+                        f"nacimiento {real[:12]}… != {cabeza[:12]}… "
+                        f"(registrado)")
             if not alm.registros:
                 alm.nacer_en(ancla)
             if commit_snapshot:
@@ -354,11 +396,13 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                 snap = ruta_snapshot(root, mercado, tf)
                 registro[nombre] = {
                     "mercado": mercado, "tf": tf, "ancla": int(ancla),
-                    "ruta": ruta, "snapshot_ruta": snap,
+                    "ruta": ruta_prov, "snapshot_ruta": snap,
                     "snapshot_sha256": sha_snapshot(snap),
                     "commit_snapshot": commit_snapshot or (
                         ledger.commit if ledger is not None else "dev"),
                     "hash_acum_inicial": S.SEMILLA,
+                    # `snapshot_record_count` / `snapshot_head` se completan
+                    # al terminar el nacimiento, más abajo.
                 }
         else:
             alm = S.Almacen(mercado, tf)
@@ -375,13 +419,18 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                 break
             huecos.append((mercado, reg_hueco))
         alm.huecos_declarados = [h for m, h in huecos if m == mercado]
+        if estado_dir and nombre in registro \
+                and registro[nombre].get("snapshot_head") is None:
+            # NACIMIENTO recién completado: el prefijo es lo que el almacén
+            # tiene ahora, y a partir de acá es inmutable.
+            registro[nombre]["snapshot_record_count"] = len(alm.registros)
+            registro[nombre]["snapshot_head"] = alm.head
         almacenes[mercado] = alm
     if estado_dir:
-        for nombre, prov in registro.items():        # B4: head vigente
-            m = prov.get("mercado")
-            if prov.get("tf") == tf and m in almacenes:
-                prov["head"] = almacenes[m].head
-        escribir_manifiesto(estado_dir, registro)
+        if registro_out is not None:
+            registro_out.update(registro)
+        if publicar_manifiesto:
+            escribir_manifiesto(estado_dir, registro)
     if ledger is not None:
         # CF-28: se reemite el `nacimiento` de TODO almacén del manifiesto de
         # esta TF. Es idempotente por `event_id`, así que un crash entre la
@@ -462,8 +511,47 @@ def correr(root: str = ROOT, mercados=MERCADOS, hasta: int | None = None,
     comun = dict(estado_dir=estado_dir, ledger=led, commit_snapshot=commit,
                  exigir_universo=True,
                  permitir_snapshot_externo=permitir_snapshot_externo)
-    m15 = construir_almacenes(root, mercados, "15m", limite, **comun)
-    h4 = construir_almacenes(root, mercados, "4h", limite, **comun)
+    nacimiento = bool(estado_dir) and not leer_manifiesto(estado_dir)
+    if nacimiento:
+        # NACIMIENTO ATÓMICO (rev.8 §4). Los 14 almacenes se materializan en
+        # `almacenes.new/` y se publican con UN solo rename: catorce renames
+        # dejaban, ante una caída, unos archivos definitivos y otros no.
+        #
+        # El manifiesto es el ÚNICO testigo de nacimiento. Si no existe, todo
+        # resto previo se descarta: `almacenes.new/` se borra y `almacenes/`
+        # —que no puede provenir de un nacimiento publicado— va a cuarentena.
+        stage = os.path.join(estado_dir, CARPETA_STAGING)
+        firme = os.path.join(estado_dir, CARPETA_ALMACENES)
+        if os.path.isdir(stage):
+            shutil.rmtree(stage)
+        if os.path.isdir(firme):
+            destino = os.path.join(
+                estado_dir, f"{CARPETA_ALMACENES}.cuarentena")
+            n = 0
+            while os.path.exists(destino if n == 0 else f"{destino}.{n}"):
+                n += 1
+            os.replace(firme, destino if n == 0 else f"{destino}.{n}")
+        os.makedirs(stage, exist_ok=True)
+        registro: dict = {}
+        naciendo = dict(comun, carpeta=CARPETA_STAGING,
+                        publicar_manifiesto=False, registro_out=registro)
+        m15 = construir_almacenes(root, mercados, "15m", limite, **naciendo)
+        h4 = construir_almacenes(root, mercados, "4h", limite, **naciendo)
+        for mapa in (m15, h4):
+            for alm in mapa.values():
+                alm.sincronizar()
+        _fsync_dir(stage)
+        os.replace(stage, firme)                     # ← ATÓMICO, uno solo
+        _fsync_dir(estado_dir)
+        # Los almacenes quedan apuntando al staging: se reapunta al definitivo
+        # (la provenance ya nombraba el definitivo).
+        for tf_n, mapa in (("15m", m15), ("4h", h4)):
+            for mercado, alm in mapa.items():
+                alm.ruta = ruta_estado(estado_dir, mercado, tf_n)
+        escribir_manifiesto(estado_dir, registro, identidad)
+    else:
+        m15 = construir_almacenes(root, mercados, "15m", limite, **comun)
+        h4 = construir_almacenes(root, mercados, "4h", limite, **comun)
     mercados_ok = tuple(sorted(set(m15) & set(h4)))
     motor = Motor(m15, h4, mercados_ok, led, bootstrap_hasta=bootstrap_hasta)
     # CF-31/CF-34: los huecos LOCALES se emiten por la vía canónica del motor

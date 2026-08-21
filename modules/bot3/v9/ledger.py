@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 
+from . import marco
 from .contract import CONTRATO_HASH, PROTOCOLO, TIPOS, canon, event_id
 
 
@@ -22,6 +23,7 @@ class Ledger:
     def __init__(self, ruta: str | None = None, commit: str = "dev"):
         self.ruta = ruta
         self.commit = commit
+        self.durable = False        # el observador lo activa (rev.8 §5)
         self.eventos: list[dict] = []
         self._ids: set[str] = set()
         # Índice por identidad: el dedupe compara contra el evento previo, y
@@ -42,11 +44,14 @@ class Ledger:
         falla cerrado."""
         self.eventos, self._ids, self._por_id = [], set(), {}
         por_id = self._por_id
-        with open(self.ruta, encoding="utf-8") as fh:
-            for n, linea in enumerate(fh, 1):
-                linea = linea.strip()
-                if not linea:
-                    continue
+        # Mismo encuadre que el almacén (rev.8 §5.1): la cola truncada por una
+        # caída se descarta y se repone por reemisión idempotente; cualquier
+        # otro defecto es corrupción y falla cerrado.
+        tramas, cola = marco.leer(self.ruta)
+        if cola:
+            marco.truncar_cola(self.ruta)
+        if True:
+            for n, linea in enumerate(tramas, 1):
                 ev = json.loads(linea)
                 eid = ev.get("event_id")
                 # `contrato` y `protocolo` no son telemetría: son la
@@ -178,12 +183,15 @@ class Ledger:
         self._ids.add(eid)
         self._por_id[eid] = ev
         if self.ruta:
-            os.makedirs(os.path.dirname(self.ruta), exist_ok=True)
-            with open(self.ruta, "a", encoding="utf-8") as fh:
-                fh.write(canon(ev) + "\n")
+            marco.escribir(self.ruta, canon(ev), durable=self.durable)
         return ev
 
     # --- consulta ---------------------------------------------------------
+    def sincronizar(self) -> None:
+        """`fsync` del libro al cerrar el ciclo (rev.8 §5, paso 4)."""
+        if self.ruta:
+            marco.sincronizar(self.ruta)
+
     def por_tipo(self, tipo: str) -> list[dict]:
         return [e for e in self.eventos if e["tipo"] == tipo]
 

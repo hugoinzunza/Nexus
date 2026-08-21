@@ -1288,18 +1288,32 @@ def test_b6_almacen_rehidrata_con_indices_y_cadena(tmp_path):
         assert a.commit_asof(t) == b.commit_asof(t)
 
 
+def _reescribir_tramas(ruta, lineas):
+    """Reescribe el archivo RE-ENMARCANDO cada línea.
+
+    Los gates de manipulación tienen que dejar el marco válido: si no, la
+    corrupción la detectaría el encuadre (§5.1) y no llegaríamos a probar la
+    capa que nos interesa —la cadena y los metadatos derivados."""
+    from modules.bot3.v9 import marco as MM
+    with open(ruta, "wb") as fh:
+        for linea in lineas:
+            fh.write(MM.enmarcar(linea))
+
+
 def test_b6_almacen_alterado_no_carga_en_silencio(tmp_path):
     """Un archivo manipulado rompe la cadena y la carga DEBE fallar."""
     import pytest
+    from modules.bot3.v9 import marco as MM
     ruta = str(tmp_path / "X_15m.jsonl")
     a = S.Almacen("X", "15m", ruta=ruta); a.nacer_en(0)
     a.ofrecer([vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(5)], "push")
     a.drenar()
-    lineas = open(ruta, encoding="utf-8").read().splitlines()
+    lineas, cola = MM.leer(ruta)
+    assert not cola
     # el payload va escapado dentro de la línea JSON
     assert '\\"l\\":\\"0.5\\"' in lineas[2]
     lineas[2] = lineas[2].replace('\\"l\\":\\"0.5\\"', '\\"l\\":\\"0.4\\"')
-    open(ruta, "w", encoding="utf-8").write("\n".join(lineas) + "\n")
+    _reescribir_tramas(ruta, lineas)
     with pytest.raises(ValueError, match="cadena rota"):
         S.Almacen.cargar("X", "15m", ruta)
 
@@ -1494,15 +1508,16 @@ def test_b6_metadato_alterado_no_pasa(tmp_path):
     payload, que es lo único cubierto por el hash)."""
     import json
     import pytest
+    from modules.bot3.v9 import marco as MM
     ruta = str(tmp_path / "X_15m.jsonl")
     a = S.Almacen("X", "15m", ruta=ruta); a.nacer_en(0)
     a.ofrecer([vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(6)], "push")
     a.drenar()
-    lineas = open(ruta, encoding="utf-8").read().splitlines()
+    lineas, _ = MM.leer(ruta)
     reg = json.loads(lineas[2])
     reg["t"] = reg["t"] + 7777                     # payload y hash intactos
     lineas[2] = json.dumps(reg, sort_keys=True, separators=(",", ":"))
-    open(ruta, "w", encoding="utf-8").write("\n".join(lineas) + "\n")
+    _reescribir_tramas(ruta, lineas)
     with pytest.raises(ValueError, match="metadato alterado"):
         S.Almacen.cargar("X", "15m", ruta)
 
@@ -2245,14 +2260,15 @@ def test_int_recuperacion_exchange_desde_archivos_reales(tmp_path):
     los almacenes se releen con `Almacen.cargar()` (que revalida la cadena) y
     el libro con `Ledger(ruta)` (que reconstruye el índice de `event_id`
     desde el archivo). Es el camino real de un reinicio."""
+    from modules.bot3.v9 import marco as MM
     from modules.bot3.v9.contract import canon
     motor, led, T = _escenario_exchange()
     m15 = {}
     for mercado, alm in motor.m15.items():
         ruta = str(tmp_path / f"{mercado}_15m.jsonl")
-        with open(ruta, "w", encoding="utf-8") as fh:
+        with open(ruta, "wb") as fh:
             for r in alm.registros:
-                fh.write(canon(dict(r)) + "\n")
+                fh.write(MM.enmarcar(canon(dict(r))))
         # `cargar` revalida la cadena entera contra los payloads y deriva los
         # metadatos: si el archivo estuviera alterado, moriría aquí.
         m15[mercado] = S.Almacen.cargar(mercado, "15m", ruta, requerido=True)
@@ -2297,11 +2313,12 @@ def test_int_recuperacion_exchange_desde_archivos_reales(tmp_path):
 
 
 def _libro_en_disco(tmp_path, eventos, nombre="l.jsonl"):
+    from modules.bot3.v9 import marco as MM
     from modules.bot3.v9.contract import canon
     ruta = str(tmp_path / nombre)
-    with open(ruta, "w", encoding="utf-8") as fh:
+    with open(ruta, "wb") as fh:
         for e in eventos:
-            fh.write(canon(e) + "\n")
+            fh.write(MM.enmarcar(canon(e)))
     return ruta
 
 
@@ -2414,6 +2431,7 @@ def _mundo_h4_propio(silencioso="BTCUSDT"):
 def test_int_los_cinco_heads_se_derivan_de_cadenas_separadas(tmp_path):
     """P2: con H4 propio, los `h4_*` heads deben salir de la cadena H4 y no
     de la M15, y sobrevivir intactos a un viaje por disco."""
+    from modules.bot3.v9 import marco as MM
     from modules.bot3.v9.contract import canon
     motor, led, t0 = _mundo_h4_propio()
     T = t0 + 201 * DUR
@@ -2437,9 +2455,9 @@ def test_int_los_cinco_heads_se_derivan_de_cadenas_separadas(tmp_path):
     # recuperación por disco con las DOS cadenas persistidas por separado
     def guardar(alm, tf):
         ruta = str(tmp_path / f"{alm.mercado}_{tf}.jsonl")
-        with open(ruta, "w", encoding="utf-8") as fh:
+        with open(ruta, "wb") as fh:
             for r in alm.registros:
-                fh.write(canon(dict(r)) + "\n")
+                fh.write(MM.enmarcar(canon(dict(r))))
         return S.Almacen.cargar(alm.mercado, tf, ruta, requerido=True)
 
     m15b = {m: guardar(a, "15m") for m, a in motor.m15.items()}
@@ -2460,6 +2478,7 @@ def test_int_los_cinco_heads_se_derivan_de_cadenas_separadas(tmp_path):
 
 def _libro_epoca(tmp_path, mutar=None, nombre="e.jsonl"):
     """Libro en disco con un `epoca_m15` REAL emitido por el motor."""
+    from modules.bot3.v9 import marco as MM
     from modules.bot3.v9.contract import canon
     ruta = str(tmp_path / nombre)
     led = Ledger()
@@ -2468,9 +2487,9 @@ def _libro_epoca(tmp_path, mutar=None, nombre="e.jsonl"):
     evs = [dict(e) for e in led.eventos]
     if mutar is not None:
         mutar(evs[0])
-    with open(ruta, "w", encoding="utf-8") as fh:
+    with open(ruta, "wb") as fh:
         for e in evs:
-            fh.write(canon(e) + "\n")
+            fh.write(MM.enmarcar(canon(e)))
     return ruta
 
 
@@ -2667,3 +2686,307 @@ def test_int_el_bootstrap_no_marca_la_epoca_como_anunciada():
         motor.finalizar_ciclo()
     assert len([e for e in led.eventos if e["tipo"] == "epoca_m15"]) == 1
     assert motor._epocas_anunciadas                # ahora sí
+
+
+# ===================== Capa base del observador (rev.8 §3-§5) =============
+# Diseño congelado: 660c25d6f9151dfcde5db06abf31158f58e5ad3d65a370897299d080561aa781
+
+def _frames(ruta):
+    from modules.bot3.v9 import marco as MM
+    return MM.leer(ruta)
+
+
+def test_base_marco_solo_trunca_la_cola_sin_newline(tmp_path):
+    """§5.1: el ÚNICO criterio de truncación es la ausencia del `\\n` final.
+    Una trama CERRADA con cualquier defecto es corrupción y falla cerrado —
+    incluida la longitud inflada, que rev.5 clasificaba mal como torn write
+    (el hash cubre el payload, no el encabezado)."""
+    import pytest
+    from modules.bot3.v9 import marco as MM
+    from modules.bot3.v9.contract import sha256_hex
+    base = str(tmp_path / "f.bin")
+
+    def escribir(*payloads):
+        with open(base, "wb") as fh:
+            for p in payloads:
+                fh.write(MM.enmarcar(p))
+        return open(base, "rb").read()
+
+    crudo = escribir('{"a":1}', '{"b":"ñ"}', '{"c":3}')
+    assert MM.leer(base) == (['{"a":1}', '{"b":"ñ"}', '{"c":3}'], False)
+
+    # 1) cola truncada en cualquier byte de la última trama → se descarta
+    for corte in range(1, len(MM.enmarcar('{"c":3}'))):
+        open(base, "wb").write(crudo[:-corte])
+        payloads, cola = MM.leer(base)
+        assert cola is True and payloads == ['{"a":1}', '{"b":"ñ"}']
+
+    p3 = '{"c":3}'
+    cab = f"{len(p3.encode())}\t{sha256_hex(p3)}\t".encode()
+    cuerpo = crudo[:-len(MM.enmarcar(p3))]
+    casos = {
+        "longitud menor": f"{len(p3.encode()) - 1}\t{sha256_hex(p3)}\t".encode()
+        + p3.encode() + b"\n",
+        "longitud mayor": f"{len(p3.encode()) + 5}\t{sha256_hex(p3)}\t".encode()
+        + p3.encode() + b"\n",
+        "hash alterado": f"{len(p3.encode())}\t{'0' * 64}\t".encode()
+        + p3.encode() + b"\n",
+        "encabezado sin gramática": b"xx\t" + cab.split(b"\t")[1] + b"\t"
+        + p3.encode() + b"\n",
+        "utf-8 incompleto": f"3\t{sha256_hex('abc')}\t".encode()
+        + b"\xc3\x28\x41" + b"\n",
+    }
+    for nombre, trama in casos.items():
+        # con `\n`: trama CERRADA → corrupción, aunque sea la última
+        open(base, "wb").write(cuerpo + trama)
+        with pytest.raises(MM.MarcoCorrupto):
+            MM.leer(base)
+        # sin `\n`: es la cola → truncación, se descarta
+        open(base, "wb").write(cuerpo + trama[:-1])
+        payloads, cola = MM.leer(base)
+        assert cola is True and payloads == ['{"a":1}', '{"b":"ñ"}'], nombre
+
+    # una trama NO final rota NUNCA es truncable, aunque el archivo esté cortado
+    open(base, "wb").write(casos["hash alterado"] + crudo[:20])
+    with pytest.raises(MM.MarcoCorrupto):
+        MM.leer(base)
+
+
+def test_base_torn_write_en_almacen_recupera_identico(tmp_path):
+    """§5.1 + gate 23: una caída a mitad de la última escritura del almacén
+    se recupera por replay y produce la MISMA cadena que la corrida continua."""
+    ruta = str(tmp_path / "X_15m.jsonl")
+    velas = [vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(8)]
+
+    continuo = S.Almacen("X", "15m"); continuo.nacer_en(0)
+    continuo.ofrecer(velas, "push"); continuo.drenar()
+
+    a = S.Almacen("X", "15m", ruta=ruta); a.nacer_en(0)
+    a.ofrecer(velas, "push"); a.drenar()
+    crudo = open(ruta, "rb").read()
+    for corte in (1, 5, 40):
+        open(ruta, "wb").write(crudo[:-corte])
+        rec = S.Almacen.cargar("X", "15m", ruta)
+        assert len(rec.registros) < len(continuo.registros)   # perdió la cola
+        # el archivo quedó en una frontera válida: se puede seguir appendeando
+        rec.ofrecer(velas, "push"); rec.drenar()
+        assert rec.head == continuo.head                      # replay idéntico
+        assert [r["hash_acum"] for r in rec.registros] == \
+            [r["hash_acum"] for r in continuo.registros]
+        open(ruta, "wb").write(crudo)
+
+
+def test_base_torn_write_en_libro_recupera_identico(tmp_path):
+    """Lo mismo para el libro: la cola truncada se repone por reemisión
+    idempotente y la firma final es la de la corrida continua."""
+    ruta = str(tmp_path / "l.jsonl")
+    eventos = [("lote_finalizado", dict(effective_at=i, finalized_at=i))
+               for i in range(1, 9)]
+    continuo = Ledger()
+    for tipo, campos in eventos:
+        continuo.append(tipo, **campos)
+
+    led = Ledger(ruta)
+    for tipo, campos in eventos:
+        led.append(tipo, **campos)
+    crudo = open(ruta, "rb").read()
+    for corte in (1, 9, 60):
+        open(ruta, "wb").write(crudo[:-corte])
+        rec = Ledger(ruta)
+        assert len(rec.eventos) < len(continuo.eventos)
+        for tipo, campos in eventos:
+            rec.append(tipo, **campos)
+        assert rec.firma() == continuo.firma()
+        assert len(rec.eventos) == len(continuo.eventos)
+        open(ruta, "wb").write(crudo)
+
+
+def test_base_modo_durable_baja_a_disco_antes_del_evento(monkeypatch, tmp_path):
+    """§5: el marcador tiene que ser DURABLE antes de que exista el evento
+    que lo cita. Sin esto, el SO podía bajar el libro primero y una caída
+    dejaba el evento sin el marcador que lo justifica."""
+    from modules.bot3.v9 import marco as MM
+    orden = []
+    fsync_real = MM.os.fsync
+    monkeypatch.setattr(MM.os, "fsync", lambda fd: (orden.append("fsync"),
+                                                    fsync_real(fd))[1])
+    ruta = str(tmp_path / "X_15m.jsonl")
+    a = S.Almacen("X", "15m", ruta=ruta); a.nacer_en(0)
+    a.ofrecer([vela(i * DUR, 1, 2, 0.5, 1.5) for i in range(3)], "push")
+    a.drenar()
+    assert orden == []                       # sin modo durable: ningún fsync
+    a.durable = True
+    a.ofrecer([vela(3 * DUR, 1, 2, 0.5, 1.5)], "push")
+    a.drenar()
+    assert orden == ["fsync"]                # uno por append
+    a.sincronizar()
+    assert len(orden) == 2
+
+    led = Ledger(str(tmp_path / "l.jsonl"))
+    led.append("lote_finalizado", effective_at=1, finalized_at=1)
+    assert len(orden) == 2                   # el libro NO fsyncea por append
+    led.durable = True
+    led.append("lote_finalizado", effective_at=2, finalized_at=2)
+    assert len(orden) == 3
+
+
+def _estado_nacido(tmp_path, monkeypatch, mercados=("BTCUSDT",), n=300):
+    """Un `estado_dir` con la cohorte ya nacida, sobre snapshots recortados."""
+    import json
+    import pytest
+    from modules.bot3.v9 import runner as R
+    _sin_guardia_arbol(monkeypatch)
+    head = _head_o_skip()
+    raiz = str(tmp_path / "raiz"); os.makedirs(os.path.join(raiz, "data"))
+    for m in mercados:
+        for tf in ("15m", "4h"):
+            src = R.ruta_snapshot(R.ROOT, m, tf)
+            if not os.path.exists(src):
+                pytest.skip("sin klines versionadas")
+            json.dump(json.load(open(src, encoding="utf-8"))[:n],
+                      open(R.ruta_snapshot(raiz, m, tf), "w",
+                           encoding="utf-8"))
+    d = str(tmp_path / "estado")
+    base = dict(root=raiz, mercados=mercados, hasta=0, estado_dir=d,
+                commit=head, ledger_ruta=str(tmp_path / "l.jsonl"),
+                bootstrap_hasta=1, permitir_snapshot_externo=True)
+    return R, d, base
+
+
+def test_base_manifiesto_sin_head_mutable(monkeypatch, tmp_path):
+    """§3: el manifiesto guarda el PREFIJO de nacimiento, inmutable por
+    CF-28, y ya no el `head` físico — que el primer push invalidaba."""
+    import json
+    R, d, base = _estado_nacido(tmp_path, monkeypatch)
+    R.correr(**base)
+    prov = R.leer_manifiesto(d)["BTCUSDT_15m"]
+    assert "head" not in prov                       # el campo mutable se fue
+    assert isinstance(prov["snapshot_record_count"], int)
+    assert len(prov["snapshot_head"]) == 64
+    # el prefijo describe EXACTAMENTE lo sellado al nacer
+    alm = S.Almacen.cargar("BTCUSDT", "15m",
+                           R.ruta_estado(d, "BTCUSDT", "15m"), requerido=True)
+    assert len(alm.registros) == prov["snapshot_record_count"]
+    assert alm.registros[-1]["hash_acum"] == prov["snapshot_head"]
+    R.correr(**base)                                # recuperación: pasa
+
+
+def test_base_el_sufijo_push_no_invalida_la_recuperacion(monkeypatch,
+                                                         tmp_path):
+    """El motivo de todo el cambio: appendear velas nuevas mueve el `head`.
+    Con el prefijo inmutable, el almacén con sufijo se recupera igual."""
+    R, d, base = _estado_nacido(tmp_path, monkeypatch)
+    R.correr(**base)
+    ruta = R.ruta_estado(d, "BTCUSDT", "15m")
+    prov = R.leer_manifiesto(d)["BTCUSDT_15m"]
+    alm = S.Almacen.cargar("BTCUSDT", "15m", ruta, requerido=True)
+    cabeza_nacimiento = alm.head
+    alm.ofrecer([vela(alm.ultimo_t + DUR, 1, 2, 0.5, 1.5)], "push")
+    alm.drenar()
+    assert alm.head != cabeza_nacimiento            # el push movió el head
+    assert len(alm.registros) > prov["snapshot_record_count"]
+    # y aun así la recuperación lo acepta: el prefijo sigue intacto
+    rec = S.Almacen.cargar("BTCUSDT", "15m", ruta, requerido=True)
+    assert rec.registros[prov["snapshot_record_count"] - 1]["hash_acum"] == \
+        prov["snapshot_head"]
+
+
+def test_base_almacen_truncado_bajo_el_prefijo_es_rechazado(monkeypatch,
+                                                            tmp_path):
+    """Un almacén al que le falta parte del nacimiento no puede pasar por
+    'archivo válido más corto': el contador lo delata."""
+    import pytest
+    from modules.bot3.v9 import marco as MM
+    R, d, base = _estado_nacido(tmp_path, monkeypatch)
+    R.correr(**base)
+    ruta = R.ruta_estado(d, "BTCUSDT", "15m")
+    tramas, _ = MM.leer(ruta)
+    with open(ruta, "wb") as fh:                     # cadena VÁLIDA, más corta
+        for t in tramas[:-5]:
+            fh.write(MM.enmarcar(t))
+    with pytest.raises(ValueError, match="truncado"):
+        R.correr(**base)
+
+
+def test_base_prefijo_detecta_almacenes_intercambiados(monkeypatch, tmp_path):
+    """La detección de intercambio se conserva sin `head` mutable: el prefijo
+    deriva del snapshot de ESE mercado."""
+    import pytest
+    import shutil
+    R, d, base = _estado_nacido(tmp_path, monkeypatch,
+                                mercados=("BTCUSDT", "ETHUSDT"))
+    R.correr(**base)
+    a = R.ruta_estado(d, "BTCUSDT", "15m")
+    b = R.ruta_estado(d, "ETHUSDT", "15m")
+    tmp = str(tmp_path / "swap")
+    shutil.copy(a, tmp); shutil.copy(b, a); shutil.copy(tmp, b)
+    with pytest.raises(ValueError, match="no corresponde"):
+        R.correr(**base)
+
+
+def test_base_nacimiento_atomico_publica_con_un_rename(monkeypatch, tmp_path):
+    """§4: los 14 almacenes se publican con UN rename. Catorce renames
+    dejaban, ante una caída, unos archivos definitivos y otros no."""
+    from modules.bot3.v9 import runner as R
+    renames = []
+    real = R.os.replace
+    monkeypatch.setattr(R.os, "replace",
+                        lambda a, b: (renames.append((a, b)), real(a, b))[1])
+    R2, d, base = _estado_nacido(tmp_path, monkeypatch,
+                                 mercados=("BTCUSDT", "ETHUSDT"))
+    R2.correr(**base)
+    dirs = [(a, b) for a, b in renames if a.endswith(R.CARPETA_STAGING)]
+    assert len(dirs) == 1, "el nacimiento debe publicar con UN solo rename"
+    assert not os.path.isdir(os.path.join(d, R.CARPETA_STAGING))
+    assert sorted(os.listdir(os.path.join(d, R.CARPETA_ALMACENES))) == [
+        "BTCUSDT_15m.jsonl", "BTCUSDT_4h.jsonl",
+        "ETHUSDT_15m.jsonl", "ETHUSDT_4h.jsonl"]
+
+
+def test_base_caida_antes_del_manifiesto_renace_y_pone_en_cuarentena(
+        monkeypatch, tmp_path):
+    """El manifiesto es el ÚNICO testigo de nacimiento. Una caída entre el
+    rename y el manifiesto deja `almacenes/` sin testigo: no se reutiliza —
+    va a cuarentena— y se renace desde cero."""
+    import pytest
+    from modules.bot3.v9 import runner as R
+    R2, d, base = _estado_nacido(tmp_path, monkeypatch)
+
+    # `correr` escribe el manifiesto DOS veces: primero la identidad de la
+    # cohorte (fail-fast, antes del ledger) y después la provenance de los
+    # almacenes. La caída que interesa es la segunda: ya se hizo el rename.
+    real = R.escribir_manifiesto
+    llamadas = []
+
+    def morir(*a, **k):
+        llamadas.append(1)
+        if len(llamadas) == 1:
+            return real(*a, **k)
+        raise RuntimeError("caída entre el rename y el manifiesto")
+
+    monkeypatch.setattr(R, "escribir_manifiesto", morir)
+    with pytest.raises(RuntimeError):
+        R2.correr(**base)
+    assert os.path.isdir(os.path.join(d, R.CARPETA_ALMACENES))  # publicado…
+    assert R.leer_manifiesto(d) == {}                           # …sin testigo
+    monkeypatch.undo()
+    _sin_guardia_arbol(monkeypatch)
+
+    R2.correr(**base)                                  # renace
+    assert os.path.isdir(os.path.join(d, f"{R.CARPETA_ALMACENES}.cuarentena"))
+    assert R.leer_manifiesto(d)["BTCUSDT_15m"]["snapshot_head"]
+    R2.correr(**base)                                  # y ya recupera normal
+
+
+def test_base_staging_huerfano_se_descarta(monkeypatch, tmp_path):
+    """Un `almacenes.new/` de un nacimiento que no llegó a publicarse no
+    puede contaminar el siguiente."""
+    from modules.bot3.v9 import runner as R
+    R2, d, base = _estado_nacido(tmp_path, monkeypatch)
+    stage = os.path.join(d, R.CARPETA_STAGING)
+    os.makedirs(stage)
+    basura = os.path.join(stage, "BTCUSDT_15m.jsonl")
+    open(basura, "wb").write(b"basura que no es una trama\n")
+    R2.correr(**base)
+    assert not os.path.exists(stage)
+    assert R.leer_manifiesto(d)["BTCUSDT_15m"]["snapshot_head"]

@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 
+from . import marco
 from .contract import (
     TF_MS, WATERMARK_LOCAL_N, WATERMARK_EXCHANGE_N, WATERMARK_EXCHANGE_Q,
     canon, repr_f, sha256_hex,
@@ -75,6 +76,11 @@ class Almacen:
         # Índices (solo rendimiento; no alteran semántica): mapa t→vela,
         # rangos de hueco y caché de épocas invalidada en cada append.
         self._por_t: dict[int, dict] = {}
+        # Modo durable (diseño rev.8 §5): `fsync` en cada append, para que
+        # un marcador NUNCA llegue al disco después del evento que lo cita.
+        # Se activa solo en el observador: un `fsync` por vela sobre el replay
+        # de bootstrap (~1M velas) es inviable y ahí nada depende del orden.
+        self.durable = False
         self._huecos: list[tuple[int, int]] = []
         # Marcadores por `desde`: permite recuperar un hueco SELLADO en O(1)
         # durante el replay, sin recorrer el almacén en cada lote.
@@ -109,9 +115,8 @@ class Almacen:
         self.registros.append(reg)
         self._indexar(reg)
         if self.ruta:
-            os.makedirs(os.path.dirname(self.ruta), exist_ok=True)
-            with open(self.ruta, "a", encoding="utf-8") as fh:
-                fh.write(canon({k: v for k, v in reg.items()}) + "\n")
+            marco.escribir(self.ruta, canon({k: v for k, v in reg.items()}),
+                           durable=self.durable)
         return reg
 
     def _append_vela(self, vela: dict) -> None:
@@ -153,11 +158,14 @@ class Almacen:
                     f"se esperaba estado sellado en {ruta} y no existe")
             return alm
         prev = SEMILLA
-        with open(ruta, encoding="utf-8") as fh:
-            for n, linea in enumerate(fh, 1):
-                linea = linea.strip()
-                if not linea:
-                    continue
+        # Encuadre (rev.8 §5.1): una cola truncada por una caída se descarta
+        # —único descarte permitido— y se recupera por replay; cualquier otro
+        # defecto es corrupción y `marco.leer` falla cerrado.
+        tramas, cola = marco.leer(ruta)
+        if cola:
+            marco.truncar_cola(ruta)
+        if True:
+            for n, linea in enumerate(tramas, 1):
                 crudo = json.loads(linea)
                 payload = crudo["payload"]
                 esperado = encadenar(prev, payload)
@@ -267,6 +275,11 @@ class Almacen:
             return None
         t_min = min(self._buffer)
         return (siguiente, t_min - self.dur)
+
+    def sincronizar(self) -> None:
+        """`fsync` explícito del archivo (cierre de ciclo, rev.8 §5)."""
+        if self.ruta:
+            marco.sincronizar(self.ruta)
 
     def marcador_en(self, desde: int, motivo: str | None = None):
         """Marcador SELLADO que empieza exactamente en `desde` (None si no
