@@ -14,6 +14,18 @@ ACCOUNT_ALIASES = {
         "Ganancia (pérdida) de actividades operacionales",
     ),
     "net_income": ("Ganancia (pérdida)",),
+    "total_assets": ("Total de activos",),
+    "total_liabilities": ("Total de pasivos",),
+    "current_assets": ("Activos corrientes totales",),
+    "current_liabilities": ("Pasivos corrientes totales",),
+    "cash": ("Efectivo y equivalentes al efectivo",),
+    "inventories": ("Inventarios corrientes",),
+    "equity": ("Patrimonio total",),
+    "operating_cash_flow": (
+        "Flujos de efectivo netos procedentes de (utilizados en) actividades de operación",
+    ),
+    "capex_ppe": ("Compras de propiedades, planta y equipo",),
+    "capex_intangibles": ("Compras de activos intangibles",),
 }
 
 
@@ -35,6 +47,10 @@ def analyze_company(current: Iterable[CMFRow], previous: Iterable[CMFRow] = ()) 
         return {"available": False, "reason": "sin filas CMF para la sociedad"}
     values = {name: _find(current, aliases) for name, aliases in ACCOUNT_ALIASES.items()}
     old = {name: _find(previous, aliases) for name, aliases in ACCOUNT_ALIASES.items()}
+    capex = sum((value or Decimal(0) for name, value in values.items()
+                 if name in {"capex_ppe", "capex_intangibles"}), Decimal(0))
+    free_cash_flow = (values["operating_cash_flow"] - capex
+                      if values["operating_cash_flow"] is not None else None)
     return {
         "available": True,
         "period": current[0].period,
@@ -50,6 +66,22 @@ def analyze_company(current: Iterable[CMFRow], previous: Iterable[CMFRow] = ()) 
         ),
         "operating_margin": _ratio(values["operating_profit"], values["revenue"]),
         "net_margin": _ratio(values["net_income"], values["revenue"]),
+        "total_assets": str(values["total_assets"]) if values["total_assets"] is not None else None,
+        "total_liabilities": (str(values["total_liabilities"])
+                              if values["total_liabilities"] is not None else None),
+        "current_assets": str(values["current_assets"]) if values["current_assets"] is not None else None,
+        "current_liabilities": (str(values["current_liabilities"])
+                                 if values["current_liabilities"] is not None else None),
+        "cash": str(values["cash"]) if values["cash"] is not None else None,
+        "inventories": str(values["inventories"]) if values["inventories"] is not None else None,
+        "equity": str(values["equity"]) if values["equity"] is not None else None,
+        "operating_cash_flow": (str(values["operating_cash_flow"])
+                                if values["operating_cash_flow"] is not None else None),
+        "capex": str(capex) if values["operating_cash_flow"] is not None else None,
+        "free_cash_flow": str(free_cash_flow) if free_cash_flow is not None else None,
+        "liabilities_to_assets": _ratio(values["total_liabilities"], values["total_assets"]),
+        "current_coverage": _ratio(values["current_assets"], values["current_liabilities"]),
+        "cash_conversion": _ratio(free_cash_flow, values["net_income"]),
         "source": "CMF IFRS TXT",
         "is_prediction": False,
     }

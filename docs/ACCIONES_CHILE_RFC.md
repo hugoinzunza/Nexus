@@ -74,6 +74,16 @@ una orden.
   lote Q2 2026 cubre, entre otras, CAP, CMPC, Cencosud, Cencomalls, SMSAAM,
   LATAM, Mall Plaza, CCU, Entel, Concha y Toro, los bancos, Enel, Colbún,
   Andina, Engie, Sonda y Pehuenche.
+- Con autorización del owner se revisó además el contenido de miembros mediante
+  su sesión de YouTube. Las transcripciones se usan sólo de forma transitoria
+  para investigación personal: no se versionan, republican ni exponen por API.
+- La rúbrica inicial referencia cuatro clases exclusivas: disciplina de venta,
+  valoración/margen de seguridad, flujo de caja libre y lectura de balance.
+- Principios codificados: no reaccionar a un trimestre aislado; confirmar
+  deterioro repetido; revisar caja, deuda y composición del balance; contrastar
+  utilidad contable con flujo libre; valorar con múltiplo propio del sector y
+  tasas vigentes; exigir margen de seguridad; combinar tesis, riesgos y objetivo
+  personal antes de reducir o salir.
 
 ### HechosEsencialesChile (Telegram)
 
@@ -152,6 +162,12 @@ ni datos personales en `data/acciones_chile_audit_snapshot.json`.
 3. **Modelos research-only:** preregistro, splits temporales, benchmark simple,
    costos y evidencia fuera de muestra.
 4. **Command Center:** alertas explicables y revisión humana. Sin ejecución.
+
+La interfaz del Command Center ya permite guardar manualmente una cartera por
+usuario, abrir fichas históricas y consultar un radar fundamental comparable.
+Las etiquetas `FUNDAMENTOS FUERTES`, `EN OBSERVACIÓN` y `REVISAR TESIS` son
+lecturas de investigación. `comprar` o `vender` permanece nulo hasta incorporar
+precio autorizado, valoración, margen de seguridad y reglas personales.
 
 ## Criterios de salida del MVP
 

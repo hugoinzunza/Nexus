@@ -13,7 +13,7 @@ from .fundamentals import analyze_company
 from .youtube import FEED_URL, fetch_feed, parse_feed
 
 
-SCHEMA_VERSION = "acciones-chile-dataset-0.3.0"
+SCHEMA_VERSION = "acciones-chile-dataset-0.4.0"
 
 
 def select_comparison_periods(periods: list[str]) -> tuple[str, str | None]:
@@ -131,7 +131,8 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
             "raw_artifact": meta.get("raw_artifact"),
         })
     metric_coverage = {}
-    for metric in ("revenue", "operating_profit", "net_income"):
+    for metric in ("revenue", "operating_profit", "net_income", "operating_cash_flow",
+                   "free_cash_flow", "total_assets", "total_liabilities"):
         present = sum(item["analysis"].get(metric) is not None for item in issuers)
         metric_coverage[metric] = round(present / len(issuers), 6) if issuers else 0.0
     months = sorted({item["months_covered"] for item in issuers if not item["stale"]})
@@ -154,6 +155,8 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
 
 def build_audit_snapshot(data: dict) -> dict:
     """Snapshot sin cartera ni datos personales para revisión externa."""
+    from .strategy import SOURCE_VIDEOS, STRATEGY_VERSION
+
     cmf = data.get("cmf", {})
     youtube = data.get("youtube", {})
     return {
@@ -178,6 +181,24 @@ def build_audit_snapshot(data: dict) -> dict:
             "entry_count": len(youtube.get("entries", [])),
             "source_role": youtube.get("source_role"),
             "url": youtube.get("url"),
+            "member_methodology": {
+                "strategy_version": STRATEGY_VERSION,
+                "sources": SOURCE_VIDEOS,
+                "transcripts_persisted": False,
+                "status": "editorial_interpretation_not_independently_reproducible",
+                "feature_authority": "none",
+                "rules": [
+                    "evaluate several quarters before treating a weak result as thesis failure",
+                    "review revenue, margins, profit, operating cash flow, free cash flow and balance quality",
+                    "require sector-appropriate valuation and margin of safety before a buy/sell conclusion",
+                    "allow several moderate warnings to combine or one critical factor to trigger thesis review",
+                ],
+            },
+        },
+        "decision_layer": {
+            "current_output": "fundamental research signal only",
+            "buy_sell_recommendation": None,
+            "gate": "authorized prices, valuation and verified listed universe required",
         },
         "claims": [
             "CMF values are primary evidence with source hashes",

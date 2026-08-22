@@ -15,7 +15,8 @@ from . import auditor
 from . import banks
 from . import dataset as dataset_store
 from .portfolio import normalize_portfolio
-from .predictor import feature_join_report, readiness as predictor_readiness
+from .predictor import build_feature_records, feature_join_report, readiness as predictor_readiness
+from .strategy import build_radar, evaluate_observation
 from .universe import load_universe, snapshot_as_of, universe_status
 
 
@@ -169,6 +170,68 @@ class AccionesChileModule(NexusModule):
                 f"cubre {issuer.get('months_covered')} meses del año",
             ]
             return self._json(200, issuer)
+        if subpath == "company-history":
+            rut = "".join(ch for ch in str(query.get("rut") or "") if ch.isdigit())[:8]
+            if not rut:
+                return self._json(400, {"error": "falta rut"})
+            dataset = self._read_dataset()
+            if not dataset:
+                return self._json(503, {"error": "dataset CMF todavía no disponible"})
+            history = [item for item in dataset["cmf"].get("observations", [])
+                       if item.get("rut") == rut]
+            history.sort(key=lambda item: item.get("period", ""))
+            if not history:
+                return self._json(404, {"error": "sociedad no encontrada"})
+            return self._json(200, {
+                "rut": rut, "company": history[-1]["company"], "history": history,
+                "reading": evaluate_observation(history[-1], history),
+                "price_history_ready": False,
+            })
+        if subpath == "radar":
+            dataset = self._read_dataset()
+            if not dataset:
+                return self._json(503, {"error": "dataset CMF todavía no disponible"})
+            try:
+                limit = max(1, min(100, int(query.get("limit") or 40)))
+            except (TypeError, ValueError):
+                return self._json(400, {"error": "limit inválido"})
+            causal = build_feature_records(dataset, self._read_telegram())
+            allowed_ruts = {item["rut"] for item in causal}
+            result = build_radar(dataset, limit=limit, allowed_ruts=allowed_ruts)
+            result["universe_role"] = "companies_with_causal_cmf_telegram_match"
+            result["listing_status"] = "unverified_until_authorized_exchange_universe"
+            result["research_only"] = True
+            return self._json(200, result)
+        if subpath == "portfolio-monitor":
+            uid = (user or {}).get("uid")
+            if uid is None:
+                return self._json(401, {"error": "necesitas iniciar sesión"})
+            portfolio = self._read_portfolio(uid)
+            if not portfolio:
+                return self._json(200, {"connected": False, "holdings": []})
+            dataset = self._read_dataset() or {}
+            observations = (dataset.get("cmf") or {}).get("observations", [])
+            issuers = (dataset.get("cmf") or {}).get("issuers", [])
+            by_rut = {item.get("rut"): item for item in issuers}
+            monitored = []
+            for holding in portfolio.get("holdings", []):
+                issuer = by_rut.get(holding.get("company_rut"))
+                history = [item for item in observations
+                           if issuer and item.get("rut") == issuer.get("rut")]
+                monitored.append({
+                    **holding,
+                    "company": issuer.get("company") if issuer else None,
+                    "latest_period": issuer.get("latest_available_period") if issuer else None,
+                    "analysis": issuer.get("analysis") if issuer else None,
+                    "reading": evaluate_observation(issuer, history) if issuer else None,
+                    "market_value": None, "unrealized_pnl": None,
+                    "price_gate": "waiting_for_authorized_market_data",
+                })
+            return self._json(200, {
+                "connected": True, "source": portfolio.get("source"),
+                "as_of": portfolio.get("as_of"), "holdings": monitored,
+                "orders": "prohibited", "recommendations": "research_only",
+            })
         if subpath == "videos":
             dataset = self._read_dataset()
             entries = ((dataset or {}).get("youtube") or {}).get("entries", [])
@@ -225,6 +288,17 @@ class AccionesChileModule(NexusModule):
         return None
 
     def api_post(self, subpath, body, headers, user=None):
+        if subpath == "save-portfolio":
+            uid = (user or {}).get("uid")
+            if uid is None:
+                return self._json(401, {"error": "necesitas iniciar sesión"})
+            try:
+                normalized = normalize_portfolio(body)
+            except ValueError as exc:
+                return self._json(400, {"error": str(exc)})
+            normalized["received_at_ms"] = int(time.time() * 1000)
+            self._write_portfolio(int(uid), normalized)
+            return self._json(200, {"ok": True, "positions": len(normalized["holdings"])})
         if subpath != "ingest-portfolio":
             return None
         if not self.config.get("portfolio_ingest_enabled", False):

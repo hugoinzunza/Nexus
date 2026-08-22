@@ -33,6 +33,8 @@ un benchmark simple?
 - Hora/día de publicación, retraso desde cierre trimestral y tipo de balance.
 - Cantidad de hechos esenciales conocidos en los 30 días previos.
 - Sector y tamaño, si provienen de una fuente trazable.
+- Flujo operativo, capex, flujo de caja libre, caja, inventarios, activos,
+  pasivos, patrimonio y cobertura corriente CMF.
 
 ## Features prohibidas en la primera cohorte
 
@@ -41,6 +43,15 @@ un benchmark simple?
 - Composición de la cartera personal: introduce sesgo de selección.
 - Precios, titulares, revisiones o documentos conocidos después de `available_at`.
 - Variables de módulos cripto.
+
+## Capa de decisión humana
+
+El score fundamental no se convierte directamente en comprar/vender. Primero
+debe existir precio y valorización autorizados, múltiplo apropiado al sector,
+margen de seguridad, costo de la posición y plan personal. Una alerta de venta
+requiere un gatillante crítico o acumulación de deterioros, no un trimestre malo.
+El sistema puede sugerir `mantener`, `observar` o `revisar posible reducción`,
+pero jamás enviar una orden.
 
 ## Gate mínimo
 

@@ -3,6 +3,7 @@ import ast
 import urllib.error
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,6 +29,8 @@ from modules.acciones_chile.market_data import parse_market_csv
 from modules.acciones_chile.universe import (
     UniverseIncompleteError, load_universe, resolve_ticker, snapshot_as_of, universe_status,
 )
+from modules.acciones_chile.strategy import build_radar, evaluate_observation
+from modules.acciones_chile import module as acciones_module
 
 
 def _payload(period="202603", revenue="1200", profit="120"):
@@ -47,6 +50,44 @@ def test_parse_cmf_and_fundamental_metrics():
     assert result["operating_margin"] == 0.1
     assert result["net_margin"] == 0.05
     assert result["is_prediction"] is False
+
+
+def test_fundamentals_include_balance_and_free_cash_flow():
+    extended = _payload() + (
+        "202603;76543210;EMPRESA CHILENA S.A.;I;CLP;Total de activos;5000;TAX CI;ESF\n"
+        "202603;76543210;EMPRESA CHILENA S.A.;I;CLP;Total de pasivos;2500;TAX CI;ESF\n"
+        "202603;76543210;EMPRESA CHILENA S.A.;I;CLP;Activos corrientes totales;1500;TAX CI;ESF\n"
+        "202603;76543210;EMPRESA CHILENA S.A.;I;CLP;Pasivos corrientes totales;1000;TAX CI;ESF\n"
+        "202603;76543210;EMPRESA CHILENA S.A.;I;CLP;Flujos de efectivo netos procedentes de (utilizados en) actividades de operación;300;TAX CI;EFE\n"
+        "202603;76543210;EMPRESA CHILENA S.A.;I;CLP;Compras de propiedades, planta y equipo;80;TAX CI;EFE\n"
+        "202603;76543210;EMPRESA CHILENA S.A.;I;CLP;Compras de activos intangibles;20;TAX CI;EFE\n"
+    )
+    result = analyze_company(parse_rows(extended))
+    assert result["free_cash_flow"] == "200"
+    assert result["liabilities_to_assets"] == 0.5
+    assert result["current_coverage"] == 1.5
+
+
+def test_strategy_rubric_is_explainable_and_never_emits_trade_order():
+    observation = {"period": "202603", "analysis": {
+        "revenue_growth_yoy": 0.12, "operating_margin": 0.15, "net_margin": 0.1,
+        "operating_cash_flow": "300", "free_cash_flow": "220",
+        "liabilities_to_assets": 0.5, "current_coverage": 1.8, "cash_conversion": 1.2,
+    }}
+    reading = evaluate_observation(observation)
+    assert reading["fundamental_view"] == "FUNDAMENTOS FUERTES"
+    assert reading["buy_sell_recommendation"] is None
+    assert reading["buy_sell_gate"] == "waiting_for_authorized_price_and_valuation"
+    assert reading["youtube_feature_allowed"] is False
+    assert len(reading["source_videos"]) == 4
+
+
+def test_radar_uses_one_comparable_period():
+    data = build_dataset(_payload().encode())
+    radar = build_radar(data)
+    assert radar["period"] == "202603"
+    assert radar["count"] == 1
+    assert radar["rows"][0]["company"] == "EMPRESA CHILENA S.A."
 
 
 def test_parser_fails_closed_on_schema_change():
@@ -71,6 +112,22 @@ def test_portfolio_rejects_negative_positions():
         normalize_portfolio({"holdings": [{
             "ticker": "TEST", "quantity": Decimal("-1"), "average_cost": "1",
         }]})
+
+
+def test_authenticated_user_can_save_own_read_only_portfolio(monkeypatch, tmp_path):
+    monkeypatch.setattr(acciones_module, "PORTFOLIO_PATH", str(tmp_path / "portfolio.json"))
+    context = SimpleNamespace(module_config={}, module_dir=str(tmp_path), log=lambda message: None)
+    instance = acciones_module.AccionesChileModule(context)
+    status, _, raw = instance.api_post("save-portfolio", {"holdings": [{
+        "ticker": "ENELCHILE", "company_rut": "76.536.353-5",
+        "quantity": "100", "average_cost": "52.5",
+    }]}, {}, user={"uid": 7})
+    assert status == 200
+    assert json.loads(raw)["positions"] == 1
+    saved = instance._read_portfolio(7)
+    assert saved["holdings"][0]["ticker"] == "ENELCHILE"
+    assert instance._read_portfolio(8) is None
+    assert instance.api_post("save-portfolio", {"holdings": []}, {}, user=None)[0] == 401
 
 
 def test_auditor_is_manual_and_advisory(monkeypatch):
@@ -148,7 +205,26 @@ def test_partial_latest_period_keeps_catalog_from_previous_quarter():
     snapshot = build_audit_snapshot(data)
     assert snapshot["cmf"]["issuer_count"] == 2
     assert snapshot["boundaries"]["orders"] == "prohibited"
+    assert snapshot["decision_layer"]["buy_sell_recommendation"] is None
+    assert snapshot["youtube"]["member_methodology"]["transcripts_persisted"] is False
     assert "holdings" not in json.dumps(snapshot)
+
+
+def test_partial_cmf_period_is_enforced_out_of_causal_features():
+    partial = _payload("202606", "1400", "140")
+    complete = _payload("202603", "1200", "120")
+    data = build_multi_period_dataset({"202606": partial.encode(), "202603": complete.encode()})
+    data["cmf"]["sources"][0]["partial"] = True
+    telegram = {"events": [
+        {"event_type": "financial_statement", "company": "EMPRESA CHILENA S.A.",
+         "period": "2T 2026", "balance_type": "Individual", "message_id": 1,
+         "available_at": "2026-08-01T12:00:00+00:00"},
+        {"event_type": "financial_statement", "company": "EMPRESA CHILENA S.A.",
+         "period": "1T 2026", "balance_type": "Individual", "message_id": 2,
+         "available_at": "2026-05-01T12:00:00+00:00"},
+    ]}
+    records = build_feature_records(data, telegram)
+    assert [record["period"] for record in records] == ["202603"]
 
 
 def test_telegram_parser_keeps_causal_message_time_and_ignores_chat():
@@ -316,7 +392,9 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
     ):
         assert f'id="{element_id}"' in page
     assert "s.cmf_banks" in page
-    assert "j.candidate_records" in page
+    assert "x.causal_feature_candidates" in page
+    assert "./api/save-portfolio" in page
+    assert "./api/radar" in page
 
 
 def test_versioned_universe_is_partial_and_blocks_survivorship_backtest():

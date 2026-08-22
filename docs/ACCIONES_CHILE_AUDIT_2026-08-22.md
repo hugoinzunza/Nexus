@@ -44,3 +44,26 @@
 
 El predictor y las señales permanecen deshabilitados hasta cerrar todos los
 bloqueos relevantes y realizar una nueva auditoría independiente.
+
+## Segunda revisión Opus — terminal fundamental
+
+Se ejecutó manualmente `claude-opus-4-8` sobre el snapshot `0.4.0`, sin cartera
+ni credenciales. El auditor volvió a confirmar `can_train=false`,
+`can_generate_signal=false` y `buy_sell_recommendation=null`. Sus observaciones
+se incorporaron así:
+
+- El período parcial `202606` se excluye por código de
+  `build_feature_records`; ya no es una advertencia que un consumidor pueda
+  ignorar. El radar selecciona el cierre completo comparable más reciente.
+- La metodología derivada de videos de miembros se declara interpretación
+  editorial, no evidencia financiera ni feature de entrenamiento. Se conservan
+  los IDs y roles de los cuatro videos, pero no transcripciones.
+- La historia mínima continúa en ocho trimestres y no se relaja para desbloquear
+  artificialmente el predictor.
+- El universo parcial sigue impidiendo backtesting histórico y las sociedades
+  del radar se presentan como emisores CMF, no como acciones transables
+  verificadas.
+
+Los bloqueos de precios/valoración, universo bursátil completo y CMF Bancos se
+mantienen. La nueva interfaz puede publicarse como terminal de investigación,
+pero no como recomendador operable.

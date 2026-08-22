@@ -79,9 +79,17 @@ def build_feature_records(dataset: dict, telegram: dict | None) -> list[dict]:
             event_index[key] = event
     records = []
     cmf = dataset.get("cmf") or {}
+    partial_periods = {
+        str(source.get("period")) for source in cmf.get("sources", [])
+        if source.get("partial")
+    }
     fundamentals = cmf.get("observations") or cmf.get("issuers", [])
     for issuer in fundamentals:
         period = issuer.get("period") or issuer.get("latest_available_period")
+        # Enforcement, no solo metadato: un cierre CMF incompleto nunca entra al
+        # conjunto candidato aunque Telegram ya haya anunciado su publicación.
+        if str(period) in partial_periods:
+            continue
         key = (normalize_company(issuer.get("company", "")), period, issuer.get("scope"))
         event = event_index.get(key)
         if not event:
