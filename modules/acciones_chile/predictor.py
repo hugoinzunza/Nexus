@@ -62,6 +62,77 @@ def telegram_period_to_cmf(label: str | None) -> str | None:
     return f"{match.group(2)}{int(match.group(1)) * 3:02d}"
 
 
+def _period_label(period: str | None) -> str | None:
+    if not period or len(period) != 6 or not period.isdigit():
+        return None
+    month = int(period[-2:])
+    if month not in {3, 6, 9, 12}:
+        return None
+    return f"{month // 3}T {period[:4]}"
+
+
+def portfolio_event_monitor(events: list[dict], companies: list[str]) -> dict:
+    """Resume eventos causales del feed para una cartera, sin predecir fechas."""
+    dated = []
+    for event in events:
+        try:
+            available = datetime.fromisoformat(str(event["available_at"]).replace("Z", "+00:00"))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if available.tzinfo is None:
+            available = available.replace(tzinfo=timezone.utc)
+        dated.append((available, event))
+    cutoff = max((available for available, _ in dated), default=None)
+    statements = [(available, event, telegram_period_to_cmf(event.get("period")))
+                  for available, event in dated
+                  if event.get("event_type") == "financial_statement"]
+    latest_market_period = max((period for _, _, period in statements if period), default=None)
+    results = {}
+    for company in companies:
+        key = normalize_company(company)
+        company_events = [(available, event) for available, event in dated
+                          if normalize_company(event.get("company", "")) == key]
+        company_statements = [(available, event, telegram_period_to_cmf(event.get("period")))
+                              for available, event in company_events
+                              if event.get("event_type") == "financial_statement"]
+        company_notices = [(available, event) for available, event in company_events
+                           if event.get("event_type") == "essential_notice"]
+        last_statement = max(company_statements, default=None, key=lambda item: item[0])
+        last_notice = max(company_notices, default=None, key=lambda item: item[0])
+        last_period = last_statement[2] if last_statement else None
+        if latest_market_period and last_period == latest_market_period:
+            statement_status = "latest_period_detected"
+        elif last_statement:
+            statement_status = "latest_period_not_detected_in_feed"
+        else:
+            statement_status = "no_statement_detected"
+        notices_30d = (sum(1 for available, _ in company_notices
+                           if cutoff and available >= cutoff - timedelta(days=30)))
+        results[key] = {
+            "statement_status": statement_status,
+            "latest_market_period": _period_label(latest_market_period),
+            "last_statement_period": last_statement[1].get("period") if last_statement else None,
+            "last_statement_available_at": last_statement[0].isoformat() if last_statement else None,
+            "last_notice_available_at": last_notice[0].isoformat() if last_notice else None,
+            "last_notice_subject": last_notice[1].get("subject") if last_notice else None,
+            "essential_notices_30d": notices_30d,
+            "source_role": "publication_availability_monitor",
+            "date_prediction": None,
+        }
+    current = sum(item["statement_status"] == "latest_period_detected" for item in results.values())
+    pending = sum(item["statement_status"] != "latest_period_detected" for item in results.values())
+    recent = sum(item["essential_notices_30d"] > 0 for item in results.values())
+    return {
+        "as_of": cutoff.isoformat() if cutoff else None,
+        "latest_market_period": _period_label(latest_market_period),
+        "positions_current": current,
+        "positions_pending_in_feed": pending,
+        "positions_with_recent_notice": recent,
+        "by_company": results,
+        "disclaimer": "ausencia en el feed no demuestra que el emisor no haya publicado",
+    }
+
+
 def build_feature_records(dataset: dict, telegram: dict | None) -> list[dict]:
     """Une CMF↔Telegram; solo devuelve fundamentales con disponibilidad demostrada."""
     events = (telegram or {}).get("events", [])

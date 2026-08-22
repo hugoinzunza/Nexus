@@ -10,6 +10,7 @@ from pathlib import Path
 SCHEMA_VERSION = "acciones-chile-universe-0.1.0"
 COMPLETE_COVERAGE = "complete_index_constituents"
 ALLOWED_COVERAGE = {COMPLETE_COVERAGE, "partial_top_weight_constituents"}
+AUTHORIZED_SOURCE_ACCESS = {"licensed_local_file", "authorized_export"}
 
 
 class UniverseIncompleteError(ValueError):
@@ -85,6 +86,17 @@ def validate_universe(data: dict) -> dict:
             raise ValueError("snapshot sin miembros")
         if snapshot.get("declared_member_count") != len(members):
             raise ValueError("declared_member_count no coincide")
+        if coverage == COMPLETE_COVERAGE:
+            verification = snapshot.get("verification") or {}
+            source_ref = verification.get("constituent_source_ref")
+            source = sources.get(source_ref) or {}
+            if source.get("access") not in AUTHORIZED_SOURCE_ACCESS:
+                raise ValueError("snapshot completo requiere fuente autorizada o licenciada")
+            if not re.fullmatch(r"[0-9a-f]{64}", str(source.get("sha256") or "")):
+                raise ValueError("snapshot completo requiere SHA-256 de la fuente")
+            _iso_date(verification.get("verified_as_of"), "verification verified_as_of")
+            if verification.get("constituent_count") != len(members):
+                raise ValueError("conteo verificado de componentes no coincide")
         tickers, ruts = set(), set()
         for member in members:
             ticker = str(member.get("ticker") or "")
@@ -101,6 +113,8 @@ def validate_universe(data: dict) -> dict:
             refs = member.get("source_refs") or []
             if not refs or any(ref not in sources for ref in refs):
                 raise ValueError(f"fuente inválida para {ticker}")
+            if coverage == COMPLETE_COVERAGE and source_ref not in refs:
+                raise ValueError(f"{ticker} no referencia la fuente completa autorizada")
     return data
 
 

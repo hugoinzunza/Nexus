@@ -112,3 +112,22 @@ Opus mantuvo como bloqueos externos la fuente de precios ajustados/benchmark,
 el universo IPSA completo con historia de membresía, la clave CMF Bancos y la
 historia mínima de ocho trimestres. Por diseño, ninguno se convirtió en una
 recomendación artificial.
+
+## Quinta revisión Opus — monitor causal de cartera
+
+Opus revisó el snapshot después de incorporar el monitor de publicaciones para
+la cartera. Confirmó como correcta la regla `date_prediction=null` y que una
+ausencia en Telegram no se interpreta como ausencia de publicación. El monitor
+usa el bot sólo para disponibilidad y hechos esenciales recientes; la cartera
+continúa excluida de features y del snapshot de auditoría.
+
+También se endureció la instalación del universo IPSA: declarar cobertura
+completa exige una fuente autorizada o licenciada, SHA-256, fecha, conteo de
+componentes y referencia de cada miembro. La lista completa continúa bloqueada
+hasta recibir esa exportación; los diez componentes públicos no se promueven a
+universo completo.
+
+El veredicto permanece `NO-GO` para entrenamiento y señales, como corresponde:
+faltan labels de precios ajustados, benchmark, historia suficiente, universo
+histórico completo y CMF Bancos. La terminal de investigación y sus alertas de
+publicación sí pueden operar en modo read-only.

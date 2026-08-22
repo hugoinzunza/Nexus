@@ -23,11 +23,12 @@ from modules.acciones_chile.dataset import (
 from modules.acciones_chile.telegram_events import parse_event
 from modules.acciones_chile.predictor import (
     build_feature_records, event_features, feature_join_report, normalize_company, readiness,
-    telegram_period_to_cmf,
+    portfolio_event_monitor, telegram_period_to_cmf,
 )
 from modules.acciones_chile.market_data import parse_market_csv
 from modules.acciones_chile.universe import (
     UniverseIncompleteError, load_universe, resolve_ticker, snapshot_as_of, universe_status,
+    validate_universe,
 )
 from modules.acciones_chile.strategy import build_radar, evaluate_observation, evaluate_valuation
 from modules.acciones_chile import module as acciones_module
@@ -352,6 +353,27 @@ def test_predictor_features_exclude_future_events():
     assert features["future_events_excluded"] is True
 
 
+def test_portfolio_event_monitor_marks_feed_gaps_without_predicting_dates():
+    events = [
+        {"message_id": 1, "event_type": "financial_statement", "company": "AGUAS ANDINAS S.A.",
+         "available_at": "2026-08-20T16:57:35+00:00", "period": "2T 2026"},
+        {"message_id": 2, "event_type": "financial_statement", "company": "EMPRESAS COPEC S.A.",
+         "available_at": "2026-05-08T01:54:49+00:00", "period": "1T 2026"},
+        {"message_id": 3, "event_type": "essential_notice", "company": "EMPRESAS COPEC S.A.",
+         "available_at": "2026-08-11T23:35:23+00:00", "subject": "Otros"},
+    ]
+    result = portfolio_event_monitor(events, ["AGUAS ANDINAS S.A.", "EMPRESAS COPEC S.A."])
+    assert result["latest_market_period"] == "2T 2026"
+    assert result["positions_current"] == 1
+    assert result["positions_pending_in_feed"] == 1
+    aguas = result["by_company"][normalize_company("AGUAS ANDINAS S.A.")]
+    copec = result["by_company"][normalize_company("EMPRESAS COPEC S.A.")]
+    assert aguas["statement_status"] == "latest_period_detected"
+    assert copec["statement_status"] == "latest_period_not_detected_in_feed"
+    assert copec["essential_notices_30d"] == 1
+    assert copec["date_prediction"] is None
+
+
 def test_predictor_readiness_fails_closed_without_history_and_prices():
     state = readiness({"events": [{
         "event_type": "financial_statement", "company": "ENEL CHILE S.A.",
@@ -488,6 +510,7 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
         "progress-cmf", "progress-telegram", "progress-join", "progress-banks",
         "progress-market", "progress-auditor", "bank-state", "bank-detail",
         "portfolio-asof", "kpi-decision", "kpi-decision-note",
+        "portfolio-events-summary",
     ):
         assert f'id="{element_id}"' in page
     assert "s.cmf_banks" in page
@@ -496,6 +519,7 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
     assert "./api/radar" in page
     assert "no es una cotización en vivo" in page
     assert "unidad EPS por validar" in page
+    assert "Ausencia en el feed no prueba" in page
 
 
 def test_versioned_universe_is_partial_and_blocks_survivorship_backtest():
@@ -514,6 +538,27 @@ def test_versioned_universe_is_partial_and_blocks_survivorship_backtest():
     sqm = resolve_ticker(universe, "sqm-b", "2026-08-22", require_complete=False)
     assert sqm["rut"] == "93007000"
     assert sqm["rut_dv"] == "9"
+
+
+def test_complete_universe_requires_hashed_authorized_constituent_source():
+    root = Path(__file__).resolve().parents[1]
+    data = json.loads((root / "config/acciones_chile_universe_v0.1.json").read_text())
+    snapshot = data["snapshots"][0]
+    snapshot["coverage"] = "complete_index_constituents"
+    data["sources"]["licensed_constituents"] = {
+        "url": "local-authorized-export.csv", "access": "licensed_local_file",
+        "sha256": "a" * 64, "retrieved_at": "2026-08-22T12:00:00-04:00",
+    }
+    snapshot["verification"] = {
+        "constituent_source_ref": "licensed_constituents",
+        "verified_as_of": "2026-08-22", "constituent_count": len(snapshot["members"]),
+    }
+    for member in snapshot["members"]:
+        member["source_refs"].append("licensed_constituents")
+    assert validate_universe(data)["snapshots"][0]["coverage"] == "complete_index_constituents"
+    data["sources"]["licensed_constituents"]["access"] = "public_unverified_copy"
+    with pytest.raises(ValueError, match="fuente autorizada o licenciada"):
+        validate_universe(data)
 
 
 def _market_manifest(license_status="owned_export"):

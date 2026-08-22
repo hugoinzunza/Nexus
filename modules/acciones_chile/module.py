@@ -15,7 +15,10 @@ from . import auditor
 from . import banks
 from . import dataset as dataset_store
 from .portfolio import normalize_portfolio
-from .predictor import build_feature_records, feature_join_report, readiness as predictor_readiness
+from .predictor import (
+    build_feature_records, feature_join_report, normalize_company, portfolio_event_monitor,
+    readiness as predictor_readiness,
+)
 from .strategy import build_radar, evaluate_observation, evaluate_valuation
 from .universe import load_universe, snapshot_as_of, universe_status
 
@@ -221,6 +224,14 @@ class AccionesChileModule(NexusModule):
             observations = (dataset.get("cmf") or {}).get("observations", [])
             issuers = (dataset.get("cmf") or {}).get("issuers", [])
             by_rut = {item.get("rut"): item for item in issuers}
+            telegram = self._read_telegram() or {}
+            portfolio_companies = [
+                by_rut[holding.get("company_rut")].get("company")
+                for holding in portfolio.get("holdings", [])
+                if holding.get("company_rut") in by_rut
+            ]
+            event_monitor = portfolio_event_monitor(
+                telegram.get("events", []), portfolio_companies)
             monitored = []
             total_initial = 0.0
             total_market = 0.0
@@ -250,6 +261,8 @@ class AccionesChileModule(NexusModule):
                     "analysis": issuer.get("analysis") if issuer else None,
                     "reading": evaluate_observation(issuer, history) if issuer else None,
                     "valuation": valuation,
+                    "events": (event_monitor.get("by_company") or {}).get(
+                        normalize_company(issuer.get("company", "")) if issuer else ""),
                     "price_gate": ("renta4_authenticated_snapshot"
                                    if market_value is not None
                                    else "waiting_for_authorized_market_data"),
@@ -271,7 +284,13 @@ class AccionesChileModule(NexusModule):
                     "return_pct": total_pnl / total_initial if total_pnl is not None and total_initial else None,
                     "available_cash": self._as_float(portfolio.get("available_cash")),
                     "decision_ready": bool(monitored) and fair_value_positions == len(monitored),
+                    "latest_market_period": event_monitor.get("latest_market_period"),
+                    "current_statement_positions": event_monitor.get("positions_current", 0),
+                    "pending_statement_positions": event_monitor.get("positions_pending_in_feed", 0),
+                    "recent_notice_positions": event_monitor.get("positions_with_recent_notice", 0),
                 },
+                "event_monitor_as_of": event_monitor.get("as_of"),
+                "event_monitor_disclaimer": event_monitor.get("disclaimer"),
                 "orders": "prohibited", "recommendations": "research_only",
             })
         if subpath == "videos":

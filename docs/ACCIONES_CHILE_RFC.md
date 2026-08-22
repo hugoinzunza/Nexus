@@ -98,6 +98,10 @@ una orden.
 - Para modelos, `available_at` es siempre la hora del mensaje Telegram. La hora
   declarada de emisión queda como metadata y nunca adelanta disponibilidad.
 - Endpoint read-only: `api/events?type=financial_statement`.
+- El monitor de cartera compara cada emisor por nombre CMF exacto con el último
+  período detectado en el feed. Informa brechas de detección y hechos esenciales
+  de 30 días, pero nunca predice una fecha ni interpreta ausencia como prueba de
+  que el emisor no publicó.
 
 ### Universo y precios de mercado
 
@@ -119,8 +123,10 @@ una orden.
 - Sólo se persiste el resumen/hash de la validación. El archivo licenciado no se
   copia al repositorio ni al cache de NexUX.
 - Un universo completo autorizado se valida e instala fuera de Git con
-  `scripts/install_acciones_chile_universe.py`; el módulo lo prefiere sobre el
-  snapshot público parcial y reporta `storage=local_licensed`.
+  `scripts/install_acciones_chile_universe.py --as-of YYYY-MM-DD`; el módulo lo
+  prefiere sobre el snapshot público parcial y reporta `storage=local_licensed`.
+  Un snapshot marcado como completo se rechaza si no referencia una exportación
+  autorizada/licenciada con SHA-256, fecha de verificación y conteo coincidente.
 - Los anuncios públicos registran cambios temporales desde marzo de 2024: sin
   cambios en 2024, incorporación de ILC en marzo de 2025 y sin cambios en marzo
   de 2026. Sin un baseline completo autorizado, estos deltas no bastan para

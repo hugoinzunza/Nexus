@@ -185,6 +185,9 @@ def build_audit_snapshot(data: dict) -> dict:
             "universe_history": "price label readiness requires survivorship_free_backtest_allowed",
             "youtube": "youtube_feature_allowed=false; rubric emits research reading only",
             "portfolio_privacy": "stored by authenticated uid; excluded from audit snapshots and model features",
+            "portfolio_events": (
+                "Telegram is used only to monitor publication availability and recent notices; "
+                "date_prediction=null and feed absence is not treated as proof of non-publication"),
             "module_isolation": "acciones_chile imports no crypto or order-executor modules",
             "negative_tests": [
                 "test_partial_cmf_period_is_enforced_out_of_causal_features",
@@ -192,6 +195,7 @@ def build_audit_snapshot(data: dict) -> dict:
                 "test_acciones_chile_has_no_crypto_or_executor_imports",
                 "test_authenticated_user_can_save_own_read_only_portfolio",
                 "test_portfolio_discards_credentials_and_rejects_untrusted_metadata",
+                "test_portfolio_event_monitor_marks_feed_gaps_without_predicting_dates",
             ],
         },
         "cmf": {
