@@ -1,11 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.9
+# Bot3.v13 — Observador operativo · DISEÑO rev.10
 
-**Estado: DISEÑO rev.9 — revisión mínima de §13, propuesta para auditoría
-ANTES de seguir implementando. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.10 — revisión registral de la transición terminal,
+propuesta para auditoría ANTES de seguir implementando. No desplegado. Cohorte
+no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.9 es una **revisión MÍNIMA y acotada a §13/§9.1.1**: la transición
-terminal. La arquitectura de rev.8 no se reabre; lo que se corrige es que la
+rev.10 es una **revisión REGISTRAL** de rev.9, acotada a la transición
+terminal: completa la precedencia de los cinco motivos, acota cuándo un
+terminal publicado domina un request residual, define la matriz de reanudación,
+versiona el schema y RECONCILIA las reglas de rev.8 que la ampliación dejó
+contradictorias. rev.9 fue una revisión mínima acotada a §13/§9.1.1: la
+transición terminal. La arquitectura de rev.8 no se reabre; lo que se corrige es que la
 implementación amplió el alcance de `terminal.request` a los cortes
 CIENTÍFICOS sin que el diseño lo dijera, y de esa discordancia salieron cuatro
 rondas de parches que abrían rutas nuevas. Ver §13.2.
@@ -605,7 +610,7 @@ Regla total:
 Una cohorte cuyo determinismo se rompió no se reporta, y ningún ciclo posterior
 la rehabilita.
 
-#### 9.1.1 La transición a bloqueo va serializada *(rev.6 — BLOCKER 4)*
+#### 9.1.1 La transición TERMINAL va serializada *(rev.10: toda causa)*
 
 La comparación fría corre fuera de `cycle_barrier` y el daemon sigue operando,
 así que sin arbitraje una implementación publicaría el marcador antes del ciclo
@@ -637,20 +642,23 @@ autorizó el bloqueo:
 | `estado_esperado` | los 14 heads, firma del libro y hash de los sidecars |
 | `checksum` | del propio request |
 
-Al arrancar, un `terminal.request` sin `blocked.json` significa que la caída
-ocurrió a mitad: se **valida fail-closed** (schema, identidad, checksum) y se
-reanuda la transición desde (2). Nunca se ingiere.
+Al arrancar, un `terminal.request` **sin terminal publicado** significa que la
+caída ocurrió a mitad: se **valida fail-closed** (schema, identidad, checksum)
+y se reanuda la transición desde (2) según la matriz de §13.5. Nunca se
+ingiere. *(rev.10: «sin `blocked.json`» era de cuando el request solo cubría
+integridad.)*
 
 **Precedencia**, congelada — no se resuelve por última escritura ni por orden de
 hilos:
 
 | situación | resolución |
 |---|---|
-| `blocked.json` presente | es terminal; el request se ignora y se archiva |
 | `completed.json` **y** `blocked.json` | **fallo cerrado**: la única contradicción que queda |
-| un terminal publicado **y** `terminal.request` | el terminal manda; el request se archiva *(rev.9)* |
-| dos motivos concurrentes | `determinism_divergence` **precede** a `silencio_h4` — la integridad manda sobre la liveness |
-| request ya existente | **no se sobrescribe**; el motivo nuevo se anexa a `motivos_adicionales` y el ganador se decide por la precedencia de arriba |
+| terminal publicado **y** request COINCIDENTE (§13.6) | el terminal manda; el request se archiva |
+| terminal publicado **y** request DISCREPANTE | **fallo cerrado** *(rev.10)* |
+| dos o más motivos en el request | gana el de mayor precedencia (§13.2) |
+| dos motivos CIENTÍFICOS a la vez | **fallo cerrado**: el motor corta una sola vez *(rev.10)* |
+| request ya existente | **no se sobrescribe**; el motivo nuevo se anexa y el ganador se recalcula por precedencia |
 
 **La anexión también es una escritura, y va atómica** *(rev.8)*: se lee el
 request, se valida su `checksum`, se agrega el motivo, se recalcula el
@@ -660,10 +668,12 @@ igual que la transición terminal (§9.1.1), así que no hay dos escritores. El
 `motivo` ganador **no cambia** por una anexión posterior: se decide por la
 precedencia de la tabla, no por orden de llegada.
 
-**La misma regla arbitra la carrera entre el resultado de la verificación y el
-corte del motor**: quien llega primero a `cycle_barrier` gana, y la zona de
-corte (§9.0) garantiza que el motor no puede cortar con una verificación que no
-sea `ok`.
+**La carrera entre la verificación y el corte del motor NO la decide quién
+llega primero a la barrera** *(rev.10: rev.8 decía lo contrario y quedó
+obsoleto al partir la transición en dos fases)*. Las dos causas se ANOTAN en el
+request y la publicación resuelve por precedencia; además la publicación
+reevalúa la verificación (§13.4), así que un `COMPLETED` no sale si entretanto
+pasó a `divergent` o `deferred`.
 
 ### 9.2 `verification_deferred` es sidecar, no evento *(rev.5 — MAJOR 2)*
 
@@ -787,14 +797,21 @@ nuevos. La deriva en RAM la controlan §8 y §9.
 Un health solo en RAM permitiría que launchd reiniciara el servicio y
 reconstruyera la cohorte como activa.
 
-Al cortar el motor (por `CORTE_N_CIERRES` o `T_CORTE`):
+Al cortar el motor (por `CORTE_N_CIERRES` o `T_CORTE`), el cierre pasa por las
+DOS FASES como cualquier otra causa terminal *(rev.10)*:
 
 ```
 1. cerrar motor y emitir los eventos terminales
-2. fsync de almacenes y libro
-3. escribir completed.json.tmp → fsync → os.replace → fsync del directorio
-4. exponer health COMPLETED y salir, sin reactivación
+2. ANOTAR la causa en terminal.request (§13.2) → cierre en curso (§13.3)
+3. fsync de almacenes y libro
+4. verificar el estado autorizado (§13.4) y la verificación (§13.5)
+5. escribir completed.json.tmp → fsync → os.replace → fsync del directorio
+6. borrar terminal.request
+7. exponer health COMPLETED y salir, sin reactivación
 ```
+
+Una caída entre (5) y (6) deja terminal y request a la vez: es recuperación
+normal si coinciden (§13.6), no una contradicción.
 
 `completed.json` contiene identidad de cohorte, contrato, commit, motivo del
 corte, última barrera, los 14 heads y la firma del libro.
@@ -854,6 +871,25 @@ Se amplía el alcance, y con él las reglas que dependían de él:
   el request se archiva. La contradicción fatal queda reservada a la única
   que sigue siéndolo: `completed.json` **y** `blocked.json` a la vez.
 
+### 13.2.1 Precedencia COMPLETA de los cinco motivos *(rev.10)*
+
+rev.9 introdujo cinco motivos pero la tabla de §9.1.1 solo ordenaba dos. Orden
+total, congelado:
+
+```
+determinism_divergence  >  silencio_h4  >  { muestra, tiempo, administrativo }
+```
+
+- **la integridad precede a lo científico**, siempre. Un cierre evaluable no
+  puede publicarse si en el mismo turno hay una causa que dice que la
+  evidencia no es confiable: reportar la muestra sería reportar un resultado
+  cuya trazabilidad está en duda;
+- **entre los motivos científicos NO hay orden, porque no pueden coexistir**.
+  El motor corta UNA vez: `_fase8` da `muestra`, el corte por tiempo da
+  `tiempo` y `cerrar_administrativo` da `administrativo`, y los tres apagan
+  `cortado`. Dos motivos científicos en un mismo request significan que algo
+  ya está mal, así que **falla cerrado** en vez de elegir uno.
+
 ### 13.3 Un request PENDIENTE prohíbe abrir ciclos *(rev.9)*
 
 Anotar una causa cierra la cohorte tanto como publicarla: entre el último
@@ -870,7 +906,51 @@ rev.8 lo verificaba solo al reanudar. Refrescarlo en cada registro no cubre una
 mutación posterior al último. La publicación compara `estado_esperado` contra
 el estado actual y falla cerrado si difieren, igual que la reanudación.
 
-### 13.5 La verificación gobierna también en la reanudación *(rev.9)*
+### 13.5 Matriz de reanudación *(rev.10)*
+
+«Recargar y aplicar» admitía implementaciones distintas. Para un request cuyo
+ganador es CIENTÍFICO, al reanudar se recarga `verificacion.json` desde disco
+—el objeto en memoria se perdió con la caída— y se aplica esta matriz:
+
+| estado del sidecar | qué se hace |
+|---|---|
+| `ok` y posterior a toda deferencia | se publica `COMPLETED` |
+| `pending` o `deferred` | se MANTIENE el cierre en curso: ni ciclos ni publicación. Se espera a que la verificación resuelva |
+| `divergent` | se ANEXA `determinism_divergence` con su evidencia al request y se publica `BLOCKED_INTEGRITY` |
+| ausente, corrupto o de otra identidad | **fallo cerrado** |
+
+Para un ganador de INTEGRIDAD la verificación no habilita ni bloquea nada: el
+terminal se publica igual, porque `BLOCKED_INTEGRITY` no ejecuta cierre
+científico (§13.1).
+
+### 13.6 Cuándo un terminal publicado domina un request residual *(rev.10)*
+
+«El terminal manda» sin condiciones permitía que un `COMPLETED` sobreviviera a
+un request residual cuyo ganador es `determinism_divergence` — es decir,
+conservar como evaluable una cohorte que ya tenía una causa de integridad
+anotada.
+
+El request se archiva como recuperación NORMAL solo si coincide en las cuatro:
+
+1. identidad (`cohorte`, `contrato`, `commit`);
+2. motivo ganador **y** familia terminal;
+3. evidencia del ganador;
+4. `estado_esperado`: heads y firma autorizados.
+
+Cualquier discrepancia es **fallo cerrado**. En particular, `completed.json`
+con un request de INTEGRIDAD nunca es normal.
+
+### 13.7 El schema del request se versiona *(rev.10)*
+
+El request pasó de dos motivos y una evidencia a cinco motivos, `evidencias`
+por motivo, ganador derivado y coexistencia normal con un terminal publicado.
+Eso es otro formato: `SCHEMA_TERMINAL` sube a **2**.
+
+Como nunca se desplegó, **no hay migración**: cualquier `schema_version`
+anterior se rechaza con fallo cerrado. Migrar un formato que nunca existió en
+producción solo agregaría una ruta sin probar.
+
+### 13.8 La verificación gobierna también en la reanudación *(rev.9)*
 
 `COMPLETED` exige verificación `ok` y posterior a toda deferencia. Esa
 comprobación tiene que hacerse en la reanudación igual que en la publicación
@@ -903,8 +983,12 @@ memoria que la caída perdió— y la aplica.
 | Silencio H4 > `SILENCIO_MAX_H4` | `BLOCKED_INTEGRITY(silencio_h4)`, no evaluable (§6.5) |
 | Verificación `pending` fuera de la zona de corte | se procesa normal; **no** se publica `COMPLETED` (§9.1) |
 | Verificación no-`ok` **en** la zona de corte | no se procesa ningún lote (§9.0) |
-| `terminal.request` sin `blocked.json` al arrancar | se valida y se reanuda la transición, no se ingiere (§9.1.1) |
-| `completed.json` **y** `terminal.request` a la vez | fallo cerrado (§9.1.1) |
+| `terminal.request` sin terminal publicado | se valida y se reanuda según la matriz (§13.5), no se ingiere |
+| terminal publicado **y** request COINCIDENTE | recuperación normal: se archiva el request (§13.6) |
+| terminal publicado **y** request DISCREPANTE | fallo cerrado (§13.6) |
+| motivo fuera del registro cerrado | fallo cerrado (§13.2) |
+| dos motivos científicos a la vez | fallo cerrado (§13.2) |
+| `SCHEMA_TERMINAL` anterior a la versión vigente | fallo cerrado, sin migración (§13.7) |
 | `silencio.json` con `doc_sha256`, cadena, monotonicidad o acumulado inconsistentes | fallo cerrado (§6.5.1) |
 | Divergencia de determinismo | `BLOCKED_INTEGRITY(determinism_divergence)` (§9.1) |
 | `completed.json` o `blocked.json` presente | no se reactiva (§13) |
@@ -914,7 +998,8 @@ memoria que la caída perdió— y la aplica.
 `CADENCIA`, `MARGEN_CIERRE`, `RESOLAPE`, `LIMITE_PAGINA`, `LAG_MAX` (por TF),
 `DERIVA_MAX`, `SILENCIO_MAX_H4`, `TOPE_INTERVALO`, `BACKOFF_BASE`, `BACKOFF_MAX`, `BACKOFF_INTENTOS`,
 `TF_OBSERVADAS`, `UNIVERSO`, `ENDPOINT_KLINES`, `ENDPOINT_TIME`,
-`CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`, y las
+`CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`,
+`PRECEDENCIA_TERMINAL`, y las
 rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
 (`silencio.json`, `verificacion.json`) y `terminal.request`.
@@ -1025,8 +1110,10 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     se deriva de `observaciones`;
 40. **`terminal.request`**: caída después de cada byte y de cada rename;
     request alterado; request duplicado; dos motivos concurrentes
-    (`determinism_divergence` gana); carrera request-vs-`completed.json`
-    (fallo cerrado);
+    (`determinism_divergence` gana); caída entre publicar el terminal y borrar
+    el request → recuperación NORMAL si coinciden y fallo cerrado si discrepan
+    *(rev.10: antes este gate exigía fallo cerrado para toda carrera
+    request-vs-`completed.json`, y eso ya no es cierto)*;
 41. **cota de la zona de corte demostrada** contra el orden completo de fases
     del motor —`fill+STOP` en el mismo lote incluido— sobre los siete mercados:
     ningún lote produce más cierres que mercados con posición u orden viva.
