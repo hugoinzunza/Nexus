@@ -82,6 +82,19 @@ def verif(tmp_path, nombre="v.json"):
     return E.Verificacion(str(tmp_path / nombre))
 
 
+def cerrar_y_publicar(d, motor, m15, h4, libro, v, ahora, barrera=None):
+    """Lo que hace el ciclo: anota la causa del corte y publica una vez."""
+    barrera = barrera or D.BarreraCiclo()
+    causa = D.cerrar_si_corresponde(barrera, d, IDENT, motor, m15, h4, libro,
+                                    v, ahora)
+    if causa is None or causa["estado"] == "espera":
+        return causa
+    D.registrar_causa(barrera, d, causa["motivo"], IDENT, causa["evidencia"],
+                      ahora, m15, h4, libro)
+    return D.publicar_pendiente(barrera, d, ahora, motor, m15, h4, libro,
+                                C.COMPLETADO)
+
+
 # ==================== 1. ningún ciclo ingiere sin reloj ====================
 def test_ningun_ciclo_ingiere_sin_reloj(tmp_path):
     motor, m15, h4, libro = mundo(tmp_path)
@@ -526,6 +539,31 @@ def test_el_estado_esperado_incluye_los_sidecars(tmp_path):
     assert D.estado_esperado(d, m15, h4, libro) != antes
 
 
+def test_dos_causas_del_MISMO_ciclo_las_resuelve_la_precedencia(tmp_path):
+    """La ruta REAL: el ciclo ANOTA las causas y publica una sola vez al
+    final. Con una sola fase, dos causas quedaban serializadas por la barrera
+    y la primera publicaba de inmediato — en operación ganaba siempre quien
+    publicaba primero, no la precedencia."""
+    for orden in (( C.MOTIVO_SILENCIO, C.MOTIVO_DIVERGENCIA),
+                  (C.MOTIVO_DIVERGENCIA, C.MOTIVO_SILENCIO)):
+        sub = tmp_path / f"ciclo_{orden[0]}"
+        sub.mkdir()
+        motor, m15, h4, libro = mundo(sub, n15=30)
+        d = str(sub / "estado")
+        os.makedirs(d)
+        barrera = D.BarreraCiclo()
+        for motivo in orden:                        # anotadas, sin publicar
+            D.registrar_causa(barrera, d, motivo, IDENT,
+                              {"de": motivo}, T0, m15, h4, libro)
+        assert not os.path.exists(os.path.join(d, C.ARCHIVO_BLOQUEADO))
+        hecho = D.publicar_pendiente(barrera, d, T0, motor, m15, h4, libro)
+        assert hecho["cuerpo"]["motivo"] == C.MOTIVO_DIVERGENCIA, orden
+        # y la EVIDENCIA es la del ganador, no la de la otra causa
+        assert hecho["cuerpo"]["evidencia"] == {"de": C.MOTIVO_DIVERGENCIA}
+        assert C.MOTIVO_SILENCIO in hecho["cuerpo"]["motivos_adicionales"]
+        assert barrera.terminal == C.MOTIVO_DIVERGENCIA
+
+
 def test_la_precedencia_se_resuelve_en_el_REQUEST_no_al_publicar(tmp_path):
     """Con dos motivos acumulados en un request PENDIENTE, gana la
     divergencia en los dos órdenes: la precedencia se resuelve mientras el
@@ -607,8 +645,7 @@ def test_el_corte_del_motor_publica_COMPLETED(tmp_path):
     v.conforme(1, "d", "f")
     motor.cortado = True
     motor.motivo_corte = "n_cierres"
-    hecho = D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
-                                    libro, v, T0)
+    hecho = cerrar_y_publicar(d, motor, m15, h4, libro, v, T0)
     assert hecho["estado"] == C.COMPLETADO
     cuerpo = json.load(open(os.path.join(d, C.ARCHIVO_COMPLETADO),
                             encoding="utf-8"))
@@ -624,13 +661,12 @@ def test_COMPLETED_no_se_publica_sin_verificacion_ok(tmp_path):
     v = verif(tmp_path)
     v.diferir(1, {"BTCUSDT_15m": 1})
     motor.cortado = True
-    hecho = D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
-                                    libro, v, T0)
+    hecho = cerrar_y_publicar(d, motor, m15, h4, libro, v, T0)
     assert hecho["estado"] == "espera"
     assert not os.path.exists(os.path.join(d, C.ARCHIVO_COMPLETADO))
     v.conforme(2, "d", "f")
-    assert D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
-                                   libro, v, T0)["estado"] == C.COMPLETADO
+    assert cerrar_y_publicar(d, motor, m15, h4, libro, v,
+                             T0)["estado"] == C.COMPLETADO
 
 
 def test_el_cierre_administrativo_se_intenta_en_cada_ciclo(tmp_path):
@@ -705,8 +741,7 @@ def test_el_corte_administrativo_NO_se_ejecuta_sin_verificacion_ok(tmp_path):
 
     # con `ok`, el corte administrativo REAL sí ocurre y publica COMPLETED
     v.conforme(2, "d", "f")
-    hecho = D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
-                                    libro, v, pasado)
+    hecho = cerrar_y_publicar(d, motor, m15, h4, libro, v, pasado)
     assert motor.cortado is True
     assert hecho["estado"] == C.COMPLETADO
     corte = [e for e in libro.eventos if e["tipo"] == "corte_administrativo"]
@@ -826,55 +861,90 @@ def test_caida_entre_el_fsync_del_almacen_y_el_append_al_libro(tmp_path):
     assert huecos and huecos[0]["motivo"] == "local"
 
 
-def test_el_corte_por_50_cierres_llega_a_COMPLETED_y_no_emite_51(tmp_path):
-    """Camino real `cierre 50 → _fase8 → motor.cortado → COMPLETED`.
+def test_el_cierre_50_lo_produce_el_motor_y_dispara_el_corte(tmp_path):
+    """Camino real `49 → cierre 50 por la ruta del motor → _fase8 → COMPLETED`.
 
-    El PREFIJO de cierres se prepara canónicamente —sintetizar 50 trades
-    reales con datos planos no es viable—, pero el CORTE lo produce `_fase8`
-    del motor por su ruta propia: `procesar_lote` lo llama al final de cada
-    lote y `_cerrar("muestra", T)` emite los eventos terminales de verdad."""
-    import datetime
+    El PREFIJO de 49 cierres se prepara canónicamente —sintetizar 49 trades
+    completos con datos planos no es viable—, pero el cierre 50 lo produce el
+    motor: se le deja una POSICIÓN viva cuyo objetivo toca la vela siguiente,
+    y Fase 1a la cierra por `evaluar_salida` → `_cerrar_posicion` →
+    `cierres.append` → `_fase8` → `_cerrar("muestra", T)`.
+    """
+    from modules.bot3.v9.contract import CORTE_MIN_SEMANAS_ISO
     motor, m15, h4, libro = mundo(tmp_path, n15=210)
     d = str(tmp_path / "estado")
     os.makedirs(d)
     v = verif(tmp_path)
     v.conforme(1, "d", "f")
 
-    # prefijo canónico: 50 cierres repartidos en semanas ISO suficientes
+    # 49 cierres repartidos en semanas ISO suficientes: uno MENOS que el corte
     semana = 7 * 24 * 3600 * 1000
-    motor.cierres = [{"t": T0 - (50 - i) * semana // 2, "mercado": "BTCUSDT",
-                      "r": 0.1, "trade_id": f"t{i}"} for i in range(50)]
-    semanas = {motor._semana_iso(c["t"]) for c in motor.cierres}
-    from modules.bot3.v9.contract import CORTE_MIN_SEMANAS_ISO
-    assert len(semanas) >= CORTE_MIN_SEMANAS_ISO   # el corte es alcanzable
-    assert len(motor.cierres) == CORTE_N_CIERRES
+    motor.cierres = [{"t": T0 - (49 - i) * semana // 2, "mercado": "BTCUSDT",
+                      "r": 0.1, "trade_id": f"t{i}"} for i in range(49)]
+    assert len(motor.cierres) == CORTE_N_CIERRES - 1
+    assert len({motor._semana_iso(c["t"]) for c in motor.cierres}) >= \
+        CORTE_MIN_SEMANAS_ISO
 
+    # Primero se procesa la historia, para que la ÉPOCA quede habilitada:
+    # Fase 1a solo corre dentro de una época vigente (≥200 velas).
     ahora = ahora_de(m15, h4)
-    parte = D.ciclo(fetch_reloj(ahora), D.BarreraCiclo(), motor, m15, h4,
-                    libro, v, lambda: ahora, estado_dir=d, identidad=IDENT)
-    # `_fase8` cortó en el PRIMER lote procesado, por su ruta real
-    assert motor.cortado is True
-    assert motor.motivo_corte == "muestra"
-    assert len(parte["procesados"]) == 1
+    D.ciclo(fetch_reloj(ahora), D.BarreraCiclo(), motor, m15, h4, libro, v,
+            lambda: ahora, estado_dir=d, identidad=IDENT)
+    assert motor.cortado is False
+
+    # posición viva cuyo OBJETIVO toca la vela NUEVA que llega ahora
+    t_nueva = m15["BTCUSDT"].ultimo_t + DUR
+    nueva = vela(t_nueva, 100 + 210 * 0.1)
+    objetivo = nueva["h"] - 0.2                    # dentro del rango
+    st = motor.estados["BTCUSDT"]
+    st.posicion = {"order_id": "o-50", "candidate_id": "c-50",
+                   "E": nueva["o"], "S": nueva["l"] - 10, "T": objetivo,
+                   "largo": True, "dir": "long",
+                   "deadline_close": t_nueva + 100 * DUR,
+                   "P_in": nueva["o"], "trade_id": "trade-50",
+                   "close_fill": m15["BTCUSDT"].ultimo_t,
+                   "ultimo_cierre_sellado": m15["BTCUSDT"].ultimo_t}
+    st.estado = "posicion"
+
+    paginas = {(m, "15m"): [[nueva["t"], repr(nueva["o"]), repr(nueva["h"]),
+                             repr(nueva["l"]), repr(nueva["c"]),
+                             repr(nueva["v"]), nueva["t"] + DUR - 1,
+                             "0", 0, "0", "0", "0"]] for m in MERCADOS}
+    ahora2 = t_nueva + DUR + C.MARGEN_CIERRE_MS
+    parte = D.ciclo(fetch_reloj(ahora2, paginas), D.BarreraCiclo(), motor, m15,
+                    h4, libro, v, lambda: ahora2, estado_dir=d,
+                    identidad=IDENT)
+
+    # el cierre 50 lo emitió el MOTOR, y ese cierre disparó el corte
+    cerrados = [e for e in libro.eventos if e["tipo"] == "cerrado"]
+    assert len(cerrados) == 1 and cerrados[0]["id"] == "trade-50"
+    assert len(motor.cierres) == CORTE_N_CIERRES
+    assert motor.cortado is True and motor.motivo_corte == "muestra"
     assert parte["terminal"]["estado"] == C.COMPLETADO
     cuerpo = json.load(open(os.path.join(d, C.ARCHIVO_COMPLETADO),
                             encoding="utf-8"))
     assert cuerpo["motivo"] == "muestra"
 
-    # no hay eventos 51+: ningún lote posterior se procesa
+    # no hay eventos 51+
     n = len(libro.eventos)
-    barrera = D.BarreraCiclo()
-    barrera.cerrar_para_siempre("muestra")
-    otro = D.ciclo(fetch_reloj(ahora), barrera, motor, m15, h4, libro, v,
-                   lambda: ahora, estado_dir=d, identidad=IDENT)
-    assert otro["ingirio"] is False
+    otro = D.ciclo(fetch_reloj(ahora2), D.BarreraCiclo(), motor, m15, h4, libro,
+                   v, lambda: ahora2, estado_dir=d, identidad=IDENT)
+    assert otro["procesados"] == []
     assert len(libro.eventos) == n
     assert len(motor.cierres) == CORTE_N_CIERRES
 
-    # y un REINICIO encuentra el terminal y no ingiere
+    # REINICIO con objetos NUEVOS, rehidratados desde disco
+    m15r = {m: S.Almacen.cargar(m, "15m", a.ruta, requerido=True)
+            for m, a in m15.items()}
+    h4r = {m: S.Almacen.cargar(m, "4h", a.ruta, requerido=True)
+           for m, a in h4.items()}
+    libror = Ledger(libro.ruta, commit="ensayo")
+    mr = Motor(m15r, h4r, MERCADOS, libror, bootstrap_hasta=1)
     fresca = D.BarreraCiclo()
-    leido = D.reanudar(fresca, d, IDENT, motor, m15, h4, libro, ahora)
+    leido = D.reanudar(fresca, d, IDENT, mr, m15r, h4r, libror, ahora2)
     assert leido["estado"] == C.COMPLETADO
     assert fresca.terminal
-    assert D.ciclo(fetch_reloj(ahora), fresca, motor, m15, h4, libro, v,
-                   lambda: ahora)["ingirio"] is False
+    antes = len(libror.eventos)
+    assert D.ciclo(fetch_reloj(ahora2), fresca, mr, m15r, h4r, libror,
+                   v, lambda: ahora2)["ingirio"] is False
+    assert len(libror.eventos) == antes

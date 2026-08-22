@@ -299,64 +299,6 @@ def verificar_en_frio(captura: dict, verificacion, ahora: int,
 # --------------------------------------------------------------------------
 # §9.1.1 — transición terminal serializada
 # --------------------------------------------------------------------------
-def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
-                        identidad: dict, evidencia: dict, ahora: int,
-                        motor, m15: dict, h4: dict, libro,
-                        estado_final: str = C.BLOQUEADO) -> dict:
-    """`terminal.request` → barrera → PROHIBIR ciclos → fsync → heads y firma
-    → publicar → salir.
-
-    `BLOCKED_INTEGRITY` **no ejecuta el cierre científico**: no llama al corte
-    del motor, no emite `abierta_al_corte` ni `orden_al_corte` y no toca el
-    libro. Solo hace durable lo que ya existe."""
-    ruta_req = os.path.join(estado_dir, C.ARCHIVO_SOLICITUD_TERMINAL)
-    with barrera:
-        # Un terminal PUBLICADO es INMUTABLE (§9.1.1). La precedencia se
-        # resuelve MIENTRAS existe `terminal.request`, antes de publicar: es
-        # `solicitar_terminal` quien acumula motivos y elige el ganador.
-        #
-        # Permitir reemplazo era peor que un orden equivocado: con un
-        # `COMPLETED` por `n_cierres` —motivo que no está en la tabla de
-        # precedencia— una divergencia posterior publicaba `blocked.json` SIN
-        # borrar `completed.json`, y el arranque siguiente encontraba los dos
-        # y fallaba cerrado. Un terminal corrupto en vez de uno discutible.
-        ya = E.leer_terminal(estado_dir)
-        if ya is not None and ya["estado"] in (C.COMPLETADO, C.BLOQUEADO):
-            previo = ya["cuerpo"].get("motivo", "terminal")
-            barrera.cerrar_para_siempre(previo)
-            if os.path.exists(ruta_req):
-                os.replace(ruta_req, ruta_req + ".archivado")
-            return {"estado": ya["estado"], "ruta": None,
-                    "cuerpo": ya["cuerpo"], "ya_existia": True}
-        # La solicitud se escribe DENTRO de la barrera: si no, dos anexiones
-        # concurrentes no estarían serializadas y un ciclo en espera podría
-        # colarse entre la solicitud y la publicación.
-        barrera.cerrar_para_siempre(motivo)
-        # El request acumula motivos y su `motivo` es ya el GANADOR por
-        # precedencia: se publica ese, no el que trajo esta llamada.
-        req = E.solicitar_terminal(ruta_req, motivo, identidad, evidencia,
-                                   ahora,
-                                   estado_esperado(estado_dir, m15, h4, libro))
-        motivo = req["motivo"]
-        for mapa in (m15, h4):
-            for alm in mapa.values():
-                alm.sincronizar()
-        libro.sincronizar()
-        cuerpo = {
-            "cohorte": identidad.get("cohorte"),
-            "contrato": identidad.get("contrato"),
-            "commit": identidad.get("commit"),
-            "motivo": motivo,
-            "evidencia": evidencia,
-            "cerrado_en": int(ahora),
-            "heads": E.estado_almacenes(m15, h4),
-            "firma": libro.firma(),
-        }
-        ruta = E.publicar_terminal(estado_dir, estado_final, cuerpo)
-        os.remove(ruta_req)
-    return {"estado": estado_final, "ruta": ruta, "cuerpo": cuerpo}
-
-
 def estado_esperado(estado_dir: str, m15: dict, h4: dict, libro) -> dict:
     """Lo que el request AUTORIZA a publicar: heads, firma del libro y hash de
     cada sidecar. Sin esto, una caída podía publicar el terminal sobre un
@@ -369,6 +311,88 @@ def estado_esperado(estado_dir: str, m15: dict, h4: dict, libro) -> dict:
                 sidecars[nombre] = E.sha(fh.read().decode("utf-8"))
     return {"heads": E.estado_almacenes(m15, h4), "firma": libro.firma(),
             "sidecars": sidecars}
+
+
+def registrar_causa(barrera: BarreraCiclo, estado_dir: str, motivo: str,
+                    identidad: dict, evidencia: dict, ahora: int,
+                    m15: dict, h4: dict, libro) -> dict | None:
+    """Fase 1: ANOTA la causa en `terminal.request`, sin publicar.
+
+    Separar anotar de publicar es lo que hace real la precedencia. Con una
+    sola fase, dos causas de la misma corrida quedaban serializadas por la
+    barrera y la primera publicaba de inmediato: la segunda encontraba un
+    terminal inmutable y en operación siempre ganaba quien publicaba primero.
+    Anotando primero, las causas de un mismo ciclo conviven en el request y el
+    ganador se decide por la tabla, no por el reloj."""
+    with barrera:
+        ya = E.leer_terminal(estado_dir)
+        if ya is not None and ya["estado"] in (C.COMPLETADO, C.BLOQUEADO):
+            barrera.cerrar_para_siempre(ya["cuerpo"].get("motivo", "terminal"))
+            return None                             # publicado = inmutable
+        return E.solicitar_terminal(
+            os.path.join(estado_dir, C.ARCHIVO_SOLICITUD_TERMINAL), motivo,
+            identidad, evidencia, ahora,
+            estado_esperado(estado_dir, m15, h4, libro))
+
+
+def publicar_pendiente(barrera: BarreraCiclo, estado_dir: str, ahora: int,
+                       motor, m15: dict, h4: dict, libro,
+                       estado_final: str = C.BLOQUEADO) -> dict | None:
+    """Fase 2: publica el GANADOR del request, con SU evidencia.
+
+    `BLOCKED_INTEGRITY` no ejecuta el cierre científico: no llama al corte del
+    motor, no emite `abierta_al_corte` ni `orden_al_corte` y no toca el libro.
+    Solo hace durable lo que ya existe."""
+    ruta_req = os.path.join(estado_dir, C.ARCHIVO_SOLICITUD_TERMINAL)
+    with barrera:
+        ya = E.leer_terminal(estado_dir)
+        if ya is not None and ya["estado"] in (C.COMPLETADO, C.BLOQUEADO):
+            barrera.cerrar_para_siempre(ya["cuerpo"].get("motivo", "terminal"))
+            if os.path.exists(ruta_req):
+                os.replace(ruta_req, ruta_req + ".archivado")
+            return {"estado": ya["estado"], "ruta": None,
+                    "cuerpo": ya["cuerpo"], "ya_existia": True}
+        req = E.leer_solicitud(ruta_req)
+        if req is None:
+            return None
+        # La barrera se cierra con el motivo GANADOR, no con el entrante: si
+        # no, `barrera.terminal` y el terminal publicado podían discrepar.
+        barrera.cerrar_para_siempre(req["motivo"])
+        for mapa in (m15, h4):
+            for alm in mapa.values():
+                alm.sincronizar()
+        libro.sincronizar()
+        cuerpo = {
+            "cohorte": req.get("cohorte"),
+            "contrato": req.get("contrato"),
+            "commit": req.get("commit"),
+            "motivo": req["motivo"],
+            "motivos_adicionales": req.get("motivos_adicionales", []),
+            "evidencia": req["evidencia"],          # la del GANADOR
+            "evidencias": req.get("evidencias", {}),
+            "cerrado_en": int(ahora),
+            "heads": E.estado_almacenes(m15, h4),
+            "firma": libro.firma(),
+        }
+        ruta = E.publicar_terminal(estado_dir, estado_final, cuerpo)
+        os.remove(ruta_req)
+    return {"estado": estado_final, "ruta": ruta, "cuerpo": cuerpo}
+
+
+def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
+                        identidad: dict, evidencia: dict, ahora: int,
+                        motor, m15: dict, h4: dict, libro,
+                        estado_final: str = C.BLOQUEADO) -> dict:
+    """Anota la causa y publica. Para un solo causante."""
+    registrar_causa(barrera, estado_dir, motivo, identidad, evidencia, ahora,
+                    m15, h4, libro)
+    hecho = publicar_pendiente(barrera, estado_dir, ahora, motor, m15, h4,
+                               libro, estado_final)
+    if hecho is None:                               # ya había terminal
+        ya = E.leer_terminal(estado_dir)
+        return {"estado": ya["estado"], "ruta": None, "cuerpo": ya["cuerpo"],
+                "ya_existia": True}
+    return hecho
 
 
 def reanudar(barrera: BarreraCiclo, estado_dir: str, identidad: dict,
@@ -459,11 +483,11 @@ def cerrar_si_corresponde(barrera: BarreraCiclo, estado_dir: str,
         motor.finalizar_ciclo()
     if not motor.cortado:
         return None
-    return transicion_terminal(
-        barrera, estado_dir, getattr(motor, "motivo_corte", "corte"),
-        identidad, {"cierres": len(motor.cierres),
-                    "lotes_finalizados": len(motor.lotes_finalizados)},
-        ahora, motor, m15, h4, libro, estado_final=C.COMPLETADO)
+    # Devuelve la CAUSA; publicar es del ciclo, que junta todas las del turno.
+    return {"estado": "causa",
+            "motivo": getattr(motor, "motivo_corte", "corte"),
+            "evidencia": {"cierres": len(motor.cierres),
+                          "lotes_finalizados": len(motor.lotes_finalizados)}}
 
 
 def verificar_y_reaccionar(barrera: BarreraCiclo, captura: dict,
@@ -536,16 +560,30 @@ def ciclo(fetch, barrera: BarreraCiclo, motor, m15: dict, h4: dict, libro,
             # observaciones y las 72 h nunca producirían un terminal.
             silencio.guardar(os.path.join(estado_dir, C.ARCHIVO_SILENCIO))
     if estado_dir and identidad is not None:
+        # Se ANOTAN todas las causas del ciclo y recién después se publica UNA
+        # vez: así dos causas de la misma corrida conviven en el request y el
+        # ganador lo decide la precedencia, no cuál se detectó primero.
+        causas = []
         if silencio is not None:
             ganadora = silencio.ganadora()
             if ganadora is not None:
-                parte["terminal"] = transicion_terminal(
-                    barrera, estado_dir, C.MOTIVO_SILENCIO, identidad,
-                    ganadora, local, motor, m15, h4, libro)
-        if "terminal" not in parte:
-            cierre = cerrar_si_corresponde(
-                barrera, estado_dir, identidad, motor, m15, h4, libro,
-                verificacion, local)
-            if cierre is not None:
-                parte["terminal"] = cierre
+                causas.append((C.MOTIVO_SILENCIO, ganadora))
+                registrar_causa(barrera, estado_dir, C.MOTIVO_SILENCIO,
+                                identidad, ganadora, local, m15, h4, libro)
+        cierre = cerrar_si_corresponde(
+            barrera, estado_dir, identidad, motor, m15, h4, libro,
+            verificacion, local)
+        if cierre is not None and cierre.get("estado") == "espera":
+            parte["terminal"] = cierre
+        elif cierre is not None:
+            causas.append((cierre["motivo"], cierre["evidencia"]))
+            registrar_causa(barrera, estado_dir, cierre["motivo"], identidad,
+                            cierre["evidencia"], local, m15, h4, libro)
+        if causas:
+            estado_final = (C.COMPLETADO
+                            if all(m not in C.PRECEDENCIA_MOTIVOS
+                                   for m, _ in causas) else C.BLOQUEADO)
+            parte["terminal"] = publicar_pendiente(
+                barrera, estado_dir, local, motor, m15, h4, libro,
+                estado_final) or parte.get("terminal")
     return parte

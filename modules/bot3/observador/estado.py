@@ -264,30 +264,47 @@ def solicitar_terminal(ruta: str, motivo: str, identidad: dict,
     previo = _leer(ruta)
     if previo is not None:
         verificar_solicitud(previo, ruta)
-        motivos = list(previo.get("motivos_adicionales", []))
-        if motivo != previo["motivo"] and motivo not in motivos:
-            motivos.append(motivo)
         cuerpo = dict(previo)
-        cuerpo["motivos_adicionales"] = motivos
-        candidatos = [previo["motivo"]] + motivos
-        cuerpo["motivo"] = min(
-            candidatos, key=lambda m: C.PRECEDENCIA_MOTIVOS.index(m)
-            if m in C.PRECEDENCIA_MOTIVOS else len(C.PRECEDENCIA_MOTIVOS))
+        # La evidencia viaja CON su motivo. Guardar una sola dejaba que un
+        # terminal `determinism_divergence` se publicara con la evidencia del
+        # `silencio_h4` que había llegado antes.
+        evidencias = dict(cuerpo.get("evidencias", {}))
+        evidencias.setdefault(motivo, evidencia)
+        cuerpo["evidencias"] = evidencias
+        cuerpo["motivos_adicionales"] = sorted(
+            m for m in evidencias if m != previo["motivo"])
     else:
         cuerpo = {
             "schema_version": C.SCHEMA_TERMINAL,
             "cohorte": identidad.get("cohorte"),
             "contrato": identidad.get("contrato"),
             "commit": identidad.get("commit"),
-            "motivo": motivo,
             "motivos_adicionales": [],
-            "evidencia": evidencia,
+            "evidencias": {motivo: evidencia},
             "solicitado_en": int(solicitado_en),
             "estado_esperado": estado_esperado,
         }
+    # El GANADOR y su evidencia se derivan juntos, siempre, de la misma tabla.
+    cuerpo["motivo"] = min(
+        cuerpo["evidencias"],
+        key=lambda m: (C.PRECEDENCIA_MOTIVOS.index(m)
+                       if m in C.PRECEDENCIA_MOTIVOS
+                       else len(C.PRECEDENCIA_MOTIVOS), m))
+    cuerpo["evidencia"] = cuerpo["evidencias"][cuerpo["motivo"]]
+    cuerpo["motivos_adicionales"] = sorted(
+        m for m in cuerpo["evidencias"] if m != cuerpo["motivo"])
     cuerpo.pop("checksum", None)
     cuerpo["checksum"] = sha(canon(cuerpo))
     escribir_atomico(ruta, canon(cuerpo))
+    return cuerpo
+
+
+def leer_solicitud(ruta: str) -> dict | None:
+    """El request VALIDADO, o None si no existe."""
+    cuerpo = _leer(ruta)
+    if cuerpo is None:
+        return None
+    verificar_solicitud(cuerpo, ruta)
     return cuerpo
 
 
