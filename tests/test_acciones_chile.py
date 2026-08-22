@@ -139,6 +139,24 @@ def test_portfolio_computes_market_snapshot_server_side():
     assert result["available_cash"] == "2331"
 
 
+def test_portfolio_discards_credentials_and_rejects_untrusted_metadata():
+    result = normalize_portfolio({
+        "source": "renta4_authenticated_web_snapshot", "as_of": "2026-08-22",
+        "password": "never-store-this", "session_cookie": "never-store-this-either",
+        "holdings": [{
+            "ticker": "COPEC", "quantity": "1", "average_cost": "6000",
+            "broker_token": "holding-secret",
+        }],
+    })
+    serialized = json.dumps(result)
+    assert "never-store" not in serialized
+    assert "holding-secret" not in serialized
+    with pytest.raises(ValueError, match="fuente de cartera no permitida"):
+        normalize_portfolio({"source": "password=secret", "holdings": []})
+    with pytest.raises(ValueError, match="fecha de cartera inválida"):
+        normalize_portfolio({"as_of": "cookie=secret", "holdings": []})
+
+
 def test_authenticated_user_can_save_own_read_only_portfolio(monkeypatch, tmp_path):
     monkeypatch.setattr(acciones_module, "PORTFOLIO_PATH", str(tmp_path / "portfolio.json"))
     context = SimpleNamespace(module_config={}, module_dir=str(tmp_path), log=lambda message: None)
@@ -152,6 +170,9 @@ def test_authenticated_user_can_save_own_read_only_portfolio(monkeypatch, tmp_pa
     saved = instance._read_portfolio(7)
     assert saved["holdings"][0]["ticker"] == "ENELCHILE"
     assert instance._read_portfolio(8) is None
+    other_status, _, other_raw = instance.api("portfolio-monitor", {}, user={"uid": 8})
+    assert other_status == 200
+    assert json.loads(other_raw) == {"connected": False, "holdings": []}
     assert instance.api_post("save-portfolio", {"holdings": []}, {}, user=None)[0] == 401
 
 
@@ -172,6 +193,9 @@ def test_portfolio_monitor_summarizes_only_priced_positions(monkeypatch, tmp_pat
     assert result["summary"]["initial_value"] == 200
     assert result["summary"]["market_value"] == 240
     assert result["summary"]["unrealized_pnl"] == 40
+    assert result["summary"]["observed_multiple_positions"] == 0
+    assert result["summary"]["fair_value_positions"] == 0
+    assert result["summary"]["decision_ready"] is False
     assert result["holdings"][0]["allocation_pct"] == 1
 
 
@@ -463,12 +487,15 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
     for element_id in (
         "progress-cmf", "progress-telegram", "progress-join", "progress-banks",
         "progress-market", "progress-auditor", "bank-state", "bank-detail",
+        "portfolio-asof", "kpi-decision", "kpi-decision-note",
     ):
         assert f'id="{element_id}"' in page
     assert "s.cmf_banks" in page
     assert "x.causal_feature_candidates" in page
     assert "./api/save-portfolio" in page
     assert "./api/radar" in page
+    assert "no es una cotización en vivo" in page
+    assert "unidad EPS por validar" in page
 
 
 def test_versioned_universe_is_partial_and_blocks_survivorship_backtest():

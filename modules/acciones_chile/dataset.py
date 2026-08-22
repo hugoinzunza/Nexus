@@ -127,8 +127,13 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
                                       else "absent_from_server_response"),
             "bytes_received": meta.get("bytes_received", len(payloads[period])),
             "sha256": hashlib.sha256(payloads[period]).hexdigest(),
+            "sha256_scope": "downloaded_uncompressed_ifrs_txt_bytes",
+            "raw_artifact_encoding": "gzip",
             "rows": len(parsed_by_period[period]),
             "completeness_ratio_yoy": ratio,
+            "completeness_method": ("year_over_year_row_ratio_threshold_0.70"
+                                    if ratio is not None
+                                    else "official_published_archive_no_yoy_baseline"),
             "partial": ratio is not None and ratio < 0.7,
             "raw_artifact": meta.get("raw_artifact"),
         })
@@ -170,7 +175,13 @@ def build_audit_snapshot(data: dict) -> dict:
             "crypto_dependency": "prohibited", "auditor_authority": "advisory_only",
         },
         "enforcement_evidence": {
-            "partial_periods": "excluded in build_feature_records and cross-sectional radar",
+            "partial_periods": "excluded in build_feature_records and single-period radar",
+            "radar_comparability": (
+                "build_radar selects one non-partial accounting close; the issuer catalog "
+                "cross_section_comparable flag is false when latest issuer records mix horizons"),
+            "artifact_integrity": (
+                "sha256 covers exact downloaded uncompressed IFRS TXT bytes; raw artifact is "
+                "a gzip encoding of those bytes and transport Content-Length is checked when present"),
             "universe_history": "price label readiness requires survivorship_free_backtest_allowed",
             "youtube": "youtube_feature_allowed=false; rubric emits research reading only",
             "portfolio_privacy": "stored by authenticated uid; excluded from audit snapshots and model features",
@@ -180,6 +191,7 @@ def build_audit_snapshot(data: dict) -> dict:
                 "test_versioned_universe_is_partial_and_blocks_survivorship_backtest",
                 "test_acciones_chile_has_no_crypto_or_executor_imports",
                 "test_authenticated_user_can_save_own_read_only_portfolio",
+                "test_portfolio_discards_credentials_and_rejects_untrusted_metadata",
             ],
         },
         "cmf": {
@@ -191,6 +203,7 @@ def build_audit_snapshot(data: dict) -> dict:
             "feature_use": data.get("feature_use"),
             "metric_coverage": cmf.get("metric_coverage", {}),
             "cross_section_comparable": cmf.get("cross_section_comparable"),
+            "radar_contract": "one_non_partial_period_only",
         },
         "youtube": {
             "entry_count": len(youtube.get("entries", [])),

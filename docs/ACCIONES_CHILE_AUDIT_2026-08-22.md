@@ -86,3 +86,29 @@ publicar se añadió evidencia verificable al snapshot:
 
 El auditor no aprobó entrenamiento ni recomendación operable. Estas capas se
 mantienen bloqueadas deliberadamente.
+
+## Cuarta revisión Opus — trazabilidad de cartera y valoración
+
+Se ejecutaron dos pasadas adicionales con `claude-opus-4-8`, usando la clave
+inyectada por Railway sin copiarla al repositorio ni exponerla en consola. La
+segunda pasada confirmó como consistentes los límites de órdenes, credenciales,
+cripto y autoridad consultiva, y verificó que el snapshot no contiene datos de
+la cartera.
+
+Como cierres de esta revisión:
+
+- cada fuente CMF declara que el SHA-256 cubre exactamente los bytes TXT IFRS
+  descargados sin comprimir y que el artefacto persistido usa gzip;
+- el radar declara su contrato de un único cierre contable no parcial, separado
+  del catálogo general que puede mezclar antigüedad entre emisores;
+- CMF Bancos queda `unverified_no_data` y no anuncia métricas verificadas cuando
+  no existe cache real;
+- una prueba negativa confirma que campos de contraseña, cookie o token no se
+  guardan, y que fuente/fecha libres son rechazadas;
+- el monitor muestra la fecha del snapshot Renta 4, advierte que no es precio en
+  vivo y separa precio observado de valor justo.
+
+Opus mantuvo como bloqueos externos la fuente de precios ajustados/benchmark,
+el universo IPSA completo con historia de membresía, la clave CMF Bancos y la
+historia mínima de ocho trimestres. Por diseño, ninguno se convirtió en una
+recomendación artificial.

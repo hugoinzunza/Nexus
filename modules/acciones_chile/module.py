@@ -225,6 +225,8 @@ class AccionesChileModule(NexusModule):
             total_initial = 0.0
             total_market = 0.0
             priced_positions = 0
+            observed_multiple_positions = 0
+            fair_value_positions = 0
             for holding in portfolio.get("holdings", []):
                 issuer = by_rut.get(holding.get("company_rut"))
                 history = [item for item in observations
@@ -236,13 +238,18 @@ class AccionesChileModule(NexusModule):
                     total_market += market_value
                     if initial_value is not None:
                         total_initial += initial_value
+                valuation = evaluate_valuation(history, holding.get("market_price")) if issuer else None
+                if valuation and valuation.get("pe") is not None:
+                    observed_multiple_positions += 1
+                if valuation and valuation.get("fair_value") is not None:
+                    fair_value_positions += 1
                 monitored.append({
                     **holding,
                     "company": issuer.get("company") if issuer else None,
                     "latest_period": issuer.get("latest_available_period") if issuer else None,
                     "analysis": issuer.get("analysis") if issuer else None,
                     "reading": evaluate_observation(issuer, history) if issuer else None,
-                    "valuation": evaluate_valuation(history, holding.get("market_price")) if issuer else None,
+                    "valuation": valuation,
                     "price_gate": ("renta4_authenticated_snapshot"
                                    if market_value is not None
                                    else "waiting_for_authorized_market_data"),
@@ -256,11 +263,14 @@ class AccionesChileModule(NexusModule):
                 "as_of": portfolio.get("as_of"), "holdings": monitored,
                 "summary": {
                     "positions": len(monitored), "priced_positions": priced_positions,
+                    "observed_multiple_positions": observed_multiple_positions,
+                    "fair_value_positions": fair_value_positions,
                     "initial_value": total_initial if priced_positions else None,
                     "market_value": total_market if priced_positions else None,
                     "unrealized_pnl": total_pnl,
                     "return_pct": total_pnl / total_initial if total_pnl is not None and total_initial else None,
                     "available_cash": self._as_float(portfolio.get("available_cash")),
+                    "decision_ready": bool(monitored) and fair_value_positions == len(monitored),
                 },
                 "orders": "prohibited", "recommendations": "research_only",
             })

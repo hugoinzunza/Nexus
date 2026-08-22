@@ -89,8 +89,9 @@ def availability(path: str | None = None) -> dict:
         "observations": observations,
         "periods": periods,
         "feature_ready": False,
-        "metric_schema_status": "partial_verified",
-        "verified_metrics": sorted(VERIFIED_METRICS),
+        "metric_schema_status": "partial_verified" if observations else "unverified_no_data",
+        "verified_metrics": sorted(VERIFIED_METRICS) if observations else [],
+        "configured_metric_candidates": sorted(VERIFIED_METRICS),
         "blockers": blockers,
     }
 

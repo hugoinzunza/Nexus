@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+import re
 
 
 MAX_HOLDINGS = 300
+ALLOWED_SOURCES = {
+    "renta4_manual_export", "renta4_manual", "renta4_authenticated_web_snapshot",
+}
 
 
 def normalize_portfolio(payload: dict) -> dict:
@@ -61,9 +65,15 @@ def normalize_portfolio(payload: dict) -> dict:
             raise ValueError("saldo disponible inválido") from exc
         if available_cash < 0:
             raise ValueError("saldo disponible negativo")
+    source = str(payload.get("source") or "renta4_manual_export")
+    if source not in ALLOWED_SOURCES:
+        raise ValueError("fuente de cartera no permitida")
+    as_of = payload.get("as_of")
+    if as_of not in (None, "") and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(as_of)):
+        raise ValueError("fecha de cartera inválida")
     return {
-        "source": str(payload.get("source") or "renta4_manual_export"),
-        "as_of": payload.get("as_of"),
+        "source": source,
+        "as_of": as_of or None,
         "available_cash": str(available_cash) if available_cash is not None else None,
         "holdings": holdings,
         "read_only": True,
