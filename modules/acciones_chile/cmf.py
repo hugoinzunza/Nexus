@@ -7,6 +7,7 @@ Este adaptador solo acepta el host y path oficiales definidos abajo.
 from __future__ import annotations
 
 import io
+import re
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -16,8 +17,11 @@ from typing import Iterable
 
 CMF_HOST = "www.cmfchile.cl"
 CMF_PATH = "/institucional/estadisticas/ver_archivo.php"
+CMF_LIST_PATH = "/institucional/estadisticas/estadisticas_ifrs.php"
 DEFAULT_URL = f"https://{CMF_HOST}{CMF_PATH}"
+LIST_URL = f"https://{CMF_HOST}{CMF_LIST_PATH}"
 MAX_DOWNLOAD_BYTES = 30_000_000
+PERIOD_LINK = re.compile(r"ver_archivo\.php\?inicio=(\d{6})&(?:amp;)?termino=(\d{6})")
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,21 @@ def download_period(period: str, base_url: str = DEFAULT_URL, timeout: float = 3
     if len(body) > MAX_DOWNLOAD_BYTES:
         raise ValueError("archivo CMF excede el límite permitido")
     return body
+
+
+def available_periods(timeout: float = 20.0) -> list[str]:
+    """Lista períodos individuales publicados por la CMF, más reciente primero."""
+    request = urllib.request.Request(LIST_URL, headers={"User-Agent": "NexUX-AccionesChile/0.1"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL constante
+        final = urllib.parse.urlparse(response.geturl())
+        if final.scheme != "https" or final.hostname != CMF_HOST or final.path != CMF_LIST_PATH:
+            raise ValueError("la CMF redirigió fuera del listado autorizado")
+        body = response.read(3_000_001)
+    if len(body) > 3_000_000:
+        raise ValueError("listado CMF excede el límite")
+    found = [start for start, end in PERIOD_LINK.findall(body.decode("utf-8", errors="replace"))
+             if start == end]
+    return sorted(set(found), reverse=True)
 
 
 def parse_rows(payload: bytes | str) -> list[CMFRow]:

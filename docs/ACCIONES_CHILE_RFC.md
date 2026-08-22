@@ -33,6 +33,11 @@ una orden.
 - Métricas iniciales: ventas, crecimiento interanual, utilidad operacional,
   utilidad neta, margen operacional y margen neto.
 - Cada valor conserva período, RUT, sociedad, moneda, taxonomía y estado origen.
+- Un colector diario descubre los dos cierres individuales más recientes y sus
+  comparables interanuales, calcula SHA-256 de cada fuente y publica un cache
+  compacto. Si el cierre nuevo aún es parcial, conserva el último período
+  disponible por sociedad. Si la red falla, conserva el último cache válido.
+- Endpoints read-only: `api/issuers?q=...`, `api/analysis?rut=...` y `api/videos`.
 
 ### @inversorchileno
 
@@ -45,6 +50,18 @@ una orden.
   lote Q2 2026 cubre, entre otras, CAP, CMPC, Cencosud, Cencomalls, SMSAAM,
   LATAM, Mall Plaza, CCU, Entel, Concha y Toro, los bancos, Enel, Colbún,
   Andina, Engie, Sonda y Pehuenche.
+
+### HechosEsencialesChile (Telegram)
+
+- Fuente de eventos: `https://t.me/hechosesencialeschile`.
+- El grupo declara uso personal y no masivo/lucrativo; NexUX conserva esa frontera.
+- El colector no se une al grupo, exige una sesión que ya sea miembro, no descarga
+  PDFs y descarta conversación humana.
+- Solo persiste mensajes estructurados del bot: nuevo estado financiero o nuevo
+  comunicado esencial.
+- Para modelos, `available_at` es siempre la hora del mensaje Telegram. La hora
+  declarada de emisión queda como metadata y nunca adelanta disponibilidad.
+- Endpoint read-only: `api/events?type=financial_statement`.
 
 ## Auditoría OPUS/Claude
 
@@ -70,6 +87,9 @@ cuenta:
 ANTHROPIC_API_KEY=... .venv/bin/python scripts/audit_acciones_chile.py snapshot.json
 ```
 
+`scripts/refresh_acciones_chile.py` genera automáticamente un snapshot sin cartera
+ni datos personales en `data/acciones_chile_audit_snapshot.json`.
+
 ## Fases
 
 1. **Cartera y CMF:** importación read-only, catálogo ticker↔RUT y métricas.
@@ -85,3 +105,6 @@ ANTHROPIC_API_KEY=... .venv/bin/python scripts/audit_acciones_chile.py snapshot.
 - Cartera rechaza payloads inválidos y permanece read-only.
 - Auditor visible con modelo, disponibilidad y autoridad.
 - Predicciones rotuladas como investigación y sin camino a órdenes.
+
+El diseño causal del modelo se congela por separado en
+`docs/ACCIONES_CHILE_PREDICTOR_PROTOCOL.md`.

@@ -12,6 +12,7 @@
     article{background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--line);border-radius:18px;padding:20px}h2{font-size:17px;margin:0 0 14px}.value{font-size:28px;font-weight:780}.muted{color:var(--muted)}
     .pill{display:inline-flex;padding:5px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:12px}.ok{color:var(--accent)}.warn{color:var(--warn)}
     ul{padding-left:18px;color:var(--muted)}a{color:var(--accent)}
+    .wide{grid-column:1/-1}.search{display:flex;gap:8px;margin:12px 0}.search input{flex:1;background:#09130f;border:1px solid var(--line);border-radius:12px;color:var(--text);padding:12px}.search button{border:0;border-radius:12px;padding:0 16px;background:var(--accent);color:#062217;font-weight:750}.rows{display:grid;gap:8px}.row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}button.row{width:100%;background:none;color:var(--text);text-align:left;border-left:0;border-right:0;border-bottom:0;cursor:pointer}.metric{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:12px}.metric div{background:#09130f;border-radius:12px;padding:12px}.metric small{display:block;color:var(--muted)}
   </style>
 </head>
 <body><main>
@@ -21,11 +22,17 @@
     <article><h2>Cartera Renta 4</h2><div class="value" id="positions">—</div><p class="muted" id="portfolio">Consultando…</p><span class="pill">solo lectura</span></article>
     <article><h2>Fuente fundamental</h2><div class="value">CMF</div><p class="muted">TXT IFRS oficial por período, RUT, cuenta y moneda.</p><span class="pill ok">adaptador listo</span></article>
     <article><h2>Auditor independiente</h2><div class="value">OPUS</div><p class="muted" id="auditor">Revisión manual, sin autoridad operacional.</p><span class="pill" id="audit-pill">verificando</span></article>
+    <article><h2>Predictor</h2><div class="value" id="predictor-stage">—</div><p class="muted" id="predictor-detail">Evaluando preparación causal…</p><span class="pill warn">research-only</span></article>
   </section>
   <section class="grid">
     <article><h2>Etapa 1</h2><ul><li>Importar la cartera personal.</li><li>Vincular ticker con RUT del emisor.</li><li>Comparar ventas, utilidad y márgenes interanuales.</li></ul></article>
     <article><h2>Biblioteca de tesis</h2><ul><li>Feed público de @inversorchileno listo.</li><li>Separar hechos, tesis y opinión.</li><li>Contrastar cada afirmación con CMF.</li></ul></article>
     <article><h2>Frontera</h2><ul><li>No guarda claves del sitio.</li><li>No compra ni vende.</li><li>Una predicción nunca es una orden.</li></ul></article>
+  </section>
+  <section class="grid">
+    <article class="wide"><h2>Explorar sociedades CMF</h2><div class="search"><input id="issuer-q" placeholder="Buscar empresa o RUT"><button id="issuer-go">Buscar</button></div><div id="issuer-results" class="rows muted">El dataset se carga en segundo plano.</div><div id="issuer-analysis"></div></article>
+    <article class="wide"><h2>Últimos análisis de @inversorchileno</h2><div id="videos" class="rows muted">Cargando índice público…</div></article>
+    <article class="wide"><h2>Nuevos estados financieros</h2><div id="events" class="rows muted">Cargando eventos de HechosEsencialesChile…</div></article>
   </section>
 </main><script>
 fetch('./api/status').then(r=>r.json()).then(s=>{
@@ -33,5 +40,14 @@ fetch('./api/status').then(r=>r.json()).then(s=>{
   document.querySelector('#portfolio').textContent=s.portfolio.connected?`Conectada · ${s.portfolio.source}`:'Pendiente de importación personal';
   const a=s.auditor; document.querySelector('#auditor').textContent=`${a.model} · ejecución ${a.run_mode} · autoridad consultiva`;
   const p=document.querySelector('#audit-pill');p.textContent=a.key_present?'disponible':'falta credencial';p.className='pill '+(a.key_present?'ok':'warn');
+  document.querySelector('#positions').title=`${s.cmf.issuers||0} sociedades CMF · períodos ${(s.cmf.periods||[]).join(' / ')}`;
 }).catch(()=>{document.querySelector('#portfolio').textContent='Estado no disponible';});
+const money=v=>v==null?'n/d':new Intl.NumberFormat('es-CL').format(Number(v));
+const pct=v=>v==null?'n/d':new Intl.NumberFormat('es-CL',{style:'percent',maximumFractionDigits:1}).format(v);
+function showAnalysis(rut){fetch(`./api/analysis?rut=${encodeURIComponent(rut)}`).then(r=>r.json()).then(x=>{const a=x.analysis||{};const box=document.querySelector('#issuer-analysis');box.textContent='';const h=document.createElement('h2');h.textContent=`${x.company||'Sociedad'} · período ${x.latest_available_period||'n/d'}`;box.append(h);const m=document.createElement('div');m.className='metric';[['Ventas',money(a.revenue)],['Crecimiento interanual',pct(a.revenue_growth_yoy)],['Margen operacional',pct(a.operating_margin)],['Margen neto',pct(a.net_margin)]].forEach(([k,v])=>{const d=document.createElement('div'),s=document.createElement('small');s.textContent=k;d.append(s,document.createTextNode(v));m.append(d)});box.append(m)});}
+function searchIssuers(){const q=document.querySelector('#issuer-q').value;fetch(`./api/issuers?q=${encodeURIComponent(q)}`).then(r=>r.json()).then(x=>{const box=document.querySelector('#issuer-results');box.textContent='';(x.issuers||[]).slice(0,20).forEach(i=>{const b=document.createElement('button');b.className='row';const n=document.createElement('span'),r=document.createElement('span');n.textContent=i.company;r.textContent=i.rut;b.append(n,r);b.onclick=()=>showAnalysis(i.rut);box.append(b)});if(!box.children.length)box.textContent=x.error||'Sin coincidencias';});}
+document.querySelector('#issuer-go').onclick=searchIssuers;document.querySelector('#issuer-q').addEventListener('keydown',e=>{if(e.key==='Enter')searchIssuers()});searchIssuers();
+fetch('./api/videos').then(r=>r.json()).then(x=>{const box=document.querySelector('#videos');box.textContent='';(x.entries||[]).slice(0,8).forEach(v=>{const d=document.createElement('div');d.className='row';const a=document.createElement('a');a.href=v.url;a.target='_blank';a.rel='noopener';a.textContent=v.title;const t=document.createElement('span');t.textContent=(v.published||'').slice(0,10);d.append(a,t);box.append(d)});if(!box.children.length)box.textContent='Índice pendiente de primera actualización';});
+fetch('./api/events?type=financial_statement').then(r=>r.json()).then(x=>{const box=document.querySelector('#events');box.textContent='';(x.events||[]).slice(0,12).forEach(e=>{const d=document.createElement('div');d.className='row';const n=document.createElement('span'),t=document.createElement('span');n.textContent=`${e.company} · ${e.period||'período n/d'}`;t.textContent=(e.available_at||'').slice(0,10);d.append(n,t);box.append(d)});if(!box.children.length)box.textContent='Ejecuta el colector personal de Telegram para cargar eventos';});
+fetch('./api/predictor-status').then(r=>r.json()).then(x=>{document.querySelector('#predictor-stage').textContent=x.can_train?'LISTO':'DATOS';document.querySelector('#predictor-detail').textContent=`${x.statement_events} publicaciones · ${x.periods.length}/${x.minimum_quarters} trimestres · sin señales`;});
 </script></body></html>

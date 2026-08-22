@@ -11,11 +11,15 @@ from core.module_base import NexusModule
 from core.paths import persist_dir
 
 from . import auditor
+from . import dataset as dataset_store
 from .portfolio import normalize_portfolio
+from .predictor import readiness as predictor_readiness
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PORTFOLIO_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_portfolio.json")
+DATASET_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_dataset.json")
+TELEGRAM_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_telegram_events.json")
 MAX_BODY_BYTES = 500_000
 
 
@@ -28,6 +32,20 @@ class AccionesChileModule(NexusModule):
     def __init__(self, context):
         super().__init__(context)
         self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._refresh_thread = None
+
+    def start(self):
+        if not self.config.get("cmf_auto_refresh", False):
+            return
+        self._refresh_thread = threading.Thread(
+            target=self._refresh_loop, name="acciones-chile-refresh", daemon=True)
+        self._refresh_thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        if self._refresh_thread:
+            self._refresh_thread.join(timeout=2)
 
     @staticmethod
     def _json(status: int, payload: dict):
@@ -38,6 +56,9 @@ class AccionesChileModule(NexusModule):
     def api(self, subpath, query, user=None):
         if subpath == "status":
             portfolio = self._read_portfolio()
+            dataset = self._read_dataset()
+            cmf = (dataset or {}).get("cmf", {})
+            telegram = self._read_telegram()
             return self._json(200, {
                 "module": "acciones_chile",
                 "mode": "read_only",
@@ -51,7 +72,12 @@ class AccionesChileModule(NexusModule):
                 "cmf": {
                     "source": "CMF IFRS TXT oficial",
                     "ready": True,
-                    "automatic_fetch": False,
+                    "automatic_fetch": bool(self.config.get("cmf_auto_refresh", False)),
+                    "cached": bool(dataset),
+                    "periods": cmf.get("periods", []),
+                    "issuers": len(cmf.get("issuers", [])),
+                    "generated_at_ms": (dataset or {}).get("generated_at_ms"),
+                    "known_gaps": ["bancos listados requieren fuente CMF Bancos"],
                 },
                 "renta4": {
                     "public_api_documented": False,
@@ -63,11 +89,57 @@ class AccionesChileModule(NexusModule):
                     "public_metadata_feed_ready": True,
                     "source_role": "secondary_thesis",
                 },
+                "telegram": {
+                    "source": "@hechosesencialeschile",
+                    "connected": bool(telegram),
+                    "events": (telegram or {}).get("event_count", 0),
+                    "causal_timestamp": "telegram_message_date",
+                    "personal_use_only": True,
+                },
                 "auditor": auditor.availability(self.config),
             })
         if subpath == "portfolio":
             data = self._read_portfolio()
             return self._json(200, data or {"connected": False, "holdings": []})
+        if subpath == "issuers":
+            dataset = self._read_dataset()
+            if not dataset:
+                return self._json(503, {"error": "dataset CMF todavía no disponible", "issuers": []})
+            search = str(query.get("q") or "").strip().casefold()
+            issuers = dataset["cmf"].get("issuers", [])
+            if search:
+                issuers = [item for item in issuers
+                           if search in item["company"].casefold() or search in item["rut"]]
+            compact = [{"rut": item["rut"], "company": item["company"],
+                        "scope": item["scope"], "currency": item["currency"],
+                        "latest_available_period": item.get("latest_available_period")}
+                       for item in issuers[:100]]
+            return self._json(200, {"count": len(issuers), "issuers": compact})
+        if subpath == "analysis":
+            rut = "".join(ch for ch in str(query.get("rut") or "") if ch.isdigit())[:8]
+            if not rut:
+                return self._json(400, {"error": "falta rut"})
+            dataset = self._read_dataset()
+            if not dataset:
+                return self._json(503, {"error": "dataset CMF todavía no disponible"})
+            issuer = next((item for item in dataset["cmf"].get("issuers", [])
+                           if item["rut"] == rut), None)
+            return self._json(200, issuer) if issuer else self._json(404, {"error": "sociedad no encontrada"})
+        if subpath == "videos":
+            dataset = self._read_dataset()
+            entries = ((dataset or {}).get("youtube") or {}).get("entries", [])
+            return self._json(200, {"count": len(entries), "entries": entries[:30],
+                                    "source_role": "secondary_thesis"})
+        if subpath == "events":
+            data = self._read_telegram()
+            events = (data or {}).get("events", [])
+            event_type = str(query.get("type") or "").strip()
+            if event_type:
+                events = [event for event in events if event.get("event_type") == event_type]
+            return self._json(200, {"count": len(events), "events": events[:200],
+                                    "source": "telegram:hechosesencialeschile"})
+        if subpath == "predictor-status":
+            return self._json(200, predictor_readiness(self._read_telegram(), price_history_ready=False))
         if subpath == "boundaries":
             return self._json(200, {
                 "orders": "prohibited", "broker_credentials": "not_stored",
@@ -115,9 +187,40 @@ class AccionesChileModule(NexusModule):
                 os.fsync(handle.fileno())
             os.replace(temp, PORTFOLIO_PATH)
 
+    def _read_dataset(self):
+        with self._lock:
+            return dataset_store.read_dataset(DATASET_PATH)
+
+    @staticmethod
+    def _read_telegram():
+        try:
+            with open(TELEGRAM_PATH, encoding="utf-8") as handle:
+                data = json.load(handle)
+            if data.get("schema_version") != "acciones-chile-telegram-events-0.1.0":
+                return None
+            return data
+        except (FileNotFoundError, OSError, ValueError, AttributeError):
+            return None
+
+    def _refresh_loop(self):
+        interval = max(3600, int(self.config.get("cmf_refresh_interval_seconds", 86400)))
+        while not self._stop_event.is_set():
+            existing = self._read_dataset()
+            age = time.time() - ((existing or {}).get("generated_at_ms", 0) / 1000)
+            if not existing or age >= interval:
+                try:
+                    dataset_store.refresh_dataset(
+                        DATASET_PATH, base_url=self.config.get("cmf_base_url") or dataset_store.DEFAULT_URL)
+                    self.context.log("acciones_chile: dataset CMF/YouTube actualizado")
+                except Exception as exc:  # noqa: BLE001 - conservar cache y reintentar luego
+                    self.context.log(f"acciones_chile: actualización falló cerrada: {exc}")
+            self._stop_event.wait(interval)
+
     def health(self):
         return {"slug": self.slug, "status": "ok", "mode": "read_only",
-                "portfolio_connected": bool(self._read_portfolio())}
+                "portfolio_connected": bool(self._read_portfolio()),
+                "dataset_ready": bool(self._read_dataset()),
+                "telegram_events_ready": bool(self._read_telegram())}
 
 
 def get_module(context):
