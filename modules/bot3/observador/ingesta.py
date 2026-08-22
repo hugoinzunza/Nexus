@@ -136,6 +136,7 @@ def ingerir(fetch, mercado: str, tf: str, alm, elegibilidad: int) -> dict:
         "huecos": huecos,
         "esperada": esperada,
         "esperada_exigible": exigible,
+        "trajo_esperada": bool(esperada is not None and trajo_esperada),
         "observacion_probatoria": bool(exigible and not trajo_esperada),
         "ultimo_t": alm.ultimo_t,
     }

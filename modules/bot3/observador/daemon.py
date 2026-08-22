@@ -154,10 +154,20 @@ def procesar_lote_canonico(motor, T: int, reloj: int | None = None) -> bool:
         motor.finalizar_ciclo()
 
 
-def avanzar_lotes(motor, m15: dict, verificacion, desde_T: int | None,
+def watermark_lotes(motor) -> int | None:
+    """El último lote FINALIZADO, derivado del motor.
+
+    No se recibe de afuera: si el llamador lo omitiera o lo perdiera en un
+    reinicio, `avanzar_lotes` recorrería otra vez toda la historia sobre el
+    mismo motor vivo. La única fuente es `motor.lotes_finalizados`."""
+    return max(motor.lotes_finalizados) if motor.lotes_finalizados else None
+
+
+def avanzar_lotes(motor, m15: dict, verificacion,
                   reloj: int | None = None) -> dict:
     """Procesa los lotes pendientes en orden, deteniéndose en el primero que
     no avance —por no ser finalizable o por la zona de corte."""
+    desde_T = watermark_lotes(motor)
     procesados, bloqueo = [], None
     for T in cierres_de(m15, motor.mercados):
         if desde_T is not None and T <= desde_T:
@@ -301,13 +311,24 @@ def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
     libro. Solo hace durable lo que ya existe."""
     ruta_req = os.path.join(estado_dir, C.ARCHIVO_SOLICITUD_TERMINAL)
     with barrera:
+        # Un terminal YA PUBLICADO manda (§9.1.1): la segunda transición no lo
+        # reemplaza. Sin esto, dos motivos concurrentes se resolvían por orden
+        # de ejecución —la segunda borraba el request de la primera, creaba el
+        # suyo y pisaba `blocked.json`—, así que `silencio_h4` podía ganarle a
+        # `determinism_divergence` pese a la precedencia contractual.
+        ya = E.leer_terminal(estado_dir)
+        if ya is not None and ya["estado"] in (C.COMPLETADO, C.BLOQUEADO):
+            barrera.cerrar_para_siempre(ya["cuerpo"].get("motivo", "terminal"))
+            if os.path.exists(ruta_req):
+                os.replace(ruta_req, ruta_req + ".archivado")
+            return {"estado": ya["estado"], "ruta": None,
+                    "cuerpo": ya["cuerpo"], "ya_existia": True}
         # La solicitud se escribe DENTRO de la barrera: si no, dos anexiones
         # concurrentes no estarían serializadas y un ciclo en espera podría
         # colarse entre la solicitud y la publicación.
         barrera.cerrar_para_siempre(motivo)
-        E.solicitar_terminal(
-            ruta_req, motivo, identidad, evidencia, ahora,
-            {"heads": E.estado_almacenes(m15, h4), "firma": libro.firma()})
+        E.solicitar_terminal(ruta_req, motivo, identidad, evidencia, ahora,
+                             estado_esperado(estado_dir, m15, h4, libro))
         for mapa in (m15, h4):
             for alm in mapa.values():
                 alm.sincronizar()
@@ -325,6 +346,20 @@ def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
         ruta = E.publicar_terminal(estado_dir, estado_final, cuerpo)
         os.remove(ruta_req)
     return {"estado": estado_final, "ruta": ruta, "cuerpo": cuerpo}
+
+
+def estado_esperado(estado_dir: str, m15: dict, h4: dict, libro) -> dict:
+    """Lo que el request AUTORIZA a publicar: heads, firma del libro y hash de
+    cada sidecar. Sin esto, una caída podía publicar el terminal sobre un
+    estado distinto del que se autorizó."""
+    sidecars = {}
+    for nombre in (C.ARCHIVO_SILENCIO, C.ARCHIVO_VERIFICACION):
+        ruta = os.path.join(estado_dir, nombre)
+        if os.path.exists(ruta):
+            with open(ruta, "rb") as fh:
+                sidecars[nombre] = E.sha(fh.read().decode("utf-8"))
+    return {"heads": E.estado_almacenes(m15, h4), "firma": libro.firma(),
+            "sidecars": sidecars}
 
 
 def reanudar(barrera: BarreraCiclo, estado_dir: str, identidad: dict,
@@ -345,6 +380,15 @@ def reanudar(barrera: BarreraCiclo, estado_dir: str, identidad: dict,
         if cuerpo.get(campo) != identidad.get(campo):
             raise ValueError(
                 f"terminal.request de otra cohorte: {campo} no coincide")
+    # El request AUTORIZA un estado concreto. Publicar sobre otro sería cerrar
+    # la cohorte con heads o firma distintos de los que se autorizaron.
+    esperado = cuerpo.get("estado_esperado") or {}
+    real = estado_esperado(estado_dir, m15, h4, libro)
+    difs = [k for k in ("heads", "firma", "sidecars")
+            if esperado.get(k) != real.get(k)]
+    if difs:
+        raise ValueError(
+            f"terminal.request autoriza otro estado: difieren {sorted(difs)}")
     hecho = transicion_terminal(
         barrera, estado_dir, cuerpo["motivo"], identidad,
         cuerpo.get("evidencia", {}), ahora, motor, m15, h4, libro)
@@ -366,21 +410,67 @@ def _actualizar_silencio(silencio, partes, elegibilidad, h4):
         if p["observacion_probatoria"]:
             silencio.observar(p["mercado"], "4h", p["esperada"],
                               p["ultimo_t"], elegibilidad)
-        elif h4[p["mercado"]].cubre(p["esperada"]) == "vela":
+        elif p.get("trajo_esperada"):
+            # Gobierna el HECHO de que la respuesta trajo la vela, no que el
+            # almacén la tenga: un backfill posterior al sellado del hueco
+            # queda como `vela_no_incorporada` y `cubre()` nunca diría "vela",
+            # así que el silencio no se resolvería nunca.
             silencio.resolver(p["mercado"], "4h", p["esperada"])
     silencio.verificar_contra_almacen(h4)
 
 
+def cerrar_si_corresponde(barrera: BarreraCiclo, estado_dir: str,
+                          identidad: dict, motor, m15: dict, h4: dict, libro,
+                          verificacion, ahora: int) -> dict | None:
+    """Conecta los terminales CIENTÍFICOS, que sin esto quedaban a cargo de un
+    `main` inexistente:
+
+    - CF-35: `cerrar_administrativo` se intenta en cada ciclo; es un no-op
+      salvo que el reloj pase `T_corte + gracia` sin lote posterior;
+    - si el motor CORTÓ, se publica `COMPLETED` — pero solo con la
+      verificación `ok` y posterior a toda deferencia (§13, precisión 2). Sin
+      eso se espera al ciclo siguiente: el corte ya ocurrió y no se pierde.
+    """
+    motor.cerrar_administrativo(int(ahora))
+    if not motor.cortado:
+        return None
+    if not verificacion.habilita_cierre():
+        return {"estado": "espera", "motivo": f"verificacion={verificacion.estado}"}
+    return transicion_terminal(
+        barrera, estado_dir, getattr(motor, "motivo_corte", "corte"),
+        identidad, {"cierres": len(motor.cierres),
+                    "lotes_finalizados": len(motor.lotes_finalizados)},
+        ahora, motor, m15, h4, libro, estado_final=C.COMPLETADO)
+
+
+def verificar_y_reaccionar(barrera: BarreraCiclo, captura: dict,
+                           verificacion, ahora: int, estado_dir: str,
+                           identidad: dict, motor, m15: dict, h4: dict,
+                           libro, commit: str = "dev") -> dict:
+    """Verifica en frío y, si diverge, DISPARA el terminal. Antes se marcaba
+    la divergencia en el sidecar y ahí quedaba."""
+    resultado = verificar_en_frio(captura, verificacion, ahora, commit)
+    if not resultado["igual"]:
+        resultado["terminal"] = transicion_terminal(
+            barrera, estado_dir, C.MOTIVO_DIVERGENCIA, identidad,
+            {"esperado": {"digest": captura["digest"],
+                          "firma": captura["firma"]},
+             "obtenido": {"digest": resultado["digest"],
+                          "firma": resultado["firma"]}},
+            ahora, motor, m15, h4, libro)
+    return resultado
+
+
 def ciclo(fetch, barrera: BarreraCiclo, motor, m15: dict, h4: dict, libro,
           verificacion, reloj_local, silencio=None, estado_dir=None,
-          identidad=None, ultimo_T=None) -> dict:
+          identidad=None) -> dict:
     """Un pull = un ciclo = un reloj observado.
 
     `eligibility_time` se muestrea UNA vez y ANTES de tomar la barrera: si no
     está, el ciclo termina sin ingerir. El motor recibe el reloj LOCAL como
     `processed_at` (CF-34); el de Binance solo filtra velas."""
     parte = {"ingirio": False, "procesados": [], "incidencias": [],
-             "ultimo_T": ultimo_T}
+             "ultimo_T": watermark_lotes(motor)}
     if barrera.terminal:
         parte["motivo"] = f"terminal: {barrera.terminal}"
         return parte                                # no se abren ciclos nuevos
@@ -403,15 +493,16 @@ def ciclo(fetch, barrera: BarreraCiclo, motor, m15: dict, h4: dict, libro,
         parte["streams"] = partes
         if silencio is not None:
             _actualizar_silencio(silencio, partes, elegibilidad, h4)
-        emitir_huecos_locales(motor, m15, h4, local)
+        # §5: el marcador tiene que ser DURABLE antes de que exista el evento
+        # que lo cita. El `fsync` va ANTES de emitir, no después.
         for mapa in (m15, h4):
             for alm in mapa.values():
                 alm.sincronizar()
+        emitir_huecos_locales(motor, m15, h4, local)
         decision = I.puede_procesar(m15, h4, elegibilidad, elegibilidad)
         parte["decision"] = decision
         if decision["procesar"]:
-            avance = avanzar_lotes(motor, m15, verificacion, ultimo_T,
-                                   local)
+            avance = avanzar_lotes(motor, m15, verificacion, local)
             parte["procesados"] = avance["procesados"]
             parte["ultimo_T"] = avance["ultimo_T"]
             if avance["bloqueo"]:
@@ -421,10 +512,17 @@ def ciclo(fetch, barrera: BarreraCiclo, motor, m15: dict, h4: dict, libro,
             # La memoria no basta: sin persistir, un reinicio pierde las
             # observaciones y las 72 h nunca producirían un terminal.
             silencio.guardar(os.path.join(estado_dir, C.ARCHIVO_SILENCIO))
-    if silencio is not None and estado_dir and identidad is not None:
-        ganadora = silencio.ganadora()
-        if ganadora is not None:
-            parte["terminal"] = transicion_terminal(
-                barrera, estado_dir, C.MOTIVO_SILENCIO, identidad,
-                ganadora, local, motor, m15, h4, libro)
+    if estado_dir and identidad is not None:
+        if silencio is not None:
+            ganadora = silencio.ganadora()
+            if ganadora is not None:
+                parte["terminal"] = transicion_terminal(
+                    barrera, estado_dir, C.MOTIVO_SILENCIO, identidad,
+                    ganadora, local, motor, m15, h4, libro)
+        if "terminal" not in parte:
+            cierre = cerrar_si_corresponde(
+                barrera, estado_dir, identidad, motor, m15, h4, libro,
+                verificacion, local)
+            if cierre is not None:
+                parte["terminal"] = cierre
     return parte

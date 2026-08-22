@@ -347,13 +347,36 @@ def test_solo_la_llegada_REAL_de_la_vela_resuelve_el_silencio(tmp_path):
 
     # la vela NO llegó y el reloj retrocede: la ausencia deja de ser exigible
     partes = [{"mercado": "BTCUSDT", "tf": "4h", "esperada": falt,
-               "ultimo_t": alm.ultimo_t, "observacion_probatoria": False}]
+               "ultimo_t": alm.ultimo_t, "observacion_probatoria": False,
+               "trajo_esperada": False}]
     D._actualizar_silencio(s, partes, T0, h4)
     assert s.entradas[k]["estado"] == "activo"     # NO se resolvió
 
-    # ahora sí llega
-    alm.ofrecer([vela(falt)], "push")
+    # ahora sí llega: gobierna el HECHO de que la respuesta la trajo
+    partes[0]["trajo_esperada"] = True
+    D._actualizar_silencio(s, partes, T0, h4)
+    assert s.entradas[k]["estado"] == "resuelto"
+
+
+def test_un_backfill_posterior_al_sellado_igual_resuelve(tmp_path):
+    """La vela llega DESPUÉS de que el hueco se selló: queda como
+    `vela_no_incorporada` y `cubre()` nunca diría «vela», así que gobernar por
+    el almacén dejaba el silencio activo para siempre."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=30)
+    s = SIL.Silencio(IDENT["cohorte"], IDENT["contrato"], IDENT["commit"])
+    s.abrir_corrida()
+    alm = h4["BTCUSDT"]
+    falt = alm.ultimo_t + DUR4
+    k = SIL.clave("BTCUSDT", "4h", falt)
+    s.observar("BTCUSDT", "4h", falt, alm.ultimo_t, T0)
+    # se sella el hueco con el watermark local
+    alm.ofrecer([vela(falt + (i + 1) * DUR4) for i in range(3)], "push")
     alm.drenar()
+    assert alm.declarar_hueco_local() is not None
+    assert alm.cubre(falt) == "hueco"               # NUNCA será "vela"
+    partes = [{"mercado": "BTCUSDT", "tf": "4h", "esperada": falt,
+               "ultimo_t": alm.ultimo_t, "observacion_probatoria": False,
+               "trajo_esperada": True}]
     D._actualizar_silencio(s, partes, T0, h4)
     assert s.entradas[k]["estado"] == "resuelto"
 
@@ -422,7 +445,8 @@ def test_una_caida_a_mitad_se_reanuda_y_no_ingiere(tmp_path):
     d = str(tmp_path / "estado")
     os.makedirs(d)
     E.solicitar_terminal(os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL),
-                         C.MOTIVO_SILENCIO, IDENT, {"h": 1}, 5, {"k": 1})
+                         C.MOTIVO_SILENCIO, IDENT, {"h": 1}, 5,
+                         D.estado_esperado(d, m15, h4, libro))
     barrera = D.BarreraCiclo()
     hecho = D.reanudar(barrera, d, IDENT, motor, m15, h4, libro, T0)
     assert hecho["reanudado"] is True
@@ -467,3 +491,162 @@ def test_la_solicitud_se_escribe_DENTRO_de_la_barrera(tmp_path):
         D.E.solicitar_terminal = real
     assert vista == [True]
     assert barrera.retenida is False
+
+
+def test_la_reanudacion_exige_el_estado_QUE_EL_REQUEST_AUTORIZA(tmp_path):
+    """Publicar sobre otros heads o firma sería cerrar la cohorte con un
+    estado distinto del que se autorizó."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=30)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    E.solicitar_terminal(os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL),
+                         C.MOTIVO_SILENCIO, IDENT, {}, 5,
+                         D.estado_esperado(d, m15, h4, libro))
+    # el almacén avanza DESPUÉS del request: ya no es el estado autorizado
+    m15["BTCUSDT"].ofrecer([vela(m15["BTCUSDT"].ultimo_t + DUR)], "push")
+    m15["BTCUSDT"].drenar()
+    with pytest.raises(ValueError, match="autoriza otro estado"):
+        D.reanudar(D.BarreraCiclo(), d, IDENT, motor, m15, h4, libro, T0)
+
+
+def test_el_estado_esperado_incluye_los_sidecars(tmp_path):
+    motor, m15, h4, libro = mundo(tmp_path, n15=30)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    s = SIL.Silencio(IDENT["cohorte"], IDENT["contrato"], IDENT["commit"])
+    s.abrir_corrida()
+    s.observar("BTCUSDT", "4h", h4["BTCUSDT"].ultimo_t + DUR4,
+               h4["BTCUSDT"].ultimo_t, T0)
+    s.guardar(os.path.join(d, C.ARCHIVO_SILENCIO))
+    antes = D.estado_esperado(d, m15, h4, libro)
+    assert C.ARCHIVO_SILENCIO in antes["sidecars"]
+    s.observar("BTCUSDT", "4h", h4["BTCUSDT"].ultimo_t + DUR4,
+               h4["BTCUSDT"].ultimo_t, T0 + C.CADENCIA_MS)
+    s.guardar(os.path.join(d, C.ARCHIVO_SILENCIO))
+    assert D.estado_esperado(d, m15, h4, libro) != antes
+
+
+def test_dos_motivos_concurrentes_no_se_pisan_en_ningun_orden(tmp_path):
+    """La segunda transición NO reemplaza al terminal publicado: sin esto, el
+    orden de ejecución decidía el motivo y `silencio_h4` podía ganarle a
+    `determinism_divergence` pese a la precedencia contractual."""
+    for primero, segundo in ((C.MOTIVO_DIVERGENCIA, C.MOTIVO_SILENCIO),
+                             (C.MOTIVO_SILENCIO, C.MOTIVO_DIVERGENCIA)):
+        sub = tmp_path / f"caso_{primero}"
+        sub.mkdir()
+        motor, m15, h4, libro = mundo(sub, n15=30)
+        d = str(sub / "estado")
+        os.makedirs(d)
+        barrera = D.BarreraCiclo()
+        uno = D.transicion_terminal(barrera, d, primero, IDENT, {}, T0,
+                                    motor, m15, h4, libro)
+        dos = D.transicion_terminal(barrera, d, segundo, IDENT, {}, T0 + 1,
+                                    motor, m15, h4, libro)
+        assert uno["cuerpo"]["motivo"] == primero
+        assert dos.get("ya_existia") is True
+        assert dos["cuerpo"]["motivo"] == primero      # el publicado manda
+        crudo = json.load(open(os.path.join(d, C.ARCHIVO_BLOQUEADO),
+                               encoding="utf-8"))
+        assert crudo["motivo"] == primero
+        assert not os.path.exists(
+            os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL))
+
+
+def test_el_watermark_de_lotes_se_deriva_del_motor(tmp_path):
+    """No se recibe de afuera: si el llamador lo omitiera o lo perdiera en un
+    reinicio, el ciclo recorrería otra vez toda la historia sobre el mismo
+    motor vivo."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=120)
+    v = verif(tmp_path)
+    ahora = ahora_de(m15, h4)
+    primero = D.ciclo(fetch_reloj(ahora), D.BarreraCiclo(), motor, m15, h4,
+                      libro, v, lambda: ahora)
+    assert primero["procesados"]
+    assert D.watermark_lotes(motor) == max(motor.lotes_finalizados)
+    n_eventos = len(libro.eventos)
+    # un segundo ciclo SIN datos nuevos no puede reprocesar nada
+    segundo = D.ciclo(fetch_reloj(ahora), D.BarreraCiclo(), motor, m15, h4,
+                      libro, v, lambda: ahora)
+    assert segundo["procesados"] == []
+    assert len(libro.eventos) == n_eventos
+
+
+def test_el_corte_del_motor_publica_COMPLETED(tmp_path):
+    """Sin esto, `motor.cortado` no producía ningún terminal y un `main`
+    futuro habría tenido que inventar la orquestación."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=30)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    v = verif(tmp_path)
+    v.conforme(1, "d", "f")
+    motor.cortado = True
+    motor.motivo_corte = "n_cierres"
+    hecho = D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
+                                    libro, v, T0)
+    assert hecho["estado"] == C.COMPLETADO
+    cuerpo = json.load(open(os.path.join(d, C.ARCHIVO_COMPLETADO),
+                            encoding="utf-8"))
+    assert cuerpo["motivo"] == "n_cierres"
+    assert cuerpo["heads"] and cuerpo["firma"] == libro.firma()
+
+
+def test_COMPLETED_no_se_publica_sin_verificacion_ok(tmp_path):
+    """El corte ya ocurrió y no se pierde: se espera al ciclo siguiente."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=30)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    v = verif(tmp_path)
+    v.diferir(1, {"BTCUSDT_15m": 1})
+    motor.cortado = True
+    hecho = D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
+                                    libro, v, T0)
+    assert hecho["estado"] == "espera"
+    assert not os.path.exists(os.path.join(d, C.ARCHIVO_COMPLETADO))
+    v.conforme(2, "d", "f")
+    assert D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
+                                   libro, v, T0)["estado"] == C.COMPLETADO
+
+
+def test_el_cierre_administrativo_se_intenta_en_cada_ciclo(tmp_path):
+    """CF-35: es un no-op salvo que el reloj pase `T_corte + gracia`."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=30)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    v = verif(tmp_path)
+    v.conforme(1, "d", "f")
+    llamadas = []
+    real = type(motor).cerrar_administrativo
+    type(motor).cerrar_administrativo = lambda self, r: (
+        llamadas.append(r), real(self, r))[1]
+    try:
+        D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
+                                libro, v, T0)
+    finally:
+        type(motor).cerrar_administrativo = real
+    assert llamadas == [T0]
+    assert motor.cortado is False                   # no-op fuera del corte
+
+
+def test_una_divergencia_real_dispara_BLOCKED_INTEGRITY(tmp_path):
+    """Antes la divergencia se marcaba en el sidecar y ahí quedaba."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=120)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    v = verif(tmp_path)
+    ahora = ahora_de(m15, h4)
+    D.ciclo(fetch_reloj(ahora), D.BarreraCiclo(), motor, m15, h4, libro, v,
+            lambda: ahora)
+    barrera = D.BarreraCiclo()
+    with barrera:
+        captura = D.capturar(barrera, motor, m15, h4, libro, None,
+                             str(tmp_path / "scratch"), ahora, v)
+    captura["digest"] = "0" * 64                    # el vivo dijo otra cosa
+    resultado = D.verificar_y_reaccionar(
+        barrera, captura, v, ahora + 1, d, IDENT, motor, m15, h4, libro,
+        commit="ensayo")
+    assert resultado["igual"] is False
+    assert resultado["terminal"]["estado"] == C.BLOQUEADO
+    cuerpo = json.load(open(os.path.join(d, C.ARCHIVO_BLOQUEADO),
+                            encoding="utf-8"))
+    assert cuerpo["motivo"] == C.MOTIVO_DIVERGENCIA
+    assert barrera.terminal                         # no se abren más ciclos
