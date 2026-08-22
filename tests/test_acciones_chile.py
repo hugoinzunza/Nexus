@@ -130,6 +130,32 @@ def test_authenticated_user_can_save_own_read_only_portfolio(monkeypatch, tmp_pa
     assert instance.api_post("save-portfolio", {"holdings": []}, {}, user=None)[0] == 401
 
 
+def test_token_authenticated_telegram_export_ingest(monkeypatch, tmp_path):
+    target = tmp_path / "telegram.json"
+    monkeypatch.setattr(acciones_module, "TELEGRAM_PATH", str(target))
+    monkeypatch.setenv("NEXUX_CHILE_INGEST_TOKEN", "collector-secret")
+    context = SimpleNamespace(module_config={}, module_dir=str(tmp_path), log=lambda message: None)
+    instance = acciones_module.AccionesChileModule(context)
+    export = {
+        "schema_version": "acciones-chile-telegram-events-0.1.0",
+        "source": "telegram:hechosesencialeschile",
+        "event_count": 1,
+        "events": [{"message_id": 1, "available_at": "2026-08-01T12:00:00+00:00",
+                    "event_type": "financial_statement", "company": "EMPRESA S.A."}],
+    }
+    assert instance.api_post("ingest-telegram-events", export, {}, user=None)[0] == 401
+    status, _, raw = instance.api_post(
+        "ingest-telegram-events", export,
+        {"x-nexux-token": "collector-secret"}, user=None)
+    assert status == 200
+    assert json.loads(raw)["events"] == 1
+    assert json.loads(target.read_text())["events"][0]["message_id"] == 1
+    invalid = {**export, "event_count": 2}
+    assert instance.api_post(
+        "ingest-telegram-events", invalid,
+        {"x-nexux-token": "collector-secret"}, user=None)[0] == 400
+
+
 def test_auditor_is_manual_and_advisory(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     status = availability({"claude_auditor_enabled": True,

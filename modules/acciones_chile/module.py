@@ -29,6 +29,7 @@ LOCAL_UNIVERSE_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_universe.j
 MARKET_STATUS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_market_data_status.json")
 BANKS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_banks.json")
 MAX_BODY_BYTES = 500_000
+MAX_TELEGRAM_BODY_BYTES = 2_000_000
 
 
 class AccionesChileModule(NexusModule):
@@ -288,6 +289,31 @@ class AccionesChileModule(NexusModule):
         return None
 
     def api_post(self, subpath, body, headers, user=None):
+        if subpath == "ingest-telegram-events":
+            expected = os.environ.get("NEXUX_CHILE_INGEST_TOKEN", "")
+            provided = headers.get("x-nexux-token", "")
+            if not expected:
+                return self._json(503, {"error": "falta NEXUX_CHILE_INGEST_TOKEN"})
+            if not hmac.compare_digest(str(provided), str(expected)):
+                return self._json(401, {"error": "token inválido"})
+            encoded = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            if len(encoded) > MAX_TELEGRAM_BODY_BYTES:
+                return self._json(413, {"error": "payload demasiado grande"})
+            if (not isinstance(body, dict)
+                    or body.get("schema_version") != "acciones-chile-telegram-events-0.1.0"
+                    or body.get("source") != "telegram:hechosesencialeschile"
+                    or not isinstance(body.get("events"), list)
+                    or body.get("event_count") != len(body["events"])):
+                return self._json(400, {"error": "export Telegram inválido"})
+            allowed_types = {"financial_statement", "essential_notice"}
+            required = {"message_id", "available_at", "event_type", "company"}
+            if any(not isinstance(event, dict)
+                   or not required.issubset(event)
+                   or event.get("event_type") not in allowed_types
+                   for event in body["events"]):
+                return self._json(400, {"error": "evento Telegram inválido"})
+            self._write_json_atomic(TELEGRAM_PATH, body, mode=0o600)
+            return self._json(200, {"ok": True, "events": len(body["events"])})
         if subpath == "save-portfolio":
             uid = (user or {}).get("uid")
             if uid is None:
@@ -371,6 +397,18 @@ class AccionesChileModule(NexusModule):
                 return json.load(handle)
         except (FileNotFoundError, OSError, ValueError):
             return None
+
+    def _write_json_atomic(self, path: str, data: dict, mode: int | None = None):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temp = path + ".tmp"
+        with self._lock:
+            with open(temp, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, ensure_ascii=False, separators=(",", ":"))
+                handle.flush()
+                os.fsync(handle.fileno())
+            if mode is not None:
+                os.chmod(temp, mode)
+            os.replace(temp, path)
 
     @staticmethod
     def _universe_status():
