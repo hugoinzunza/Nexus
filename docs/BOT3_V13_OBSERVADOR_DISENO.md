@@ -1,11 +1,15 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.12
+# Bot3.v13 — Observador operativo · DISEÑO rev.13
 
-**Estado: DISEÑO rev.12 — revisión de concurrencia de la transición,
+**Estado: DISEÑO rev.13 — normalización de la condición de cierre,
 propuesta para auditoría ANTES de seguir implementando. No desplegado. Cohorte
 no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.12 cierra la CONCURRENCIA de la transición: parte la barrera en fase de
+rev.13 normaliza la condición que cierra la ventana: la hace depender del
+ganador actual, resuelve `deferred` sin productor activo, garantiza que un
+`divergent` observado esté SIEMPRE en el request antes de calcular el ganador,
+y declara quién reactiva la fase B. Acotada a §9.1.2/§13.5 y sus gates.
+rev.12 cerró la CONCURRENCIA de la transición: parte la barrera en fase de
 registro y fase de publicación, define qué evento cierra la ventana de
 recolección, e impide que un silencio le gane a una divergencia que todavía se
 está calculando. rev.11 cerró los puntos registrales que rev.10 dejó abiertos: el ORDEN de la
@@ -657,24 +661,51 @@ FASE B — publicación (una sola vez)
 ANTES de tomar la barrera, y entre esos dos pasos otro ciclo podía empezar a
 ingerir sobre una cohorte que ya estaba cerrándose.
 
-#### 9.1.2 Qué cierra la ventana de recolección *(rev.12)*
+#### 9.1.2 Qué cierra la ventana de recolección *(rev.13)*
 
 La ventana existe para que la precedencia signifique algo: si se publicara con
 la primera causa, ganaría la que llega antes.
 
-**Se cierra cuando ningún productor puede aportar una causa de mayor
-precedencia.** En la práctica hay un solo productor asíncrono —la comparación
-fría—, porque el silencio y el corte los detecta el ciclo, que durante la
-ventana no abre. Así que la condición es:
+**Regla previa, y es incondicional** *(rev.13)*: quien entra en la fase B y
+observa la verificación en `divergent` **anexa `determinism_divergence` con su
+evidencia ANTES de calcular el ganador**.
 
-| estado de la verificación | ventana |
-|---|---|
-| `ok` o `divergent` | **cerrada**: ya aportó lo que tenía que aportar |
-| `pending` o `deferred` | **abierta**: todavía puede producir `determinism_divergence` |
+Sin eso, la condición era inobservable: la comparación fría escribe
+`verificacion.json = divergent` y recién después pide la barrera para
+registrar su causa. Entre esos dos pasos, la fase B podía adquirir la barrera,
+ver `divergent`, dar la ventana por cerrada y publicar el ganador anterior —un
+`silencio_h4`— sin que la divergencia hubiera llegado nunca al request.
 
-Una causa registrada con la comparación fría `pending` **espera** a que
-resuelva. No es una demora arbitraria: es lo que hace cumplible
-`determinism_divergence > silencio_h4`.
+Con la causa ya anexada, la ventana se cierra según el **ganador actual**, no
+según el estado de la verificación a secas:
+
+| ganador en el request | estado de la comparación | qué se hace |
+|---|---|---|
+| `determinism_divergence` | cualquiera | **publicar ya**: nada lo supera |
+| `silencio_h4` | `pending` | **esperar**: hay una comparación activa que puede superarlo |
+| `silencio_h4` | `deferred`, `ok` | **publicar**: no hay productor que pueda aportar más |
+| científico | `ok` posterior a toda deferencia | **publicar** `COMPLETED` |
+| científico | `pending` | **esperar** |
+| científico | `deferred` | **fallo cerrado**: estado inalcanzable (§13.5.0) |
+
+`divergent` no aparece en la tabla porque, por la regla previa, para cuando se
+calcula el ganador ya es `determinism_divergence` quien gana.
+
+rev.12 mantenía abierta cualquier ventana con `pending`, incluso cuando el
+request ya contenía el motivo de máxima precedencia: esperar ahí era esperar
+algo que no podía cambiar el resultado.
+
+#### 9.1.3 Quién reactiva la fase B *(rev.13)*
+
+Cuando una comparación pasa de `pending` a `ok` no hay causa nueva que
+registrar, así que nadie volvería a intentar publicar y la cohorte quedaría
+detenida.
+
+**La finalización de la comparación fría intenta la fase B de inmediato**, en
+sus cuatro salidas —`ok`, `divergent`, y también al fallar por copia ausente o
+corrupta, que es fallo cerrado—. No depende de otro ciclo ni de un polling sin
+especificar: los ciclos de ingesta están prohibidos durante la ventana,
+precisamente.
 
 **Contrato de `terminal.request`** *(rev.7 — MAJOR 2)*. El artefacto que
 permite reanudar necesita schema propio, o el reinicio no puede verificar qué
@@ -967,21 +998,24 @@ ganador es CIENTÍFICO, al reanudar se recarga `verificacion.json` desde disco
 | estado del sidecar | qué se hace |
 |---|---|
 | `ok` y posterior a toda deferencia | se publica `COMPLETED` |
-| `pending` | se MANTIENE el cierre en curso: ni ciclos ni publicación. La comparación fría se reanuda desde la copia (§13.5.1) |
+| `pending` | se MANTIENE el cierre en curso: ni ciclos ni publicación. La comparación fría se reanuda desde la copia (§13.5.1) y al terminar intenta la fase B (§9.1.3) |
 | `deferred` con ganador CIENTÍFICO | **fallo cerrado**: estado inalcanzable (§13.5.0) |
-| `deferred` con ganador de INTEGRIDAD | ventana abierta (§9.1.2); se espera a que la comparación resuelva |
+| `deferred` con ganador de INTEGRIDAD | se PUBLICA: no hay comparación activa que pueda aportar más (§9.1.2) |
 | `divergent` | se ANEXA `determinism_divergence` con su evidencia al request y se publica `BLOCKED_INTEGRITY` |
 | ausente, corrupto o de otra identidad | **fallo cerrado** |
 
 Para un ganador de INTEGRIDAD la verificación no HABILITA nada —
-`BLOCKED_INTEGRITY` no ejecuta cierre científico (§13.1)—, pero sí puede
-RETENERLO: mientras la comparación fría siga `pending` o `deferred`, la
-ventana está abierta (§9.1.2) y no se publica *(rev.12)*.
+`BLOCKED_INTEGRITY` no ejecuta cierre científico (§13.1)—, pero un
+`silencio_h4` sí queda RETENIDO mientras haya una comparación fría realmente
+`pending` (§9.1.2). Sin esa retención, el silencio publicaba mientras la
+comparación corría, el terminal quedaba inmutable y una divergencia posterior
+nunca ejercía su precedencia.
 
-Sin esa retención, `silencio_h4` publicaba mientras la comparación corría, el
-terminal quedaba inmutable y una divergencia posterior nunca ejercía su
-precedencia — el orden `determinism_divergence > silencio_h4` era letra
-muerta justo en el caso en que importa.
+**`deferred` NO retiene** *(rev.13)*: una deferencia significa que no hay
+captura ni comparación activa, y resolverla exigiría una captura nueva, que
+vive en un ciclo — prohibido durante la ventana. Esperar ahí sería esperar a
+un productor que no existe, y el bloqueo quedaría detenido para siempre. Con
+`deferred` y ganador de integridad se **publica**.
 
 `COMPLETED` exige verificación `ok` y posterior a toda deferencia, y esa
 comprobación se hace en la reanudación igual que en la publicación en vivo: sin
@@ -1011,8 +1045,8 @@ falló, y **falla cerrado** en vez de intentar resolverlo con una operación que
 el diseño no contempla.
 
 `deferred` con un ganador de INTEGRIDAD sí es alcanzable —la deferencia pudo
-quedar de antes— y ahí rige §9.1.2: la ventana sigue abierta hasta que la
-comparación fría resuelva.
+quedar de antes—, y ahí la ventana NO espera: sin comparación activa no hay
+nada que aportar, así que se publica el bloqueo (§9.1.2) *(rev.13)*.
 
 #### 13.5.1 Quién resuelve un `pending` tras el reinicio *(rev.11)*
 
@@ -1230,13 +1264,20 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     ausente o de otra identidad); terminal + request COINCIDENTE se recupera
     archivando; cada una de las cinco discrepancias de §13.6 falla cerrado; y
     caída en CADA frontera entre barrera, request, terminal y archivado;
-40bis. **concurrencia de la transición** *(rev.12)*, con el mutex REAL, no un
-    doble: un registrador B entra después de A y ANTES de publicar; ningún
+40bis. **concurrencia de la transición** *(rev.12/13)*, con el mutex REAL, no
+    un doble: un registrador B entra después de A y ANTES de publicar; ningún
     ciclo de ingesta entra en esa ventana; `silencio_h4` con la comparación
     fría `pending` NO publica, y al resolver `divergent` el terminal es por
-    divergencia — en los dos órdenes de llegada; `deferred` con ganador
-    científico falla cerrado; y caída durante CADA una de las dos fases de
-    barrera, la de registro y la de publicación;
+    divergencia — en los dos órdenes de llegada; caída durante CADA una de las
+    dos fases de barrera;
+40ter. **condición de cierre por GANADOR** *(rev.13)*: con
+    `determinism_divergence` en el request se publica aunque la comparación
+    siga `pending`; `silencio_h4` con `deferred` PUBLICA y no queda detenido;
+    `deferred` con ganador científico falla cerrado; una fase B que observa
+    `divergent` sin la causa en el request la ANEXA antes de calcular el
+    ganador —gate con la escritura del sidecar y el registro separados, que es
+    la carrera real—; y la finalización de la comparación intenta la fase B en
+    sus cuatro salidas, sin que ningún ciclo la despierte;
 41. **cota de la zona de corte demostrada** contra el orden completo de fases
     del motor —`fill+STOP` en el mismo lote incluido— sobre los siete mercados:
     ningún lote produce más cierres que mercados con posición u orden viva.
