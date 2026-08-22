@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="/static/icons/nexux-favicon-v5.ico">
+  <title>Acciones Chile · NexUX</title>
+  <style>
+    :root{color-scheme:dark;--bg:#09110f;--card:#111d19;--line:#284239;--text:#eaf5ef;--muted:#94afa4;--accent:#5ee0a0;--warn:#f4c66b}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#17372d 0,transparent 35%),var(--bg);font:15px/1.45 system-ui;color:var(--text)}
+    main{max-width:980px;margin:auto;padding:28px 18px 60px}.eyebrow{color:var(--accent);font-weight:750;letter-spacing:.12em;text-transform:uppercase;font-size:12px}
+    h1{font-size:clamp(34px,7vw,66px);line-height:.95;margin:12px 0}.lead{max-width:650px;color:var(--muted);font-size:18px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:30px}
+    article{background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--line);border-radius:18px;padding:20px}h2{font-size:17px;margin:0 0 14px}.value{font-size:28px;font-weight:780}.muted{color:var(--muted)}
+    .pill{display:inline-flex;padding:5px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:12px}.ok{color:var(--accent)}.warn{color:var(--warn)}
+    ul{padding-left:18px;color:var(--muted)}a{color:var(--accent)}
+  </style>
+</head>
+<body><main>
+  <div class="eyebrow">NexUX · módulo independiente</div><h1>Acciones<br>Chile</h1>
+  <p class="lead">Tu cartera nacional, resultados oficiales de la CMF y un motor de investigación auditable. Sin mezclar cripto y sin ejecutar órdenes.</p>
+  <section class="grid">
+    <article><h2>Cartera Renta 4</h2><div class="value" id="positions">—</div><p class="muted" id="portfolio">Consultando…</p><span class="pill">solo lectura</span></article>
+    <article><h2>Fuente fundamental</h2><div class="value">CMF</div><p class="muted">TXT IFRS oficial por período, RUT, cuenta y moneda.</p><span class="pill ok">adaptador listo</span></article>
+    <article><h2>Auditor independiente</h2><div class="value">OPUS</div><p class="muted" id="auditor">Revisión manual, sin autoridad operacional.</p><span class="pill" id="audit-pill">verificando</span></article>
+  </section>
+  <section class="grid">
+    <article><h2>Etapa 1</h2><ul><li>Importar la cartera personal.</li><li>Vincular ticker con RUT del emisor.</li><li>Comparar ventas, utilidad y márgenes interanuales.</li></ul></article>
+    <article><h2>Biblioteca de tesis</h2><ul><li>Feed público de @inversorchileno listo.</li><li>Separar hechos, tesis y opinión.</li><li>Contrastar cada afirmación con CMF.</li></ul></article>
+    <article><h2>Frontera</h2><ul><li>No guarda claves del sitio.</li><li>No compra ni vende.</li><li>Una predicción nunca es una orden.</li></ul></article>
+  </section>
+</main><script>
+fetch('./api/status').then(r=>r.json()).then(s=>{
+  document.querySelector('#positions').textContent=s.portfolio.positions;
+  document.querySelector('#portfolio').textContent=s.portfolio.connected?`Conectada · ${s.portfolio.source}`:'Pendiente de importación personal';
+  const a=s.auditor; document.querySelector('#auditor').textContent=`${a.model} · ejecución ${a.run_mode} · autoridad consultiva`;
+  const p=document.querySelector('#audit-pill');p.textContent=a.key_present?'disponible':'falta credencial';p.className='pill '+(a.key_present?'ok':'warn');
+}).catch(()=>{document.querySelector('#portfolio').textContent='Estado no disponible';});
+</script></body></html>

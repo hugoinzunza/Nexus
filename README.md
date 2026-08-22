@@ -14,6 +14,8 @@ Hoy arranca con estas áreas:
   estrategias con backtest honesto (¡ya funcional!).
 - **📒 Diario** — estadísticas de tu trading real en Binance (Futuros y Spot),
   **solo lectura** (¡ya funcional!).
+- **🇨🇱 Acciones Chile** — cartera Renta 4 y análisis fundamental de resultados
+  CMF, en un módulo read-only separado de cripto.
 - **🎵 Música** — reservado, placeholder por ahora.
 
 > ⚠️ **Solo lectura.** NexUX observa los mercados y muestra información. **No
@@ -57,6 +59,7 @@ Luego, para arrancarlo:
 - **Hub:** http://127.0.0.1:8800/
 - **Trading:** http://127.0.0.1:8800/m/trading/
 - **Música:** http://127.0.0.1:8800/m/music/
+- **Acciones Chile:** http://127.0.0.1:8800/m/acciones_chile/
 
 Para detenerlo: `Ctrl + C`.
 

@@ -1,0 +1,87 @@
+# RFC — NexUX Acciones Chile
+
+**Estado:** MVP read-only en construcción  
+**Fecha:** 2026-08-22  
+**Owner humano:** Hugo  
+
+## Objetivo
+
+Crear un módulo de NexUX separado del mundo cripto para observar una cartera de
+acciones chilenas, analizar resultados financieros publicados por la CMF y
+evaluar hipótesis de forma reproducible. Una señal o predicción nunca constituye
+una orden.
+
+## Fuentes y conectividad
+
+### Renta 4 Chile
+
+- No se encontró una API pública chilena documentada.
+- Fase inicial: exportación personal de cartera y movimientos, normalizada al
+  contrato `{ticker, company_rut, quantity, average_cost, currency}`.
+- La ingesta está deshabilitada por defecto y exige un token separado.
+- No se automatiza el login, no se guardan claves y no se interceptan endpoints
+  privados. Antes de crear un adaptador web se requiere autorización/confirmación
+  escrita de Renta 4 sobre acceso automatizado y uso de los datos.
+- El módulo jamás incluye endpoints de compra, venta, modificación o cancelación.
+
+### CMF
+
+- Fuente primaria: TXT IFRS oficial publicado mensualmente en
+  `https://www.cmfchile.cl/institucional/estadisticas/ver_archivo.php`.
+- El cliente aplica allowlist exacta de esquema, host y path, límite de descarga,
+  timeout, parser estricto y falla cerrada.
+- Métricas iniciales: ventas, crecimiento interanual, utilidad operacional,
+  utilidad neta, margen operacional y margen neto.
+- Cada valor conserva período, RUT, sociedad, moneda, taxonomía y estado origen.
+
+### @inversorchileno
+
+- El canal se usa como fuente secundaria de tesis, no como ground truth.
+- Cada afirmación futura debe guardar video, fecha, timestamp, ticker/RUT, tipo
+  (`hecho`, `tesis`, `opinión`) y evidencia CMF que la confirma, contradice o deja
+  sin resolver.
+- No se copiarán ni republicarán videos o transcripciones completas.
+- El feed público ya permite indexar títulos, fechas, URL y capítulos. El primer
+  lote Q2 2026 cubre, entre otras, CAP, CMPC, Cencosud, Cencomalls, SMSAAM,
+  LATAM, Mall Plaza, CCU, Entel, Concha y Toro, los bancos, Enel, Colbún,
+  Andina, Engie, Sonda y Pehuenche.
+
+## Auditoría OPUS/Claude
+
+Claude Opus actúa como auditor adversarial independiente de los avances. Revisa
+procedencia, look-ahead, privacidad, separación respecto de cripto, reproducibilidad,
+afirmaciones predictivas y comportamiento fail-closed.
+
+Su autoridad es exclusivamente consultiva:
+
+- no genera órdenes ni señales operables;
+- no modifica datos, políticas o modelos;
+- no aprueba releases;
+- no sustituye revisión humana;
+- si falta credencial o la API falla, el estado es `pending`, nunca `approved`.
+
+La ejecución es manual para controlar costo y evitar enviar cartera personal sin
+una acción explícita.
+
+El comando recibe un snapshot JSON acotado; no descubre ni lee la cartera por su
+cuenta:
+
+```bash
+ANTHROPIC_API_KEY=... .venv/bin/python scripts/audit_acciones_chile.py snapshot.json
+```
+
+## Fases
+
+1. **Cartera y CMF:** importación read-only, catálogo ticker↔RUT y métricas.
+2. **Biblioteca de tesis:** índice del canal y contraste CMF.
+3. **Modelos research-only:** preregistro, splits temporales, benchmark simple,
+   costos y evidencia fuera de muestra.
+4. **Command Center:** alertas explicables y revisión humana. Sin ejecución.
+
+## Criterios de salida del MVP
+
+- Cero imports desde módulos cripto o ejecutores.
+- Parser CMF probado con fixture representativo.
+- Cartera rechaza payloads inválidos y permanece read-only.
+- Auditor visible con modelo, disponibilidad y autoridad.
+- Predicciones rotuladas como investigación y sin camino a órdenes.

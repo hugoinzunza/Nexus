@@ -1,0 +1,83 @@
+"""Cliente read-only para los TXT IFRS publicados por la CMF.
+
+La CMF publica un archivo delimitado por punto y coma. Cada fila contiene:
+periodo, RUT, sociedad, alcance, moneda, cuenta, valor, taxonomía y estado.
+Este adaptador solo acepta el host y path oficiales definidos abajo.
+"""
+from __future__ import annotations
+
+import io
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+from typing import Iterable
+
+
+CMF_HOST = "www.cmfchile.cl"
+CMF_PATH = "/institucional/estadisticas/ver_archivo.php"
+DEFAULT_URL = f"https://{CMF_HOST}{CMF_PATH}"
+MAX_DOWNLOAD_BYTES = 30_000_000
+
+
+@dataclass(frozen=True)
+class CMFRow:
+    period: str
+    rut: str
+    company: str
+    scope: str
+    currency: str
+    account: str
+    value: Decimal
+    taxonomy: str
+    statement: str
+
+
+def _validated_url(base_url: str, period: str) -> str:
+    if len(period) != 6 or not period.isdigit():
+        raise ValueError("period debe tener formato YYYYMM")
+    parsed = urllib.parse.urlparse(base_url)
+    if parsed.scheme != "https" or parsed.hostname != CMF_HOST or parsed.path != CMF_PATH:
+        raise ValueError("la fuente CMF no está allowlisted")
+    return base_url + "?" + urllib.parse.urlencode({"inicio": period, "termino": period})
+
+
+def download_period(period: str, base_url: str = DEFAULT_URL, timeout: float = 30.0) -> bytes:
+    """Descarga un período oficial. Falla cerrado ante redirecciones inesperadas."""
+    url = _validated_url(base_url, period)
+    request = urllib.request.Request(url, headers={"User-Agent": "NexUX-AccionesChile/0.1"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL allowlisted
+        final = urllib.parse.urlparse(response.geturl())
+        if final.scheme != "https" or final.hostname != CMF_HOST or final.path != CMF_PATH:
+            raise ValueError("la CMF redirigió fuera del endpoint autorizado")
+        body = response.read(MAX_DOWNLOAD_BYTES + 1)
+    if len(body) > MAX_DOWNLOAD_BYTES:
+        raise ValueError("archivo CMF excede el límite permitido")
+    return body
+
+
+def parse_rows(payload: bytes | str) -> list[CMFRow]:
+    text = payload.decode("utf-8-sig") if isinstance(payload, bytes) else payload
+    rows: list[CMFRow] = []
+    for number, raw in enumerate(io.StringIO(text), start=1):
+        raw = raw.rstrip("\r\n")
+        if not raw:
+            continue
+        fields = raw.split(";")
+        if len(fields) != 9:
+            raise ValueError(f"fila CMF {number}: se esperaban 9 columnas")
+        try:
+            value = Decimal(fields[6].strip())
+        except InvalidOperation as exc:
+            raise ValueError(f"fila CMF {number}: valor inválido") from exc
+        rows.append(CMFRow(
+            period=fields[0].strip(), rut=fields[1].strip(), company=fields[2].strip(),
+            scope=fields[3].strip(), currency=fields[4].strip(), account=fields[5].strip(),
+            value=value, taxonomy=fields[7].strip(), statement=fields[8].strip(),
+        ))
+    return rows
+
+
+def rows_for_rut(rows: Iterable[CMFRow], rut: str) -> list[CMFRow]:
+    wanted = "".join(ch for ch in str(rut) if ch.isdigit())[:8]
+    return [row for row in rows if row.rut == wanted]

@@ -163,6 +163,15 @@
     "hypothesis_lab": {
       "enabled": true,
       "_nota": "Vista de solo lectura para estudios causales y observadores forward. No importa ejecutores ni expone endpoints de escritura."
+    },
+    "acciones_chile": {
+      "enabled": true,
+      "cmf_base_url": "https://www.cmfchile.cl/institucional/estadisticas/ver_archivo.php",
+      "portfolio_ingest_enabled": false,
+      "claude_auditor_enabled": true,
+      "claude_auditor_model": "claude-opus-4-8",
+      "claude_auditor_run_mode": "manual",
+      "_nota": "Modulo separado de cripto. Cartera y CMF son read-only; no crea, modifica ni cancela ordenes. La ingesta se habilita solo con token. Claude/Opus audita avances, no genera senales ni autoriza decisiones."
     }
   }
 }
