@@ -15,8 +15,10 @@ from modules.acciones_chile.banks import (
 from modules.acciones_chile.fundamentals import analyze_company
 from modules.acciones_chile.fx import (
     FxDownload, _validated_url as validated_fx_url, availability as fx_availability,
-    build_fx_dataset, download_observed_dollar, parse_observed_dollar, rate_as_of,
-    read_fx_dataset, validate_eps_unit_dataset,
+    build_fx_dataset, build_public_fx_dataset, download_observed_dollar,
+    download_public_observed_dollar, eps_unit_availability, parse_observed_dollar,
+    parse_public_observed_dollar,
+    rate_as_of, read_fx_dataset, validate_eps_unit_dataset,
 )
 from modules.acciones_chile.portfolio import normalize_portfolio
 from modules.acciones_chile.auditor import availability
@@ -88,7 +90,9 @@ def test_valuation_only_computes_compatible_observed_multiple():
     usd_without_eps = [{"period": "202512", "currency": "USD", "analysis": {}}]
     assert evaluate_valuation(usd_without_eps, "6000")["status"] == "annual_eps_unavailable"
     verified = {
-        "status": "verified", "unit": "USD_PER_SHARE",
+        "status": "verified", "metric": "basic_eps", "period": "202512",
+        "unit": "USD_PER_SHARE", "cmf_value": "1.2", "reported_value": "1.2",
+        "cmf_value_multiplier": "1", "source_page": 10,
         "source_reference": "https://issuer.example/annual-report.pdf",
         "verification_method": "audited_annual_report_note",
         "source_sha256": "a" * 64, "verified_as_of": "2026-08-22",
@@ -156,19 +160,87 @@ def test_bcch_network_error_never_leaks_token(monkeypatch):
     assert error.value.__cause__ is None
 
 
+def test_bcch_public_table_is_strict_official_fallback(monkeypatch):
+    html = b'''<html><table id="listaObsHtmlAll"><thead><tr><th>FECHA</th><th>VALOR</th></tr></thead>
+    <tbody><tr><td>21.Ago.2026</td><td>923,23</td></tr>
+    <tr><td>20.Ago.2026</td><td>920,26</td></tr></tbody></table></html>'''
+    rows = parse_public_observed_dollar(html)
+    assert rows[-1] == {"date": "2026-08-21", "clp_per_usd": "923.23"}
+
+    class Response:
+        headers = {}
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *args): return None
+        def geturl(self):
+            return ("https://si3.bcentral.cl/Siete/ES/Siete/Cuadro/CAP_TIPO_CAMBIO/"
+                    "MN_TIPO_CAMBIO4/DOLAR_OBS_ADO?idSerie=F073.TCO.PRE.Z.D")
+        def read(self, size): return html
+
+    monkeypatch.setattr("modules.acciones_chile.fx.urllib.request.urlopen",
+                        lambda request, timeout: Response())
+    download = download_public_observed_dollar()
+    data = build_public_fx_dataset(download)
+    assert data["ingestion_method"] == "public_bde_html"
+    assert rate_as_of(data, "2026-08-22") == rows[-1]
+
+
+def test_bcch_public_table_rejects_ambiguous_or_redirected_source(monkeypatch):
+    duplicate = ('<table id="listaObsHtmlAll"><tr><td>21.Ago.2026</td><td>923,23</td></tr></table>' * 2)
+    with pytest.raises(ValueError, match="no encontrada o ambigua"):
+        parse_public_observed_dollar(duplicate)
+
+    class Redirected:
+        headers = {}
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *args): return None
+        def geturl(self): return "https://example.com/fx"
+        def read(self, size): return b""
+
+    monkeypatch.setattr("modules.acciones_chile.fx.urllib.request.urlopen",
+                        lambda request, timeout: Redirected())
+    with pytest.raises(ValueError, match="fuera del endpoint autorizado"):
+        download_public_observed_dollar()
+
+
 def test_eps_unit_requires_audited_hashed_evidence():
-    valid = {"schema_version": "acciones-chile-eps-units-0.1.0", "entries": {
+    valid = {"schema_version": "acciones-chile-eps-units-0.2.0", "entries": {
         "90412000": {
-            "status": "verified", "unit": "USD_PER_SHARE",
+            "status": "verified", "metric": "basic_eps", "period": "202512",
+            "unit": "USD_PER_SHARE", "cmf_value": "1.3495",
+            "reported_value": "1.3495", "cmf_value_multiplier": "1",
             "verification_method": "audited_annual_report_note",
             "source_reference": "https://issuer.example/annual-report.pdf",
-            "source_sha256": "a" * 64, "verified_as_of": "2026-08-22",
+            "source_page": 14, "source_sha256": "a" * 64,
+            "verified_as_of": "2026-08-22",
         },
     }}
     assert validate_eps_unit_dataset(valid)["entries"]["90412000"]["unit"] == "USD_PER_SHARE"
     valid["entries"]["90412000"]["verification_method"] = "heuristic"
     with pytest.raises(ValueError, match="método de unidad EPS"):
         validate_eps_unit_dataset(valid)
+
+
+def test_packaged_eps_evidence_reconciles_copec_cmf_scale_and_minera_unit():
+    root = Path(__file__).resolve().parents[1]
+    evidence = validate_eps_unit_dataset(json.loads(
+        (root / "config/acciones_chile_eps_units_v0.2.json").read_text(encoding="utf-8")))
+    copec = evidence["entries"]["90690000"]
+    assert Decimal(copec["cmf_value"]) * Decimal(copec["cmf_value_multiplier"]) == Decimal("0.67457")
+    assert copec["reported_value"] == "0.674577"
+    history = [{"period": "202512", "currency": "USD",
+                "analysis": {"basic_eps": "674.57"}}]
+    valuation = evaluate_valuation(
+        history, "6600", {"date": "2026-08-21", "clp_per_usd": "933"}, copec)
+    assert valuation["eps_verified_per_share"] == 0.674577
+    assert valuation["eps_clp_per_share"] == pytest.approx(629.380341)
+    assert valuation["pe"] == pytest.approx(10.4865)
+    assert evidence["entries"]["90412000"]["reported_value"] == "1.3495"
+    status = eps_unit_availability(str(root / "config/acciones_chile_eps_units_v0.2.json"))
+    assert status["mechanism_ready"] is True
+    assert status["ready"] is False
+    assert status["universe_complete"] is False
 
 
 def test_strategy_rubric_is_explainable_and_never_emits_trade_order():
@@ -460,7 +532,7 @@ def test_cmf_sources_expose_numeric_issuer_coverage_and_persisted_artifact_hash(
     assert source["raw_artifact_sha256"] == "b" * 64
     assert source["raw_artifact_sha256_scope"] == "persisted_deterministic_gzip_bytes"
     assert source["raw_artifact_bytes"] == 321
-    assert data["cmf"]["metric_coverage_scope"].startswith("descriptive_latest_record")
+    assert data["cmf"]["metric_coverage_scope"].startswith("descriptive_latest_nonpartial")
 
 
 def test_cmf_missing_content_length_requires_matching_redownload():
@@ -518,11 +590,26 @@ def test_partial_latest_period_keeps_catalog_from_previous_quarter():
     assert by_rut["76543210"]["months_covered"] == 3
     assert data["cmf"]["cross_section_comparable"] is False
     assert data["cmf"]["historical_observation_count"] == 3
+    assert data["cmf"]["issuer_catalog_derivation"] == "union_of_distinct_ruts_across_all_loaded_periods"
+    assert data["cmf"]["issuer_catalog_count"] == len({
+        item["rut"] for item in data["cmf"]["observations"]})
     assert {item["period"] for item in data["cmf"]["observations"]} == {
         "202606", "202603", "202503",
     }
     assert data["feature_use"] == "forbidden_until_availability_join"
     assert by_rut["76543210"]["analysis"]["revenue_growth_yoy"] == 0.2
+
+
+def test_metric_coverage_excludes_partial_latest_period():
+    latest = (_payload("202606") +
+              "202606;76543210;EMPRESA CHILENA S.A.;I;CLP;Total de activos;5000;TAX CI;ESF\n")
+    reference = (_payload("202506") +
+                 _payload("202506").replace("76543210", "11111111").replace(
+                     "EMPRESA CHILENA S.A.", "SEGUNDA EMPRESA S.A."))
+    data = build_multi_period_dataset({"202606": latest.encode(), "202506": reference.encode()})
+    assert data["cmf"]["sources"][0]["partial"] is True
+    assert data["cmf"]["metric_coverage"]["total_assets"] == 0
+    assert data["cmf"]["metric_coverage_excluded_partial_periods"] == ["202606"]
     snapshot = build_audit_snapshot(data)
     assert snapshot["cmf"]["issuer_count"] == 2
     assert snapshot["boundaries"]["orders"] == "prohibited"
@@ -783,6 +870,7 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
     ):
         assert f'id="{element_id}"' in page
     assert "s.cmf_banks" in page
+    assert "s.eps_units" in page
     assert "x.causal_feature_candidates" in page
     assert "./api/save-portfolio" in page
     assert "./api/radar" in page

@@ -1,0 +1,33 @@
+{
+  "schema_version": "acciones-chile-eps-units-0.2.0",
+  "entries": {
+    "90412000": {
+      "status": "verified",
+      "metric": "basic_eps",
+      "period": "202512",
+      "unit": "USD_PER_SHARE",
+      "cmf_value": "1.3495",
+      "reported_value": "1.3495",
+      "cmf_value_multiplier": "1",
+      "verification_method": "audited_annual_report_note",
+      "source_reference": "https://www.minera.cl/wp-content/uploads/2026/03/2025_12_31_minera_estados_financieros_consolidados.pdf",
+      "source_page": 14,
+      "source_sha256": "fd1bfa018d3e3bac60e5115977afed8a9fb2f6f58d8a8c75c483157b239d028b",
+      "verified_as_of": "2026-08-22"
+    },
+    "90690000": {
+      "status": "verified",
+      "metric": "basic_eps",
+      "period": "202512",
+      "unit": "USD_PER_SHARE",
+      "cmf_value": "674.57",
+      "reported_value": "0.674577",
+      "cmf_value_multiplier": "0.001",
+      "verification_method": "audited_annual_report_note",
+      "source_reference": "https://www.empresascopec.cl/wp-content/uploads/2026/02/Estados_Financieros_4Q25.pdf",
+      "source_page": 15,
+      "source_sha256": "91c116b2240316710d1558d05a5af3b2c0f40c7ad4b126bf3feb28675c311d68",
+      "verified_as_of": "2026-08-22"
+    }
+  }
+}

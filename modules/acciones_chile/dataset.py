@@ -202,11 +202,18 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
             "partial": partial,
             "raw_artifact": meta.get("raw_artifact"),
         })
+    partial_periods = {item["period"] for item in sources if item["partial"]}
+    comparable_latest = {}
+    for item in observations:
+        if item["period"] not in partial_periods and item["rut"] not in comparable_latest:
+            comparable_latest[item["rut"]] = item
+    coverage_issuers = list(comparable_latest.values())
     metric_coverage = {}
     for metric in ("revenue", "operating_profit", "net_income", "basic_eps", "operating_cash_flow",
                    "free_cash_flow", "total_assets", "total_liabilities"):
-        present = sum(item["analysis"].get(metric) is not None for item in issuers)
-        metric_coverage[metric] = round(present / len(issuers), 6) if issuers else 0.0
+        present = sum(item["analysis"].get(metric) is not None for item in coverage_issuers)
+        metric_coverage[metric] = (round(present / len(coverage_issuers), 6)
+                                   if coverage_issuers else 0.0)
     months = sorted({item["months_covered"] for item in issuers if not item["stale"]})
     videos = parse_feed(videos_payload) if videos_payload else []
     return {
@@ -215,11 +222,14 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
         "feature_use": "forbidden_until_availability_join",
         "cmf": {
             "periods": periods, "sources": sources, "issuers": issuers,
+            "issuer_catalog_derivation": "union_of_distinct_ruts_across_all_loaded_periods",
+            "issuer_catalog_count": len(all_ruts),
             "observations": observations,
             "historical_observation_count": len(observations),
             "metric_coverage": metric_coverage,
             "metric_coverage_scope": (
-                "descriptive_latest_record_per_issuer_mixed_horizons_not_feature_or_radar_input"),
+                "descriptive_latest_nonpartial_record_per_issuer_not_feature_or_radar_input"),
+            "metric_coverage_excluded_partial_periods": sorted(partial_periods),
             "cross_section_comparable": len(months) <= 1,
             "months_covered_present": months,
         },
@@ -243,6 +253,9 @@ def build_audit_snapshot(data: dict) -> dict:
         },
         "enforcement_evidence": {
             "partial_periods": "excluded in build_feature_records and single-period radar",
+            "availability_join": (
+                "CMF rows become causal candidates only after exact company/period Telegram match; "
+                "Telegram available_at governs eligibility and CMF retrieved_at is never a feature timestamp"),
             "radar_comparability": (
                 "build_radar selects one non-partial accounting close; the issuer catalog "
                 "cross_section_comparable flag is false when latest issuer records mix horizons"),
@@ -251,7 +264,9 @@ def build_audit_snapshot(data: dict) -> dict:
                 "read back and decompressed after deterministic gzip persistence; transport Content-Length "
                 "is checked when present, otherwise two independent downloads must have equal SHA-256"),
             "universe_history": "price label readiness requires survivorship_free_backtest_allowed",
-            "youtube": "youtube_feature_allowed=false; rubric emits research reading only",
+            "youtube": (
+                "editorial rubric maps primary CMF metrics to a research reading; "
+                "youtube_feature_allowed=false and every buy/sell/order output remains null"),
             "portfolio_privacy": "stored by authenticated uid; excluded from audit snapshots and model features",
             "portfolio_events": (
                 "Telegram is used only to monitor publication availability and recent notices; "
@@ -267,6 +282,7 @@ def build_audit_snapshot(data: dict) -> dict:
                 "order-executor modules"),
             "negative_tests": [
                 "test_partial_cmf_period_is_enforced_out_of_causal_features",
+                "test_metric_coverage_excludes_partial_latest_period",
                 "test_versioned_universe_is_partial_and_blocks_survivorship_backtest",
                 "test_acciones_chile_has_no_crypto_or_executor_imports",
                 "test_authenticated_user_can_save_own_read_only_portfolio",
@@ -277,7 +293,9 @@ def build_audit_snapshot(data: dict) -> dict:
                 "test_bank_position_is_explicitly_blocked_without_separate_cmf_bank_data",
                 "test_bcch_fx_adapter_is_redacted_causal_and_read_only",
                 "test_bcch_fx_cache_fails_closed_when_tampered",
+                "test_bcch_public_table_is_strict_official_fallback",
                 "test_eps_unit_requires_audited_hashed_evidence",
+                "test_packaged_eps_evidence_reconciles_copec_cmf_scale_and_minera_unit",
                 "test_cmf_missing_content_length_requires_matching_redownload",
                 "test_deterministic_cmf_artifact_is_read_back_and_verified",
                 "test_acciones_chile_transitive_import_graph_excludes_crypto_and_executor",
@@ -286,6 +304,10 @@ def build_audit_snapshot(data: dict) -> dict:
         "cmf": {
             "periods": cmf.get("periods", []),
             "issuer_count": len(cmf.get("issuers", [])),
+            "issuer_catalog_derivation": cmf.get("issuer_catalog_derivation"),
+            "issuer_catalog_count": cmf.get("issuer_catalog_count"),
+            "issuer_count_by_period": {
+                item.get("period"): item.get("issuer_count") for item in cmf.get("sources", [])},
             "historical_observation_count": len(cmf.get("observations", [])),
             "sources": cmf.get("sources", []),
             "known_gap": "listed banks require the separate CMF Bancos source",
@@ -316,6 +338,9 @@ def build_audit_snapshot(data: dict) -> dict:
         "decision_layer": {
             "current_output": "fundamental research signal only",
             "buy_sell_recommendation": None,
+            "valuation_scope": (
+                "per_issuer_only; a verified issuer may expose observed P/E while every unverified issuer "
+                "remains blocked; fair value, margin of safety and buy/sell remain null for all"),
             "gate": "authorized prices, valuation and verified listed universe required",
         },
         "claims": [

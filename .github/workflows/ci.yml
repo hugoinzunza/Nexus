@@ -28,3 +28,15 @@ jobs:
           pip install pytest
       - name: Smoke tests (import de la app + bóveda)
         run: python -m pytest -q tests/
+      - name: Evidencia Acciones Chile
+        run: |
+          python -m pytest -q tests/test_acciones_chile.py --junitxml=acciones-chile-junit.xml
+          python scripts/report_acciones_chile_import_graph.py > acciones-chile-import-graph.json
+      - name: Publicar evidencia Acciones Chile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acciones-chile-evidence-py${{ matrix.python }}-${{ github.sha }}
+          path: |
+            acciones-chile-junit.xml
+            acciones-chile-import-graph.json

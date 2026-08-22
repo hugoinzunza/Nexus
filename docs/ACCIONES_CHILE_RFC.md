@@ -72,8 +72,9 @@ una orden.
 ### Dólar observado y unidades EPS
 
 - `scripts/refresh_acciones_chile_fx.py` consulta únicamente la serie diaria
-  oficial `F073.TCO.PRE.Z.D` de la API BDE del Banco Central y exige
-  `BCCH_API_TOKEN`.
+  oficial `F073.TCO.PRE.Z.D`. Prefiere la API BDE si existe `BCCH_API_TOKEN` y,
+  sin credencial, usa la tabla HTML pública del mismo Banco Central mediante
+  allowlist estricta, parser acotado y hash de la respuesta.
 - El token se envía sólo al host `si3.bcentral.cl`; nunca se conserva en cache,
   URL de procedencia, error o snapshot de auditoría.
 - El cache guarda todas las observaciones válidas, selecciona la última tasa
@@ -83,9 +84,16 @@ una orden.
   USD, `scripts/install_acciones_chile_eps_units.py` exige evidencia auditada o
   disclosure del emisor, URL, SHA-256 y fecha, declarando explícitamente
   `USD_PER_SHARE` o `CLP_PER_SHARE`.
+- La evidencia versionada también reconcilia el valor crudo del TXT CMF con el
+  PDF auditado. MINERA 2025 confirma US$ 1,3495 por acción con factor 1. COPEC
+  confirma US$ 0,674577; su TXT entrega 674,57, por lo que se registra y valida
+  explícitamente el factor 0,001 antes de cualquier conversión.
 - Sin ambas evidencias, P/E, valor justo, margen de seguridad y compra/venta
   permanecen bloqueados. Esto evita tratar los 674,57 de COPEC como USD por
   acción sólo porque la moneda de presentación general sea USD.
+- `EPS 2 verificados` significa exclusivamente MINERA y COPEC; no declara lista
+  la cobertura del universo. Cada emisor adicional continúa bloqueado hasta
+  reconciliar su período, unidad, escala y PDF de origen.
 
 ### @inversorchileno
 
@@ -156,6 +164,9 @@ una orden.
 - El cache CMF conserva una observación por emisor–período–scope para todos los
   cierres trimestrales expuestos por la fuente, además de la vista compacta del
   último período por emisor. El join causal usa las observaciones históricas.
+- El total del catálogo es la unión de RUT distintos en todos los períodos
+  cargados; por eso puede superar el conteo de cualquier cierre individual. No
+  representa una sección cruzada contemporánea ni un universo transable.
 - Endpoints read-only: `api/universe-status` y `api/universe`.
 
 ## Auditoría OPUS/Claude

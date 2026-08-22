@@ -6,7 +6,7 @@ import json
 import os
 import threading
 import time
-from datetime import date
+from datetime import date, datetime
 
 from core.module_base import NexusModule
 from core.paths import persist_dir
@@ -37,6 +37,7 @@ MARKET_STATUS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_market_data
 BANKS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_banks.json")
 FX_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_fx.json")
 EPS_UNITS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_eps_units.json")
+PACKAGED_EPS_UNITS_PATH = os.path.join(ROOT, "config", "acciones_chile_eps_units_v0.2.json")
 MAX_BODY_BYTES = 500_000
 MAX_TELEGRAM_BODY_BYTES = 2_000_000
 
@@ -82,6 +83,7 @@ class AccionesChileModule(NexusModule):
             market = self._read_json(MARKET_STATUS_PATH)
             bank_status = banks.availability(BANKS_PATH)
             fx_status = fx.availability(FX_PATH)
+            eps_status = fx.eps_unit_availability(EPS_UNITS_PATH, PACKAGED_EPS_UNITS_PATH)
             return self._json(200, {
                 "module": "acciones_chile",
                 "mode": "read_only",
@@ -109,6 +111,7 @@ class AccionesChileModule(NexusModule):
                 },
                 "cmf_banks": bank_status,
                 "fx": fx_status,
+                "eps_units": eps_status,
                 "renta4": {
                     "public_api_documented": False,
                     "manual_export_supported": True,
@@ -208,7 +211,8 @@ class AccionesChileModule(NexusModule):
             reading = evaluate_observation(history[-1], history)
             fx_rate = fx.rate_as_of(self._read_json(FX_PATH), (portfolio or {}).get("as_of")) \
                 if (portfolio or {}).get("as_of") else None
-            eps_units = fx.read_eps_unit_dataset(EPS_UNITS_PATH) or {}
+            eps_units = (fx.read_eps_unit_dataset(EPS_UNITS_PATH)
+                         or fx.read_eps_unit_dataset(PACKAGED_EPS_UNITS_PATH) or {})
             unit_verification = (eps_units.get("entries") or {}).get(rut)
             valuation = evaluate_valuation(
                 history, (holding or {}).get("market_price"), fx_rate, unit_verification)
@@ -260,7 +264,8 @@ class AccionesChileModule(NexusModule):
                 telegram.get("events", []), portfolio_companies)
             fx_rate = fx.rate_as_of(self._read_json(FX_PATH), portfolio.get("as_of")) \
                 if portfolio.get("as_of") else None
-            eps_units = fx.read_eps_unit_dataset(EPS_UNITS_PATH) or {}
+            eps_units = (fx.read_eps_unit_dataset(EPS_UNITS_PATH)
+                         or fx.read_eps_unit_dataset(PACKAGED_EPS_UNITS_PATH) or {})
             bank_status = banks.availability(BANKS_PATH)
             monitored = []
             total_initial = 0.0
@@ -562,6 +567,19 @@ class AccionesChileModule(NexusModule):
                     self.context.log("acciones_chile: dataset CMF/YouTube actualizado")
                 except Exception as exc:  # noqa: BLE001 - conservar cache y reintentar luego
                     self.context.log(f"acciones_chile: actualización falló cerrada: {exc}")
+            fx_data = fx.read_fx_dataset(FX_PATH)
+            try:
+                fx_age = time.time() - datetime.fromisoformat(
+                    str((fx_data or {}).get("retrieved_at"))).timestamp()
+            except (TypeError, ValueError):
+                fx_age = interval
+            if not fx_data or fx_age >= interval:
+                try:
+                    public_download = fx.download_public_observed_dollar()
+                    fx.write_fx_dataset(FX_PATH, fx.build_public_fx_dataset(public_download))
+                    self.context.log("acciones_chile: dólar observado BCCh público actualizado")
+                except Exception as exc:  # noqa: BLE001 - conservar cache y reintentar luego
+                    self.context.log(f"acciones_chile: dólar BCCh falló cerrado: {exc}")
             self._stop_event.wait(interval)
 
     def health(self):

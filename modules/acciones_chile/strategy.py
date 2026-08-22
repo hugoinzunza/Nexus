@@ -5,9 +5,9 @@ auditables; valoración y precio siguen siendo requisitos para comprar/vender.
 """
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal, InvalidOperation
-import re
+
+from .fx import validate_eps_unit_record
 
 
 STRATEGY_VERSION = "inversor-chileno-rubric-0.1.0"
@@ -163,33 +163,29 @@ def evaluate_valuation(history: list[dict], market_price, fx_rate: dict | None =
         result["status"] = "annual_eps_unavailable"
     elif currency == "USD":
         verification = eps_unit_verification or {}
-        unit = verification.get("unit") if verification.get("status") == "verified" else None
-        source = str(verification.get("source_reference") or "")
-        method = verification.get("verification_method")
-        source_hash = str(verification.get("source_sha256") or "")
         try:
-            date.fromisoformat(str(verification.get("verified_as_of")))
-            evidence_date_valid = True
+            validate_eps_unit_record("0000000", verification)
+            evidence_valid = (
+                verification.get("period") == annual.get("period") and
+                abs((_number(verification.get("cmf_value")) or 0) - eps) <= 0.0000001
+            )
         except ValueError:
-            evidence_date_valid = False
-        evidence_valid = (
-            unit in {"CLP_PER_SHARE", "USD_PER_SHARE"} and source.startswith("https://") and
-            method in {"audited_annual_report_note", "issuer_disclosure"} and
-            bool(re.fullmatch(r"[0-9a-f]{64}", source_hash)) and evidence_date_valid
-        )
+            evidence_valid = False
         if not evidence_valid:
             result["status"] = "eps_unit_verification_required"
-        elif unit == "USD_PER_SHARE" and (
+        elif verification["unit"] == "USD_PER_SHARE" and (
                 not fx_rate or _number(fx_rate.get("clp_per_usd")) is None):
             result["status"] = "official_fx_rate_required"
         else:
-            converted_eps = eps
-            if unit == "USD_PER_SHARE":
+            source_eps = _number(verification["reported_value"])
+            converted_eps = source_eps
+            if verification["unit"] == "USD_PER_SHARE":
                 converted_eps *= _number(fx_rate.get("clp_per_usd")) or 0
             if converted_eps <= 0:
                 result["status"] = "pe_not_meaningful_for_nonpositive_eps"
             else:
                 result["pe"] = round(price / converted_eps, 4)
+                result["eps_verified_per_share"] = source_eps
                 result["eps_clp_per_share"] = round(converted_eps, 8)
                 result["status"] = "observed_multiple_ready_fair_value_pending"
     elif currency != "CLP":
