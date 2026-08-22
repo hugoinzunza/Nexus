@@ -106,6 +106,12 @@ PARAMS = (
     "ARCHIVO_SOLICITUD_TERMINAL", "ARCHIVO_PEDIDO_VERIFICACION",
     "SCHEMA_SILENCIO", "SCHEMA_VERIFICACION", "SCHEMA_TERMINAL",
     "SEMILLA_SILENCIO",
+    # Los estados terminales, sus motivos y su PRECEDENCIA también son
+    # comportamiento congelado: quedaban fuera de la huella y podían cambiar
+    # qué terminal gana sin que la identidad del observador se moviera.
+    "COMPLETADO", "BLOQUEADO", "MOTIVO_SILENCIO", "MOTIVO_DIVERGENCIA",
+    "PRECEDENCIA_MOTIVOS",
+    "VERIF_OK", "VERIF_DIFERIDA", "VERIF_PENDIENTE", "VERIF_DIVERGENTE",
 )
 
 

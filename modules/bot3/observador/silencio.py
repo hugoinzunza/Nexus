@@ -19,6 +19,27 @@ Reglas que esta máquina implementa, todas congeladas:
   `run_epoch` lo hace reconstruible tras un reinicio;
 - **el acumulado no se cree, se deriva**: al rehidratar se recalcula desde las
   observaciones y se compara con lo persistido.
+
+MODELO DE AMENAZA, explícito para no prometer de más
+----------------------------------------------------
+`doc_sha256` y la cadena de evidencia son hashes SIN CLAVE. Lo que garantizan
+es **detección de corrupción coherente**: una edición parcial, un archivo
+truncado, un acumulado que no se deriva de sus observaciones o una cadena rota
+fallan cerrado. Lo que NO garantizan es autenticación adversarial: quien pueda
+escribir este archivo puede recalcular observaciones, cadena, acumulado y
+`doc_sha256` a la vez y producir un documento aceptado.
+
+Eso es deliberado y no se arregla con un MAC: el actor capaz de reescribir
+`silencio.json` corre como el mismo usuario que el observador y también puede
+borrar el estado entero o la clave. Una llave local daría una sensación de
+autenticación que no existiría.
+
+Lo que SÍ hay es un ancla externa para la AFIRMACIÓN, no para la línea de
+tiempo: `verificar_contra_almacen` contrasta el silencio contra la cadena de
+hashes del almacén H4, que a su vez está anclada al snapshot autenticado por el
+commit. Fabricar un silencio para un mercado cuyas velas SÍ están selladas
+—que es la fabricación que produciría un `BLOCKED_INTEGRITY` falso— exige
+además reescribir esa cadena.
 """
 from __future__ import annotations
 
@@ -31,6 +52,10 @@ from . import contrato as C
 
 class SilencioCorrupto(ValueError):
     """El sidecar decide `BLOCKED_INTEGRITY`: no se acepta a medias."""
+
+
+class SilencioDesmentido(ValueError):
+    """El almacén contradice el silencio declarado."""
 
 
 def _canon(objeto) -> str:
@@ -168,6 +193,33 @@ class Silencio:
             "cadena": cadena(entrada["observaciones"]),
         }
 
+    # --- ancla externa ----------------------------------------------------
+    def verificar_contra_almacen(self, almacenes_h4: dict) -> None:
+        """Contrasta cada entrada ACTIVA contra la cadena del almacén H4.
+
+        No autentica la línea de tiempo de las observaciones —eso no lo puede
+        hacer un hash sin clave—, pero sí desmiente la fabricación que importa:
+        declarar mudo un mercado cuyas velas están selladas. El almacén es una
+        cadena append-only anclada al snapshot que el commit autentica, así que
+        mentirle cuesta bastante más que editar un JSON."""
+        for k in sorted(self.entradas):
+            entrada = self.entradas[k]
+            if entrada["estado"] != "activo":
+                continue
+            alm = almacenes_h4.get(entrada["mercado"])
+            if alm is None:
+                raise SilencioDesmentido(
+                    f"{k}: no hay almacén H4 para {entrada['mercado']}")
+            if alm.cubre(entrada["primer_cierre"]) == "vela":
+                raise SilencioDesmentido(
+                    f"{k}: el almacén TIENE la vela {entrada['primer_cierre']} "
+                    f"que el silencio declara ausente")
+            if alm.cubre(entrada["ultimo_cierre_valido"]) != "vela":
+                raise SilencioDesmentido(
+                    f"{k}: `ultimo_cierre_valido` "
+                    f"{entrada['ultimo_cierre_valido']} no está sellado en el "
+                    f"almacén")
+
     # --- persistencia -----------------------------------------------------
     def documento(self) -> dict:
         cuerpo = {
@@ -179,7 +231,9 @@ class Silencio:
             "entradas": {},
         }
         for k in sorted(self.entradas):
-            e = dict(self.entradas[k])
+            # Copia PROFUNDA: `dict(...)` compartía la lista de observaciones,
+            # así que quien tocara el documento mutaba el estado vivo.
+            e = json.loads(_canon(self.entradas[k]))
             e["evidencia_acumulada_ms"] = acumulado(e["observaciones"])
             e["cadena"] = cadena(e["observaciones"])
             cuerpo["entradas"][k] = e
@@ -208,9 +262,11 @@ class Silencio:
     @classmethod
     def cargar(cls, ruta: str, cohorte: dict, contrato: str,
                commit: str) -> "Silencio":
-        """Rehidrata VALIDANDO. Cualquier discrepancia detiene el observador:
-        este archivo decide `BLOCKED_INTEGRITY`, así que no puede aceptarse
-        «otro digest válido» en vez del que corresponde."""
+        """Rehidrata VALIDANDO. Cualquier discrepancia detiene el observador.
+
+        Alcance de la validación: detecta corrupción COHERENTE (ver el modelo
+        de amenaza en la cabecera del módulo). No pretende resistir a un actor
+        local que reescriba todo el documento de forma consistente."""
         s = cls(cohorte, contrato, commit)
         if not os.path.exists(ruta):
             return s

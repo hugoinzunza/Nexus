@@ -432,3 +432,113 @@ def test_los_dos_terminales_a_la_vez_es_fallo_cerrado(tmp_path):
     E.publicar_terminal(d, C.BLOQUEADO, {"cohorte": "c"})
     with pytest.raises(ValueError, match="a la vez"):
         E.leer_terminal(d)
+
+
+# ------------------------------------------- huella: sensibilidad completa
+def test_la_huella_reacciona_a_TODOS_los_parametros_congelados(monkeypatch):
+    """`PARAMS` incompleto dejaba cambiar estados, motivos, precedencia y
+    estados de verificación sin mover `huella()`: comportamiento congelado que
+    podía moverse sin que la identidad del observador lo reflejara."""
+    base = C.huella()
+    for nombre in C.PARAMS:
+        actual = getattr(C, nombre)
+        if isinstance(actual, str):
+            nuevo = actual + "x"
+        elif isinstance(actual, bool):
+            nuevo = not actual
+        elif isinstance(actual, int):
+            nuevo = actual + 1
+        elif isinstance(actual, tuple):
+            nuevo = actual + ("x",)
+        elif isinstance(actual, dict):
+            nuevo = {**actual, "__x": 1}
+        else:                                          # pragma: no cover
+            raise AssertionError(f"{nombre}: tipo no contemplado")
+        monkeypatch.setattr(C, nombre, nuevo)
+        assert C.huella() != base, nombre
+        monkeypatch.undo()
+    assert C.huella() == base
+
+
+def test_los_terminales_y_su_precedencia_entran_en_la_huella():
+    """Explícito, porque fue el agujero concreto."""
+    for nombre in ("COMPLETADO", "BLOQUEADO", "MOTIVO_SILENCIO",
+                   "MOTIVO_DIVERGENCIA", "PRECEDENCIA_MOTIVOS", "VERIF_OK",
+                   "VERIF_DIFERIDA", "VERIF_PENDIENTE", "VERIF_DIVERGENTE"):
+        assert nombre in C.PARAMS, nombre
+
+
+def test_el_competidor_rechazado_no_trunca_el_lock(tmp_path):
+    """Abrir en `"w"` vaciaba el archivo ANTES de pedir el `flock`, así que un
+    segundo observador rechazado borraba el PID del propietario."""
+    ruta = str(tmp_path / "obs.lock")
+    with E.Singleton(ruta):
+        dueno = open(ruta, encoding="utf-8").read()
+        assert dueno == str(os.getpid())
+        for _ in range(3):
+            with pytest.raises(E.SingletonTomado):
+                with E.Singleton(ruta):
+                    pass
+            assert open(ruta, encoding="utf-8").read() == dueno
+
+
+# --------------------------------------------------- silencio: ancla externa
+class _AlmH4:
+    """Almacén H4 mínimo con la API que usa el ancla."""
+
+    def __init__(self, sellados):
+        self._sellados = set(sellados)
+
+    def cubre(self, t):
+        return "vela" if t in self._sellados else "pendiente"
+
+
+def test_el_almacen_desmiente_un_silencio_fabricado():
+    """Ancla externa: declarar mudo un mercado cuyas velas SÍ están selladas
+    exige además reescribir la cadena del almacén, que está anclada al
+    snapshot autenticado por el commit."""
+    s = _silencio()
+    _observar(s, 3, cierre=1000)
+    # el almacén tiene la vela que el silencio declara ausente
+    with pytest.raises(S.SilencioDesmentido, match="TIENE la vela"):
+        s.verificar_contra_almacen({"BTCUSDT": _AlmH4([999, 1000])})
+    # y el `ultimo_cierre_valido` tiene que estar realmente sellado
+    with pytest.raises(S.SilencioDesmentido, match="no está sellado"):
+        s.verificar_contra_almacen({"BTCUSDT": _AlmH4([])})
+    with pytest.raises(S.SilencioDesmentido, match="no hay almacén"):
+        s.verificar_contra_almacen({})
+    # caso legítimo: 999 sellado, 1000 ausente
+    s.verificar_contra_almacen({"BTCUSDT": _AlmH4([999])})
+    # una entrada resuelta ya no se contrasta
+    s.resolver("BTCUSDT", "4h", 1000)
+    s.verificar_contra_almacen({"BTCUSDT": _AlmH4([999, 1000])})
+
+
+def test_el_modelo_de_amenaza_esta_declarado_y_no_promete_de_mas():
+    """La garantía es detección de corrupción COHERENTE, no autenticación
+    adversarial: un actor local que reescriba todo el documento de forma
+    consistente produce uno aceptado, y eso está dicho."""
+    fuente = open(S.__file__, encoding="utf-8").read()
+    assert "MODELO DE AMENAZA" in fuente
+    assert "detección de corrupción coherente" in fuente
+    assert "NO garantizan es autenticación adversarial" in fuente
+
+    # y la demostración: un atacante COHERENTE pasa. Se documenta como límite
+    # conocido, no como falla del gate.
+    s = _silencio()
+    _observar(s, 4)
+    doc = s.documento()
+    k = S.clave("BTCUSDT", "4h", 1000)
+    entrada = doc["entradas"][k]
+    entrada["observaciones"].append(
+        {"eligibility_time": BASE + 10 ** 7, "run_epoch": 1})
+    entrada["cadena"] = S.cadena(entrada["observaciones"])
+    entrada["evidencia_acumulada_ms"] = S.acumulado(entrada["observaciones"])
+    doc.pop("doc_sha256")
+    doc["doc_sha256"] = S._sha(S._canon(doc))
+    import tempfile
+    ruta = os.path.join(tempfile.mkdtemp(), "silencio.json")
+    with open(ruta, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh)
+    rehidratado = S.Silencio.cargar(ruta, COHORTE, "contrato-x", "commit-y")
+    assert rehidratado.evidencia(k) > s.evidencia(k)   # LÍMITE CONOCIDO

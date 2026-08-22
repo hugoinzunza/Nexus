@@ -73,7 +73,11 @@ class Singleton:
 
     def __enter__(self) -> "Singleton":
         os.makedirs(os.path.dirname(self.ruta) or ".", exist_ok=True)
-        self._fh = open(self.ruta, "w")
+        # SIN truncar: abrir en "w" vaciaba el archivo ANTES de pedir el lock,
+        # así que un competidor rechazado borraba el PID del propietario. Se
+        # abre en "r+" (o se crea), se toma el lock y RECIÉN AHÍ se escribe.
+        self._fh = open(self.ruta, "r+") if os.path.exists(self.ruta) \
+            else open(self.ruta, "x+")
         try:
             fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
@@ -82,6 +86,8 @@ class Singleton:
             raise SingletonTomado(
                 f"otro observador ya tiene {self.ruta}: dos sobre el mismo "
                 f"estado producirían dos historias bajo una identidad")
+        self._fh.seek(0)
+        self._fh.truncate()
         self._fh.write(str(os.getpid()))
         self._fh.flush()
         return self
