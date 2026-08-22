@@ -32,10 +32,12 @@
 | M7 ticker↔RUT ausente | en cierre | top 10 público con RUT/DV; lista completa local/licenciada e historia pendientes |
 | Precios sin contrato | cerrado como frontera | importador exige licencia, ajuste total-return, timestamps y benchmark alineado; no scrapea producto pagado |
 | CMF sólo último período | cerrado | seis cierres disponibles, 2.121 observaciones históricas y 460 joins causales con Telegram |
+| Fuente bancaria separada | en cierre | adaptador/API/parser/cache para códigos 001, 016, 037 y 039; falta credencial, descarga real, catálogo completo y join causal |
 
 ## Bloqueos vigentes
 
-1. Fuente y cobertura separada para bancos listados.
+1. Configurar `CMF_BANKS_API_KEY`, ejecutar la primera descarga bancaria,
+   validar el catálogo contable vigente y unir los cierres con Telegram.
 2. Importar localmente el universo IPSA completo autorizado; los cambios públicos 2024–2026 ya están registrados.
 3. Esperar u obtener una fuente autorizada adicional para ocho trimestres por empresa; Telegram sólo contiene siete períodos.
 4. Adquirir o autorizar precios ajustados y benchmark IPSA, y validarlos con el nuevo contrato.

@@ -12,6 +12,7 @@ from core.module_base import NexusModule
 from core.paths import persist_dir
 
 from . import auditor
+from . import banks
 from . import dataset as dataset_store
 from .portfolio import normalize_portfolio
 from .predictor import feature_join_report, readiness as predictor_readiness
@@ -25,6 +26,7 @@ TELEGRAM_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_telegram_events.
 PACKAGED_UNIVERSE_PATH = os.path.join(ROOT, "config", "acciones_chile_universe_v0.1.json")
 LOCAL_UNIVERSE_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_universe.json")
 MARKET_STATUS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_market_data_status.json")
+BANKS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_banks.json")
 MAX_BODY_BYTES = 500_000
 
 
@@ -67,6 +69,7 @@ class AccionesChileModule(NexusModule):
             telegram = self._read_telegram()
             universe = self._universe_status()
             market = self._read_json(MARKET_STATUS_PATH)
+            bank_status = banks.availability(BANKS_PATH)
             return self._json(200, {
                 "module": "acciones_chile",
                 "mode": "read_only",
@@ -88,10 +91,11 @@ class AccionesChileModule(NexusModule):
                     "issuers": len(cmf.get("issuers", [])),
                     "historical_observations": len(cmf.get("observations", [])),
                     "generated_at_ms": (dataset or {}).get("generated_at_ms"),
-                    "known_gaps": ["bancos listados requieren fuente CMF Bancos"],
+                    "known_gaps": bank_status["blockers"],
                     "metric_coverage": cmf.get("metric_coverage", {}),
                     "cross_section_comparable": cmf.get("cross_section_comparable", False),
                 },
+                "cmf_banks": bank_status,
                 "renta4": {
                     "public_api_documented": False,
                     "manual_export_supported": True,
@@ -193,7 +197,10 @@ class AccionesChileModule(NexusModule):
             state["fundamental_dataset_feature_use"] = dataset.get("feature_use", "forbidden")
             state["universe"] = universe
             state["market_data"] = market or {"label_ready": False}
+            state["cmf_banks"] = banks.availability(BANKS_PATH)
             return self._json(200, state)
+        if subpath == "banks-status":
+            return self._json(200, banks.availability(BANKS_PATH))
         if subpath == "universe-status":
             return self._json(200, self._universe_status())
         if subpath == "universe":

@@ -27,6 +27,8 @@ un benchmark simple?
 ## Features permitidas
 
 - Ventas, crecimiento interanual, utilidades y márgenes CMF conocidos al evento.
+- Para bancos, sólo métricas de CMF Bancos con cuenta contable validada y
+  disponibilidad unida al evento; nunca aplicar las métricas IFRS societarias.
 - Cambio respecto del mismo trimestre del año anterior.
 - Hora/día de publicación, retraso desde cierre trimestral y tipo de balance.
 - Cantidad de hechos esenciales conocidos en los 30 días previos.

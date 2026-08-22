@@ -44,6 +44,25 @@ una orden.
   candidatos causales se construyen únicamente tras unir sociedad, período,
   alcance y evento Telegram con `available_at`.
 
+### CMF Bancos
+
+- Los bancos listados usan un adaptador separado porque su catálogo contable no
+  corresponde al TXT IFRS de sociedades: CHILE `001`, BCI `016`, BSANTANDER
+  `037` e ITAUCL `039`.
+- `scripts/refresh_acciones_chile_banks.py` consulta exclusivamente la API v3
+  oficial por HTTPS y exige `CMF_BANKS_API_KEY`; la credencial nunca se guarda
+  en URLs de procedencia, cache ni errores.
+- El parser JSON valida esquema, institución, año, cuenta, mes y montos, limita
+  el tamaño y rechaza redirecciones fuera del endpoint allowlisted.
+- La primera métrica habilitada es la cuenta oficial `4100000`, ingresos por
+  intereses y reajustes. ROE, provisiones, margen financiero y utilidad neta
+  quedan pendientes de validar contra el catálogo contable vigente, sin inferir
+  cuentas por nombre.
+- El cache `acciones_chile_banks.json` conserva observaciones trimestrales y hash
+  de cada descarga, pero permanece `forbidden_until_availability_join` hasta
+  unir la publicación de Telegram. Endpoints read-only: `api/banks-status` y la
+  sección `cmf_banks` de `api/status` y `api/predictor-status`.
+
 ### @inversorchileno
 
 - El canal se usa como fuente secundaria de tesis, no como ground truth.

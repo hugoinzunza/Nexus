@@ -11,6 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from core.paths import persist_dir  # noqa: E402
+from modules.acciones_chile.banks import availability as bank_availability  # noqa: E402
 from modules.acciones_chile.dataset import build_audit_snapshot, refresh_dataset  # noqa: E402
 from modules.acciones_chile.predictor import feature_join_report, readiness  # noqa: E402
 from modules.acciones_chile.universe import load_universe, universe_status  # noqa: E402
@@ -20,6 +21,8 @@ def main() -> int:
     path = pathlib.Path(persist_dir(str(ROOT))) / "acciones_chile_dataset.json"
     data = refresh_dataset(str(path))
     audit_snapshot = build_audit_snapshot(data)
+    audit_snapshot["cmf_banks"] = bank_availability(
+        str(path.with_name("acciones_chile_banks.json")))
     telegram_path = path.with_name("acciones_chile_telegram_events.json")
     telegram = None
     try:

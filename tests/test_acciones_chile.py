@@ -1,11 +1,16 @@
 import json
 import ast
+import urllib.error
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 from modules.acciones_chile.cmf import _validated_url, parse_rows, rows_for_rut
+from modules.acciones_chile.banks import (
+    BankDownload, _validated_url as validated_bank_url, availability as bank_availability,
+    build_bank_dataset, parse_results,
+)
 from modules.acciones_chile.fundamentals import analyze_company
 from modules.acciones_chile.portfolio import normalize_portfolio
 from modules.acciones_chile.auditor import availability
@@ -196,6 +201,67 @@ def test_cmf_base_url_rejects_preexisting_query():
     with pytest.raises(ValueError, match="allowlisted"):
         _validated_url("https://www.cmfchile.cl/institucional/estadisticas/ver_archivo.php?x=1",
                        "202603")
+
+
+def _bank_payload(year="2026", institution="001", total="1.234,50"):
+    return json.dumps({"ReportesBancarios": {"CodigosEstadosDeResultado": {
+        "CodigoEERRIFI": [{
+            "CodigoCuenta": "4100000",
+            "DescripcionCuenta": "INGRESOS POR INTERESES Y REAJUSTES",
+            "CodigoInstitucion": institution,
+            "NombreInstitucion": "BANCO DE CHILE",
+            "Anho": year,
+            "Mes": "3",
+            "MonedaTotal": total,
+        }],
+    }}}).encode()
+
+
+def test_cmf_banks_parser_and_dataset_keep_sources_separate_and_redacted():
+    rows = parse_results(_bank_payload())
+    assert rows[0].total == Decimal("1234.50")
+    url, redacted = validated_bank_url(2026, "001", "secret-value")
+    assert "secret-value" in url
+    assert "secret-value" not in redacted
+    download = BankDownload(
+        year=2026, institution_code="001", payload=_bank_payload(),
+        effective_url_redacted=redacted, retrieved_at="2026-05-01T00:00:00+00:00",
+        http_status=200, content_length=None, bytes_received=len(_bank_payload()),
+    )
+    data = build_bank_dataset([download])
+    assert data["schema_version"] == "acciones-chile-banks-0.1.0"
+    assert data["observations"][0]["ticker"] == "CHILE"
+    assert data["observations"][0]["analysis"]["interest_income"] == "1234.50"
+    assert data["observations"][0]["available_at"] is None
+    assert data["feature_use"] == "forbidden_until_availability_join"
+    assert "secret-value" not in json.dumps(data)
+
+
+def test_cmf_banks_fails_closed_without_key_or_on_unknown_bank(monkeypatch):
+    monkeypatch.delenv("CMF_BANKS_API_KEY", raising=False)
+    assert bank_availability()["key_present"] is False
+    with pytest.raises(ValueError, match="falta CMF_BANKS_API_KEY"):
+        validated_bank_url(2026, "001", "")
+    with pytest.raises(ValueError, match="no allowlisted"):
+        validated_bank_url(2026, "999", "secret")
+
+
+def test_cmf_banks_parser_rejects_schema_drift():
+    with pytest.raises(ValueError, match="CodigosEstadosDeResultado"):
+        parse_results(b'{"ReportesBancarios": {}}')
+
+
+def test_cmf_banks_network_error_does_not_leak_key(monkeypatch):
+    from modules.acciones_chile.banks import download_results
+
+    def fail(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 401, "bad key", {}, None)
+
+    monkeypatch.setattr("modules.acciones_chile.banks.urllib.request.urlopen", fail)
+    with pytest.raises(ValueError, match="consulta CMF Bancos falló") as error:
+        download_results(2026, "001", "top-secret")
+    assert "top-secret" not in str(error.value)
+    assert error.value.__cause__ is None
 
 
 def test_causal_join_requires_matching_period_scope_and_event():
