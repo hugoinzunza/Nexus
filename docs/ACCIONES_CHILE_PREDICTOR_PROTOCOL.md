@@ -49,6 +49,10 @@ un benchmark simple?
 - Baseline ingenuo y modelo interpretable antes de modelos complejos.
 - Evaluación OOS congelada, intervalos de confianza y resultados negativos preservados.
 
-El estado actual no cumple el Gate: el canal aporta 197 publicaciones de 89
-sociedades entre abril y agosto de 2026, pero cubre solo parte de dos temporadas y
-aún falta la fuente de precios. Por lo tanto no existe predictor ni señal autorizada.
+El backfill completo contiene 809 publicaciones financieras y 564 observaciones
+empresa–trimestre de 97 sociedades entre marzo de 2025 y agosto de 2026. Cubre
+siete períodos; la mediana por empresa es seis y ninguna puede aportar ocho
+trimestres desde este canal todavía. También falta la fuente autorizada de
+precios. El join histórico CMF↔Telegram entrega 460 candidatos causales y deja
+tres AFP explícitamente sin matching. Por lo tanto no existe predictor ni señal
+autorizada.

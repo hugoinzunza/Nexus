@@ -90,6 +90,13 @@ una orden.
 - Un universo completo autorizado se valida e instala fuera de Git con
   `scripts/install_acciones_chile_universe.py`; el módulo lo prefiere sobre el
   snapshot público parcial y reporta `storage=local_licensed`.
+- Los anuncios públicos registran cambios temporales desde marzo de 2024: sin
+  cambios en 2024, incorporación de ILC en marzo de 2025 y sin cambios en marzo
+  de 2026. Sin un baseline completo autorizado, estos deltas no bastan para
+  declarar historia libre de sesgo de supervivencia.
+- El cache CMF conserva una observación por emisor–período–scope para todos los
+  cierres trimestrales expuestos por la fuente, además de la vista compacta del
+  último período por emisor. El join causal usa las observaciones históricas.
 - Endpoints read-only: `api/universe-status` y `api/universe`.
 
 ## Auditoría OPUS/Claude

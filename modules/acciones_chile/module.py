@@ -86,6 +86,7 @@ class AccionesChileModule(NexusModule):
                     "cached": bool(dataset),
                     "periods": cmf.get("periods", []),
                     "issuers": len(cmf.get("issuers", [])),
+                    "historical_observations": len(cmf.get("observations", [])),
                     "generated_at_ms": (dataset or {}).get("generated_at_ms"),
                     "known_gaps": ["bancos listados requieren fuente CMF Bancos"],
                     "metric_coverage": cmf.get("metric_coverage", {}),

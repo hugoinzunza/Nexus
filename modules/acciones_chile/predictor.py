@@ -53,7 +53,10 @@ def event_features(events: list[dict], company: str, as_of: str) -> dict:
 
 
 def telegram_period_to_cmf(label: str | None) -> str | None:
-    match = re.fullmatch(r"([1-4])T\s+(\d{4})", (label or "").strip(), flags=re.IGNORECASE)
+    match = re.fullmatch(
+        r"([1-4])T\s+(\d{4})(?:\s*\(ANUAL\))?",
+        (label or "").strip(), flags=re.IGNORECASE,
+    )
     if not match:
         return None
     return f"{match.group(2)}{int(match.group(1)) * 3:02d}"
@@ -75,15 +78,17 @@ def build_feature_records(dataset: dict, telegram: dict | None) -> list[dict]:
         if current is None or event["available_at"] < current["available_at"]:
             event_index[key] = event
     records = []
-    for issuer in (dataset.get("cmf") or {}).get("issuers", []):
-        key = (normalize_company(issuer.get("company", "")),
-               issuer.get("latest_available_period"), issuer.get("scope"))
+    cmf = dataset.get("cmf") or {}
+    fundamentals = cmf.get("observations") or cmf.get("issuers", [])
+    for issuer in fundamentals:
+        period = issuer.get("period") or issuer.get("latest_available_period")
+        key = (normalize_company(issuer.get("company", "")), period, issuer.get("scope"))
         event = event_index.get(key)
         if not event:
             continue
         records.append({
             "rut": issuer["rut"], "company": issuer["company"],
-            "period": issuer["latest_available_period"],
+            "period": period,
             "months_covered": issuer.get("months_covered"),
             "available_at": event["available_at"],
             "source_message_id": event["message_id"],
@@ -130,6 +135,8 @@ def readiness(telegram: dict | None, price_history_ready: bool = False) -> dict:
     required_quarters = 8
     blockers = []
     minimum_company_quarters = counts[0] if counts else 0
+    maximum_company_quarters = counts[-1] if counts else 0
+    eligible_companies = sum(count >= required_quarters for count in counts)
     if minimum_company_quarters < required_quarters:
         blockers.append(
             f"historia por empresa insuficiente: mínimo {minimum_company_quarters}/{required_quarters} trimestres")
@@ -146,6 +153,8 @@ def readiness(telegram: dict | None, price_history_ready: bool = False) -> dict:
         "companies": len(by_company),
         "minimum_company_quarters_observed": minimum_company_quarters,
         "median_company_quarters_observed": counts[len(counts) // 2] if counts else 0,
+        "maximum_company_quarters_observed": maximum_company_quarters,
+        "eligible_companies_with_minimum_quarters": eligible_companies,
         "periods": periods,
         "history_start": dates[0] if dates else None,
         "history_end": dates[-1] if dates else None,

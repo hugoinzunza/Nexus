@@ -13,7 +13,7 @@ from .fundamentals import analyze_company
 from .youtube import FEED_URL, fetch_feed, parse_feed
 
 
-SCHEMA_VERSION = "acciones-chile-dataset-0.2.0"
+SCHEMA_VERSION = "acciones-chile-dataset-0.3.0"
 
 
 def select_comparison_periods(periods: list[str]) -> tuple[str, str | None]:
@@ -25,14 +25,15 @@ def select_comparison_periods(periods: list[str]) -> tuple[str, str | None]:
 
 
 def select_refresh_periods(periods: list[str]) -> list[str]:
-    """Últimos dos cierres y sus comparables interanuales, sin duplicados."""
+    """Todos los cierres trimestrales que la CMF expone, sin duplicados."""
     if not periods:
         raise ValueError("la CMF no informó períodos individuales")
     selected = []
-    for period in periods[:2]:
-        for candidate in (period, str(int(period) - 100)):
-            if candidate in periods and candidate not in selected:
-                selected.append(candidate)
+    for period in periods:
+        if len(period) != 6 or not period.isdigit() or period[-2:] not in {"03", "06", "09", "12"}:
+            raise ValueError(f"período CMF inválido: {period}")
+        if period not in selected:
+            selected.append(period)
     return selected
 
 
@@ -72,6 +73,21 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
     if not periods:
         raise ValueError("dataset CMF vacío")
     all_ruts = sorted({rut for period in periods for rut in rows_by_period_rut[period]})
+    observations = []
+    for period in periods:
+        for rut, raw_rows in rows_by_period_rut[period].items():
+            rows, selected_scope, scopes = _preferred_scope(raw_rows)
+            previous_raw = rows_by_period_rut.get(str(int(period) - 100), {}).get(rut, [])
+            previous = [row for row in previous_raw if row.scope == selected_scope]
+            observations.append({
+                "rut": rut, "company": rows[0].company, "scope": selected_scope,
+                "scopes_available": scopes, "currency": rows[0].currency,
+                "period": period, "months_covered": _months_covered(period),
+                "analysis": analyze_company(rows, previous),
+                "available_at": None,
+                "feature_use": "forbidden_until_telegram_join",
+            })
+    observations.sort(key=lambda item: (item["period"], item["company"].casefold()), reverse=True)
     issuers = []
     for rut in all_ruts:
         current_period = next(period for period in periods if rut in rows_by_period_rut[period])
@@ -126,6 +142,8 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
         "feature_use": "forbidden_until_availability_join",
         "cmf": {
             "periods": periods, "sources": sources, "issuers": issuers,
+            "observations": observations,
+            "historical_observation_count": len(observations),
             "metric_coverage": metric_coverage,
             "cross_section_comparable": len(months) <= 1,
             "months_covered_present": months,
@@ -149,6 +167,7 @@ def build_audit_snapshot(data: dict) -> dict:
         "cmf": {
             "periods": cmf.get("periods", []),
             "issuer_count": len(cmf.get("issuers", [])),
+            "historical_observation_count": len(cmf.get("observations", [])),
             "sources": cmf.get("sources", []),
             "known_gap": "listed banks require the separate CMF Bancos source",
             "feature_use": data.get("feature_use"),

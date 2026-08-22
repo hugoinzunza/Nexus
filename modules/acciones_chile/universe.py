@@ -40,6 +40,24 @@ def validate_universe(data: dict) -> dict:
         raise ValueError("universo sin fuentes")
     if not isinstance(data.get("membership_history_complete"), bool):
         raise ValueError("membership_history_complete debe ser booleano")
+    changes = data.get("change_events", [])
+    if not isinstance(changes, list):
+        raise ValueError("change_events debe ser una lista")
+    previous_change = None
+    for change in changes:
+        effective = _iso_date(change.get("effective_from"), "change effective_from")
+        if previous_change and effective <= previous_change:
+            raise ValueError("change_events deben estar ordenados y ser únicos")
+        previous_change = effective
+        additions = change.get("additions") or []
+        deletions = change.get("deletions") or []
+        if any(not re.fullmatch(r"[A-Z0-9-]{1,20}", ticker) for ticker in additions + deletions):
+            raise ValueError("ticker inválido en change_events")
+        if set(additions) & set(deletions):
+            raise ValueError("un ticker no puede entrar y salir en el mismo cambio")
+        refs = change.get("source_refs") or []
+        if not refs or any(ref not in sources for ref in refs):
+            raise ValueError("fuente inválida en change_events")
     snapshots = data.get("snapshots")
     if not isinstance(snapshots, list) or not snapshots:
         raise ValueError("universo sin snapshots")
@@ -134,6 +152,9 @@ def universe_status(data: dict, as_of: str | date) -> dict:
         "member_count": len(snapshot["members"]),
         "current_snapshot_complete": complete,
         "membership_history_complete": history_complete,
+        "public_change_event_count": len(data.get("change_events", [])),
+        "public_change_history_from": (data["change_events"][0]["effective_from"]
+                                       if data.get("change_events") else None),
         "survivorship_free_backtest_allowed": backtest_allowed,
         "blockers": blockers,
     }

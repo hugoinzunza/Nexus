@@ -96,8 +96,11 @@ def test_comparison_period_is_same_quarter_previous_year():
     assert select_comparison_periods(["202606", "202603", "202506"]) == ("202606", "202506")
     assert select_comparison_periods(["202606", "202603"]) == ("202606", None)
     assert select_refresh_periods(["202606", "202603", "202506", "202503"]) == [
-        "202606", "202506", "202603", "202503",
+        "202606", "202603", "202506", "202503",
     ]
+    assert select_refresh_periods(
+        ["202606", "202603", "202512", "202509", "202506", "202503"]
+    ) == ["202606", "202603", "202512", "202509", "202506", "202503"]
 
 
 def test_compact_dataset_preserves_provenance_and_secondary_videos():
@@ -131,6 +134,10 @@ def test_partial_latest_period_keeps_catalog_from_previous_quarter():
     assert by_rut["76543210"]["latest_available_period"] == "202603"
     assert by_rut["76543210"]["months_covered"] == 3
     assert data["cmf"]["cross_section_comparable"] is False
+    assert data["cmf"]["historical_observation_count"] == 3
+    assert {item["period"] for item in data["cmf"]["observations"]} == {
+        "202606", "202603", "202503",
+    }
     assert data["feature_use"] == "forbidden_until_availability_join"
     assert by_rut["76543210"]["analysis"]["revenue_growth_yoy"] == 0.2
     snapshot = build_audit_snapshot(data)
@@ -200,6 +207,7 @@ def test_causal_join_requires_matching_period_scope_and_event():
     }]}
     records = build_feature_records(dataset, telegram)
     assert telegram_period_to_cmf("1T 2026") == "202603"
+    assert telegram_period_to_cmf("4T 2025 (Anual)") == "202512"
     assert len(records) == 1
     assert records[0]["available_at"] == "2026-05-01T12:00:00+00:00"
     assert records[0]["feature_use"] == "causal_feature_candidate_no_price_label"
@@ -241,6 +249,8 @@ def test_versioned_universe_is_partial_and_blocks_survivorship_backtest():
     assert status["coverage"] == "partial_top_weight_constituents"
     assert status["current_snapshot_complete"] is False
     assert status["membership_history_complete"] is False
+    assert status["public_change_event_count"] == 3
+    assert status["public_change_history_from"] == "2024-03-18"
     assert status["survivorship_free_backtest_allowed"] is False
     with pytest.raises(UniverseIncompleteError, match="sesgo de supervivencia"):
         snapshot_as_of(universe, "2026-08-22")
