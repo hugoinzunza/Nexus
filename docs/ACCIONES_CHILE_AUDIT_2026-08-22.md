@@ -131,3 +131,23 @@ El veredicto permanece `NO-GO` para entrenamiento y señales, como corresponde:
 faltan labels de precios ajustados, benchmark, historia suficiente, universo
 histórico completo y CMF Bancos. La terminal de investigación y sus alertas de
 publicación sí pueden operar en modo read-only.
+
+## Sexta revisión Opus — checklist de decisión y concentración
+
+Se añadió una matriz por posición con seis controles independientes: precio,
+resultado detectado, fundamentales suficientes, múltiplo observado, valor justo
+y margen de seguridad. Opus confirmó que compra/venta continúa nulo y que la
+concentración se utiliza sólo como advertencia, nunca como rebalanceo automático.
+
+La revisión solicitó mayor reproducibilidad de los artefactos CMF. Como cierre:
+
+- el TXT descargado mantiene su SHA-256 original;
+- el gzip persistido ahora es determinista (`compresslevel=9`, `mtime=0`) y
+  declara su propio SHA-256 y tamaño;
+- todos los períodos declaran cantidad de emisores y razón contra el máximo
+  observado del mismo horizonte contable; 202606 queda medido en 15,08% frente
+  a 2T 2025 y bloqueado como parcial;
+- los períodos sin baseline interanual ya no se justifican sólo por ser un
+  archivo oficial: usan el umbral numérico de cobertura de emisores.
+
+La capa predictiva permanece cerrada por los bloqueos externos ya documentados.

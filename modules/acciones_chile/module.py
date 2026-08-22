@@ -19,7 +19,10 @@ from .predictor import (
     build_feature_records, feature_join_report, normalize_company, portfolio_event_monitor,
     readiness as predictor_readiness,
 )
-from .strategy import build_radar, evaluate_observation, evaluate_valuation
+from .strategy import (
+    build_radar, evaluate_decision_evidence, evaluate_observation, evaluate_valuation,
+    portfolio_concentration,
+)
 from .universe import load_universe, snapshot_as_of, universe_status
 
 
@@ -192,10 +195,23 @@ class AccionesChileModule(NexusModule):
             portfolio = self._read_portfolio((user or {}).get("uid"))
             holding = next((item for item in (portfolio or {}).get("holdings", [])
                             if item.get("company_rut") == rut), None)
+            total_market = sum(
+                self._as_float(item.get("market_value")) or 0
+                for item in (portfolio or {}).get("holdings", []))
+            holding_market = self._as_float((holding or {}).get("market_value"))
+            allocation = holding_market / total_market if holding_market is not None and total_market else None
+            reading = evaluate_observation(history[-1], history)
+            valuation = evaluate_valuation(history, (holding or {}).get("market_price"))
+            event_state = portfolio_event_monitor(
+                (self._read_telegram() or {}).get("events", []), [history[-1]["company"]])
+            company_events = (event_state.get("by_company") or {}).get(
+                normalize_company(history[-1]["company"]))
             return self._json(200, {
                 "rut": rut, "company": history[-1]["company"], "history": history,
-                "reading": evaluate_observation(history[-1], history),
-                "valuation": evaluate_valuation(history, (holding or {}).get("market_price")),
+                "reading": reading, "valuation": valuation,
+                "events": company_events, "allocation_pct": allocation,
+                "decision_evidence": evaluate_decision_evidence(
+                    reading, valuation, company_events, allocation),
                 "price_history_ready": False,
             })
         if subpath == "radar":
@@ -270,6 +286,10 @@ class AccionesChileModule(NexusModule):
             for item in monitored:
                 value = self._as_float(item.get("market_value"))
                 item["allocation_pct"] = value / total_market if value is not None and total_market else None
+                item["decision_evidence"] = evaluate_decision_evidence(
+                    item.get("reading"), item.get("valuation"), item.get("events"),
+                    item.get("allocation_pct"))
+            concentration = portfolio_concentration(monitored)
             total_pnl = total_market - total_initial if priced_positions else None
             return self._json(200, {
                 "connected": True, "source": portfolio.get("source"),
@@ -288,6 +308,7 @@ class AccionesChileModule(NexusModule):
                     "current_statement_positions": event_monitor.get("positions_current", 0),
                     "pending_statement_positions": event_monitor.get("positions_pending_in_feed", 0),
                     "recent_notice_positions": event_monitor.get("positions_with_recent_notice", 0),
+                    "concentration": concentration,
                 },
                 "event_monitor_as_of": event_monitor.get("as_of"),
                 "event_monitor_disclaimer": event_monitor.get("disclaimer"),

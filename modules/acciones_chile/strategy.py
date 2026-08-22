@@ -168,6 +168,71 @@ def evaluate_valuation(history: list[dict], market_price) -> dict:
     return result
 
 
+def evaluate_decision_evidence(reading: dict | None, valuation: dict | None,
+                               events: dict | None, allocation_pct) -> dict:
+    """Explica el gate de decisión; nunca convierte una brecha en una orden."""
+    reading, valuation, events = reading or {}, valuation or {}, events or {}
+    allocation = _number(allocation_pct)
+    checks = [
+        {"key": "market_price", "label": "precio de mercado autorizado",
+         "ready": valuation.get("market_price") is not None},
+        {"key": "latest_result", "label": "último resultado detectado",
+         "ready": events.get("statement_status") == "latest_period_detected"},
+        {"key": "fundamentals", "label": "fundamentales suficientes",
+         "ready": int(reading.get("data_points") or 0) >= 5},
+        {"key": "observed_multiple", "label": "múltiplo observado compatible",
+         "ready": valuation.get("pe") is not None},
+        {"key": "fair_value", "label": "valor justo sustentado",
+         "ready": valuation.get("fair_value") is not None},
+        {"key": "margin_of_safety", "label": "margen de seguridad",
+         "ready": valuation.get("margin_of_safety") is not None},
+    ]
+    blockers = [check["label"] for check in checks if not check["ready"]]
+    warnings = []
+    if allocation is not None and allocation >= 0.5:
+        warnings.append(f"concentración elevada en cartera ({allocation:.1%})")
+    if events.get("essential_notices_30d"):
+        warnings.append(f"{events['essential_notices_30d']} hecho(s) esencial(es) en 30 días")
+    ready_count = sum(check["ready"] for check in checks)
+    return {
+        "strategy_version": STRATEGY_VERSION,
+        "operational_state": "blocked" if blockers else "ready_for_human_review",
+        "checks_ready": ready_count,
+        "checks_total": len(checks),
+        "checks": checks,
+        "blockers": blockers,
+        "warnings": warnings,
+        "fundamental_view": reading.get("fundamental_view"),
+        "research_posture": reading.get("portfolio_action_research"),
+        "buy_recommendation": None,
+        "sell_recommendation": None,
+        "orders": "prohibited",
+    }
+
+
+def portfolio_concentration(holdings: list[dict]) -> dict:
+    """Mide concentración de la valorización; no prescribe rebalanceos."""
+    weighted = [(item.get("ticker"), _number(item.get("allocation_pct"))) for item in holdings]
+    weighted = [(ticker, weight) for ticker, weight in weighted if weight is not None]
+    if not weighted:
+        return {"status": "unavailable", "largest_ticker": None, "largest_weight": None,
+                "hhi": None, "effective_positions": None, "level": None}
+    largest_ticker, largest_weight = max(weighted, key=lambda item: item[1])
+    hhi = sum(weight * weight for _, weight in weighted)
+    if largest_weight >= 0.5 or hhi >= 0.35:
+        level = "high"
+    elif largest_weight >= 0.35 or hhi >= 0.25:
+        level = "medium"
+    else:
+        level = "low"
+    return {
+        "status": "ready", "largest_ticker": largest_ticker,
+        "largest_weight": round(largest_weight, 8), "hhi": round(hhi, 8),
+        "effective_positions": round(1 / hhi, 4) if hhi else None,
+        "level": level, "recommendation": None,
+    }
+
+
 def build_radar(dataset: dict, limit: int = 40, allowed_ruts: set[str] | None = None) -> dict:
     cmf = dataset.get("cmf") or {}
     sources = cmf.get("sources") or []

@@ -30,7 +30,10 @@ from modules.acciones_chile.universe import (
     UniverseIncompleteError, load_universe, resolve_ticker, snapshot_as_of, universe_status,
     validate_universe,
 )
-from modules.acciones_chile.strategy import build_radar, evaluate_observation, evaluate_valuation
+from modules.acciones_chile.strategy import (
+    build_radar, evaluate_decision_evidence, evaluate_observation, evaluate_valuation,
+    portfolio_concentration,
+)
 from modules.acciones_chile import module as acciones_module
 
 
@@ -91,6 +94,37 @@ def test_strategy_rubric_is_explainable_and_never_emits_trade_order():
     assert reading["buy_sell_gate"] == "waiting_for_authorized_price_and_valuation"
     assert reading["youtube_feature_allowed"] is False
     assert len(reading["source_videos"]) == 4
+
+
+def test_decision_evidence_explains_missing_valuation_without_emitting_action():
+    evidence = evaluate_decision_evidence(
+        {"data_points": 7, "fundamental_view": "FUNDAMENTOS FUERTES",
+         "portfolio_action_research": "MANTENER / EVALUAR CON VALORACIÓN"},
+        {"market_price": 6600, "pe": 12.5, "fair_value": None,
+         "margin_of_safety": None},
+        {"statement_status": "latest_period_detected", "essential_notices_30d": 1},
+        0.58,
+    )
+    assert evidence["operational_state"] == "blocked"
+    assert evidence["checks_ready"] == 4
+    assert evidence["blockers"] == ["valor justo sustentado", "margen de seguridad"]
+    assert "concentración elevada" in evidence["warnings"][0]
+    assert evidence["buy_recommendation"] is None
+    assert evidence["sell_recommendation"] is None
+    assert evidence["orders"] == "prohibited"
+
+
+def test_portfolio_concentration_reports_risk_without_rebalance_recommendation():
+    result = portfolio_concentration([
+        {"ticker": "COPEC", "allocation_pct": 0.582},
+        {"ticker": "MINERA", "allocation_pct": 0.231},
+        {"ticker": "AGUAS-A", "allocation_pct": 0.187},
+    ])
+    assert result["largest_ticker"] == "COPEC"
+    assert result["largest_weight"] == 0.582
+    assert result["level"] == "high"
+    assert result["effective_positions"] < 3
+    assert result["recommendation"] is None
 
 
 def test_radar_uses_one_comparable_period():
@@ -197,7 +231,33 @@ def test_portfolio_monitor_summarizes_only_priced_positions(monkeypatch, tmp_pat
     assert result["summary"]["observed_multiple_positions"] == 0
     assert result["summary"]["fair_value_positions"] == 0
     assert result["summary"]["decision_ready"] is False
+    assert result["summary"]["concentration"]["level"] == "high"
+    assert result["holdings"][0]["decision_evidence"]["operational_state"] == "blocked"
     assert result["holdings"][0]["allocation_pct"] == 1
+
+
+def test_company_history_exposes_same_explainable_decision_gate(monkeypatch, tmp_path):
+    monkeypatch.setattr(acciones_module, "PORTFOLIO_PATH", str(tmp_path / "portfolio.json"))
+    context = SimpleNamespace(module_config={}, module_dir=str(tmp_path), log=lambda message: None)
+    instance = acciones_module.AccionesChileModule(context)
+    data = build_dataset(_payload().encode())
+    monkeypatch.setattr(instance, "_read_dataset", lambda: data)
+    monkeypatch.setattr(instance, "_read_telegram", lambda: {"events": [{
+        "message_id": 1, "event_type": "financial_statement", "company": "EMPRESA CHILENA S.A.",
+        "available_at": "2026-05-01T12:00:00+00:00", "period": "1T 2026",
+    }]})
+    assert instance.api_post("save-portfolio", {"holdings": [{
+        "ticker": "TEST", "company_rut": "76543210", "quantity": "2",
+        "average_cost": "100", "market_price": "120",
+    }]}, {}, user={"uid": 7})[0] == 200
+    status, _, raw = instance.api("company-history", {"rut": "76543210"}, user={"uid": 7})
+    result = json.loads(raw)
+    assert status == 200
+    assert result["events"]["statement_status"] == "latest_period_detected"
+    assert result["allocation_pct"] == 1
+    assert result["decision_evidence"]["checks_total"] == 6
+    assert result["decision_evidence"]["buy_recommendation"] is None
+    assert result["decision_evidence"]["sell_recommendation"] is None
 
 
 def test_token_authenticated_telegram_export_ingest(monkeypatch, tmp_path):
@@ -277,6 +337,23 @@ def test_compact_dataset_preserves_provenance_and_secondary_videos():
     assert data["cmf"]["sources"][0]["url"].endswith("?inicio=202603&termino=202603")
     assert data["cmf"]["issuers"][0]["analysis"]["revenue_growth_yoy"] == 0.2
     assert data["youtube"]["entries"][0]["source_role"] == "secondary_thesis"
+
+
+def test_cmf_sources_expose_numeric_issuer_coverage_and_persisted_artifact_hash():
+    data = build_multi_period_dataset(
+        {"202603": _payload().encode(), "202503": _payload("202503").encode()},
+        source_metadata={"202603": {
+            "raw_artifact_sha256": "b" * 64, "raw_artifact_bytes": 321,
+            "gzip_reproducibility": "python_gzip_compresslevel_9_mtime_0",
+        }},
+    )
+    source = next(item for item in data["cmf"]["sources"] if item["period"] == "202603")
+    assert source["issuer_count"] == 1
+    assert source["issuer_coverage_ratio_same_horizon"] == 1
+    assert source["completeness_method"] == "row_yoy_and_same_horizon_issuer_threshold_0.70"
+    assert source["raw_artifact_sha256"] == "b" * 64
+    assert source["raw_artifact_sha256_scope"] == "persisted_deterministic_gzip_bytes"
+    assert source["raw_artifact_bytes"] == 321
 
 
 def test_partial_latest_period_keeps_catalog_from_previous_quarter():
@@ -511,6 +588,8 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
         "progress-market", "progress-auditor", "bank-state", "bank-detail",
         "portfolio-asof", "kpi-decision", "kpi-decision-note",
         "portfolio-events-summary",
+        "portfolio-allocation", "allocation-bar", "allocation-legend", "allocation-risk",
+        "company-decision-checklist",
     ):
         assert f'id="{element_id}"' in page
     assert "s.cmf_banks" in page
@@ -520,6 +599,7 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
     assert "no es una cotización en vivo" in page
     assert "unidad EPS por validar" in page
     assert "Ausencia en el feed no prueba" in page
+    assert "no implica orden de rebalanceo" in page
 
 
 def test_versioned_universe_is_partial_and_blocks_survivorship_backtest():

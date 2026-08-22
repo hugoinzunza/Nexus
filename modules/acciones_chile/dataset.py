@@ -112,11 +112,21 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
     issuers.sort(key=lambda item: item["company"].casefold())
     sources = []
     source_metadata = source_metadata or {}
+    issuer_counts = {period: len(rows_by_period_rut[period]) for period in periods}
+    issuer_reference_by_horizon = {
+        horizon: max(count for period, count in issuer_counts.items() if period[-2:] == horizon)
+        for horizon in {period[-2:] for period in periods}
+    }
     for period in periods:
         prior_year = str(int(period) - 100)
         baseline_rows = len(parsed_by_period.get(prior_year, []))
         ratio = round(len(parsed_by_period[period]) / baseline_rows, 6) if baseline_rows else None
+        issuer_reference = issuer_reference_by_horizon[period[-2:]]
+        issuer_ratio = (round(issuer_counts[period] / issuer_reference, 6)
+                        if issuer_reference else None)
         meta = source_metadata.get(period, {})
+        partial = bool((ratio is not None and ratio < 0.7)
+                       or (issuer_ratio is not None and issuer_ratio < 0.7))
         sources.append({
             "period": period,
             "url": meta.get("effective_url") or f"{DEFAULT_URL}?inicio={period}&termino={period}",
@@ -129,12 +139,21 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
             "sha256": hashlib.sha256(payloads[period]).hexdigest(),
             "sha256_scope": "downloaded_uncompressed_ifrs_txt_bytes",
             "raw_artifact_encoding": "gzip",
+            "raw_artifact_sha256": meta.get("raw_artifact_sha256"),
+            "raw_artifact_sha256_scope": (
+                "persisted_deterministic_gzip_bytes" if meta.get("raw_artifact_sha256") else None),
+            "raw_artifact_bytes": meta.get("raw_artifact_bytes"),
+            "gzip_reproducibility": meta.get("gzip_reproducibility"),
             "rows": len(parsed_by_period[period]),
+            "months_covered": _months_covered(period),
             "completeness_ratio_yoy": ratio,
-            "completeness_method": ("year_over_year_row_ratio_threshold_0.70"
-                                    if ratio is not None
-                                    else "official_published_archive_no_yoy_baseline"),
-            "partial": ratio is not None and ratio < 0.7,
+            "issuer_count": issuer_counts[period],
+            "issuer_reference_max_same_horizon": issuer_reference,
+            "issuer_coverage_ratio_same_horizon": issuer_ratio,
+            "completeness_method": (
+                "row_yoy_and_same_horizon_issuer_threshold_0.70" if ratio is not None
+                else "same_horizon_issuer_threshold_0.70_no_row_yoy_baseline"),
+            "partial": partial,
             "raw_artifact": meta.get("raw_artifact"),
         })
     metric_coverage = {}
@@ -188,6 +207,9 @@ def build_audit_snapshot(data: dict) -> dict:
             "portfolio_events": (
                 "Telegram is used only to monitor publication availability and recent notices; "
                 "date_prediction=null and feed absence is not treated as proof of non-publication"),
+            "explainable_decision": (
+                "per-position checklist separates price, publication, fundamentals, observed multiple, "
+                "fair value and margin of safety; buy/sell stay null and concentration is warning-only"),
             "module_isolation": "acciones_chile imports no crypto or order-executor modules",
             "negative_tests": [
                 "test_partial_cmf_period_is_enforced_out_of_causal_features",
@@ -196,6 +218,8 @@ def build_audit_snapshot(data: dict) -> dict:
                 "test_authenticated_user_can_save_own_read_only_portfolio",
                 "test_portfolio_discards_credentials_and_rejects_untrusted_metadata",
                 "test_portfolio_event_monitor_marks_feed_gaps_without_predicting_dates",
+                "test_decision_evidence_explains_missing_valuation_without_emitting_action",
+                "test_portfolio_concentration_reports_risk_without_rebalance_recommendation",
             ],
         },
         "cmf": {
@@ -251,8 +275,9 @@ def refresh_dataset(path: str, base_url: str = DEFAULT_URL) -> dict:
     for period, item in downloads.items():
         artifact = os.path.join(raw_dir, f"eifrs_{period}.txt.gz")
         temp = artifact + ".tmp"
+        compressed = gzip.compress(item.payload, compresslevel=9, mtime=0)
         with open(temp, "wb") as handle:
-            handle.write(gzip.compress(item.payload, compresslevel=9))
+            handle.write(compressed)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp, artifact)
@@ -261,6 +286,9 @@ def refresh_dataset(path: str, base_url: str = DEFAULT_URL) -> dict:
             "http_status": item.http_status, "content_length": item.content_length,
             "bytes_received": item.bytes_received,
             "raw_artifact": os.path.relpath(artifact, os.path.dirname(path)),
+            "raw_artifact_sha256": hashlib.sha256(compressed).hexdigest(),
+            "raw_artifact_bytes": len(compressed),
+            "gzip_reproducibility": "python_gzip_compresslevel_9_mtime_0",
         }
     dataset = build_multi_period_dataset(payloads, fetch_feed(), metadata)
     write_dataset(path, dataset)
