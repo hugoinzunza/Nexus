@@ -96,9 +96,12 @@ def test_capas_smc_legadas_no_quedan_encendidas_por_defecto():
     assert "if (rng && indState.levels)" in apply
     renderer = _block(app, "class SMCRenderer", "class SMCPaneView")
     assert "show.levels && smc.range" in renderer
-    assert "course || !show.levels ? []" in renderer
-    assert "course || (!show.levels && !show.htf) ? []" in renderer
-    assert "show.tpsl && smc.cdc_events" in renderer
+    # El gating de FVG/OB pasó al adaptador compartido (gate 2), pero la regla
+    # es la misma: con `course` activo o sin `levels`, no se piden.
+    assert "fvg: !course && show.levels" in renderer
+    assert "ob: !course && (show.levels || show.htf)" in renderer
+    assert "cdc: !course && Boolean(show.tpsl)" in renderer
+
     panel = _block(app, "function renderSMCPanel", "// El gráfico")
     assert "Contexto SMC legado · no Bot3" in panel
     assert "Capas legadas desactivadas" in panel

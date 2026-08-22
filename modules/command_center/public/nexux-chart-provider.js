@@ -25,6 +25,19 @@ export {
   rsiValues,
   adxValues,
 } from "../../../static/nexux-chart-series.js";
+export {
+  CONTRATO_SMC,
+  CDC_ROTULO,
+  dibujarFvg,
+  dibujarOb,
+  dibujarCdc,
+  dibujarSmc,
+  normalizarAnalisis,
+} from "../../../static/nexux-smc-primitive.js";
+import {
+  dibujarSmc,
+  normalizarAnalisis,
+} from "../../../static/nexux-smc-primitive.js";
 import {
   intervalSpec,
   aggregateCandles,
@@ -89,108 +102,18 @@ class NexuxSmcRenderer {
     const source = this.source;
     const payload = source.data;
     if (!payload?.analysis || !source.series || !source.chart) return;
-    const analysis = payload.analysis;
-    const show = payload.show || {};
     const timeScale = source.chart.timeScale();
-    const yAt = (price) => source.series.priceToCoordinate(Number(price));
-    const xAt = (timestampMs) => timeScale.timeToCoordinate(Math.floor(Number(timestampMs) / 1000));
+    // El dibujo de FVG, OB y CDC es COMPARTIDO con NexUX Trading: vive en
+    // /static/nexux-smc-primitive.js y es una sola implementación. Acá solo se
+    // normaliza el payload y se aportan los conversores de coordenadas.
+    const capas = normalizarAnalisis(payload.analysis, payload.show || {});
     target.useMediaCoordinateSpace(({ context, mediaSize }) => {
-      const width = mediaSize.width;
-      const height = mediaSize.height;
-      const pill = (x, y, text, color, right = false) => {
-        context.font = "700 10px Inter, -apple-system, sans-serif";
-        context.textBaseline = "middle";
-        const pillWidth = context.measureText(text).width + 20;
-        const left = right
-          ? Math.max(3, width - pillWidth - 7)
-          : Math.max(3, Math.min(x, width - pillWidth - 3));
-        const top = Math.max(3, Math.min(y - 8, height - 19));
-        context.fillStyle = "rgba(5, 11, 18, 0.92)";
-        context.beginPath();
-        if (context.roundRect) context.roundRect(left, top, pillWidth, 17, 4);
-        else context.rect(left, top, pillWidth, 17);
-        context.fill();
-        context.fillStyle = color;
-        context.beginPath();
-        context.arc(left + 8, top + 8.5, 2.5, 0, Math.PI * 2);
-        context.fill();
-        context.fillStyle = "#f5f8fc";
-        context.fillText(text, left + 14, top + 9);
-      };
-
-      if (show.fvg) {
-        (analysis.fvgs || []).filter((zone) => !zone.filled).forEach((zone) => {
-          const y1 = yAt(zone.hi);
-          const y2 = yAt(zone.lo);
-          if (y1 == null || y2 == null) return;
-          const left = Math.max(0, xAt(zone.t) ?? 0);
-          const top = Math.min(y1, y2);
-          const boxHeight = Math.max(2, Math.abs(y2 - y1));
-          const rgb = zone.bullish ? "180,92,255" : "255,186,59";
-          const gradient = context.createLinearGradient(left, 0, width, 0);
-          gradient.addColorStop(0, `rgba(${rgb},0.18)`);
-          gradient.addColorStop(1, `rgba(${rgb},0.045)`);
-          context.fillStyle = gradient;
-          context.fillRect(left, top, width - left, boxHeight);
-          context.strokeStyle = `rgba(${rgb},0.46)`;
-          context.lineWidth = 1;
-          context.strokeRect(left + 0.5, top + 0.5, Math.max(1, width - left - 1), boxHeight);
-          pill(width, top + boxHeight / 2, zone.bullish ? "FVG ▲" : "FVG ▼",
-            zone.bullish ? "#c57aff" : "#ffba3b", true);
-        });
-      }
-
-      if (show.ob) {
-        (analysis.pois || []).forEach((zone) => {
-          const y1 = yAt(zone.hi);
-          const y2 = yAt(zone.lo);
-          if (y1 == null || y2 == null) return;
-          const left = Math.max(0, xAt(zone.t_conf) ?? 0);
-          const top = Math.min(y1, y2);
-          const boxHeight = Math.max(2, Math.abs(y2 - y1));
-          const long = zone.dir === "long";
-          const rgb = long ? "22,217,166" : "255,61,98";
-          const valid = Boolean(zone.valid);
-          context.fillStyle = `rgba(${rgb},${valid ? (zone.reference ? 0.045 : 0.12) : 0.025})`;
-          context.fillRect(left, top, width - left, boxHeight);
-          context.strokeStyle = `rgba(${rgb},${valid ? 0.5 : 0.16})`;
-          context.lineWidth = 1;
-          context.setLineDash(valid ? [] : [3, 4]);
-          context.strokeRect(left + 0.5, top + 0.5, Math.max(1, width - left - 1), boxHeight);
-          context.setLineDash([]);
-          if (valid) {
-            const distance = zone.reference && Number.isFinite(zone.dist_pct)
-              ? ` · ${zone.dist_pct > 0 ? "+" : ""}${Math.round(zone.dist_pct)}%`
-              : "";
-            pill(width, top + boxHeight / 2, `OB ${zone.tf || ""}${distance}`.trim(),
-              long ? "#16d9a6" : "#ff3d62", true);
-          }
-        });
-      }
-
-      if (show.cdc) {
-        (analysis.cdc_events || []).forEach((event) => {
-          const y = yAt(event.price);
-          if (y == null) return;
-          const left = Math.max(0, xAt(event.t_from) ?? 0);
-          let right = xAt(event.t_to);
-          if (event.pending && right == null) right = width;
-          if (right == null) return;
-          context.strokeStyle = "rgba(255,61,98,0.88)";
-          context.lineWidth = 1.25;
-          context.beginPath();
-          context.moveTo(left, y);
-          context.lineTo(right, y);
-          context.stroke();
-          if (!event.pending) {
-            context.beginPath();
-            context.moveTo(right, y - 4);
-            context.lineTo(right, y + 4);
-            context.stroke();
-          }
-          pill((left + right) / 2 - 18, y, event.pending ? "CDC pendiente" : "CDC", "#ff5574");
-        });
-      }
+      dibujarSmc(context, capas, {
+        ancho: mediaSize.width,
+        alto: mediaSize.height,
+        yAt: (price) => source.series.priceToCoordinate(Number(price)),
+        xAt: (ms) => timeScale.timeToCoordinate(Math.floor(Number(ms) / 1000)),
+      });
     });
   }
 }

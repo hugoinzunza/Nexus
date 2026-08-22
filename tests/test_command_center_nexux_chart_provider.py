@@ -149,9 +149,15 @@ def test_selector_expone_solo_capas_honestas_y_persistentes() -> None:
     assert 'fetcher(`/m/trading/api/smc?' in provider
     assert 'SMC_INTERVALS.has(this.interval)' in provider
     assert "this.series.attachPrimitive(this.smcPrimitive)" in provider
-    assert "analysis.cdc_events" in provider
-    assert "analysis.fvgs" in provider
-    assert "analysis.pois" in provider
+    # El dibujo de FVG, OB y CDC se comparte con NexUX Trading desde el gate 2:
+    # el proveedor normaliza y delega, no interpreta el payload por su cuenta.
+    assert 'from "../../../static/nexux-smc-primitive.js"' in provider
+    assert "normalizarAnalisis(payload.analysis" in provider
+    assert "dibujarSmc(context, capas" in provider
+    canonico = (ROOT / "static" / "nexux-smc-primitive.js").read_text(encoding="utf-8")
+    assert "analysis.cdc_events" in canonico
+    assert "analysis.fvgs" in canonico
+    assert "analysis.pois" in canonico
     assert "this.#refreshStructure();" in provider
     assert "revision !== this.structureRevision" in provider
     assert "await this.#loadStructure()" not in provider

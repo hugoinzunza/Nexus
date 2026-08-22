@@ -1,4 +1,5 @@
 import * as NexuxChartSeries from "../../../static/nexux-chart-series.js";
+import * as NexuxSmc from "../../../static/nexux-smc-primitive.js";
 
 (function () {
 
@@ -379,6 +380,9 @@ import * as NexuxChartSeries from "../../../static/nexux-chart-series.js";
       target.useMediaCoordinateSpace((scope) => {
         const ctx = scope.context;
         const W = scope.mediaSize.width, H = scope.mediaSize.height;
+        // Escena para el primitive compartido: solo conversores de coordenadas.
+        // El primitive no toca el chart ni hace fetch.
+        const escenaSmc = { ancho: W, alto: H, xAt: tx, yAt: py };
 
         // --- Capa LuxAlgo: cinta de tendencia (EMA 21/55), detrás de todo ---
         if (show.ribbon && D.ribbon && D.ribbon.length) {
@@ -480,65 +484,14 @@ import * as NexuxChartSeries from "../../../static/nexux-chart-series.js";
             band(pLo + BAND * d, pLo, "22,199,132", "DESCUENTO");        // pegada al mínimo
           }
         }
-        // FVG: caja desde su origen hacia la derecha, gradiente que decae y
-        // etiqueta pill a la derecha (solo si la caja tiene alto suficiente).
-        (course || !show.levels ? [] : (smc.fvgs || [])).filter((f) => !f.filled).forEach((f) => {
-          const y1 = py(f.hi), y2 = py(f.lo); if (y1 == null || y2 == null) return;
-          let x = tx(f.t); if (x == null) x = 0; x = Math.max(0, x);
-          const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
-          const col = f.bullish ? "162,155,254" : "245,166,35";
-          const g = ctx.createLinearGradient(x, 0, W, 0);
-          g.addColorStop(0, `rgba(${col},0.16)`); g.addColorStop(1, `rgba(${col},0.05)`);
-          ctx.fillStyle = g; ctx.fillRect(x, top, W - x, h);
-          ctx.strokeStyle = `rgba(${col},0.3)`; ctx.lineWidth = 1;
-          ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
-          // Etiqueta SIEMPRE visible: antes se ocultaba si la caja quedaba fina
-          // (<10px), por eso "desaparecía" al hacer zoom/mover. Se ancla al centro
-          // de la caja y se mantiene dentro del canvas (clamp) para no salirse.
-          const fy = Math.max(2, Math.min(top + h / 2 - 7, H - 17));
-          pill(placeR(fy), f.bullish ? "FVG ▲" : "FVG ▼",
-            f.bullish ? "#a29bfe" : "#f5a623", { right: true });
-        });
-        // POI / order blocks: nacen en su vela de confirmación y se extienden a
-        // la derecha. Válido = relleno con gradiente + borde + línea de
-        // mitigación al 50%; mitigado/roto = fondo no sólido y sin etiqueta
-        // (estilo breaker de LuxAlgo: menos ruido).
-        (course || (!show.levels && !show.htf) ? [] : (smc.pois || [])).forEach((poi) => {
-          // Toggle "Solo 4h/1D": muestra únicamente order blocks de timeframe alto
-          // (el edge robusto del backtest: avgR 0,90 vs 0,76, win 85%).
-          if (show.htf && poi.tf !== "4h" && poi.tf !== "1D") return;
-          const y1 = py(poi.hi), y2 = py(poi.lo); if (y1 == null || y2 == null) return;
-          const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
-          let x = poi.t_conf ? tx(poi.t_conf) : 0; if (x == null) x = 0; x = Math.max(0, x);
-          const long = poi.dir === "long";
-          const base = long ? "22,199,132" : "234,57,67";
-          if (poi.valid && poi.reference) {
-            // Zona PROFUNDA de referencia ("qué hay si el mercado se va"): atenuada
-            // y punteada para no saturar al alejar el zoom; etiqueta con la distancia.
-            ctx.fillStyle = `rgba(${base},0.05)`; ctx.fillRect(x, top, W - x, h);
-            ctx.strokeStyle = `rgba(${base},0.22)`; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
-            ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
-            ctx.setLineDash([]);
-            const d = poi.dist_pct != null ? ` ${poi.dist_pct > 0 ? "+" : ""}${Math.round(poi.dist_pct)}%` : "";
-            pill(placeR(top + 2), `${poi.tf}${d}`, `rgba(${base},0.7)`, { right: true });
-          } else if (poi.valid) {
-            const g = ctx.createLinearGradient(x, 0, W, 0);
-            g.addColorStop(0, `rgba(${base},0.20)`); g.addColorStop(1, `rgba(${base},0.06)`);
-            ctx.fillStyle = g; ctx.fillRect(x, top, W - x, h);
-            ctx.strokeStyle = `rgba(${base},0.55)`; ctx.lineWidth = 1;
-            ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
-            ctx.strokeStyle = `rgba(${base},0.35)`; ctx.setLineDash([2, 3]);
-            ctx.beginPath(); ctx.moveTo(x, top + h / 2); ctx.lineTo(W, top + h / 2); ctx.stroke();
-            ctx.setLineDash([]);
-            pill(placeR(top + 2), `POI ${poi.tf}`, long ? "#16c784" : "#ea3943", { right: true });
-          } else {
-            ctx.fillStyle = `rgba(${base},0.04)`;
-            ctx.fillRect(x, top, W - x, h);
-            ctx.strokeStyle = `rgba(${base},0.18)`; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
-            ctx.strokeRect(x + 0.5, top + 0.5, Math.max(1, W - x - 1), h);
-            ctx.setLineDash([]);
-          }
-        });
+        // FVG y OB (order blocks): capas COMPARTIDAS con Command Center.
+        // El dibujo vive en /static/nexux-smc-primitive.js — una sola
+        // implementación para las dos aplicaciones. Acá solo se decide QUÉ
+        // pedir; el filtro «Solo 4h/1D» es del adaptador, no del primitive.
+        NexuxSmc.dibujarSmc(ctx, NexuxSmc.normalizarAnalisis(smc, {
+          fvg: !course && show.levels,
+          ob: !course && (show.levels || show.htf),
+        }, { soloHtf: Boolean(show.htf) }), escenaSmc);
 
         // --- Capa LuxAlgo: niveles Weak/Strong con % ---
         if (!course && show.levels && smc.levels) {
@@ -574,29 +527,11 @@ import * as NexuxChartSeries from "../../../static/nexux-chart-series.js";
         // ESTRUCTURAL roto hasta la vela cuyo CIERRE lo rompió, con etiqueta
         // "CDC" en el eje de la línea — roja siempre, como el indicador de
         // referencia (calibrado con los ejemplos M15 de Hugo).
-        if (!course && show.tpsl && smc.cdc_events && smc.cdc_events.length) {
-          smc.cdc_events.forEach((ev) => {
-            const y = py(ev.price); if (y == null) return;
-            let x1 = tx(ev.t_from), x2 = tx(ev.t_to);
-            if (ev.pending && x2 == null) x2 = W;   // pendiente: hasta el presente
-            if (x2 == null) return;
-            if (x1 == null) x1 = 0;
-            const col = "#ea3943";
-            ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.setLineDash([]);
-            ctx.globalAlpha = ev.pending ? 0.95 : 0.7;
-            ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
-            // Tick de quiebre solo en los históricos (el pendiente sigue vivo).
-            if (!ev.pending) {
-              ctx.beginPath(); ctx.moveTo(x2, y - 4); ctx.lineTo(x2, y + 4); ctx.stroke();
-            }
-            ctx.globalAlpha = 1;
-            // Etiqueta EN el eje de la línea (centrada sobre ella, al medio del
-            // tramo): el fondo de la pill corta la línea, como el indicador.
-            pill(y - 8, "CDC", col,
-                 { x: Math.max(2, Math.min((x1 + x2) / 2 - 14, W - 44)),
-                   font: "600 9px -apple-system, sans-serif" });
-          });
-        }
+        // CDC: capa COMPARTIDA. Es un evento DESCRIPTIVO legado —describe un
+        // tramo de precio ya ocurrido—, no una señal ni una confirmación.
+        NexuxSmc.dibujarSmc(ctx, NexuxSmc.normalizarAnalisis(smc, {
+          cdc: !course && Boolean(show.tpsl),
+        }), escenaSmc);
 
         // --- Capa CURSO: estrategia Bitcoin Traders (playbook.v1) -----------
         // Lectura del profe sobre la TF vista: rango operativo causal (strong
