@@ -526,36 +526,56 @@ def test_el_estado_esperado_incluye_los_sidecars(tmp_path):
     assert D.estado_esperado(d, m15, h4, libro) != antes
 
 
-def test_la_divergencia_gana_en_LOS_DOS_ORDENES(tmp_path):
-    """Decide la PRECEDENCIA contractual, no el orden de ejecución:
-    `determinism_divergence` precede a `silencio_h4` llegue cuando llegue.
-
-    Congelar «gana el primero» dejaba que un silencio publicado antes
-    conservara el terminal aunque después apareciera una divergencia."""
+def test_la_precedencia_se_resuelve_en_el_REQUEST_no_al_publicar(tmp_path):
+    """Con dos motivos acumulados en un request PENDIENTE, gana la
+    divergencia en los dos órdenes: la precedencia se resuelve mientras el
+    request existe, antes de publicar."""
     for primero, segundo in ((C.MOTIVO_DIVERGENCIA, C.MOTIVO_SILENCIO),
                              (C.MOTIVO_SILENCIO, C.MOTIVO_DIVERGENCIA)):
-        sub = tmp_path / f"caso_{primero}"
+        sub = tmp_path / f"req_{primero}"
         sub.mkdir()
         motor, m15, h4, libro = mundo(sub, n15=30)
         d = str(sub / "estado")
         os.makedirs(d)
+        ruta = os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL)
+        E.solicitar_terminal(ruta, primero, IDENT, {}, T0,
+                             D.estado_esperado(d, m15, h4, libro))
+        E.solicitar_terminal(ruta, segundo, IDENT, {}, T0 + 1,
+                             D.estado_esperado(d, m15, h4, libro))
+        assert json.load(open(ruta, encoding="utf-8"))["motivo"] == \
+            C.MOTIVO_DIVERGENCIA, (primero, segundo)
+        # y la transición publica ESE motivo, no el que traiga la llamada
+        hecho = D.transicion_terminal(D.BarreraCiclo(), d, primero, IDENT, {},
+                                      T0 + 2, motor, m15, h4, libro)
+        assert hecho["cuerpo"]["motivo"] == C.MOTIVO_DIVERGENCIA
+
+
+def test_un_terminal_PUBLICADO_es_inmutable(tmp_path):
+    """Permitir reemplazo era peor que un orden equivocado: con un
+    `COMPLETED` por `n_cierres` —motivo fuera de la tabla de precedencia— una
+    divergencia posterior publicaba `blocked.json` SIN borrar
+    `completed.json`, y el arranque siguiente encontraba los dos."""
+    for estado, motivo in ((C.BLOQUEADO, C.MOTIVO_SILENCIO),
+                           (C.COMPLETADO, "n_cierres")):
+        sub = tmp_path / f"pub_{estado}"
+        sub.mkdir()
+        motor, m15, h4, libro = mundo(sub, n15=30)
+        d = str(sub / "estado")
+        os.makedirs(d)
+        E.publicar_terminal(d, estado, {"cohorte": IDENT["cohorte"],
+                                        "motivo": motivo})
+        antes = os.listdir(d)
         barrera = D.BarreraCiclo()
-        D.transicion_terminal(barrera, d, primero, IDENT, {}, T0,
-                              motor, m15, h4, libro)
-        dos = D.transicion_terminal(barrera, d, segundo, IDENT, {}, T0 + 1,
-                                    motor, m15, h4, libro)
-        crudo = json.load(open(os.path.join(d, C.ARCHIVO_BLOQUEADO),
-                               encoding="utf-8"))
-        # en los DOS órdenes gana la divergencia
-        assert crudo["motivo"] == C.MOTIVO_DIVERGENCIA, (primero, segundo)
-        assert dos["cuerpo"]["motivo"] == C.MOTIVO_DIVERGENCIA
-        if primero == C.MOTIVO_SILENCIO:
-            # y queda registrado a QUÉ terminal reemplazó
-            assert crudo["evidencia"]["reemplaza"]["motivo"] == primero
-        else:
-            assert dos.get("ya_existia") is True    # el de menor no reemplaza
-        assert not os.path.exists(
-            os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL))
+        dos = D.transicion_terminal(barrera, d, C.MOTIVO_DIVERGENCIA, IDENT,
+                                    {}, T0, motor, m15, h4, libro)
+        assert dos.get("ya_existia") is True
+        assert dos["cuerpo"]["motivo"] == motivo   # el publicado manda
+        assert barrera.terminal == motivo
+        # y NUNCA coexisten los dos archivos
+        assert sorted(os.listdir(d)) == sorted(antes)
+        assert not (os.path.exists(os.path.join(d, C.ARCHIVO_COMPLETADO))
+                    and os.path.exists(os.path.join(d, C.ARCHIVO_BLOQUEADO)))
+        E.leer_terminal(d)                         # no falla cerrado
 
 
 def test_el_watermark_de_lotes_se_deriva_del_motor(tmp_path):
@@ -774,9 +794,87 @@ def test_caida_entre_el_fsync_del_almacen_y_el_append_al_libro(tmp_path):
     libror = Ledger(libro.ruta, commit="ensayo")
     mr = Motor(m15r, h4r, MERCADOS, libror, bootstrap_hasta=1)
     D.emitir_huecos_locales(mr, m15r, h4r, 111)
+    for T in D.cierres_de(m15r, MERCADOS):
+        if not D.procesar_lote_canonico(mr, T, 111):
+            break
+
+    # --- y la CORRIDA CONTINUA equivalente, sin la caída -----------------
+    cont = tmp_path / "continuo"
+    cont.mkdir()
+    mc, m15c, h4c, libroc = mundo(cont, n15=60)
+    almc = m15c["BTCUSDT"]
+    almc.ofrecer([vela(almc.ultimo_t + (2 + i) * DUR) for i in range(4)],
+                 "push")
+    almc.drenar()
+    assert almc.declarar_hueco_local() is not None
+    almc.sincronizar()
+    D.emitir_huecos_locales(mc, m15c, h4c, 111)
+    for T in D.cierres_de(m15c, MERCADOS):
+        if not D.procesar_lote_canonico(mc, T, 111):
+            break
+
+    # equivalencia COMPLETA, no solo «reapareció el evento»
+    for m in MERCADOS:
+        assert m15r[m].head == m15c[m].head, m
+        assert h4r[m].head == h4c[m].head, m
+    assert libror.firma() == libroc.firma()
+    assert ([E.canon(e) for e in libror.eventos]
+            == [E.canon(e) for e in libroc.eventos])
+    assert (E.observer_state_digest(mr, m15r, h4r, None)
+            == E.observer_state_digest(mc, m15c, h4c, None))
     huecos = [e for e in libror.eventos if e["tipo"] == "hueco_detectado"]
-    assert huecos, "el evento tiene que reponerse desde el marcador sellado"
-    assert huecos[0]["motivo"] == "local"
-    for campo in ("processed_at", "input_head_asof_T",
-                  "provenance_head_at_finality"):
-        assert campo in huecos[0], campo
+    assert huecos and huecos[0]["motivo"] == "local"
+
+
+def test_el_corte_por_50_cierres_llega_a_COMPLETED_y_no_emite_51(tmp_path):
+    """Camino real `cierre 50 → _fase8 → motor.cortado → COMPLETED`.
+
+    El PREFIJO de cierres se prepara canónicamente —sintetizar 50 trades
+    reales con datos planos no es viable—, pero el CORTE lo produce `_fase8`
+    del motor por su ruta propia: `procesar_lote` lo llama al final de cada
+    lote y `_cerrar("muestra", T)` emite los eventos terminales de verdad."""
+    import datetime
+    motor, m15, h4, libro = mundo(tmp_path, n15=210)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    v = verif(tmp_path)
+    v.conforme(1, "d", "f")
+
+    # prefijo canónico: 50 cierres repartidos en semanas ISO suficientes
+    semana = 7 * 24 * 3600 * 1000
+    motor.cierres = [{"t": T0 - (50 - i) * semana // 2, "mercado": "BTCUSDT",
+                      "r": 0.1, "trade_id": f"t{i}"} for i in range(50)]
+    semanas = {motor._semana_iso(c["t"]) for c in motor.cierres}
+    from modules.bot3.v9.contract import CORTE_MIN_SEMANAS_ISO
+    assert len(semanas) >= CORTE_MIN_SEMANAS_ISO   # el corte es alcanzable
+    assert len(motor.cierres) == CORTE_N_CIERRES
+
+    ahora = ahora_de(m15, h4)
+    parte = D.ciclo(fetch_reloj(ahora), D.BarreraCiclo(), motor, m15, h4,
+                    libro, v, lambda: ahora, estado_dir=d, identidad=IDENT)
+    # `_fase8` cortó en el PRIMER lote procesado, por su ruta real
+    assert motor.cortado is True
+    assert motor.motivo_corte == "muestra"
+    assert len(parte["procesados"]) == 1
+    assert parte["terminal"]["estado"] == C.COMPLETADO
+    cuerpo = json.load(open(os.path.join(d, C.ARCHIVO_COMPLETADO),
+                            encoding="utf-8"))
+    assert cuerpo["motivo"] == "muestra"
+
+    # no hay eventos 51+: ningún lote posterior se procesa
+    n = len(libro.eventos)
+    barrera = D.BarreraCiclo()
+    barrera.cerrar_para_siempre("muestra")
+    otro = D.ciclo(fetch_reloj(ahora), barrera, motor, m15, h4, libro, v,
+                   lambda: ahora, estado_dir=d, identidad=IDENT)
+    assert otro["ingirio"] is False
+    assert len(libro.eventos) == n
+    assert len(motor.cierres) == CORTE_N_CIERRES
+
+    # y un REINICIO encuentra el terminal y no ingiere
+    fresca = D.BarreraCiclo()
+    leido = D.reanudar(fresca, d, IDENT, motor, m15, h4, libro, ahora)
+    assert leido["estado"] == C.COMPLETADO
+    assert fresca.terminal
+    assert D.ciclo(fetch_reloj(ahora), fresca, motor, m15, h4, libro, v,
+                   lambda: ahora)["ingirio"] is False

@@ -311,27 +311,33 @@ def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
     libro. Solo hace durable lo que ya existe."""
     ruta_req = os.path.join(estado_dir, C.ARCHIVO_SOLICITUD_TERMINAL)
     with barrera:
-        # Con un terminal YA PUBLICADO, decide la PRECEDENCIA CONTRACTUAL, no
-        # el orden de ejecución: `determinism_divergence` precede a
-        # `silencio_h4` llegue cuando llegue. Un motivo de menor precedencia
-        # no reemplaza al publicado; uno de mayor SÍ, porque la integridad
-        # manda sobre la liveness.
+        # Un terminal PUBLICADO es INMUTABLE (§9.1.1). La precedencia se
+        # resuelve MIENTRAS existe `terminal.request`, antes de publicar: es
+        # `solicitar_terminal` quien acumula motivos y elige el ganador.
+        #
+        # Permitir reemplazo era peor que un orden equivocado: con un
+        # `COMPLETED` por `n_cierres` —motivo que no está en la tabla de
+        # precedencia— una divergencia posterior publicaba `blocked.json` SIN
+        # borrar `completed.json`, y el arranque siguiente encontraba los dos
+        # y fallaba cerrado. Un terminal corrupto en vez de uno discutible.
         ya = E.leer_terminal(estado_dir)
         if ya is not None and ya["estado"] in (C.COMPLETADO, C.BLOQUEADO):
             previo = ya["cuerpo"].get("motivo", "terminal")
-            if not _precede(motivo, previo):
-                barrera.cerrar_para_siempre(previo)
-                if os.path.exists(ruta_req):
-                    os.replace(ruta_req, ruta_req + ".archivado")
-                return {"estado": ya["estado"], "ruta": None,
-                        "cuerpo": ya["cuerpo"], "ya_existia": True}
-            evidencia = {**evidencia, "reemplaza": {"motivo": previo}}
+            barrera.cerrar_para_siempre(previo)
+            if os.path.exists(ruta_req):
+                os.replace(ruta_req, ruta_req + ".archivado")
+            return {"estado": ya["estado"], "ruta": None,
+                    "cuerpo": ya["cuerpo"], "ya_existia": True}
         # La solicitud se escribe DENTRO de la barrera: si no, dos anexiones
         # concurrentes no estarían serializadas y un ciclo en espera podría
         # colarse entre la solicitud y la publicación.
         barrera.cerrar_para_siempre(motivo)
-        E.solicitar_terminal(ruta_req, motivo, identidad, evidencia, ahora,
-                             estado_esperado(estado_dir, m15, h4, libro))
+        # El request acumula motivos y su `motivo` es ya el GANADOR por
+        # precedencia: se publica ese, no el que trajo esta llamada.
+        req = E.solicitar_terminal(ruta_req, motivo, identidad, evidencia,
+                                   ahora,
+                                   estado_esperado(estado_dir, m15, h4, libro))
+        motivo = req["motivo"]
         for mapa in (m15, h4):
             for alm in mapa.values():
                 alm.sincronizar()
@@ -349,16 +355,6 @@ def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
         ruta = E.publicar_terminal(estado_dir, estado_final, cuerpo)
         os.remove(ruta_req)
     return {"estado": estado_final, "ruta": ruta, "cuerpo": cuerpo}
-
-
-def _precede(nuevo: str, previo: str) -> bool:
-    """¿`nuevo` tiene MÁS precedencia contractual que `previo`?"""
-    orden = C.PRECEDENCIA_MOTIVOS
-    if nuevo not in orden:
-        return False
-    if previo not in orden:
-        return True
-    return orden.index(nuevo) < orden.index(previo)
 
 
 def estado_esperado(estado_dir: str, m15: dict, h4: dict, libro) -> dict:
