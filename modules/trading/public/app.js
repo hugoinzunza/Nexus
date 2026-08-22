@@ -19,11 +19,15 @@
    * El sello dice el estado real siempre.
    */
   const vivoBinance = {
-    ws: null, stream: null, card: null, intentos: 0, timer: null, ultimo: 0, frames: 0, _ultimoBt: 0,
+    ws: null, stream: null, card: null, intentos: 0, timer: null, ultimo: 0,
+    frames: 0, generacion: 0, _ultimoBt: 0,
 
     conectar(card, stream) {
-      if (this.stream === stream && this.ws && this.ws.readyState <= 1) return;
+      if (this.stream === stream && this.card === card && this.ws
+          && this.ws.readyState <= 1 && cardEsVigente(card, card.timeframe)) return;
       this.cerrar();
+      const generacion = this.generacion;
+      const tf = card.timeframe;
       this.stream = stream;
       this.card = card;
       this.frames = 0;
@@ -44,7 +48,10 @@
         return;
       }
       this.ws = ws;
+      const vigente = () => this.ws === ws && this.generacion === generacion
+        && this.stream === stream && this.card === card && cardEsVigente(card, tf);
       ws.onopen = () => {
+        if (!vigente()) return;
         this.intentos = 0;
         // La ventana de frescura arranca AL CONECTAR, no en el epoch. Sin esto, un
         // socket recien abierto que todavia no recibio su primer frame se reportaba
@@ -54,6 +61,7 @@
         this.marcar(card, "conectando");
       };
       ws.onmessage = (ev) => {
+        if (!vigente()) return;
         // Descarte ANTES de parsear. `bookTicker` manda entre 65 y 740 frames por
         // segundo segun la actividad, y `JSON.parse` en cada uno es el costo real: el
         // repintado ya estaba limitado y aun asi la pestana se ponia pesada.
@@ -98,8 +106,8 @@
         }
         this.marcar(card, "en vivo");
       };
-      ws.onclose = () => { if (this.stream === stream) this.reintentar(card, stream); };
-      ws.onerror = () => { this.marcar(card, "sin vivo"); };
+      ws.onclose = () => { if (vigente()) this.reintentar(card, stream); };
+      ws.onerror = () => { if (vigente()) this.marcar(card, "sin vivo"); };
     },
 
     reintentar(card, stream) {
@@ -108,18 +116,25 @@
       // se reintenta cada vez mas lento y el sello queda diciendo la verdad.
       this.marcar(card, "sin vivo");
       this.intentos += 1;
+      const generacion = this.generacion;
       const espera = Math.min(60_000, 2_000 * Math.pow(2, this.intentos - 1));
       clearTimeout(this.timer);
       this.timer = setTimeout(() => {
-        if (this.stream === stream) this.conectar(card, stream);
+        if (this.generacion === generacion && this.stream === stream
+            && this.card === card && cardEsVigente(card, card.timeframe)) {
+          this.conectar(card, stream);
+        }
       }, espera);
     },
 
     cerrar() {
       clearTimeout(this.timer);
+      this.generacion += 1;
       this.stream = null;
       if (this.ws) { try { this.ws.onclose = null; this.ws.close(); } catch (e) {} }
       this.ws = null;
+      this.card = null;
+      this.frames = 0;
     },
 
     // Vivo de verdad = conectado Y con datos recientes. Un socket abierto que dejo de
@@ -305,6 +320,11 @@
   let activeSymbol = null;
   let lastLabels = {};   // símbolo → etiqueta (para poblar el dropdown)
 
+  function cardEsVigente(card, tf) {
+    return !!card && card.symbol === activeSymbol && card.timeframe === tf
+      && !!card.node && !card.node.hidden;
+  }
+
   // Temporalidades del selector. Se sobreescriben con lo que diga el backend
   // (api/config); estos son el respaldo por si esa llamada falla.
   let TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1D"];
@@ -423,13 +443,13 @@
           ctx.fillStyle = "#fff";                         // texto blanco
           ctx.fillText(text, px + 14, y + 3.2);
         };
-        // --- Overlay SMC (siempre): premium/descuento, FVG, POIs ---
+        // --- Overlay SMC legado: solo con activacion manual explicita ---
         // Premium/descuento como lo dibuja LuxAlgo: TRES BANDAS discretas dentro
         // del dealing range — premium pegada a los máximos (ahí se buscan cortos),
         // equilibrium alrededor del 50% (fib del rango) y descuento pegada a los
         // mínimos (ahí se buscan largos). NO mitades completas: las zonas marcan
         // dónde buscar la operación, el 50% solo separa caro de barato.
-        if (!course && smc.range && smc.range.eq) {
+        if (!course && show.levels && smc.range && smc.range.eq) {
           const pHi = smc.range.strong_high, pLo = smc.range.weak_low;
           const d = pHi - pLo;
           if (d > 0) {
@@ -460,7 +480,7 @@
         }
         // FVG: caja desde su origen hacia la derecha, gradiente que decae y
         // etiqueta pill a la derecha (solo si la caja tiene alto suficiente).
-        (course ? [] : (smc.fvgs || [])).filter((f) => !f.filled).forEach((f) => {
+        (course || !show.levels ? [] : (smc.fvgs || [])).filter((f) => !f.filled).forEach((f) => {
           const y1 = py(f.hi), y2 = py(f.lo); if (y1 == null || y2 == null) return;
           let x = tx(f.t); if (x == null) x = 0; x = Math.max(0, x);
           const top = Math.min(y1, y2), h = Math.max(1, Math.abs(y2 - y1));
@@ -481,7 +501,7 @@
         // la derecha. Válido = relleno con gradiente + borde + línea de
         // mitigación al 50%; mitigado/roto = fondo no sólido y sin etiqueta
         // (estilo breaker de LuxAlgo: menos ruido).
-        (course ? [] : (smc.pois || [])).forEach((poi) => {
+        (course || (!show.levels && !show.htf) ? [] : (smc.pois || [])).forEach((poi) => {
           // Toggle "Solo 4h/1D": muestra únicamente order blocks de timeframe alto
           // (el edge robusto del backtest: avgR 0,90 vs 0,76, win 85%).
           if (show.htf && poi.tf !== "4h" && poi.tf !== "1D") return;
@@ -548,11 +568,11 @@
         }
 
         // --- Capa CDC: cambios de carácter (CHoCH) sobre velas cerradas ---
-        // SIEMPRE visible (sin toggle, pedido de Hugo): línea desde el swing
+        // Visible junto al TP/SL legado: línea desde el swing
         // ESTRUCTURAL roto hasta la vela cuyo CIERRE lo rompió, con etiqueta
         // "CDC" en el eje de la línea — roja siempre, como el indicador de
         // referencia (calibrado con los ejemplos M15 de Hugo).
-        if (!course && smc.cdc_events && smc.cdc_events.length) {
+        if (!course && show.tpsl && smc.cdc_events && smc.cdc_events.length) {
           smc.cdc_events.forEach((ev) => {
             const y = py(ev.price); if (y == null) return;
             let x1 = tx(ev.t_from), x2 = tx(ev.t_to);
@@ -914,10 +934,10 @@
 
   // --- Indicadores (Vol / RSI / ADX) ---------------------------------
   // Estado global (mismo para todos los pares), recordado en localStorage.
-  const IND_KEY = "nexus_trading_ind";
-  // TP/SL (la capa del PLAN) parte encendida: es el corazón del indicador y ahí
-  // viven las etiquetas de régimen y CDC del badge.
-  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: true, div: false, htf: false, curso: false };
+  // v2 no hereda el TP/SL legado que antes quedaba encendido en localStorage.
+  // Las capas SMC no tienen contrato Bot3 y requieren activación manual explícita.
+  const IND_KEY = "nexus_trading_ind_v2";
+  const IND_DEFAULTS = { vol: true, rsi: false, adx: false, ribbon: false, levels: false, tpsl: false, div: false, htf: false, curso: false };
   let indState = (() => {
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
@@ -1078,7 +1098,10 @@
           saveIndState();
           if (PANE_INDICATORS.has(k)) Object.values(cards).forEach((c) => buildIndicators(c));
           else Object.values(cards).forEach((c) => {
-            computeRibbon(c); pushPrim(c);
+            computeRibbon(c);
+            if (k === "levels") applySMC(c);
+            else pushPrim(c);
+            if (k === "tpsl") renderSMC(c);
             // "Curso" recién encendido: la capa aún no tiene datos → los pedimos.
             if (k === "curso" && indState.curso && !c.course) loadSMC(c.symbol, c);
           });
@@ -1129,7 +1152,8 @@
     container.appendChild(node);
     const chartEl = node.querySelector(".chart");
     const card = { node, chartEl, symbol, lastPrice: null, timeframe: DEFAULT_TF,
-                   candles: [], bars: [], smc: null, priceLines: [], fitted: false };
+                   candles: [], bars: [], smc: null, priceLines: [], fitted: false,
+                   candlesRevision: 0, smcRevision: 0, olderRevision: 0 };
     cards[symbol] = card;
 
     createChart(card);
@@ -1149,6 +1173,10 @@
   function pauseCard(card) {
     if (card.refreshTimer) { clearInterval(card.refreshTimer); card.refreshTimer = null; }
     if (card.smcTimer) { clearInterval(card.smcTimer); card.smcTimer = null; }
+    card.candlesRevision += 1;
+    card.smcRevision += 1;
+    card.olderRevision += 1;
+    if (vivoBinance.card === card) vivoBinance.cerrar();
   }
   function resumeCard(card) {
     if (!card.refreshTimer) {
@@ -1323,23 +1351,29 @@
   // Pide el análisis SMC en vivo y lo proyecta como price lines + primitive.
   async function loadSMC(symbol, card) {
     const tf = card.timeframe;
+    const revision = ++card.smcRevision;
     try {
       const r = await fetch(`api/smc?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}`);
       if (!r.ok) return;
       const j = await r.json();
-      if (card.timeframe !== tf) return;
+      if (!cardEsVigente(card, tf) || card.smcRevision !== revision) return;
       card.smc = j;
       // Capa "Curso" (estrategia del profe, playbook.v1): solo si el toggle está
       // activo. Payload aparte y sin tpsl — no alimenta diario ni bot.
       if (indState.curso) {
         try {
           const rc = await fetch(`api/smc?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&strategy=course`);
-          if (rc.ok) { const cj = await rc.json(); if (card.timeframe === tf) card.course = cj; }
+          if (rc.ok) {
+            const cj = await rc.json();
+            if (cardEsVigente(card, tf) && card.smcRevision === revision) card.course = cj;
+          }
         } catch (e) { /* conservamos la capa previa */ }
       }
+      if (!cardEsVigente(card, tf) || card.smcRevision !== revision) return;
       // Trades ACTIVOS del forward-test (para dibujar la cajita acotada del trade).
       try {
         const sj = await fetch("/m/journal/api/setups").then((r) => (r.ok ? r.json() : null));
+        if (!cardEsVigente(card, tf) || card.smcRevision !== revision) return;
         card.trades = ((sj && sj.setups) || []).filter((x) => x.status === "activo" && x.pair === symbol);
         // El ancho de la caja lo calcula el primitive con xAt() (interpola por tiempo
         // real entrada→ahora), así que ya no anclamos a barras acá.
@@ -1367,7 +1401,7 @@
       }));
     };
     const rng = card.smc && card.smc.range;
-    if (rng) {
+    if (rng && indState.levels) {
       addLine(rng.strong_high, "#ea3943", "Strong High", "#c0212f");
       addLine(rng.weak_low, "#16c784", "Weak Low", "#0a8c58");
       addLine(rng.eq, "#a29bfe", "EQ 50%", "#5a4bc4");
@@ -1448,8 +1482,13 @@
       btn.setAttribute("aria-pressed", tf === card.timeframe ? "true" : "false");
       btn.addEventListener("click", () => {
         if (card.timeframe === tf) return;
+        card.candlesRevision += 1;
+        card.smcRevision += 1;
+        card.olderRevision += 1;
+        if (vivoBinance.card === card) vivoBinance.cerrar();
         card.timeframe = tf;
         card.candles = [];     // reset: no mezclar velas de otra temporalidad
+        card.bars = [];
         card.hasMore = false;
         card.loadingOlder = false;
         sel.querySelectorAll(".tf-btn").forEach((b) => {
@@ -1460,6 +1499,17 @@
         card.smc = null;      // el SMC depende de la TF seleccionada (estructura/FVG)
         card.course = null;   // la capa Curso también es por TF
         card.fitted = false;  // reajustamos la vista a la nueva resolución
+        card.priceLines.forEach((pl) => card.series.removePriceLine(pl));
+        card.priceLines = [];
+        card.series.setData([]);
+        setIndicatorData(card);
+        pushPrim(card);
+        const fuente = card.node.querySelector(".fuente-velas");
+        if (fuente) {
+          fuente.textContent = `Cargando ${tf}`;
+          fuente.classList.remove("mudo", "ajena");
+        }
+        renderSMCPanel(card);
         loadCandles(symbol, card);
         loadSMC(symbol, card);
       });
@@ -1527,11 +1577,13 @@
   // si apareció una vela nueva (si no, basta liveUpdate → barato con años cargados).
   async function loadCandles(symbol, card) {
     const tf = card.timeframe;
+    const revision = ++card.candlesRevision;
     try {
       const r = await fetch(`api/candles?instrument=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&limit=1500`);
       if (!r.ok) return;
       const j = await r.json();
-      if (card.timeframe !== tf || !Array.isArray(j.candles) || !card.series) return;
+      if (!cardEsVigente(card, tf) || card.candlesRevision !== revision
+          || !Array.isArray(j.candles) || !card.series) return;
       const first = !card.candles.length;
       const prevLen = card.candles.length;
       card.candles = first ? j.candles : mergeCandles(card.candles, j.candles);
@@ -1570,12 +1622,14 @@
     if (card.loadingOlder || !card.hasMore || !card.candles.length) return;
     card.loadingOlder = true;
     const tf = card.timeframe;
+    const revision = ++card.olderRevision;
     const before = card.candles[0].t;
     try {
       const r = await fetch(`api/candles?instrument=${encodeURIComponent(card.symbol)}&timeframe=${encodeURIComponent(tf)}&before=${before}&limit=3000`);
       if (!r.ok) return;
       const j = await r.json();
-      if (card.timeframe !== tf || !Array.isArray(j.candles) || !card.series) return;
+      if (!cardEsVigente(card, tf) || card.olderRevision !== revision
+          || !Array.isArray(j.candles) || !card.series) return;
       const older = j.candles.filter((c) => c.t < before);
       card.hasMore = !!j.has_more && older.length > 0;
       if (!older.length) return;
@@ -1756,7 +1810,7 @@
     const t = smc && smc.tpsl;
     const planEl = n.querySelector(".plan-card");
     if (planEl) {
-      if (t && t.entry) {
+      if (t && t.entry && indState.tpsl) {
         planEl.hidden = false;
         const long = t.dir === "long";
         planEl.classList.toggle("long", long);
@@ -1784,6 +1838,20 @@
   function renderSMCPanel(card) {
     const el = card.node.querySelector(".smc-list");
     if (!el) return;
+    const title = card.node.querySelector(".smc-title");
+    const contract = card.smc && card.smc.visual_contract;
+    const certificado = !!(contract && contract.validated && contract.bot3_compatible);
+    if (title) title.textContent = certificado
+      ? "POIs activos · SMC verificado"
+      : "Contexto SMC legado · no Bot3";
+    if (!card.smc) {
+      el.innerHTML = '<div class="smc-empty">Cargando contexto…</div>';
+      return;
+    }
+    if (!indState.levels && !indState.htf && !indState.curso) {
+      el.innerHTML = '<div class="smc-empty">Capas legadas desactivadas.</div>';
+      return;
+    }
     const pois = (card.smc && card.smc.active_pois) || [];
     if (!pois.length) {
       el.innerHTML = '<div class="smc-empty">Sin POIs válidos cerca del precio ahora.</div>';

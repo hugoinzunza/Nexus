@@ -1136,13 +1136,25 @@ class TradingModule(NexusModule):
                 return self._json_error(400, "temporalidad no válida")
             try:
                 # strategy=course → capa paralela del curso (solo gráfico, sin tpsl).
-                if query.get("strategy") == "course":
+                course = query.get("strategy") == "course"
+                if course:
                     analysis = self._smc_course_analysis(instrument, timeframe)
                 else:
                     analysis = self._smc_analysis(instrument, timeframe)
             except Exception as exc:  # noqa: BLE001
                 return self._json_error(502, f"no se pudo analizar SMC: {exc}")
-            body = json.dumps({"instrument": instrument, **analysis},
+            # Contrato visual honesto: este endpoint preserva el analizador legado
+            # para no contaminar su cohorte histórica. No es el ledger Bot3 ni publica
+            # disponibilidad causal evento por evento.
+            visual_contract = {
+                "id": "nexux.smc.course-legacy.v1" if course else "nexux.smc.legacy.v1",
+                "validated": False,
+                "bot3_compatible": False,
+                "source_kind": "legacy_analysis",
+                "causal_availability": False,
+            }
+            body = json.dumps({"instrument": instrument,
+                               "visual_contract": visual_contract, **analysis},
                               ensure_ascii=False).encode("utf-8")
             return (200, "application/json; charset=utf-8", body)
         if subpath == "board":
