@@ -40,11 +40,19 @@ def lag(alm, tf: str, elegibilidad: int) -> int:
 
 
 def streams_stale(m15: dict, h4: dict, elegibilidad: int) -> list[tuple]:
-    """Los 14 streams evaluados por separado, en orden canónico."""
+    """Los 14 streams evaluados por separado, en orden canónico.
+
+    Un almacén SIN NACER no es «fresco»: el manifiesto garantiza el
+    nacimiento, así que encontrarlo sin ancla significa que algo anterior
+    falló. Se marca stale en vez de dejarlo pasar en silencio."""
     stale = []
     for tf, mapa in (("15m", m15), ("4h", h4)):
         for mercado in sorted(mapa):
-            atraso = lag(mapa[mercado], tf, elegibilidad)
+            alm = mapa[mercado]
+            if alm.ultimo_t is None:
+                stale.append((mercado, tf, None))
+                continue
+            atraso = lag(alm, tf, elegibilidad)
             if atraso > C.LAG_MAX_MS[tf]:
                 stale.append((mercado, tf, atraso))
     return stale
@@ -114,13 +122,21 @@ def ingerir(fetch, mercado: str, tf: str, alm, elegibilidad: int) -> dict:
         huecos.append(reg)
     # ¿La vela que se esperaba llegó? La paginación fue válida y completa —si
     # no, `paginar` habría fallado cerrado antes de llegar acá.
-    trajo_esperada = esperada is None or any(v["t"] == esperada for v in velas)
+    #
+    # Pero la ausencia solo prueba algo si la vela YA DEBERÍA EXISTIR: una H4
+    # todavía abierta falta por definición, y contarla como evidencia iniciaba
+    # el silencio antes de `closeTime + 1 + MARGEN_CIERRE`.
+    dur = TF_MS[tf]
+    exigible = esperada is not None and B.es_elegible(
+        esperada, esperada + dur - 1, elegibilidad)
+    trajo_esperada = any(v["t"] == esperada for v in velas)
     return {
         "mercado": mercado, "tf": tf,
         "velas": len(velas),
         "huecos": huecos,
         "esperada": esperada,
-        "observacion_probatoria": not trajo_esperada,
+        "esperada_exigible": exigible,
+        "observacion_probatoria": bool(exigible and not trajo_esperada),
         "ultimo_t": alm.ultimo_t,
     }
 

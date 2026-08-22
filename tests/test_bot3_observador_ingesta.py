@@ -215,3 +215,57 @@ def test_un_ciclo_usa_UN_solo_serverTime_para_los_14_streams():
     fuente = open(I.__file__, encoding="utf-8").read()
     assert "ENDPOINT_TIME" not in fuente
     assert "eligibility_time(" not in fuente
+
+
+def test_una_vela_aun_no_elegible_NO_es_evidencia_de_silencio():
+    """Una H4 todavía abierta falta por definición. Contarla como evidencia
+    iniciaba el silencio antes de `closeTime + 1 + MARGEN_CIERRE`, o sea
+    fabricaba la prueba de un terminal."""
+    a = almacen("BTCUSDT", "4h", [BASE4 + i * DUR4 for i in range(3)])
+    esperada = BASE4 + 3 * DUR4
+    cierre = esperada + DUR4 - 1
+    fetch = fetch_de({("BTCUSDT", "4h"): [[]]})     # nada nuevo
+
+    # aún abierta, y el borde exacto del margen
+    for ahora in (esperada, cierre, cierre + 1,
+                  cierre + C.MARGEN_CIERRE_MS):
+        parte = I.ingerir(fetch, "BTCUSDT", "4h", a, ahora)
+        assert parte["esperada"] == esperada
+        assert parte["esperada_exigible"] is False
+        assert parte["observacion_probatoria"] is False, ahora
+
+    # un milisegundo después del margen SÍ es exigible, y su ausencia prueba
+    parte = I.ingerir(fetch, "BTCUSDT", "4h", a,
+                      cierre + 1 + C.MARGEN_CIERRE_MS)
+    assert parte["esperada_exigible"] is True
+    assert parte["observacion_probatoria"] is True
+
+
+def test_una_respuesta_falsy_que_no_es_lista_no_es_pagina_vacia():
+    """`None`, `{}`, `""`, `0` y `False` se leían como «página vacía válida y
+    completa», que es exactamente lo que la máquina de silencio toma por
+    evidencia. Solo una lista o tupla vacía es un fin legítimo."""
+    a = almacen("BTCUSDT", "4h", [BASE4 + i * DUR4 for i in range(3)])
+    for basura in (None, {}, "", 0, False, set(), 0.0):
+        def fetch(url, params, _b=basura):
+            return _b
+        with pytest.raises(B.PaginaInvalida, match="no es una lista"):
+            I.ingerir(fetch, "BTCUSDT", "4h", a, BASE4 + 100 * DUR4)
+    for vacia in ([], ()):
+        def fetch(url, params, _v=vacia):
+            return _v
+        parte = I.ingerir(fetch, "BTCUSDT", "4h", a, BASE4 + 100 * DUR4)
+        assert parte["velas"] == 0                  # fin válido
+
+
+def test_un_almacen_sin_nacer_no_se_toma_por_fresco():
+    """El manifiesto garantiza el nacimiento: encontrarlo sin ancla significa
+    que algo anterior falló, y eso no puede pasar por «al día»."""
+    m15 = {"BTCUSDT": S.Almacen("BTCUSDT", "15m")}   # sin `nacer_en`
+    h4 = {"BTCUSDT": almacen("BTCUSDT", "4h",
+                             [BASE4 + i * DUR4 for i in range(10)])}
+    T = BASE4 + 10 * DUR4
+    decision = I.puede_procesar(m15, h4, T, T)
+    assert decision["procesar"] is False
+    assert decision["catch_up"] is True
+    assert ("BTCUSDT", "15m", None) in decision["streams_stale"]

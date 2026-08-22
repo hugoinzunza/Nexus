@@ -192,10 +192,15 @@ def paginar(fetch, mercado: str, tf: str, ultimo_t: int,
         pagina = fetch(C.ENDPOINT_KLINES, {
             "symbol": mercado, "interval": tf, "startTime": inicio,
             "limit": limite})
+        # El TIPO se valida ANTES de la vacuidad: `None`, `{}`, `""`, `0` y
+        # `False` son falsy y se leían como «página vacía válida y completa»,
+        # que es justo lo que la máquina de silencio toma por evidencia. Solo
+        # una LISTA o TUPLA vacía es un fin legítimo.
+        if not isinstance(pagina, (list, tuple)):
+            raise PaginaInvalida(
+                f"respuesta que no es una lista: {type(pagina).__name__}")
         if not pagina:
             return velas                            # página vacía → fin
-        if not isinstance(pagina, (list, tuple)):
-            raise PaginaInvalida(f"respuesta que no es una lista: {type(pagina)}")
         normalizadas = []
         previo = None
         for fila in pagina:
