@@ -1,10 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.8
+# Bot3.v13 — Observador operativo · DISEÑO rev.9
 
-**Estado: DISEÑO rev.8 — revisión registral final, propuesto para congelar e
-implementar EN SCRATCH. No implementado. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.9 — revisión mínima de §13, propuesta para auditoría
+ANTES de seguir implementando. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.8 es la **revisión registral final** y responde a
+rev.9 es una **revisión MÍNIMA y acotada a §13/§9.1.1**: la transición
+terminal. La arquitectura de rev.8 no se reabre; lo que se corrige es que la
+implementación amplió el alcance de `terminal.request` a los cortes
+CIENTÍFICOS sin que el diseño lo dijera, y de esa discordancia salieron cuatro
+rondas de parches que abrían rutas nuevas. Ver §13.2.
+
+rev.8 fue la **revisión registral final** de la arquitectura y responde a
 `docs/AUDITORIA_BOT3_V13_OBSERVADOR_DISENO_REV7.md`: resuelve la contradicción
 entre los gates 21 y 38, persiste `run_epoch` y cierra la protección de los dos
 artefactos persistentes. La arquitectura quedó aceptada en rev.7 y no se reabre. Se pre-registra y se audita ANTES de escribir una línea de
@@ -624,7 +630,8 @@ autorizó el bloqueo:
 |---|---|
 | `schema_version` | cerrada y versionada |
 | `cohorte`, `contrato`, `commit` | identidad |
-| `motivo` | `silencio_h4` \| `determinism_divergence` |
+| `motivo` | el GANADOR por precedencia, del registro cerrado de §13.2 |
+| `evidencias` | evidencia POR MOTIVO: el ganador se publica con la suya |
 | `evidencia` | la que lo autorizó: `h_n` y resumen (§6.5.1.1), o digest y firma comparados |
 | `solicitado_en` | instante y barrera de la solicitud |
 | `estado_esperado` | los 14 heads, firma del libro y hash de los sidecars |
@@ -640,7 +647,8 @@ hilos:
 | situación | resolución |
 |---|---|
 | `blocked.json` presente | es terminal; el request se ignora y se archiva |
-| `completed.json` **y** `terminal.request` | **fallo cerrado**: contradicción que exige intervención humana |
+| `completed.json` **y** `blocked.json` | **fallo cerrado**: la única contradicción que queda |
+| un terminal publicado **y** `terminal.request` | el terminal manda; el request se archiva *(rev.9)* |
 | dos motivos concurrentes | `determinism_divergence` **precede** a `silencio_h4` — la integridad manda sobre la liveness |
 | request ya existente | **no se sobrescribe**; el motivo nuevo se anexa a `motivos_adicionales` y el ganador se decide por la precedencia de arriba |
 
@@ -796,7 +804,7 @@ estado de verificación sea **`ok` y posterior a toda deferencia**. No basta con
 la ausencia de `pending`: un `deferred` sin verificación exitosa posterior
 tampoco habilita el cierre.
 
-### 13.1 `BLOCKED_INTEGRITY` NO ejecuta el cierre científico *(rev.5 — MAJOR 1)*
+### 13.1 `BLOCKED_INTEGRITY` NO ejecuta el cierre científico
 
 rev.4 presentaba `blocked.json` como «la misma mecánica», y eso confundía dos
 cosas que deben quedar separadas normativamente:
@@ -813,17 +821,63 @@ y después publicar `blocked.json` atómico. Nada se agrega al libro para simula
 una evaluación. Las incidencias operacionales del bloqueo viven en health y en
 los sidecars, no en el registro cerrado CF-37.
 
-`blocked.json` usa la misma mecánica atómica que `completed.json` y admite dos
-motivos: `silencio_h4` (§6.5) y `determinism_divergence` (§9.1).
+### 13.2 `terminal.request` cubre TODAS las causas terminales *(rev.9)*
 
-**Al arrancar**, el marcador que exista se valida antes de abrir ningún ciclo:
+rev.8 limitaba el request a `silencio_h4 | determinism_divergence` y declaraba
+`completed.json` + `terminal.request` como contradicción fatal. Eso era
+coherente mientras solo las causas de integridad usaban el request.
 
-- existe y coincide → health `COMPLETED` / `BLOCKED_INTEGRITY`, no se ingiere;
-- corrupto o discrepante con almacenes/libro → fallo cerrado;
-- los dos presentes → fallo cerrado.
+Pero la transición tiene que ser en dos fases —anotar y después publicar—
+para que la precedencia signifique algo: con una sola fase, dos causas del
+mismo turno quedan serializadas y gana la que publica primero, no la que
+manda. Y si el corte científico no pasa por el request, queda fuera de esa
+resolución y vuelve a decidir el orden de ejecución.
 
-Reactivar exige acta nueva, con identidad de cohorte nueva. Ninguna extensión ni
-cohorte nueva automática.
+Se amplía el alcance, y con él las reglas que dependían de él:
+
+- **el request cubre toda causa terminal**, científica o de integridad;
+- **registro CERRADO de motivos**, con fallo cerrado para cualquier otro:
+
+  | familia | motivos | terminal |
+  |---|---|---|
+  | científica | `muestra`, `tiempo`, `administrativo` | `COMPLETED` |
+  | integridad | `determinism_divergence`, `silencio_h4` | `BLOCKED_INTEGRITY` |
+
+  Un motivo fuera del registro —un typo, uno nuevo sin declarar— **no** cae
+  por omisión en `COMPLETED`: falla cerrado. Fallar abierto acá significa
+  publicar como evaluable una cohorte cuya causa de cierre nadie definió.
+
+- **el terminal se DERIVA del motivo ganador**. Ningún llamador lo elige;
+- **`completed.json` + `terminal.request` deja de ser contradicción**: es el
+  estado normal de una caída entre publicar y borrar el request. La regla
+  pasa a ser la misma que para `blocked.json` — el terminal publicado manda y
+  el request se archiva. La contradicción fatal queda reservada a la única
+  que sigue siéndolo: `completed.json` **y** `blocked.json` a la vez.
+
+### 13.3 Un request PENDIENTE prohíbe abrir ciclos *(rev.9)*
+
+Anotar una causa cierra la cohorte tanto como publicarla: entre el último
+registro y la publicación, otro ciclo podía mover almacenes o libro y dejar
+obsoleto el `estado_esperado` que el request autoriza.
+
+Desde el primer `registrar_causa`, la barrera queda en **cierre en curso** y
+`ciclo()` no abre ninguno nuevo. La bandera se distingue de `terminal` —
+publicado— porque una es reversible por reanudación y la otra no.
+
+### 13.4 El estado autorizado se verifica también AL PUBLICAR *(rev.9)*
+
+rev.8 lo verificaba solo al reanudar. Refrescarlo en cada registro no cubre una
+mutación posterior al último. La publicación compara `estado_esperado` contra
+el estado actual y falla cerrado si difieren, igual que la reanudación.
+
+### 13.5 La verificación gobierna también en la reanudación *(rev.9)*
+
+`COMPLETED` exige verificación `ok` y posterior a toda deferencia. Esa
+comprobación tiene que hacerse en la reanudación igual que en la publicación
+en vivo: si no, una caída durante `pending`, `deferred` o `divergent` permite
+que el arranque siguiente publique el `COMPLETED` que antes se rechazó.
+`reanudar` RECARGA `verificacion.json` desde disco — no confía en un objeto en
+memoria que la caída perdió— y la aplica.
 
 ## 14. Fail-closed
 
@@ -860,7 +914,8 @@ cohorte nueva automática.
 `CADENCIA`, `MARGEN_CIERRE`, `RESOLAPE`, `LIMITE_PAGINA`, `LAG_MAX` (por TF),
 `DERIVA_MAX`, `SILENCIO_MAX_H4`, `TOPE_INTERVALO`, `BACKOFF_BASE`, `BACKOFF_MAX`, `BACKOFF_INTENTOS`,
 `TF_OBSERVADAS`, `UNIVERSO`, `ENDPOINT_KLINES`, `ENDPOINT_TIME`,
-`CADENCIA_VERIFICACION`, y las rutas de estado, libro, lock, staging, los dos
+`CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`, y las
+rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
 (`silencio.json`, `verificacion.json`) y `terminal.request`.
 Ninguno se elige en operación.
