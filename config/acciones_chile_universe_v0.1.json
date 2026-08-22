@@ -1,0 +1,50 @@
+{
+  "schema_version": "acciones-chile-universe-0.1.0",
+  "purpose": "Catálogo temporal ticker-RUT; snapshot público inicial deliberadamente parcial",
+  "membership_history_complete": false,
+  "sources": {
+    "sp_ipsa_20260731": {
+      "url": "https://www.spglobal.com/spdji/es/indices/equity/sp-ipsa/",
+      "role": "public_top_10_constituents",
+      "as_of": "2026-07-31"
+    },
+    "sp_ipsa_202603_rebalance": {
+      "url": "https://www.spglobal.com/spdji/en/documents/indexnews/announcements/20260313-1482477/1482477_spipsamarch2026rebalanceannouncement%28english%29.pdf",
+      "role": "effective_date_and_no_changes",
+      "as_of": "2026-03-13"
+    },
+    "cmf_ifrs_202603": {
+      "url": "https://www.cmfchile.cl/institucional/estadisticas/ver_archivo.php?inicio=202603&termino=202603",
+      "role": "issuer_rut"
+    },
+    "cmf_ifrs_202606": {
+      "url": "https://www.cmfchile.cl/institucional/estadisticas/ver_archivo.php?inicio=202606&termino=202606",
+      "role": "issuer_rut"
+    },
+    "cmf_banks_registry": {
+      "url": "https://api.cmfchile.cl/documentacion/Fichas.html",
+      "role": "bank_identity_and_rut"
+    }
+  },
+  "snapshots": [
+    {
+      "effective_from": "2026-03-23",
+      "effective_to": null,
+      "observed_as_of": "2026-07-31",
+      "coverage": "partial_top_weight_constituents",
+      "declared_member_count": 10,
+      "members": [
+        {"ticker":"CHILE","rut":"97004000","rut_dv":"5","company":"BANCO DE CHILE","source_refs":["sp_ipsa_20260731","cmf_banks_registry"]},
+        {"ticker":"SQM-B","rut":"93007000","rut_dv":"9","company":"SOCIEDAD QUIMICA Y MINERA DE CHILE S.A.","source_refs":["sp_ipsa_20260731","cmf_ifrs_202603"]},
+        {"ticker":"LTM","rut":"89862200","rut_dv":"2","company":"LATAM AIRLINES GROUP S.A.","source_refs":["sp_ipsa_20260731","cmf_ifrs_202606"]},
+        {"ticker":"BCI","rut":"97006000","rut_dv":"6","company":"BANCO DE CREDITO E INVERSIONES","source_refs":["sp_ipsa_20260731","cmf_banks_registry"]},
+        {"ticker":"FALABELLA","rut":"90749000","rut_dv":"9","company":"FALABELLA S.A.","source_refs":["sp_ipsa_20260731","cmf_ifrs_202606"]},
+        {"ticker":"BSANTANDER","rut":"97036000","rut_dv":"K","company":"BANCO SANTANDER CHILE","source_refs":["sp_ipsa_20260731","cmf_banks_registry"]},
+        {"ticker":"MALLPLAZA","rut":"76017019","rut_dv":"4","company":"PLAZA S.A.","source_refs":["sp_ipsa_20260731","cmf_ifrs_202606"]},
+        {"ticker":"PARAUCO","rut":"94627000","rut_dv":"8","company":"PARQUE ARAUCO S.A.","source_refs":["sp_ipsa_20260731","cmf_ifrs_202606"]},
+        {"ticker":"CENCOSUD","rut":"93834000","rut_dv":"5","company":"CENCOSUD S.A.","source_refs":["sp_ipsa_20260731","cmf_ifrs_202603"]},
+        {"ticker":"COPEC","rut":"90690000","rut_dv":"9","company":"EMPRESAS COPEC S.A.","source_refs":["sp_ipsa_20260731","cmf_ifrs_202606"]}
+      ]
+    }
+  ]
+}

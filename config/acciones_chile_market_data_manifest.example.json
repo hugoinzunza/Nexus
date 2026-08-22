@@ -1,0 +1,11 @@
+{
+  "schema_version": "acciones-chile-market-data-0.1.0",
+  "provider": "Bolsa de Santiago",
+  "source_reference": "REEMPLAZAR por factura, contrato o identificador de exportación",
+  "license_status": "owned_export",
+  "adjustment_method": "provider_total_return",
+  "benchmark": {
+    "ticker": "IPSA-TR",
+    "return_type": "total_return"
+  }
+}

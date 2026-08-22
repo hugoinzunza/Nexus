@@ -68,6 +68,30 @@ una orden.
   declarada de emisión queda como metadata y nunca adelanta disponibilidad.
 - Endpoint read-only: `api/events?type=financial_statement`.
 
+### Universo y precios de mercado
+
+- El catálogo temporal vive en
+  `config/acciones_chile_universe_v0.1.json`; cada snapshot declara vigencia,
+  cobertura, ticker, RUT con dígito verificador y fuentes.
+- El primer snapshot versiona los 10 componentes principales visibles
+  públicamente al 31-07-2026 y sus RUT CMF. La descarga de los 30 componentes
+  prohíbe redistribución sin permiso, por lo que el universo completo debe vivir
+  como dato local/licenciado. El código rechaza el top 10 para backtests.
+- La Bolsa de Santiago comercializa por año sus resúmenes diarios de acciones y
+  series IPSA/IGPA. NexUX no elude esa frontera ni scrapea el producto.
+- `scripts/validate_acciones_chile_market_data.py` acepta un CSV normalizado sólo
+  cuando el manifest declara exportación adquirida o API autorizada, método de
+  ajuste y benchmark IPSA de retorno total.
+- El CSV exige `session_date,ticker,open,high,low,close,volume,`
+  `total_return_close,source_available_at`. Se validan duplicados, OHLC, orden
+  temporal, disponibilidad con zona y cobertura del benchmark para cada rueda.
+- Sólo se persiste el resumen/hash de la validación. El archivo licenciado no se
+  copia al repositorio ni al cache de NexUX.
+- Un universo completo autorizado se valida e instala fuera de Git con
+  `scripts/install_acciones_chile_universe.py`; el módulo lo prefiere sobre el
+  snapshot público parcial y reporta `storage=local_licensed`.
+- Endpoints read-only: `api/universe-status` y `api/universe`.
+
 ## Auditoría OPUS/Claude
 
 Claude Opus actúa como auditor adversarial independiente de los avances. Revisa

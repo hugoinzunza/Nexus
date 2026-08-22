@@ -29,14 +29,16 @@
 | M1 duplicados | cerrado | `distinct_observations` separado de mensajes brutos |
 | M2 joins silenciosos | cerrado | reporte explícito de empresas no mapeadas |
 | M3 errores auditor | cerrado | error estructurado y salida fail-closed |
+| M7 ticker↔RUT ausente | en cierre | top 10 público con RUT/DV; lista completa local/licenciada e historia pendientes |
+| Precios sin contrato | cerrado como frontera | importador exige licencia, ajuste total-return, timestamps y benchmark alineado; no scrapea producto pagado |
 
 ## Bloqueos vigentes
 
 1. Fuente y cobertura separada para bancos listados.
-2. Universo IPSA/ticker↔RUT versionado.
+2. Importar localmente el universo IPSA completo autorizado y reconstruir su membresía histórica.
 3. Backfill Telegram completo sin vulnerar la condición de uso personal.
 4. Ocho trimestres por empresa, no globales.
-5. Precios ajustados y benchmark IPSA con uso compatible.
+5. Adquirir o autorizar precios ajustados y benchmark IPSA, y validarlos con el nuevo contrato.
 
 El predictor y las señales permanecen deshabilitados hasta cerrar todos los
 bloqueos relevantes y realizar una nueva auditoría independiente.

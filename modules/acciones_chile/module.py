@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import time
+from datetime import date
 
 from core.module_base import NexusModule
 from core.paths import persist_dir
@@ -14,12 +15,16 @@ from . import auditor
 from . import dataset as dataset_store
 from .portfolio import normalize_portfolio
 from .predictor import feature_join_report, readiness as predictor_readiness
+from .universe import load_universe, snapshot_as_of, universe_status
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PORTFOLIO_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_portfolio.json")
 DATASET_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_dataset.json")
 TELEGRAM_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_telegram_events.json")
+PACKAGED_UNIVERSE_PATH = os.path.join(ROOT, "config", "acciones_chile_universe_v0.1.json")
+LOCAL_UNIVERSE_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_universe.json")
+MARKET_STATUS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_market_data_status.json")
 MAX_BODY_BYTES = 500_000
 
 
@@ -60,6 +65,8 @@ class AccionesChileModule(NexusModule):
             dataset = self._read_dataset()
             cmf = (dataset or {}).get("cmf", {})
             telegram = self._read_telegram()
+            universe = self._universe_status()
+            market = self._read_json(MARKET_STATUS_PATH)
             return self._json(200, {
                 "module": "acciones_chile",
                 "mode": "read_only",
@@ -100,6 +107,13 @@ class AccionesChileModule(NexusModule):
                     "events": (telegram or {}).get("event_count", 0),
                     "causal_timestamp": "telegram_message_date",
                     "personal_use_only": True,
+                },
+                "universe": universe,
+                "market_data": market or {
+                    "label_ready": False,
+                    "blockers": [
+                        "falta importación adquirida o autorizada de precios e IPSA total-return"
+                    ],
                 },
                 "auditor": auditor.availability(self.config),
             })
@@ -167,12 +181,33 @@ class AccionesChileModule(NexusModule):
                                     "source": "telegram:hechosesencialeschile"})
         if subpath == "predictor-status":
             telegram = self._read_telegram()
-            state = predictor_readiness(telegram, price_history_ready=False)
+            universe = self._universe_status()
+            market = self._read_json(MARKET_STATUS_PATH) or {}
+            price_history_ready = bool(
+                market.get("label_ready") and universe.get("survivorship_free_backtest_allowed"))
+            state = predictor_readiness(telegram, price_history_ready=price_history_ready)
             dataset = self._read_dataset() or {}
             state["cmf_telegram_join"] = feature_join_report(dataset, telegram)
             state["causal_feature_candidates"] = state["cmf_telegram_join"]["candidate_records"]
             state["fundamental_dataset_feature_use"] = dataset.get("feature_use", "forbidden")
+            state["universe"] = universe
+            state["market_data"] = market or {"label_ready": False}
             return self._json(200, state)
+        if subpath == "universe-status":
+            return self._json(200, self._universe_status())
+        if subpath == "universe":
+            try:
+                data = load_universe(self._universe_path())
+                snapshot = snapshot_as_of(data, date.today(), require_complete=False)
+            except (OSError, ValueError) as exc:
+                return self._json(503, {"error": str(exc)[:200]})
+            return self._json(200, {
+                "coverage": snapshot["coverage"],
+                "effective_from": snapshot["effective_from"],
+                "members": snapshot["members"],
+                "sources": data["sources"],
+                "research_only": True,
+            })
         if subpath == "boundaries":
             return self._json(200, {
                 "orders": "prohibited", "broker_credentials": "not_stored",
@@ -246,6 +281,33 @@ class AccionesChileModule(NexusModule):
             return data
         except (FileNotFoundError, OSError, ValueError, AttributeError):
             return None
+
+    @staticmethod
+    def _read_json(path):
+        try:
+            with open(path, encoding="utf-8") as handle:
+                return json.load(handle)
+        except (FileNotFoundError, OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _universe_status():
+        try:
+            path = (LOCAL_UNIVERSE_PATH if os.path.isfile(LOCAL_UNIVERSE_PATH)
+                    else PACKAGED_UNIVERSE_PATH)
+            status = universe_status(load_universe(path), date.today())
+            status["storage"] = "local_licensed" if path == LOCAL_UNIVERSE_PATH else "packaged_public"
+            return status
+        except (OSError, ValueError) as exc:
+            return {
+                "coverage": "unavailable", "member_count": 0,
+                "survivorship_free_backtest_allowed": False,
+                "blockers": [str(exc)[:200]],
+            }
+
+    @staticmethod
+    def _universe_path():
+        return LOCAL_UNIVERSE_PATH if os.path.isfile(LOCAL_UNIVERSE_PATH) else PACKAGED_UNIVERSE_PATH
 
     def _refresh_loop(self):
         interval = max(3600, int(self.config.get("cmf_refresh_interval_seconds", 86400)))

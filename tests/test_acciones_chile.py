@@ -19,6 +19,10 @@ from modules.acciones_chile.predictor import (
     build_feature_records, event_features, feature_join_report, normalize_company, readiness,
     telegram_period_to_cmf,
 )
+from modules.acciones_chile.market_data import parse_market_csv
+from modules.acciones_chile.universe import (
+    UniverseIncompleteError, load_universe, resolve_ticker, snapshot_as_of, universe_status,
+)
 
 
 def _payload(period="202603", revenue="1200", profit="120"):
@@ -227,3 +231,55 @@ def test_acciones_chile_has_no_crypto_or_executor_imports():
             elif isinstance(node, ast.ImportFrom):
                 names.append(node.module or "")
         assert not any(any(name.startswith(prefix) for prefix in forbidden) for name in names), path
+
+
+def test_versioned_universe_is_partial_and_blocks_survivorship_backtest():
+    root = Path(__file__).resolve().parents[1]
+    universe = load_universe(root / "config/acciones_chile_universe_v0.1.json")
+    status = universe_status(universe, "2026-08-22")
+    assert status["member_count"] == 10
+    assert status["coverage"] == "partial_top_weight_constituents"
+    assert status["current_snapshot_complete"] is False
+    assert status["membership_history_complete"] is False
+    assert status["survivorship_free_backtest_allowed"] is False
+    with pytest.raises(UniverseIncompleteError, match="sesgo de supervivencia"):
+        snapshot_as_of(universe, "2026-08-22")
+    sqm = resolve_ticker(universe, "sqm-b", "2026-08-22", require_complete=False)
+    assert sqm["rut"] == "93007000"
+    assert sqm["rut_dv"] == "9"
+
+
+def _market_manifest(license_status="owned_export"):
+    return {
+        "schema_version": "acciones-chile-market-data-0.1.0",
+        "provider": "Bolsa de Santiago",
+        "source_reference": "factura/export owner",
+        "license_status": license_status,
+        "adjustment_method": "provider_total_return",
+        "benchmark": {"ticker": "IPSA-TR", "return_type": "total_return"},
+    }
+
+
+def test_market_data_contract_requires_authorization_adjustment_and_aligned_benchmark():
+    payload = (
+        "session_date,ticker,open,high,low,close,volume,total_return_close,source_available_at\n"
+        "2026-08-20,COPEC,7600,7700,7500,7650,1000,8120,2026-08-20T21:00:00-04:00\n"
+        "2026-08-20,IPSA-TR,10000,10100,9900,10050,0,15420,2026-08-20T21:00:00-04:00\n"
+    ).encode()
+    records, summary = parse_market_csv(payload, _market_manifest())
+    assert len(records) == 2
+    assert summary["benchmark_ready"] is True
+    assert summary["label_ready"] is True
+    assert len(summary["sha256"]) == 64
+
+
+def test_market_data_contract_fails_closed_without_license_or_benchmark_session():
+    payload = (
+        "session_date,ticker,open,high,low,close,volume,total_return_close,source_available_at\n"
+        "2026-08-20,COPEC,7600,7700,7500,7650,1000,8120,2026-08-20T21:00:00-04:00\n"
+    ).encode()
+    with pytest.raises(ValueError, match="adquisición o autorización"):
+        parse_market_csv(payload, _market_manifest("unknown"))
+    _, summary = parse_market_csv(payload, _market_manifest())
+    assert summary["label_ready"] is False
+    assert summary["missing_benchmark_session_count"] == 1
