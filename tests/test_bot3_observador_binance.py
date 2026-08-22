@@ -287,3 +287,19 @@ def test_velas_anteriores_al_startTime_son_rechazadas():
     with pytest.raises(B.PaginaInvalida, match="anterior al `startTime`"):
         B.paginar(fetcher([pagina, []]), "BTCUSDT", "15m", BASE,
                   BASE + 10 ** 9)
+
+
+def test_ultimo_t_debe_ser_entero_sin_conversion_silenciosa():
+    """`int(...)` antes de validar truncaba (`900000.5` → `900000`), aceptaba
+    cadenas y convertía `False` en `0`. Un `ultimo_t` mal tipado desplaza toda
+    la paginación sin que nada falle."""
+    for malo in (float(DUR), DUR + 0.5, str(DUR), True, False, None,
+                 [DUR], DUR * 1.0):
+        with pytest.raises(B.PaginaInvalida, match="debe ser entero"):
+            B.inicio_paginacion(malo, "15m")
+        with pytest.raises(B.PaginaInvalida, match="debe ser entero"):
+            B.paginar(fetcher([[]]), "BTCUSDT", "15m", malo, BASE + 10 ** 9)
+    with pytest.raises(B.PaginaInvalida, match="negativo"):
+        B.inicio_paginacion(-DUR, "15m")
+    assert B.inicio_paginacion(0, "15m") == 0            # el cero SÍ es válido
+    assert B.inicio_paginacion(BASE, "15m") == BASE - (C.RESOLAPE - 1) * DUR

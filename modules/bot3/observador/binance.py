@@ -157,12 +157,21 @@ def inicio_paginacion(ultimo_t: int, tf: str) -> int:
     Incluye exactamente `RESOLAPE` velas ya selladas, la última incluida. Se
     re-piden a propósito: si el exchange revisa una vela, tiene que aparecer
     como `vela_revisada` (CF-26) y no pasar inadvertida."""
+    # El TIPO se valida ANTES de convertir: `int(...)` truncaba en silencio
+    # (`900000.5` → `900000`), aceptaba cadenas y convertía `False` en `0`.
+    # `type(...) is int` además excluye `bool`, que es subclase de `int`.
+    if type(ultimo_t) is not int:
+        raise PaginaInvalida(
+            f"`ultimo_t` debe ser entero, no {type(ultimo_t).__name__}: "
+            f"{ultimo_t!r}")
     dur = TF_MS[tf]
-    if int(ultimo_t) % dur:
+    if ultimo_t < 0:
+        raise PaginaInvalida(f"`ultimo_t` negativo: {ultimo_t}")
+    if ultimo_t % dur:
         # Un `ultimo_t` fuera de la grilla desplazaría TODA la paginación.
         raise PaginaInvalida(
             f"`ultimo_t` {ultimo_t} desalineado de la grilla de {tf}")
-    return max(0, int(ultimo_t) - (C.RESOLAPE - 1) * dur)
+    return max(0, ultimo_t - (C.RESOLAPE - 1) * dur)
 
 
 def paginar(fetch, mercado: str, tf: str, ultimo_t: int,
