@@ -86,6 +86,7 @@ def test_bot_web_es_solo_admin(monkeypatch):
     assert ("coinsignals", "ingest") in app._TOKEN_AUTH_POSTS
     assert ("journal", "ingest") in app._TOKEN_AUTH_POSTS
     assert ("acciones_chile", "ingest-portfolio") in app._TOKEN_AUTH_POSTS
+    assert ("acciones_chile", "ingest-telegram-events") in app._TOKEN_AUTH_POSTS
 
 
 def test_acciones_chile_exige_sesion(monkeypatch):
