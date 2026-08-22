@@ -13,6 +13,7 @@
     .pill{display:inline-flex;padding:5px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:12px}.ok{color:var(--accent)}.warn{color:var(--warn)}
     ul{padding-left:18px;color:var(--muted)}a{color:var(--accent)}
     .wide{grid-column:1/-1}.search{display:flex;gap:8px;margin:12px 0}.search input{flex:1;background:#09130f;border:1px solid var(--line);border-radius:12px;color:var(--text);padding:12px}.search button{border:0;border-radius:12px;padding:0 16px;background:var(--accent);color:#062217;font-weight:750}.rows{display:grid;gap:8px}.row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}button.row{width:100%;background:none;color:var(--text);text-align:left;border-left:0;border-right:0;border-bottom:0;cursor:pointer}.metric{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:12px}.metric div{background:#09130f;border-radius:12px;padding:12px}.metric small{display:block;color:var(--muted)}
+    .progress-row{align-items:center}.progress-row strong{font-size:13px;text-align:right}.progress-row span:first-child{color:var(--muted)}
   </style>
 </head>
 <body><main>
@@ -20,9 +21,20 @@
   <p class="lead">Tu cartera nacional, resultados oficiales de la CMF y un motor de investigación auditable. Sin mezclar cripto y sin ejecutar órdenes.</p>
   <section class="grid">
     <article><h2>Cartera Renta 4</h2><div class="value" id="positions">—</div><p class="muted" id="portfolio">Consultando…</p><span class="pill">solo lectura</span></article>
-    <article><h2>Fuente fundamental</h2><div class="value">CMF</div><p class="muted">TXT IFRS oficial por período, RUT, cuenta y moneda.</p><span class="pill ok">adaptador listo</span></article>
+    <article><h2>Fuente fundamental</h2><div class="value" id="cmf-count">CMF</div><p class="muted" id="cmf-detail">TXT IFRS oficial por período, RUT, cuenta y moneda.</p><span class="pill ok">adaptador listo</span></article>
+    <article><h2>CMF Bancos</h2><div class="value" id="bank-state">—</div><p class="muted" id="bank-detail">Revisando fuente bancaria separada…</p><span class="pill" id="bank-pill">verificando</span></article>
     <article><h2>Auditor independiente</h2><div class="value">OPUS</div><p class="muted" id="auditor">Revisión manual, sin autoridad operacional.</p><span class="pill" id="audit-pill">verificando</span></article>
     <article><h2>Predictor</h2><div class="value" id="predictor-stage">—</div><p class="muted" id="predictor-detail">Evaluando preparación causal…</p><span class="pill warn">research-only</span></article>
+  </section>
+  <section class="grid">
+    <article class="wide"><h2>Avance verificable del proyecto</h2><div class="rows">
+      <div class="row progress-row"><span>Sociedades CMF</span><strong id="progress-cmf">Consultando…</strong></div>
+      <div class="row progress-row"><span>HechosEsencialesChile</span><strong id="progress-telegram">Consultando…</strong></div>
+      <div class="row progress-row"><span>Join causal CMF ↔ Telegram</span><strong id="progress-join">Consultando…</strong></div>
+      <div class="row progress-row"><span>Bancos listados</span><strong id="progress-banks">Consultando…</strong></div>
+      <div class="row progress-row"><span>Universo y precios IPSA</span><strong id="progress-market">Consultando…</strong></div>
+      <div class="row progress-row"><span>Auditor Claude Opus</span><strong id="progress-auditor">Consultando…</strong></div>
+    </div></article>
   </section>
   <section class="grid">
     <article><h2>Etapa 1</h2><ul><li>Importar la cartera personal.</li><li>Vincular ticker con RUT del emisor.</li><li>Comparar ventas, utilidad y márgenes interanuales.</li></ul></article>
@@ -40,6 +52,16 @@ fetch('./api/status').then(r=>r.json()).then(s=>{
   document.querySelector('#portfolio').textContent=s.portfolio.connected?`Conectada · ${s.portfolio.source}`:'Pendiente de importación personal';
   const a=s.auditor; document.querySelector('#auditor').textContent=`${a.model} · ejecución ${a.run_mode} · autoridad consultiva`;
   const p=document.querySelector('#audit-pill');p.textContent=a.key_present?'disponible':'falta credencial';p.className='pill '+(a.key_present?'ok':'warn');
+  document.querySelector('#cmf-count').textContent=`${s.cmf.issuers||0}`;
+  document.querySelector('#cmf-detail').textContent=`emisores · ${(s.cmf.historical_observations||0).toLocaleString('es-CL')} observaciones históricas`;
+  const b=s.cmf_banks||{};document.querySelector('#bank-state').textContent=b.cached?`${b.observations||0}`:'BLOQ.';
+  document.querySelector('#bank-detail').textContent=b.cached?`${(b.periods||[]).length} períodos bancarios en cache`:(b.key_present?'Falta ejecutar la primera descarga':'Falta CMF_BANKS_API_KEY');
+  const bp=document.querySelector('#bank-pill');bp.textContent=b.cached?'cache disponible':'fail-closed';bp.className='pill '+(b.cached?'ok':'warn');
+  document.querySelector('#progress-cmf').textContent=`${(s.cmf.historical_observations||0).toLocaleString('es-CL')} observaciones · ${(s.cmf.periods||[]).length} cierres`;
+  document.querySelector('#progress-telegram').textContent=`${(s.telegram.events||0).toLocaleString('es-CL')} eventos indexados`;
+  document.querySelector('#progress-banks').textContent=b.cached?`${b.observations||0} observaciones`:(b.key_present?'descarga pendiente':'bloqueado · falta API key');
+  document.querySelector('#progress-market').textContent=s.market_data.label_ready?'precios habilitados':`${(s.universe.member_count||0)} miembros · precios pendientes`;
+  document.querySelector('#progress-auditor').textContent=a.key_present?`${a.model} disponible`:'credencial pendiente';
   document.querySelector('#positions').title=`${s.cmf.issuers||0} sociedades CMF · períodos ${(s.cmf.periods||[]).join(' / ')}`;
 }).catch(()=>{document.querySelector('#portfolio').textContent='Estado no disponible';});
 const money=v=>v==null?'n/d':new Intl.NumberFormat('es-CL').format(Number(v));
@@ -49,5 +71,5 @@ function searchIssuers(){const q=document.querySelector('#issuer-q').value;fetch
 document.querySelector('#issuer-go').onclick=searchIssuers;document.querySelector('#issuer-q').addEventListener('keydown',e=>{if(e.key==='Enter')searchIssuers()});searchIssuers();
 fetch('./api/videos').then(r=>r.json()).then(x=>{const box=document.querySelector('#videos');box.textContent='';(x.entries||[]).slice(0,8).forEach(v=>{const d=document.createElement('div');d.className='row';const a=document.createElement('a');a.href=v.url;a.target='_blank';a.rel='noopener';a.textContent=v.title;const t=document.createElement('span');t.textContent=(v.published||'').slice(0,10);d.append(a,t);box.append(d)});if(!box.children.length)box.textContent='Índice pendiente de primera actualización';});
 fetch('./api/events?type=financial_statement').then(r=>r.json()).then(x=>{const box=document.querySelector('#events');box.textContent='';(x.events||[]).slice(0,12).forEach(e=>{const d=document.createElement('div');d.className='row';const n=document.createElement('span'),t=document.createElement('span');n.textContent=`${e.company} · ${e.period||'período n/d'}`;t.textContent=(e.available_at||'').slice(0,10);d.append(n,t);box.append(d)});if(!box.children.length)box.textContent='Ejecuta el colector personal de Telegram para cargar eventos';});
-fetch('./api/predictor-status').then(r=>r.json()).then(x=>{document.querySelector('#predictor-stage').textContent=x.can_train?'LISTO':'DATOS';document.querySelector('#predictor-detail').textContent=`${x.statement_events} publicaciones · ${x.periods.length}/${x.minimum_quarters} trimestres · sin señales`;});
+fetch('./api/predictor-status').then(r=>r.json()).then(x=>{document.querySelector('#predictor-stage').textContent=x.can_train?'LISTO':'DATOS';document.querySelector('#predictor-detail').textContent=`${x.statement_events} publicaciones · ${x.periods.length}/${x.minimum_quarters} trimestres · sin señales`;const j=x.cmf_telegram_join||{};document.querySelector('#progress-join').textContent=`${(j.candidate_records||0).toLocaleString('es-CL')} candidatos causales · sin etiquetas de precio`;document.querySelector('#progress-telegram').textContent=`${(x.statement_events||0).toLocaleString('es-CL')} publicaciones · ${(x.distinct_observations||0).toLocaleString('es-CL')} observaciones distintas`;});
 </script></body></html>

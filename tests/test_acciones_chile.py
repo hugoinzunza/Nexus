@@ -307,6 +307,18 @@ def test_acciones_chile_has_no_crypto_or_executor_imports():
         assert not any(any(name.startswith(prefix) for prefix in forbidden) for name in names), path
 
 
+def test_acciones_chile_page_exposes_verifiable_project_progress():
+    root = Path(__file__).resolve().parents[1]
+    page = (root / "modules/acciones_chile/public/index.html").read_text(encoding="utf-8")
+    for element_id in (
+        "progress-cmf", "progress-telegram", "progress-join", "progress-banks",
+        "progress-market", "progress-auditor", "bank-state", "bank-detail",
+    ):
+        assert f'id="{element_id}"' in page
+    assert "s.cmf_banks" in page
+    assert "j.candidate_records" in page
+
+
 def test_versioned_universe_is_partial_and_blocks_survivorship_backtest():
     root = Path(__file__).resolve().parents[1]
     universe = load_universe(root / "config/acciones_chile_universe_v0.1.json")
