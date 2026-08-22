@@ -1,11 +1,14 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.11
+# Bot3.v13 — Observador operativo · DISEÑO rev.12
 
-**Estado: DISEÑO rev.11 — revisión registral de la transición terminal,
+**Estado: DISEÑO rev.12 — revisión de concurrencia de la transición,
 propuesta para auditoría ANTES de seguir implementando. No desplegado. Cohorte
 no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.11 cierra los puntos registrales que rev.10 dejó abiertos: el ORDEN de la
+rev.12 cierra la CONCURRENCIA de la transición: parte la barrera en fase de
+registro y fase de publicación, define qué evento cierra la ventana de
+recolección, e impide que un silencio le gane a una divergencia que todavía se
+está calculando. rev.11 cerró los puntos registrales que rev.10 dejó abiertos: el ORDEN de la
 transición, el flujo de §9.1.1 como terminal y no solo como bloqueo, la
 comparación normativa terminal/request, la salida de la verificación pendiente
 tras un reinicio y los gates del contrato nuevo. rev.10 fue una revisión
@@ -621,27 +624,57 @@ así que sin arbitraje una implementación publicaría el marcador antes del cic
 siguiente y otra después de varios: heads y firma distintos para la misma causa,
 y el `fsync` compitiendo con escrituras vivas. Transición única:
 
+La transición son **dos fases con la barrera SOLTADA entre medio**, y una
+ventana de recolección en el medio *(rev.12)*. rev.11 retenía la barrera desde
+el registro hasta la publicación y a la vez decía que otros registradores
+podían entrar: con un mutex ordinario eso es imposible — el segundo solo entra
+cuando ya hay un terminal inmutable, que es justo lo que se quería evitar.
+
 ```
-1. adquirir cycle_barrier
-2. marcar `cierre_en_curso`                    (§13.3)
-3. escribir/anexar terminal.request atómico    (sobrevive a la caída)
-4. fsync de los 14 almacenes, del libro y de silencio.json
-5. capturar los 14 heads y la firma del libro
-6. verificar estado autorizado (§13.4) y verificación (§13.5)
-7. publicar el marcador DERIVADO del motivo ganador (§13.2):
-   `completed.json` o `blocked.json`, atómico
-8. borrar terminal.request
-9. liberar la barrera y salir
+FASE A — registro (por cada causa, serializada)
+  1. adquirir cycle_barrier
+  2. marcar `cierre_en_curso`                  (§13.3)
+  3. escribir/anexar terminal.request atómico  (sobrevive a la caída)
+  4. LIBERAR la barrera
+
+VENTANA DE RECOLECCIÓN
+  - los ciclos de INGESTA no abren (§13.3);
+  - los REGISTRADORES de causas sí entran, uno por vez, repitiendo la fase A;
+  - se cierra cuando ningún productor puede aportar ya una causa (§9.1.2).
+
+FASE B — publicación (una sola vez)
+  5. adquirir cycle_barrier
+  6. reevaluar la condición de cierre de la ventana (§9.1.2)
+  7. fsync de los 14 almacenes, del libro y de silencio.json
+  8. capturar los 14 heads y la firma del libro
+  9. verificar estado autorizado (§13.4) y verificación (§13.5)
+ 10. publicar el marcador DERIVADO del motivo ganador (§13.2)
+ 11. borrar terminal.request
+ 12. liberar la barrera y salir
 ```
 
-**El orden importa** *(rev.11)*: rev.10 escribía el request ANTES de tomar la
-barrera, y entre esos dos pasos otro ciclo podía empezar a ingerir sobre una
-cohorte que ya estaba cerrándose. La barrera y la bandera van primero.
+**El orden dentro de la fase A importa** *(rev.11)*: rev.10 escribía el request
+ANTES de tomar la barrera, y entre esos dos pasos otro ciclo podía empezar a
+ingerir sobre una cohorte que ya estaba cerrándose.
 
-**Quién puede entrar durante `cierre_en_curso`**: los REGISTRADORES de causas
-—el ciclo que detecta un silencio ganador, la verificación que detecta una
-divergencia— sí, porque su trabajo es que la causa quede anotada antes de
-publicar. Los ciclos de INGESTA, no.
+#### 9.1.2 Qué cierra la ventana de recolección *(rev.12)*
+
+La ventana existe para que la precedencia signifique algo: si se publicara con
+la primera causa, ganaría la que llega antes.
+
+**Se cierra cuando ningún productor puede aportar una causa de mayor
+precedencia.** En la práctica hay un solo productor asíncrono —la comparación
+fría—, porque el silencio y el corte los detecta el ciclo, que durante la
+ventana no abre. Así que la condición es:
+
+| estado de la verificación | ventana |
+|---|---|
+| `ok` o `divergent` | **cerrada**: ya aportó lo que tenía que aportar |
+| `pending` o `deferred` | **abierta**: todavía puede producir `determinism_divergence` |
+
+Una causa registrada con la comparación fría `pending` **espera** a que
+resuelva. No es una demora arbitraria: es lo que hace cumplible
+`determinism_divergence > silencio_h4`.
 
 **Contrato de `terminal.request`** *(rev.7 — MAJOR 2)*. El artefacto que
 permite reanudar necesita schema propio, o el reinicio no puede verificar qué
@@ -934,13 +967,21 @@ ganador es CIENTÍFICO, al reanudar se recarga `verificacion.json` desde disco
 | estado del sidecar | qué se hace |
 |---|---|
 | `ok` y posterior a toda deferencia | se publica `COMPLETED` |
-| `pending` o `deferred` | se MANTIENE el cierre en curso: ni ciclos ni publicación. Se espera a que la verificación resuelva |
+| `pending` | se MANTIENE el cierre en curso: ni ciclos ni publicación. La comparación fría se reanuda desde la copia (§13.5.1) |
+| `deferred` con ganador CIENTÍFICO | **fallo cerrado**: estado inalcanzable (§13.5.0) |
+| `deferred` con ganador de INTEGRIDAD | ventana abierta (§9.1.2); se espera a que la comparación resuelva |
 | `divergent` | se ANEXA `determinism_divergence` con su evidencia al request y se publica `BLOCKED_INTEGRITY` |
 | ausente, corrupto o de otra identidad | **fallo cerrado** |
 
-Para un ganador de INTEGRIDAD la verificación no habilita ni bloquea nada: el
-terminal se publica igual, porque `BLOCKED_INTEGRITY` no ejecuta cierre
-científico (§13.1).
+Para un ganador de INTEGRIDAD la verificación no HABILITA nada —
+`BLOCKED_INTEGRITY` no ejecuta cierre científico (§13.1)—, pero sí puede
+RETENERLO: mientras la comparación fría siga `pending` o `deferred`, la
+ventana está abierta (§9.1.2) y no se publica *(rev.12)*.
+
+Sin esa retención, `silencio_h4` publicaba mientras la comparación corría, el
+terminal quedaba inmutable y una divergencia posterior nunca ejercía su
+precedencia — el orden `determinism_divergence > silencio_h4` era letra
+muerta justo en el caso en que importa.
 
 `COMPLETED` exige verificación `ok` y posterior a toda deferencia, y esa
 comprobación se hace en la reanudación igual que en la publicación en vivo: sin
@@ -948,6 +989,30 @@ ella, una caída durante `pending`, `deferred` o `divergent` deja que el
 arranque siguiente publique el `COMPLETED` que antes se rechazó. `reanudar`
 RECARGA el sidecar desde disco; no confía en un objeto en memoria que la caída
 perdió *(rev.9, fusionado acá en rev.11)*.
+
+#### 13.5.0 `deferred` con un request científico es IMPOSIBLE *(rev.12)*
+
+Una deferencia exige vaciar buffers y volver a capturar, y capturar ocurre
+dentro de un ciclo — que durante `cierre_en_curso` no abre. Si esa combinación
+existiera, la cohorte quedaría trabada sin salida.
+
+No existe, y por construcción:
+
+- una causa CIENTÍFICA solo puede registrarse con la verificación `ok`: la
+  zona de corte (§9.0) no deja procesar lotes sin ella, y el corte
+  administrativo tampoco corre sin ella (§13.5);
+- durante la ventana de recolección no se abre ningún ciclo, así que **no
+  puede aparecer una deferencia nueva**: las deferencias las produce el intento
+  de captura, que vive en el ciclo.
+
+Por lo tanto `deferred` junto a un request cuyo ganador es científico es un
+estado que la máquina no puede alcanzar. Observarlo significa que algo anterior
+falló, y **falla cerrado** en vez de intentar resolverlo con una operación que
+el diseño no contempla.
+
+`deferred` con un ganador de INTEGRIDAD sí es alcanzable —la deferencia pudo
+quedar de antes— y ahí rige §9.1.2: la ventana sigue abierta hasta que la
+comparación fría resuelva.
 
 #### 13.5.1 Quién resuelve un `pending` tras el reinicio *(rev.11)*
 
@@ -1159,13 +1224,19 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     anterior rechazado sin migración; los cinco motivos válidos aceptados y
     cualquier otro rechazado; DOS motivos científicos rechazados antes de
     calcular ganador; integridad sobre científico en LOS DOS órdenes de
-    llegada; un request PENDIENTE impide abrir ciclos de ingesta pero NO
-    impide registrar otra causa; publicación con `estado_esperado` alterado
-    —heads, firma o hash de cualquier sidecar— falla cerrado; la matriz de
-    reanudación completa (`ok`, `pending`, `deferred`, `divergent`, sidecar
+    llegada; publicación con `estado_esperado` alterado —heads, firma o hash
+    de cualquier sidecar— falla cerrado; la matriz de reanudación completa
+    (`ok`, `pending`, `deferred` con cada familia, `divergent`, sidecar
     ausente o de otra identidad); terminal + request COINCIDENTE se recupera
     archivando; cada una de las cinco discrepancias de §13.6 falla cerrado; y
     caída en CADA frontera entre barrera, request, terminal y archivado;
+40bis. **concurrencia de la transición** *(rev.12)*, con el mutex REAL, no un
+    doble: un registrador B entra después de A y ANTES de publicar; ningún
+    ciclo de ingesta entra en esa ventana; `silencio_h4` con la comparación
+    fría `pending` NO publica, y al resolver `divergent` el terminal es por
+    divergencia — en los dos órdenes de llegada; `deferred` con ganador
+    científico falla cerrado; y caída durante CADA una de las dos fases de
+    barrera, la de registro y la de publicación;
 41. **cota de la zona de corte demostrada** contra el orden completo de fases
     del motor —`fill+STOP` en el mismo lote incluido— sobre los siete mercados:
     ningún lote produce más cierres que mercados con posición u orden viva.
