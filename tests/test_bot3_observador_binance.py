@@ -141,12 +141,26 @@ def test_backlog_multipagina_con_progreso_estricto():
     assert inicios == sorted(set(inicios))         # estrictamente creciente
 
 
-def test_una_pagina_llena_que_no_avanza_falla_cerrado():
-    """Sería un loop infinito. Se prefiere el fallo."""
-    repetida = [fila(BASE - 5 * DUR)]
-    f = fetcher([repetida, repetida, repetida])
-    with pytest.raises(B.SinProgreso, match="no avanza"):
-        B.paginar(f, "BTCUSDT", "15m", BASE, BASE + 10 ** 9, limite=1)
+def test_la_paginacion_avanza_estrictamente_y_no_puede_ciclar():
+    """Un loop infinito exigiría que una página llena no hiciera avanzar el
+    `startTime`. El guardia de «anterior al `startTime`» lo vuelve imposible:
+    toda vela cumple `t >= inicio`, así que `siguiente >= inicio + dur`.
+
+    `SinProgreso` queda como backstop por si alguien relaja aquel guardia."""
+    ahora = BASE + 5000 * DUR
+    paginas = [[fila(BASE + i * DUR)] for i in range(4)] + [[]]
+    f = fetcher(paginas)
+    B.paginar(f, "BTCUSDT", "15m", BASE, ahora, limite=1)
+    inicios = [p["startTime"] for p in f.estado["pedidos"]]
+    assert inicios == sorted(inicios) and len(set(inicios)) == len(inicios)
+    for a, b in zip(inicios, inicios[1:]):
+        assert b >= a + DUR                        # avance de al menos una vela
+    # y una respuesta que insiste con una vela vieja NO cicla: falla cerrado
+    vieja = [fila(BASE - 5 * DUR)]
+    with pytest.raises(B.PaginaInvalida, match="anterior al `startTime`"):
+        B.paginar(fetcher([vieja] * 5), "BTCUSDT", "15m", BASE, ahora,
+                  limite=1)
+    assert "SinProgreso" in open(B.__file__, encoding="utf-8").read()
 
 
 def test_una_pagina_invalida_se_descarta_entera():
@@ -162,10 +176,12 @@ def test_una_pagina_invalida_se_descarta_entera():
         f = fetcher([pagina, []])
         with pytest.raises(B.PaginaInvalida):
             B.paginar(f, "BTCUSDT", "15m", BASE, ahora)
-    # y la repetición ENTRE páginas también
+    # La repetición ENTRE páginas también falla cerrado. La atrapa primero el
+    # guardia de «anterior al `startTime`», que es más fuerte: una vela ya
+    # vista es por construcción anterior al inicio de la página siguiente.
     f = fetcher([[fila(BASE), fila(BASE + DUR)],
                  [fila(BASE + DUR), fila(BASE + 2 * DUR)]])
-    with pytest.raises(B.PaginaInvalida, match="repetida entre páginas"):
+    with pytest.raises(B.PaginaInvalida, match="anterior al `startTime`"):
         B.paginar(f, "BTCUSDT", "15m", BASE, ahora, limite=2)
 
 
@@ -209,3 +225,65 @@ def test_el_cliente_no_abre_sockets_por_su_cuenta():
     for prohibido in ("requests", "urllib", "http.client", "socket",
                       "aiohttp", "httpx", "import ssl"):
         assert prohibido not in codigo, prohibido
+
+
+def test_una_respuesta_de_reloj_que_no_es_objeto_es_indisponibilidad():
+    """Antes reventaba con `AttributeError` a mitad del ciclo, que no se
+    maneja como «no hay reloj»."""
+    for cuerpo in ([], [1, 2], "1700000000000", 1700000000000, 3.5, True):
+        with pytest.raises(B.RelojIndisponible, match="no vino en un objeto|inválido"):
+            B.eligibility_time(fetcher([], cuerpo))
+
+
+def test_valores_no_finitos_e_incoherentes_no_llegan_al_almacen():
+    """`float("nan")` e `inf` PARSEAN. Sin control quedarían sellados en la
+    cadena de hashes del almacén, para siempre."""
+    casos = {
+        "no finito": [fila(BASE, c="nan")],
+        "infinito": [fila(BASE, h="inf")],
+        "infinito negativo": [fila(BASE, l="-inf")],
+        "volumen no finito": [fila(BASE, v="nan")],
+    }
+    for nombre, pagina in casos.items():
+        with pytest.raises(B.PaginaInvalida, match="no finito"):
+            B.paginar(fetcher([pagina, []]), "BTCUSDT", "15m", BASE,
+                      BASE + 10 ** 9)
+    # incoherencias de OHLC
+    with pytest.raises(B.PaginaInvalida, match="high .* < low"):
+        B.normalizar_fila(fila(BASE, h=1.0, l=2.0, o=1.5, c=1.5), "15m")
+    with pytest.raises(B.PaginaInvalida, match="o=.*fuera de"):
+        B.normalizar_fila(fila(BASE, o=99.0, h=3.0, l=1.0, c=2.0), "15m")
+    with pytest.raises(B.PaginaInvalida, match="c=.*fuera de"):
+        B.normalizar_fila(fila(BASE, o=2.0, h=3.0, l=1.0, c=0.5), "15m")
+    with pytest.raises(B.PaginaInvalida, match="volumen negativo"):
+        B.normalizar_fila(fila(BASE, v=-0.1), "15m")
+    # y el caso legítimo sigue pasando, incluido el volumen cero
+    B.normalizar_fila(fila(BASE, o=1.0, h=1.0, l=1.0, c=1.0, v=0.0), "15m")
+
+
+def test_los_datos_reales_pasan_el_control_de_coherencia():
+    """El control no puede ser tan estricto que rechace el snapshot real."""
+    ruta = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "data", "klines_BTCUSDT_15m.json")
+    if not os.path.exists(ruta):
+        pytest.skip("sin klines versionadas")
+    for f in json.load(open(ruta, encoding="utf-8"))[:2000]:
+        B.normalizar_fila(
+            [f["t"], repr(f["o"]), repr(f["h"]), repr(f["l"]), repr(f["c"]),
+             repr(f["v"]), f["t"] + DUR - 1, "0", 0, "0", "0", "0"], "15m")
+
+
+def test_ultimo_t_desalineado_es_rechazado():
+    """Desplazaría TODA la paginación."""
+    with pytest.raises(B.PaginaInvalida, match="`ultimo_t`.*desalineado"):
+        B.inicio_paginacion(BASE + 1, "15m")
+    with pytest.raises(B.PaginaInvalida, match="`ultimo_t`.*desalineado"):
+        B.paginar(fetcher([[]]), "BTCUSDT", "15m", BASE + 7, BASE + 10 ** 9)
+
+
+def test_velas_anteriores_al_startTime_son_rechazadas():
+    """Devolver velas previas al `startTime` es otra serie, no la nuestra."""
+    pagina = [fila(BASE - 10 * DUR), fila(BASE)]
+    with pytest.raises(B.PaginaInvalida, match="anterior al `startTime`"):
+        B.paginar(fetcher([pagina, []]), "BTCUSDT", "15m", BASE,
+                  BASE + 10 ** 9)

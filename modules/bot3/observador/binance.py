@@ -22,6 +22,8 @@ cuenta, y por eso se puede probar entero sin tocar Binance.
 """
 from __future__ import annotations
 
+import math
+
 from ..v9.contract import TF_MS
 from . import contrato as C
 
@@ -59,7 +61,12 @@ def eligibility_time(fetch) -> int:
         cuerpo = fetch(C.ENDPOINT_TIME, None)
     except Exception as exc:                       # noqa: BLE001
         raise RelojIndisponible(f"no se pudo obtener serverTime: {exc}")
-    valor = (cuerpo or {}).get("serverTime")
+    # Cualquier respuesta que no sea un objeto —lista, cadena, número— es
+    # indisponibilidad, no un `AttributeError` a mitad del ciclo.
+    if not isinstance(cuerpo, dict):
+        raise RelojIndisponible(
+            f"serverTime no vino en un objeto: {type(cuerpo).__name__}")
+    valor = cuerpo.get("serverTime")
     if type(valor) is not int or valor <= 0:
         raise RelojIndisponible(f"serverTime inválido: {valor!r}")
     return valor
@@ -109,6 +116,22 @@ def normalizar_fila(fila, tf: str) -> dict:
         raise PaginaInvalida(f"fila no numérica: {exc}")
     if t % dur:
         raise PaginaInvalida(f"`t` {t} desalineado de la grilla de {tf}")
+    # `float("nan")` y `float("inf")` PARSEAN. Sin este control quedarían
+    # sellados en la cadena de hashes del almacén, para siempre.
+    for campo in ("o", "h", "l", "c", "v"):
+        if not math.isfinite(vela[campo]):
+            raise PaginaInvalida(
+                f"valor no finito en {t}: {campo}={vela[campo]!r}")
+    if vela["h"] < vela["l"]:
+        raise PaginaInvalida(
+            f"OHLC incoherente en {t}: high {vela['h']} < low {vela['l']}")
+    for campo in ("o", "c"):
+        if not (vela["l"] <= vela[campo] <= vela["h"]):
+            raise PaginaInvalida(
+                f"OHLC incoherente en {t}: {campo}={vela[campo]} fuera de "
+                f"[{vela['l']}, {vela['h']}]")
+    if vela["v"] < 0:
+        raise PaginaInvalida(f"volumen negativo en {t}: {vela['v']}")
     if cierre - t + 1 != dur:
         # El intervalo de la fila NO es el pedido: pedir 15m y recibir 1h
         # pasaría inadvertido si solo se mirara `openTime`.
@@ -134,7 +157,12 @@ def inicio_paginacion(ultimo_t: int, tf: str) -> int:
     Incluye exactamente `RESOLAPE` velas ya selladas, la última incluida. Se
     re-piden a propósito: si el exchange revisa una vela, tiene que aparecer
     como `vela_revisada` (CF-26) y no pasar inadvertida."""
-    return max(0, int(ultimo_t) - (C.RESOLAPE - 1) * TF_MS[tf])
+    dur = TF_MS[tf]
+    if int(ultimo_t) % dur:
+        # Un `ultimo_t` fuera de la grilla desplazaría TODA la paginación.
+        raise PaginaInvalida(
+            f"`ultimo_t` {ultimo_t} desalineado de la grilla de {tf}")
+    return max(0, int(ultimo_t) - (C.RESOLAPE - 1) * dur)
 
 
 def paginar(fetch, mercado: str, tf: str, ultimo_t: int,
@@ -163,6 +191,11 @@ def paginar(fetch, mercado: str, tf: str, ultimo_t: int,
         previo = None
         for fila in pagina:
             vela = normalizar_fila(fila, tf)
+            if vela["t"] < inicio:
+                # La respuesta no corresponde al pedido: devolver velas
+                # anteriores al `startTime` es otra serie, no la nuestra.
+                raise PaginaInvalida(
+                    f"vela {vela['t']} anterior al `startTime` {inicio}")
             if previo is not None and vela["t"] <= previo:
                 raise PaginaInvalida(
                     f"fuera de orden o duplicada dentro de la página: "
@@ -180,8 +213,11 @@ def paginar(fetch, mercado: str, tf: str, ultimo_t: int,
             return velas                            # página incompleta → fin
         siguiente = normalizadas[-1]["t"] + dur
         if siguiente <= inicio:
-            # Progreso ESTRICTO: una página llena que no avanza es fallo
-            # cerrado, no un loop.
+            # BACKSTOP. Con el guardia de «anterior al startTime» esto es
+            # inalcanzable —toda vela cumple `t >= inicio`, así que
+            # `siguiente >= inicio + dur`—, pero se conserva: si alguien
+            # relajara aquel guardia, sin esto la paginación entraría en un
+            # loop infinito en silencio.
             raise SinProgreso(
                 f"la paginación de {mercado} {tf} no avanza: "
                 f"{siguiente} <= {inicio}")
