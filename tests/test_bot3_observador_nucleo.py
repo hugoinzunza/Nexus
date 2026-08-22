@@ -14,6 +14,8 @@ import re
 
 import pytest
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 from modules.bot3.observador import contrato as C
 from modules.bot3.observador import estado as E
 from modules.bot3.observador import silencio as S
@@ -542,3 +544,34 @@ def test_el_modelo_de_amenaza_esta_declarado_y_no_promete_de_mas():
         json.dump(doc, fh)
     rehidratado = S.Silencio.cargar(ruta, COHORTE, "contrato-x", "commit-y")
     assert rehidratado.evidencia(k) > s.evidencia(k)   # LÍMITE CONOCIDO
+
+
+def test_dos_primeros_arranques_simultaneos_no_dan_FileExistsError(tmp_path):
+    """`exists()` + `open("x+")` era un TOCTOU: con el archivo AUSENTE, dos
+    arranques a la vez hacían que el perdedor viera `FileExistsError` en vez
+    de `SingletonTomado`, y un error inesperado no se maneja como «ya hay otro
+    observador»."""
+    import subprocess
+    import sys
+    ruta = str(tmp_path / "obs.lock")
+    assert not os.path.exists(ruta)                # arranque en frío
+    guion = (
+        "import sys, time;"
+        "sys.path.insert(0, %r);"
+        "from modules.bot3.observador import estado as E;"
+        "\ntry:\n"
+        "    with E.Singleton(%r):\n"
+        "        time.sleep(0.6)\n"
+        "    print('GANO')\n"
+        "except E.SingletonTomado:\n"
+        "    print('TOMADO')\n"
+        "except Exception as e:\n"
+        "    print('INESPERADO:' + type(e).__name__)\n"
+    ) % (str(ROOT), ruta)
+    procesos = [subprocess.Popen([sys.executable, "-c", guion],
+                                 stdout=subprocess.PIPE, text=True)
+                for _ in range(6)]
+    salidas = [p.communicate()[0].strip() for p in procesos]
+    assert all(s in ("GANO", "TOMADO") for s in salidas), salidas
+    assert salidas.count("GANO") == 1, salidas
+    assert not any("INESPERADO" in s for s in salidas), salidas

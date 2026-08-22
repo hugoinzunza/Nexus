@@ -73,11 +73,14 @@ class Singleton:
 
     def __enter__(self) -> "Singleton":
         os.makedirs(os.path.dirname(self.ruta) or ".", exist_ok=True)
-        # SIN truncar: abrir en "w" vaciaba el archivo ANTES de pedir el lock,
-        # así que un competidor rechazado borraba el PID del propietario. Se
-        # abre en "r+" (o se crea), se toma el lock y RECIÉN AHÍ se escribe.
-        self._fh = open(self.ruta, "r+") if os.path.exists(self.ruta) \
-            else open(self.ruta, "x+")
+        # `O_RDWR | O_CREAT` en UNA syscall: sin truncar y sin carrera.
+        #   - abrir en "w" vaciaba el archivo ANTES de pedir el lock, así que
+        #     un competidor rechazado borraba el PID del propietario;
+        #   - `exists()` seguido de `open("x+")` es un TOCTOU: dos primeros
+        #     arranques simultáneos daban `FileExistsError` al perdedor en vez
+        #     de `SingletonTomado`.
+        fd = os.open(self.ruta, os.O_RDWR | os.O_CREAT, 0o600)
+        self._fh = os.fdopen(fd, "r+")
         try:
             fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
