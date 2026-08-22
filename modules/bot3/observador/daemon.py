@@ -335,9 +335,19 @@ def registrar_causa(barrera: BarreraCiclo, estado_dir: str, motivo: str,
             estado_esperado(estado_dir, m15, h4, libro))
 
 
+def estado_final_de(motivo: str) -> str:
+    """El terminal se DERIVA del motivo ganador, no lo elige el llamador.
+
+    `reanudar` publicaba con el default `BLOQUEADO`: una caída después de
+    registrar un corte `muestra` y antes de publicarlo reiniciaba como
+    `BLOCKED_INTEGRITY` en vez de `COMPLETED` — un corte científico legítimo
+    convertido en fallo de integridad."""
+    return C.BLOQUEADO if motivo in C.PRECEDENCIA_MOTIVOS else C.COMPLETADO
+
+
 def publicar_pendiente(barrera: BarreraCiclo, estado_dir: str, ahora: int,
                        motor, m15: dict, h4: dict, libro,
-                       estado_final: str = C.BLOQUEADO) -> dict | None:
+                       verificacion=None) -> dict | None:
     """Fase 2: publica el GANADOR del request, con SU evidencia.
 
     `BLOCKED_INTEGRITY` no ejecuta el cierre científico: no llama al corte del
@@ -355,6 +365,14 @@ def publicar_pendiente(barrera: BarreraCiclo, estado_dir: str, ahora: int,
         req = E.leer_solicitud(ruta_req)
         if req is None:
             return None
+        estado_final = estado_final_de(req["motivo"])
+        if (estado_final == C.COMPLETADO and verificacion is not None
+                and not verificacion.habilita_cierre()):
+            # Se reevalúa AL PUBLICAR: si entre el registro y este momento la
+            # verificación pasó a `divergent` o `deferred`, un `COMPLETED` ya
+            # no está habilitado y se espera.
+            return {"estado": "espera",
+                    "motivo": f"verificacion={verificacion.estado}"}
         # La barrera se cierra con el motivo GANADOR, no con el entrante: si
         # no, `barrera.terminal` y el terminal publicado podían discrepar.
         barrera.cerrar_para_siempre(req["motivo"])
@@ -382,12 +400,12 @@ def publicar_pendiente(barrera: BarreraCiclo, estado_dir: str, ahora: int,
 def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
                         identidad: dict, evidencia: dict, ahora: int,
                         motor, m15: dict, h4: dict, libro,
-                        estado_final: str = C.BLOQUEADO) -> dict:
+                        verificacion=None) -> dict:
     """Anota la causa y publica. Para un solo causante."""
     registrar_causa(barrera, estado_dir, motivo, identidad, evidencia, ahora,
                     m15, h4, libro)
     hecho = publicar_pendiente(barrera, estado_dir, ahora, motor, m15, h4,
-                               libro, estado_final)
+                               libro, verificacion)
     if hecho is None:                               # ya había terminal
         ya = E.leer_terminal(estado_dir)
         return {"estado": ya["estado"], "ruta": None, "cuerpo": ya["cuerpo"],
@@ -498,13 +516,18 @@ def verificar_y_reaccionar(barrera: BarreraCiclo, captura: dict,
     la divergencia en el sidecar y ahí quedaba."""
     resultado = verificar_en_frio(captura, verificacion, ahora, commit)
     if not resultado["igual"]:
-        resultado["terminal"] = transicion_terminal(
+        # Dos fases, igual que el ciclo: si otra causa del mismo turno ya está
+        # anotada, la precedencia decide; y `verificacion` ya quedó en
+        # `divergent`, así que un `COMPLETED` pendiente no puede publicarse.
+        registrar_causa(
             barrera, estado_dir, C.MOTIVO_DIVERGENCIA, identidad,
             {"esperado": {"digest": captura["digest"],
                           "firma": captura["firma"]},
              "obtenido": {"digest": resultado["digest"],
                           "firma": resultado["firma"]}},
-            ahora, motor, m15, h4, libro)
+            ahora, m15, h4, libro)
+        resultado["terminal"] = publicar_pendiente(
+            barrera, estado_dir, ahora, motor, m15, h4, libro, verificacion)
     return resultado
 
 
@@ -580,10 +603,7 @@ def ciclo(fetch, barrera: BarreraCiclo, motor, m15: dict, h4: dict, libro,
             registrar_causa(barrera, estado_dir, cierre["motivo"], identidad,
                             cierre["evidencia"], local, m15, h4, libro)
         if causas:
-            estado_final = (C.COMPLETADO
-                            if all(m not in C.PRECEDENCIA_MOTIVOS
-                                   for m, _ in causas) else C.BLOQUEADO)
             parte["terminal"] = publicar_pendiente(
                 barrera, estado_dir, local, motor, m15, h4, libro,
-                estado_final) or parte.get("terminal")
+                verificacion) or parte.get("terminal")
     return parte

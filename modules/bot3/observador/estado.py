@@ -273,6 +273,12 @@ def solicitar_terminal(ruta: str, motivo: str, identidad: dict,
         cuerpo["evidencias"] = evidencias
         cuerpo["motivos_adicionales"] = sorted(
             m for m in evidencias if m != previo["motivo"])
+        # El estado AUTORIZADO se refresca en cada registro: si la primera
+        # causa lo fijó y una segunda movió el libro —un cierre administrativo
+        # emite eventos—, el request habría autorizado un estado ya viejo y la
+        # reanudación lo habría rechazado por divergencia de heads/firma.
+        cuerpo["estado_esperado"] = estado_esperado
+        cuerpo["solicitado_en"] = int(solicitado_en)
     else:
         cuerpo = {
             "schema_version": C.SCHEMA_TERMINAL,

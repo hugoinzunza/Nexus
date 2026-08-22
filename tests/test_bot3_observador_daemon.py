@@ -91,8 +91,7 @@ def cerrar_y_publicar(d, motor, m15, h4, libro, v, ahora, barrera=None):
         return causa
     D.registrar_causa(barrera, d, causa["motivo"], IDENT, causa["evidencia"],
                       ahora, m15, h4, libro)
-    return D.publicar_pendiente(barrera, d, ahora, motor, m15, h4, libro,
-                                C.COMPLETADO)
+    return D.publicar_pendiente(barrera, d, ahora, motor, m15, h4, libro, v)
 
 
 # ==================== 1. ningún ciclo ingiere sin reloj ====================
@@ -948,3 +947,80 @@ def test_el_cierre_50_lo_produce_el_motor_y_dispara_el_corte(tmp_path):
     assert D.ciclo(fetch_reloj(ahora2), fresca, mr, m15r, h4r, libror,
                    v, lambda: ahora2)["ingirio"] is False
     assert len(libror.eventos) == antes
+
+
+def test_un_corte_cientifico_se_reanuda_como_COMPLETED_no_como_BLOCKED(
+        tmp_path):
+    """`reanudar` publicaba con el default `BLOQUEADO`: una caída después de
+    registrar un corte `muestra` y antes de publicarlo reiniciaba como
+    `BLOCKED_INTEGRITY` — un corte legítimo convertido en fallo de
+    integridad. El terminal se DERIVA del motivo ganador."""
+    assert D.estado_final_de("muestra") == C.COMPLETADO
+    assert D.estado_final_de("administrativo") == C.COMPLETADO
+    assert D.estado_final_de(C.MOTIVO_SILENCIO) == C.BLOQUEADO
+    assert D.estado_final_de(C.MOTIVO_DIVERGENCIA) == C.BLOQUEADO
+
+    motor, m15, h4, libro = mundo(tmp_path, n15=30)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    barrera = D.BarreraCiclo()
+    # CAÍDA: la causa quedó anotada y no se publicó
+    D.registrar_causa(barrera, d, "muestra", IDENT, {"cierres": 50}, T0,
+                      m15, h4, libro)
+    assert not os.path.exists(os.path.join(d, C.ARCHIVO_COMPLETADO))
+    hecho = D.reanudar(D.BarreraCiclo(), d, IDENT, motor, m15, h4, libro, T0)
+    assert hecho["estado"] == C.COMPLETADO
+    assert os.path.exists(os.path.join(d, C.ARCHIVO_COMPLETADO))
+    assert not os.path.exists(os.path.join(d, C.ARCHIVO_BLOQUEADO))
+
+
+def test_una_divergencia_entre_registro_y_publicacion_impide_COMPLETED(
+        tmp_path):
+    """La ventana que abría la ruta de dos fases: el corte se anota, y ANTES
+    de publicar la verificación pasa a `divergent`. Un `COMPLETED` ya no está
+    habilitado y se espera; la divergencia, cuando se anota, gana por
+    precedencia."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=30)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    v = verif(tmp_path)
+    v.conforme(1, "d", "f")
+    barrera = D.BarreraCiclo()
+    D.registrar_causa(barrera, d, "muestra", IDENT, {"cierres": 50}, T0,
+                      m15, h4, libro)
+    v.divergente(2, {}, {})                        # llega la divergencia
+    espera = D.publicar_pendiente(barrera, d, T0, motor, m15, h4, libro, v)
+    assert espera["estado"] == "espera"
+    assert not os.path.exists(os.path.join(d, C.ARCHIVO_COMPLETADO))
+    # anotada la divergencia, gana por precedencia y publica BLOQUEADO
+    D.registrar_causa(barrera, d, C.MOTIVO_DIVERGENCIA, IDENT, {"x": 1},
+                      T0 + 1, m15, h4, libro)
+    hecho = D.publicar_pendiente(barrera, d, T0 + 1, motor, m15, h4, libro, v)
+    assert hecho["estado"] == C.BLOQUEADO
+    assert hecho["cuerpo"]["motivo"] == C.MOTIVO_DIVERGENCIA
+    assert "muestra" in hecho["cuerpo"]["motivos_adicionales"]
+
+
+def test_el_estado_autorizado_se_refresca_con_cada_causa(tmp_path):
+    """Si la primera causa lo fija y una segunda mueve el libro, el request
+    habría autorizado un estado ya viejo y la reanudación lo habría rechazado
+    por divergencia de heads/firma."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=30)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    ruta = os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL)
+    barrera = D.BarreraCiclo()
+    D.registrar_causa(barrera, d, C.MOTIVO_SILENCIO, IDENT, {}, T0,
+                      m15, h4, libro)
+    primero = json.load(open(ruta, encoding="utf-8"))["estado_esperado"]
+    # entre una causa y otra, el libro se mueve
+    libro.append("lote_finalizado", effective_at=T0, finalized_at=T0)
+    D.registrar_causa(barrera, d, C.MOTIVO_DIVERGENCIA, IDENT, {}, T0 + 1,
+                      m15, h4, libro)
+    segundo = json.load(open(ruta, encoding="utf-8"))["estado_esperado"]
+    assert segundo != primero
+    assert segundo["firma"] == libro.firma()
+    # y por eso la reanudación NO lo rechaza
+    hecho = D.reanudar(D.BarreraCiclo(), d, IDENT, motor, m15, h4, libro,
+                       T0 + 2)
+    assert hecho["estado"] == C.BLOQUEADO
