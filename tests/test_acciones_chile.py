@@ -7,18 +7,23 @@ from types import SimpleNamespace
 
 import pytest
 
-from modules.acciones_chile.cmf import _validated_url, parse_rows, rows_for_rut
+from modules.acciones_chile.cmf import CMFDownload, _validated_url, parse_rows, rows_for_rut
 from modules.acciones_chile.banks import (
     BankDownload, _validated_url as validated_bank_url, availability as bank_availability,
     build_bank_dataset, parse_results,
 )
 from modules.acciones_chile.fundamentals import analyze_company
+from modules.acciones_chile.fx import (
+    FxDownload, _validated_url as validated_fx_url, availability as fx_availability,
+    build_fx_dataset, download_observed_dollar, parse_observed_dollar, rate_as_of,
+    read_fx_dataset, validate_eps_unit_dataset,
+)
 from modules.acciones_chile.portfolio import normalize_portfolio
 from modules.acciones_chile.auditor import availability
 from modules.acciones_chile.youtube import parse_feed
 from modules.acciones_chile.dataset import (
-    build_audit_snapshot, build_dataset, build_multi_period_dataset, select_comparison_periods,
-    select_refresh_periods,
+    _download_with_integrity, _persist_raw_artifact, build_audit_snapshot, build_dataset,
+    build_multi_period_dataset, select_comparison_periods, select_refresh_periods,
 )
 from modules.acciones_chile.telegram_events import parse_event
 from modules.acciones_chile.predictor import (
@@ -79,7 +84,91 @@ def test_valuation_only_computes_compatible_observed_multiple():
     assert result["fair_value"] is None
     assert result["buy_sell_recommendation"] is None
     usd = [{"period": "202512", "currency": "USD", "analysis": {"basic_eps": "1.2"}}]
-    assert evaluate_valuation(usd, "6000")["status"] == "fx_and_eps_unit_verification_required"
+    assert evaluate_valuation(usd, "6000")["status"] == "eps_unit_verification_required"
+    usd_without_eps = [{"period": "202512", "currency": "USD", "analysis": {}}]
+    assert evaluate_valuation(usd_without_eps, "6000")["status"] == "annual_eps_unavailable"
+    verified = {
+        "status": "verified", "unit": "USD_PER_SHARE",
+        "source_reference": "https://issuer.example/annual-report.pdf",
+        "verification_method": "audited_annual_report_note",
+        "source_sha256": "a" * 64, "verified_as_of": "2026-08-22",
+    }
+    converted = evaluate_valuation(
+        usd, "6000", {"date": "2026-08-21", "clp_per_usd": "1000"}, verified)
+    assert converted["pe"] == 5
+    assert converted["eps_clp_per_share"] == 1200
+    assert evaluate_valuation(usd, "6000", None, verified)["status"] == "official_fx_rate_required"
+
+
+def _fx_payload():
+    return json.dumps({
+        "Codigo": 0, "Descripcion": "Success",
+        "Series": {"seriesId": "F073.TCO.PRE.Z.D", "Obs": [
+            {"indexDateString": "20-08-2026", "value": "933.92", "statusCode": "OK"},
+            {"indexDateString": "21-08-2026", "value": "933.00", "statusCode": "OK"},
+            {"indexDateString": "22-08-2026", "value": "NaN", "statusCode": "ND"},
+        ]},
+    }).encode()
+
+
+def test_bcch_fx_adapter_is_redacted_causal_and_read_only(monkeypatch):
+    url, redacted = validated_fx_url("2026-08-01", "2026-08-22", "private-token")
+    assert "private-token" in url
+    assert "private-token" not in redacted
+    rows = parse_observed_dollar(_fx_payload())
+    assert rows[-1] == {"date": "2026-08-21", "clp_per_usd": "933.00"}
+    download = FxDownload(
+        payload=_fx_payload(), effective_url_redacted=redacted,
+        retrieved_at="2026-08-22T12:00:00+00:00", http_status=200,
+        content_length=None, bytes_received=len(_fx_payload()),
+    )
+    data = build_fx_dataset(download)
+    assert data["latest"] == rows[-1]
+    assert rate_as_of(data, "2026-08-20")["clp_per_usd"] == "933.92"
+    assert "private-token" not in json.dumps(data)
+    monkeypatch.delenv("BCCH_API_TOKEN", raising=False)
+    assert fx_availability()["key_present"] is False
+
+
+def test_bcch_fx_cache_fails_closed_when_tampered(tmp_path):
+    _, redacted = validated_fx_url("2026-08-01", "2026-08-22", "private-token")
+    download = FxDownload(
+        payload=_fx_payload(), effective_url_redacted=redacted,
+        retrieved_at="2026-08-22T12:00:00+00:00", http_status=200,
+        content_length=None, bytes_received=len(_fx_payload()),
+    )
+    data = build_fx_dataset(download)
+    data["latest"]["clp_per_usd"] = "99999"
+    path = tmp_path / "fx.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert read_fx_dataset(str(path)) is None
+    assert rate_as_of(data, "2026-08-22") is None
+
+
+def test_bcch_network_error_never_leaks_token(monkeypatch):
+    def fail(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 401, "bad token", {}, None)
+
+    monkeypatch.setattr("modules.acciones_chile.fx.urllib.request.urlopen", fail)
+    with pytest.raises(ValueError, match="consulta BCCh falló") as error:
+        download_observed_dollar("2026-08-01", "2026-08-22", "never-print-this")
+    assert "never-print-this" not in str(error.value)
+    assert error.value.__cause__ is None
+
+
+def test_eps_unit_requires_audited_hashed_evidence():
+    valid = {"schema_version": "acciones-chile-eps-units-0.1.0", "entries": {
+        "90412000": {
+            "status": "verified", "unit": "USD_PER_SHARE",
+            "verification_method": "audited_annual_report_note",
+            "source_reference": "https://issuer.example/annual-report.pdf",
+            "source_sha256": "a" * 64, "verified_as_of": "2026-08-22",
+        },
+    }}
+    assert validate_eps_unit_dataset(valid)["entries"]["90412000"]["unit"] == "USD_PER_SHARE"
+    valid["entries"]["90412000"]["verification_method"] = "heuristic"
+    with pytest.raises(ValueError, match="método de unidad EPS"):
+        validate_eps_unit_dataset(valid)
 
 
 def test_strategy_rubric_is_explainable_and_never_emits_trade_order():
@@ -236,6 +325,23 @@ def test_portfolio_monitor_summarizes_only_priced_positions(monkeypatch, tmp_pat
     assert result["holdings"][0]["allocation_pct"] == 1
 
 
+def test_bank_position_is_explicitly_blocked_without_separate_cmf_bank_data(monkeypatch, tmp_path):
+    monkeypatch.setattr(acciones_module, "PORTFOLIO_PATH", str(tmp_path / "portfolio.json"))
+    monkeypatch.setattr(acciones_module, "BANKS_PATH", str(tmp_path / "banks.json"))
+    context = SimpleNamespace(module_config={}, module_dir=str(tmp_path), log=lambda message: None)
+    instance = acciones_module.AccionesChileModule(context)
+    monkeypatch.setattr(instance, "_read_dataset", lambda: {})
+    assert instance.api_post("save-portfolio", {"holdings": [{
+        "ticker": "CHILE", "quantity": "100", "average_cost": "100", "market_price": "110",
+    }]}, {}, user={"uid": 7})[0] == 200
+    status, _, raw = instance.api("portfolio-monitor", {}, user={"uid": 7})
+    holding = json.loads(raw)["holdings"][0]
+    assert status == 200
+    assert holding["data_source_gate"]["code"] == "cmf_banks_accounting_required"
+    assert holding["decision_evidence"]["operational_state"] == "blocked"
+    assert "contabilidad bancaria CMF separada pendiente" in holding["decision_evidence"]["blockers"]
+
+
 def test_company_history_exposes_same_explainable_decision_gate(monkeypatch, tmp_path):
     monkeypatch.setattr(acciones_module, "PORTFOLIO_PATH", str(tmp_path / "portfolio.json"))
     context = SimpleNamespace(module_config={}, module_dir=str(tmp_path), log=lambda message: None)
@@ -354,6 +460,48 @@ def test_cmf_sources_expose_numeric_issuer_coverage_and_persisted_artifact_hash(
     assert source["raw_artifact_sha256"] == "b" * 64
     assert source["raw_artifact_sha256_scope"] == "persisted_deterministic_gzip_bytes"
     assert source["raw_artifact_bytes"] == 321
+    assert data["cmf"]["metric_coverage_scope"].startswith("descriptive_latest_record")
+
+
+def test_cmf_missing_content_length_requires_matching_redownload():
+    calls = []
+
+    def download(period, base_url):
+        calls.append((period, base_url))
+        return CMFDownload(
+            period=period, payload=_payload().encode(), effective_url=base_url,
+            retrieved_at="2026-08-22T12:00:00+00:00", http_status=200,
+            content_length=None, bytes_received=len(_payload().encode()),
+        )
+
+    result, evidence = _download_with_integrity("202603", downloader=download)
+    assert result.period == "202603"
+    assert evidence["transport_integrity"] == "independent_redownload_sha256_match"
+    assert evidence["verification_downloads"] == 2
+    assert len(calls) == 2
+
+    def inconsistent(period, base_url):
+        payload = (_payload() if not getattr(inconsistent, "called", False)
+                   else _payload().replace("1200", "1201")).encode()
+        inconsistent.called = True
+        return CMFDownload(
+            period=period, payload=payload, effective_url=base_url,
+            retrieved_at="2026-08-22T12:00:00+00:00", http_status=200,
+            content_length=None, bytes_received=len(payload),
+        )
+
+    with pytest.raises(ValueError, match="descargas CMF inconsistentes"):
+        _download_with_integrity("202603", downloader=inconsistent)
+
+
+def test_deterministic_cmf_artifact_is_read_back_and_verified(tmp_path):
+    path = tmp_path / "eifrs_202603.txt.gz"
+    first = _persist_raw_artifact(str(path), _payload().encode())
+    persisted = path.read_bytes()
+    second = _persist_raw_artifact(str(path), _payload().encode())
+    assert first == second
+    assert first["raw_artifact_verified"] is True
+    assert first["raw_artifact_sha256"] == __import__("hashlib").sha256(persisted).hexdigest()
 
 
 def test_partial_latest_period_keeps_catalog_from_previous_quarter():
@@ -580,6 +728,47 @@ def test_acciones_chile_has_no_crypto_or_executor_imports():
         assert not any(any(name.startswith(prefix) for prefix in forbidden) for name in names), path
 
 
+def test_acciones_chile_transitive_import_graph_excludes_crypto_and_executor():
+    root = Path(__file__).resolve().parents[1]
+    forbidden = ("modules.trading", "modules.bot", "modules.coinsignals")
+    pending = [f"modules.acciones_chile.{path.stem}" for path in
+               (root / "modules/acciones_chile").glob("*.py") if path.stem != "__init__"]
+    visited = set()
+    while pending:
+        module_name = pending.pop()
+        if module_name in visited:
+            continue
+        visited.add(module_name)
+        assert not module_name.startswith(forbidden), module_name
+        module_path = root.joinpath(*module_name.split(".")).with_suffix(".py")
+        if not module_path.exists():
+            package_path = root.joinpath(*module_name.split("."), "__init__.py")
+            if not package_path.exists():
+                continue
+            module_path = package_path
+        package = module_name.rsplit(".", 1)[0]
+        for node in ast.walk(ast.parse(module_path.read_text(encoding="utf-8"))):
+            discovered = []
+            if isinstance(node, ast.Import):
+                discovered = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    base_parts = package.split(".")
+                    base = ".".join(base_parts[:len(base_parts) - node.level + 1])
+                    if node.module:
+                        discovered = [f"{base}.{node.module}"]
+                    else:
+                        discovered = [f"{base}.{alias.name}" for alias in node.names]
+                elif node.module:
+                    discovered = [node.module]
+            for dependency in discovered:
+                assert not dependency.startswith(forbidden), (module_name, dependency)
+                candidate = root.joinpath(*dependency.split(".")).with_suffix(".py")
+                package_candidate = root.joinpath(*dependency.split("."), "__init__.py")
+                if candidate.exists() or package_candidate.exists():
+                    pending.append(dependency)
+
+
 def test_acciones_chile_page_exposes_verifiable_project_progress():
     root = Path(__file__).resolve().parents[1]
     page = (root / "modules/acciones_chile/public/index.html").read_text(encoding="utf-8")
@@ -590,6 +779,7 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
         "portfolio-events-summary",
         "portfolio-allocation", "allocation-bar", "allocation-legend", "allocation-risk",
         "company-decision-checklist",
+        "progress-fx",
     ):
         assert f'id="{element_id}"' in page
     assert "s.cmf_banks" in page

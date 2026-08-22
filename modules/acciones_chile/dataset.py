@@ -16,6 +16,48 @@ from .youtube import FEED_URL, fetch_feed, parse_feed
 SCHEMA_VERSION = "acciones-chile-dataset-0.5.0"
 
 
+def _download_with_integrity(period: str, base_url: str = DEFAULT_URL,
+                             downloader=None):
+    """Exige una señal independiente cuando el servidor omite Content-Length."""
+    fetch = downloader or download_period_details
+    first = fetch(period, base_url=base_url)
+    if first.content_length is not None:
+        return first, {
+            "transport_integrity": "content_length_exact_match",
+            "verification_downloads": 1,
+        }
+    second = fetch(period, base_url=base_url)
+    first_hash = hashlib.sha256(first.payload).hexdigest()
+    second_hash = hashlib.sha256(second.payload).hexdigest()
+    if first_hash != second_hash or first.bytes_received != second.bytes_received:
+        raise ValueError(f"descargas CMF inconsistentes para {period}")
+    return first, {
+        "transport_integrity": "independent_redownload_sha256_match",
+        "verification_downloads": 2,
+        "verification_sha256": second_hash,
+    }
+
+
+def _persist_raw_artifact(artifact: str, payload: bytes) -> dict:
+    compressed = gzip.compress(payload, compresslevel=9, mtime=0)
+    temp = artifact + ".tmp"
+    with open(temp, "wb") as handle:
+        handle.write(compressed)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temp, artifact)
+    with open(artifact, "rb") as handle:
+        persisted = handle.read()
+    if persisted != compressed or gzip.decompress(persisted) != payload:
+        raise ValueError("artefacto CMF persistido no reproduce la descarga")
+    return {
+        "raw_artifact_sha256": hashlib.sha256(persisted).hexdigest(),
+        "raw_artifact_bytes": len(persisted),
+        "gzip_reproducibility": "python_gzip_compresslevel_9_mtime_0",
+        "raw_artifact_verified": True,
+    }
+
+
 def select_comparison_periods(periods: list[str]) -> tuple[str, str | None]:
     if not periods:
         raise ValueError("la CMF no informó períodos individuales")
@@ -144,6 +186,10 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
                 "persisted_deterministic_gzip_bytes" if meta.get("raw_artifact_sha256") else None),
             "raw_artifact_bytes": meta.get("raw_artifact_bytes"),
             "gzip_reproducibility": meta.get("gzip_reproducibility"),
+            "raw_artifact_verified": meta.get("raw_artifact_verified", False),
+            "transport_integrity": meta.get("transport_integrity"),
+            "verification_downloads": meta.get("verification_downloads"),
+            "verification_sha256": meta.get("verification_sha256"),
             "rows": len(parsed_by_period[period]),
             "months_covered": _months_covered(period),
             "completeness_ratio_yoy": ratio,
@@ -172,6 +218,8 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
             "observations": observations,
             "historical_observation_count": len(observations),
             "metric_coverage": metric_coverage,
+            "metric_coverage_scope": (
+                "descriptive_latest_record_per_issuer_mixed_horizons_not_feature_or_radar_input"),
             "cross_section_comparable": len(months) <= 1,
             "months_covered_present": months,
         },
@@ -200,7 +248,8 @@ def build_audit_snapshot(data: dict) -> dict:
                 "cross_section_comparable flag is false when latest issuer records mix horizons"),
             "artifact_integrity": (
                 "sha256 covers exact downloaded uncompressed IFRS TXT bytes; raw artifact is "
-                "a gzip encoding of those bytes and transport Content-Length is checked when present"),
+                "read back and decompressed after deterministic gzip persistence; transport Content-Length "
+                "is checked when present, otherwise two independent downloads must have equal SHA-256"),
             "universe_history": "price label readiness requires survivorship_free_backtest_allowed",
             "youtube": "youtube_feature_allowed=false; rubric emits research reading only",
             "portfolio_privacy": "stored by authenticated uid; excluded from audit snapshots and model features",
@@ -210,7 +259,12 @@ def build_audit_snapshot(data: dict) -> dict:
             "explainable_decision": (
                 "per-position checklist separates price, publication, fundamentals, observed multiple, "
                 "fair value and margin of safety; buy/sell stay null and concentration is warning-only"),
-            "module_isolation": "acciones_chile imports no crypto or order-executor modules",
+            "fx_and_eps_units": (
+                "USD conversion requires an official BCCh rate as-of price plus independently verified "
+                "per-issuer EPS unit; neither missing input is inferred"),
+            "module_isolation": (
+                "first-party transitive import graph from acciones_chile reaches no crypto or "
+                "order-executor modules"),
             "negative_tests": [
                 "test_partial_cmf_period_is_enforced_out_of_causal_features",
                 "test_versioned_universe_is_partial_and_blocks_survivorship_backtest",
@@ -220,6 +274,13 @@ def build_audit_snapshot(data: dict) -> dict:
                 "test_portfolio_event_monitor_marks_feed_gaps_without_predicting_dates",
                 "test_decision_evidence_explains_missing_valuation_without_emitting_action",
                 "test_portfolio_concentration_reports_risk_without_rebalance_recommendation",
+                "test_bank_position_is_explicitly_blocked_without_separate_cmf_bank_data",
+                "test_bcch_fx_adapter_is_redacted_causal_and_read_only",
+                "test_bcch_fx_cache_fails_closed_when_tampered",
+                "test_eps_unit_requires_audited_hashed_evidence",
+                "test_cmf_missing_content_length_requires_matching_redownload",
+                "test_deterministic_cmf_artifact_is_read_back_and_verified",
+                "test_acciones_chile_transitive_import_graph_excludes_crypto_and_executor",
             ],
         },
         "cmf": {
@@ -230,6 +291,7 @@ def build_audit_snapshot(data: dict) -> dict:
             "known_gap": "listed banks require the separate CMF Bancos source",
             "feature_use": data.get("feature_use"),
             "metric_coverage": cmf.get("metric_coverage", {}),
+            "metric_coverage_scope": cmf.get("metric_coverage_scope"),
             "cross_section_comparable": cmf.get("cross_section_comparable"),
             "radar_contract": "one_non_partial_period_only",
         },
@@ -267,28 +329,23 @@ def build_audit_snapshot(data: dict) -> dict:
 def refresh_dataset(path: str, base_url: str = DEFAULT_URL) -> dict:
     periods = available_periods()
     selected = select_refresh_periods(periods)
-    downloads = {period: download_period_details(period, base_url=base_url) for period in selected}
+    verified = {period: _download_with_integrity(period, base_url=base_url)
+                for period in selected}
+    downloads = {period: result[0] for period, result in verified.items()}
     payloads = {period: item.payload for period, item in downloads.items()}
     metadata = {}
     raw_dir = os.path.join(os.path.dirname(path), "acciones_chile_cmf_raw")
     os.makedirs(raw_dir, exist_ok=True)
     for period, item in downloads.items():
         artifact = os.path.join(raw_dir, f"eifrs_{period}.txt.gz")
-        temp = artifact + ".tmp"
-        compressed = gzip.compress(item.payload, compresslevel=9, mtime=0)
-        with open(temp, "wb") as handle:
-            handle.write(compressed)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp, artifact)
+        artifact_evidence = _persist_raw_artifact(artifact, item.payload)
         metadata[period] = {
             "effective_url": item.effective_url, "retrieved_at": item.retrieved_at,
             "http_status": item.http_status, "content_length": item.content_length,
             "bytes_received": item.bytes_received,
             "raw_artifact": os.path.relpath(artifact, os.path.dirname(path)),
-            "raw_artifact_sha256": hashlib.sha256(compressed).hexdigest(),
-            "raw_artifact_bytes": len(compressed),
-            "gzip_reproducibility": "python_gzip_compresslevel_9_mtime_0",
+            **artifact_evidence,
+            **verified[period][1],
         }
     dataset = build_multi_period_dataset(payloads, fetch_feed(), metadata)
     write_dataset(path, dataset)

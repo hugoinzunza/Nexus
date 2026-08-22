@@ -5,7 +5,9 @@ auditables; valoración y precio siguen siendo requisitos para comprar/vender.
 """
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal, InvalidOperation
+import re
 
 
 STRATEGY_VERSION = "inversor-chileno-rubric-0.1.0"
@@ -139,7 +141,8 @@ def evaluate_observation(observation: dict, history: list[dict] | None = None) -
     }
 
 
-def evaluate_valuation(history: list[dict], market_price) -> dict:
+def evaluate_valuation(history: list[dict], market_price, fx_rate: dict | None = None,
+                       eps_unit_verification: dict | None = None) -> dict:
     """Calcula sólo múltiplos compatibles; no inventa precio justo."""
     price = _number(market_price)
     annual = next((item for item in sorted(history, key=lambda row: row.get("period", ""), reverse=True)
@@ -152,13 +155,45 @@ def evaluate_valuation(history: list[dict], market_price) -> dict:
         "annual_eps": eps, "reporting_currency": currency,
         "pe": None, "fair_multiple": None, "fair_value": None,
         "margin_of_safety": None, "buy_sell_recommendation": None,
+        "fx_rate": fx_rate, "eps_unit_verification": eps_unit_verification,
     }
     if price is None:
         result["status"] = "waiting_for_authorized_market_price"
     elif annual is None or eps is None:
         result["status"] = "annual_eps_unavailable"
+    elif currency == "USD":
+        verification = eps_unit_verification or {}
+        unit = verification.get("unit") if verification.get("status") == "verified" else None
+        source = str(verification.get("source_reference") or "")
+        method = verification.get("verification_method")
+        source_hash = str(verification.get("source_sha256") or "")
+        try:
+            date.fromisoformat(str(verification.get("verified_as_of")))
+            evidence_date_valid = True
+        except ValueError:
+            evidence_date_valid = False
+        evidence_valid = (
+            unit in {"CLP_PER_SHARE", "USD_PER_SHARE"} and source.startswith("https://") and
+            method in {"audited_annual_report_note", "issuer_disclosure"} and
+            bool(re.fullmatch(r"[0-9a-f]{64}", source_hash)) and evidence_date_valid
+        )
+        if not evidence_valid:
+            result["status"] = "eps_unit_verification_required"
+        elif unit == "USD_PER_SHARE" and (
+                not fx_rate or _number(fx_rate.get("clp_per_usd")) is None):
+            result["status"] = "official_fx_rate_required"
+        else:
+            converted_eps = eps
+            if unit == "USD_PER_SHARE":
+                converted_eps *= _number(fx_rate.get("clp_per_usd")) or 0
+            if converted_eps <= 0:
+                result["status"] = "pe_not_meaningful_for_nonpositive_eps"
+            else:
+                result["pe"] = round(price / converted_eps, 4)
+                result["eps_clp_per_share"] = round(converted_eps, 8)
+                result["status"] = "observed_multiple_ready_fair_value_pending"
     elif currency != "CLP":
-        result["status"] = "fx_and_eps_unit_verification_required"
+        result["status"] = "reporting_currency_not_supported"
     elif eps <= 0:
         result["status"] = "pe_not_meaningful_for_nonpositive_eps"
     else:
@@ -169,7 +204,8 @@ def evaluate_valuation(history: list[dict], market_price) -> dict:
 
 
 def evaluate_decision_evidence(reading: dict | None, valuation: dict | None,
-                               events: dict | None, allocation_pct) -> dict:
+                               events: dict | None, allocation_pct,
+                               data_source_gate: dict | None = None) -> dict:
     """Explica el gate de decisión; nunca convierte una brecha en una orden."""
     reading, valuation, events = reading or {}, valuation or {}, events or {}
     allocation = _number(allocation_pct)
@@ -188,6 +224,8 @@ def evaluate_decision_evidence(reading: dict | None, valuation: dict | None,
          "ready": valuation.get("margin_of_safety") is not None},
     ]
     blockers = [check["label"] for check in checks if not check["ready"]]
+    if data_source_gate and data_source_gate.get("status") != "ready":
+        blockers.append(data_source_gate.get("label") or "fuente contable requerida")
     warnings = []
     if allocation is not None and allocation >= 0.5:
         warnings.append(f"concentración elevada en cartera ({allocation:.1%})")
@@ -204,6 +242,7 @@ def evaluate_decision_evidence(reading: dict | None, valuation: dict | None,
         "warnings": warnings,
         "fundamental_view": reading.get("fundamental_view"),
         "research_posture": reading.get("portfolio_action_research"),
+        "data_source_gate": data_source_gate,
         "buy_recommendation": None,
         "sell_recommendation": None,
         "orders": "prohibited",

@@ -42,6 +42,10 @@ una orden.
 - Endpoints read-only: `api/issuers?q=...`, `api/analysis?rut=...` y `api/videos`.
 - Cada fuente registra URL parametrizada, hora de recuperación, estado HTTP,
   bytes, hash, completitud interanual y artefacto crudo comprimido.
+- Como la CMF no informa `Content-Length`, cada período se descarga dos veces y
+  ambos SHA-256 deben coincidir. Esto detecta truncamiento transitorio, no una
+  alteración persistente del origen. El gzip determinista se relee y descomprime
+  después de persistirlo para comprobar que reproduce exactamente la descarga.
 - El dataset exploratorio queda marcado `forbidden_until_availability_join`; los
   candidatos causales se construyen únicamente tras unir sociedad, período,
   alcance y evento Telegram con `available_at`.
@@ -64,6 +68,24 @@ una orden.
   de cada descarga, pero permanece `forbidden_until_availability_join` hasta
   unir la publicación de Telegram. Endpoints read-only: `api/banks-status` y la
   sección `cmf_banks` de `api/status` y `api/predictor-status`.
+
+### Dólar observado y unidades EPS
+
+- `scripts/refresh_acciones_chile_fx.py` consulta únicamente la serie diaria
+  oficial `F073.TCO.PRE.Z.D` de la API BDE del Banco Central y exige
+  `BCCH_API_TOKEN`.
+- El token se envía sólo al host `si3.bcentral.cl`; nunca se conserva en cache,
+  URL de procedencia, error o snapshot de auditoría.
+- El cache guarda todas las observaciones válidas, selecciona la última tasa
+  disponible igual o anterior a la fecha del precio y conserva hash de la
+  respuesta original.
+- Una tasa oficial no autoriza por sí sola convertir EPS. Para estados rotulados
+  USD, `scripts/install_acciones_chile_eps_units.py` exige evidencia auditada o
+  disclosure del emisor, URL, SHA-256 y fecha, declarando explícitamente
+  `USD_PER_SHARE` o `CLP_PER_SHARE`.
+- Sin ambas evidencias, P/E, valor justo, margen de seguridad y compra/venta
+  permanecen bloqueados. Esto evita tratar los 674,57 de COPEC como USD por
+  acción sólo porque la moneda de presentación general sea USD.
 
 ### @inversorchileno
 
@@ -162,6 +184,16 @@ ANTHROPIC_API_KEY=... .venv/bin/python scripts/audit_acciones_chile.py snapshot.
 
 `scripts/refresh_acciones_chile.py` genera automáticamente un snapshot sin cartera
 ni datos personales en `data/acciones_chile_audit_snapshot.json`.
+
+La revisión Opus del 22-08-2026 confirmó el comportamiento fail-closed: sin ocho
+trimestres, precios ajustados, benchmark, universo histórico, FX y unidades EPS
+verificadas, `can_train=false`, `can_generate_signal=false` y compra/venta sigue
+en `null`. Sus observaciones de integridad originaron la doble descarga CMF, la
+verificación del gzip leído desde disco y una prueba del grafo transitivo propio.
+También se hizo explícito por posición que CHILE, BCI, BSANTANDER e ITAUCL quedan
+bloqueados mientras la fuente contable CMF Bancos separada no esté lista. Quedan
+como límites declarados que ambas descargas CMF comparten el mismo origen y que
+el análisis transitivo cubre código propio, no internals de dependencias externas.
 
 ## Fases
 

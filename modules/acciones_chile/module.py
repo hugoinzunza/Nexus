@@ -14,6 +14,7 @@ from core.paths import persist_dir
 from . import auditor
 from . import banks
 from . import dataset as dataset_store
+from . import fx
 from .portfolio import normalize_portfolio
 from .predictor import (
     build_feature_records, feature_join_report, normalize_company, portfolio_event_monitor,
@@ -34,6 +35,8 @@ PACKAGED_UNIVERSE_PATH = os.path.join(ROOT, "config", "acciones_chile_universe_v
 LOCAL_UNIVERSE_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_universe.json")
 MARKET_STATUS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_market_data_status.json")
 BANKS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_banks.json")
+FX_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_fx.json")
+EPS_UNITS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_eps_units.json")
 MAX_BODY_BYTES = 500_000
 MAX_TELEGRAM_BODY_BYTES = 2_000_000
 
@@ -78,6 +81,7 @@ class AccionesChileModule(NexusModule):
             universe = self._universe_status()
             market = self._read_json(MARKET_STATUS_PATH)
             bank_status = banks.availability(BANKS_PATH)
+            fx_status = fx.availability(FX_PATH)
             return self._json(200, {
                 "module": "acciones_chile",
                 "mode": "read_only",
@@ -104,6 +108,7 @@ class AccionesChileModule(NexusModule):
                     "cross_section_comparable": cmf.get("cross_section_comparable", False),
                 },
                 "cmf_banks": bank_status,
+                "fx": fx_status,
                 "renta4": {
                     "public_api_documented": False,
                     "manual_export_supported": True,
@@ -201,7 +206,12 @@ class AccionesChileModule(NexusModule):
             holding_market = self._as_float((holding or {}).get("market_value"))
             allocation = holding_market / total_market if holding_market is not None and total_market else None
             reading = evaluate_observation(history[-1], history)
-            valuation = evaluate_valuation(history, (holding or {}).get("market_price"))
+            fx_rate = fx.rate_as_of(self._read_json(FX_PATH), (portfolio or {}).get("as_of")) \
+                if (portfolio or {}).get("as_of") else None
+            eps_units = fx.read_eps_unit_dataset(EPS_UNITS_PATH) or {}
+            unit_verification = (eps_units.get("entries") or {}).get(rut)
+            valuation = evaluate_valuation(
+                history, (holding or {}).get("market_price"), fx_rate, unit_verification)
             event_state = portfolio_event_monitor(
                 (self._read_telegram() or {}).get("events", []), [history[-1]["company"]])
             company_events = (event_state.get("by_company") or {}).get(
@@ -248,6 +258,10 @@ class AccionesChileModule(NexusModule):
             ]
             event_monitor = portfolio_event_monitor(
                 telegram.get("events", []), portfolio_companies)
+            fx_rate = fx.rate_as_of(self._read_json(FX_PATH), portfolio.get("as_of")) \
+                if portfolio.get("as_of") else None
+            eps_units = fx.read_eps_unit_dataset(EPS_UNITS_PATH) or {}
+            bank_status = banks.availability(BANKS_PATH)
             monitored = []
             total_initial = 0.0
             total_market = 0.0
@@ -265,7 +279,24 @@ class AccionesChileModule(NexusModule):
                     total_market += market_value
                     if initial_value is not None:
                         total_initial += initial_value
-                valuation = evaluate_valuation(history, holding.get("market_price")) if issuer else None
+                unit_verification = (eps_units.get("entries") or {}).get(
+                    holding.get("company_rut"))
+                ticker = str(holding.get("ticker") or "").upper()
+                data_source_gate = None
+                if ticker in banks.LISTED_BANKS:
+                    data_source_gate = {
+                        "status": ("ready" if bank_status.get("feature_ready") else "blocked"),
+                        "code": "cmf_banks_accounting_required",
+                        "label": "contabilidad bancaria CMF separada pendiente",
+                    }
+                elif not issuer:
+                    data_source_gate = {
+                        "status": "blocked", "code": "issuer_not_mapped_to_cmf",
+                        "label": "emisor sin mapeo contable CMF verificado",
+                    }
+                valuation = (evaluate_valuation(
+                    history, holding.get("market_price"), fx_rate, unit_verification)
+                    if issuer else None)
                 if valuation and valuation.get("pe") is not None:
                     observed_multiple_positions += 1
                 if valuation and valuation.get("fair_value") is not None:
@@ -277,6 +308,7 @@ class AccionesChileModule(NexusModule):
                     "analysis": issuer.get("analysis") if issuer else None,
                     "reading": evaluate_observation(issuer, history) if issuer else None,
                     "valuation": valuation,
+                    "data_source_gate": data_source_gate,
                     "events": (event_monitor.get("by_company") or {}).get(
                         normalize_company(issuer.get("company", "")) if issuer else ""),
                     "price_gate": ("renta4_authenticated_snapshot"
@@ -288,7 +320,7 @@ class AccionesChileModule(NexusModule):
                 item["allocation_pct"] = value / total_market if value is not None and total_market else None
                 item["decision_evidence"] = evaluate_decision_evidence(
                     item.get("reading"), item.get("valuation"), item.get("events"),
-                    item.get("allocation_pct"))
+                    item.get("allocation_pct"), item.get("data_source_gate"))
             concentration = portfolio_concentration(monitored)
             total_pnl = total_market - total_initial if priced_positions else None
             return self._json(200, {
@@ -312,6 +344,7 @@ class AccionesChileModule(NexusModule):
                 },
                 "event_monitor_as_of": event_monitor.get("as_of"),
                 "event_monitor_disclaimer": event_monitor.get("disclaimer"),
+                "fx_rate": fx_rate,
                 "orders": "prohibited", "recommendations": "research_only",
             })
         if subpath == "videos":
