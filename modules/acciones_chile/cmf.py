@@ -11,6 +11,7 @@ import re
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
@@ -37,27 +38,53 @@ class CMFRow:
     statement: str
 
 
+@dataclass(frozen=True)
+class CMFDownload:
+    period: str
+    payload: bytes
+    effective_url: str
+    retrieved_at: str
+    http_status: int
+    content_length: int | None
+    bytes_received: int
+
+
 def _validated_url(base_url: str, period: str) -> str:
     if len(period) != 6 or not period.isdigit():
         raise ValueError("period debe tener formato YYYYMM")
     parsed = urllib.parse.urlparse(base_url)
-    if parsed.scheme != "https" or parsed.hostname != CMF_HOST or parsed.path != CMF_PATH:
+    if (parsed.scheme != "https" or parsed.hostname != CMF_HOST or parsed.path != CMF_PATH
+            or parsed.query or parsed.fragment):
         raise ValueError("la fuente CMF no está allowlisted")
     return base_url + "?" + urllib.parse.urlencode({"inicio": period, "termino": period})
 
 
 def download_period(period: str, base_url: str = DEFAULT_URL, timeout: float = 30.0) -> bytes:
     """Descarga un período oficial. Falla cerrado ante redirecciones inesperadas."""
+    return download_period_details(period, base_url, timeout).payload
+
+
+def download_period_details(period: str, base_url: str = DEFAULT_URL,
+                            timeout: float = 30.0) -> CMFDownload:
     url = _validated_url(base_url, period)
     request = urllib.request.Request(url, headers={"User-Agent": "NexUX-AccionesChile/0.1"})
     with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL allowlisted
         final = urllib.parse.urlparse(response.geturl())
         if final.scheme != "https" or final.hostname != CMF_HOST or final.path != CMF_PATH:
             raise ValueError("la CMF redirigió fuera del endpoint autorizado")
+        declared = response.headers.get("Content-Length")
+        content_length = int(declared) if declared and declared.isdigit() else None
+        status = int(getattr(response, "status", 200))
         body = response.read(MAX_DOWNLOAD_BYTES + 1)
     if len(body) > MAX_DOWNLOAD_BYTES:
         raise ValueError("archivo CMF excede el límite permitido")
-    return body
+    if content_length is not None and len(body) != content_length:
+        raise ValueError("descarga CMF truncada según Content-Length")
+    return CMFDownload(
+        period=period, payload=body, effective_url=url,
+        retrieved_at=datetime.now(timezone.utc).isoformat(), http_status=status,
+        content_length=content_length, bytes_received=len(body),
+    )
 
 
 def available_periods(timeout: float = 20.0) -> list[str]:

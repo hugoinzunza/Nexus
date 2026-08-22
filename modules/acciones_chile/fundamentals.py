@@ -9,7 +9,10 @@ from .cmf import CMFRow
 
 ACCOUNT_ALIASES = {
     "revenue": ("Ingresos de actividades ordinarias", "Ingresos ordinarios"),
-    "operating_profit": ("Ganancia (pérdida) de actividades operacionales",),
+    "operating_profit": (
+        "Ganancias (pérdidas) de actividades operacionales",
+        "Ganancia (pérdida) de actividades operacionales",
+    ),
     "net_income": ("Ganancia (pérdida)",),
 }
 

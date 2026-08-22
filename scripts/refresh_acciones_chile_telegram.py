@@ -55,12 +55,47 @@ async def refresh(args) -> dict:
                 break
         if entity is None:
             raise RuntimeError("la sesión no pertenece a HechosEsencialesChile")
-        events = []
-        async for message in client.iter_messages(entity, limit=args.limit):
-            event = parse_event(message.id, message.date.isoformat(), message.message or "")
-            if event:
-                events.append(event)
-        events.sort(key=lambda event: event["available_at"], reverse=True)
+        try:
+            existing = json.loads(args.output.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            existing = {}
+        by_id = {int(event["message_id"]): event for event in existing.get("events", [])}
+        scanned_ids = []
+
+        async def scan(offset_id=0):
+            count = 0
+            async for message in client.iter_messages(entity, limit=args.limit, offset_id=offset_id):
+                count += 1
+                scanned_ids.append(int(message.id))
+                event = parse_event(message.id, message.date.isoformat(), message.message or "")
+                if event:
+                    by_id[message.id] = event
+            return count
+
+        newest_count = await scan()
+        oldest = int(existing.get("oldest_message_id") or min(by_id, default=0))
+        last_backfill_count = None
+        cursor = oldest
+        for _ in range(max(0, args.backfill_pages)):
+            if cursor <= 1:
+                last_backfill_count = 0
+                break
+            last_backfill_count = await scan(offset_id=cursor)
+            older = [message_id for message_id in scanned_ids if message_id < cursor]
+            if not older:
+                break
+            cursor = min(older)
+            if last_backfill_count < args.limit:
+                break
+        events = sorted(by_id.values(), key=lambda event: event["available_at"], reverse=True)
+        observed_oldest = min(scanned_ids + [oldest] if oldest else scanned_ids, default=None)
+        observed_newest = max(scanned_ids + [int(existing.get("newest_message_id") or 0)], default=None)
+        if existing.get("window_truncated") is False:
+            window_truncated = False
+        elif last_backfill_count is not None:
+            window_truncated = last_backfill_count >= args.limit
+        else:
+            window_truncated = newest_count >= args.limit
         payload = {
             "schema_version": "acciones-chile-telegram-events-0.1.0",
             "source": "telegram:hechosesencialeschile",
@@ -68,6 +103,9 @@ async def refresh(args) -> dict:
             "personal_use_only": True,
             "documents_downloaded": False,
             "event_count": len(events),
+            "oldest_message_id": observed_oldest,
+            "newest_message_id": observed_newest,
+            "window_truncated": window_truncated,
             "events": events,
         }
         atomic_json(args.output, payload)
@@ -84,6 +122,8 @@ def parse_args():
                         help="sesión Telethon ya autorizada y miembro del grupo")
     parser.add_argument("--channel", default="HechosEsencialesChile")
     parser.add_argument("--limit", type=int, default=500)
+    parser.add_argument("--backfill-pages", type=int, default=1,
+                        help="páginas antiguas a fusionar; nunca sobrescribe historia previa")
     parser.add_argument("--output", type=pathlib.Path,
                         default=pathlib.Path(persist_dir(str(ROOT))) / "acciones_chile_telegram_events.json")
     return parser.parse_args()

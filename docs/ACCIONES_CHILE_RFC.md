@@ -38,6 +38,11 @@ una orden.
   compacto. Si el cierre nuevo aún es parcial, conserva el último período
   disponible por sociedad. Si la red falla, conserva el último cache válido.
 - Endpoints read-only: `api/issuers?q=...`, `api/analysis?rut=...` y `api/videos`.
+- Cada fuente registra URL parametrizada, hora de recuperación, estado HTTP,
+  bytes, hash, completitud interanual y artefacto crudo comprimido.
+- El dataset exploratorio queda marcado `forbidden_until_availability_join`; los
+  candidatos causales se construyen únicamente tras unir sociedad, período,
+  alcance y evento Telegram con `available_at`.
 
 ### @inversorchileno
 

@@ -2,17 +2,18 @@
 from __future__ import annotations
 
 import hashlib
+import gzip
 import json
 import os
 import time
 from collections import defaultdict
 
-from .cmf import DEFAULT_URL, available_periods, download_period, parse_rows
+from .cmf import DEFAULT_URL, available_periods, download_period_details, parse_rows
 from .fundamentals import analyze_company
 from .youtube import FEED_URL, fetch_feed, parse_feed
 
 
-SCHEMA_VERSION = "acciones-chile-dataset-0.1.0"
+SCHEMA_VERSION = "acciones-chile-dataset-0.2.0"
 
 
 def select_comparison_periods(periods: list[str]) -> tuple[str, str | None]:
@@ -46,7 +47,18 @@ def build_dataset(current_payload: bytes, previous_payload: bytes | None = None,
     return build_multi_period_dataset(payloads, videos_payload)
 
 
-def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes | None = None) -> dict:
+def _preferred_scope(rows):
+    scopes = {row.scope for row in rows}
+    selected = "C" if "C" in scopes else sorted(scopes)[0]
+    return [row for row in rows if row.scope == selected], selected, sorted(scopes)
+
+
+def _months_covered(period: str) -> int:
+    return int(period[-2:])
+
+
+def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes | None = None,
+                               source_metadata: dict[str, dict] | None = None) -> dict:
     rows_by_period_rut = defaultdict(lambda: defaultdict(list))
     parsed_by_period = {}
     for expected_period, payload in payloads.items():
@@ -57,29 +69,67 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
         for row in rows:
             rows_by_period_rut[expected_period][row.rut].append(row)
     periods = sorted(parsed_by_period, reverse=True)
+    if not periods:
+        raise ValueError("dataset CMF vacío")
     all_ruts = sorted({rut for period in periods for rut in rows_by_period_rut[period]})
     issuers = []
     for rut in all_ruts:
         current_period = next(period for period in periods if rut in rows_by_period_rut[period])
-        rows = rows_by_period_rut[current_period][rut]
-        previous = rows_by_period_rut.get(str(int(current_period) - 100), {}).get(rut, [])
+        rows, selected_scope, scopes = _preferred_scope(rows_by_period_rut[current_period][rut])
+        previous_raw = rows_by_period_rut.get(str(int(current_period) - 100), {}).get(rut, [])
+        previous = [row for row in previous_raw if row.scope == selected_scope]
         analysis = analyze_company(rows, previous)
+        latest_period = periods[0]
+        periods_behind = max(0, ((int(latest_period[:4]) - int(current_period[:4])) * 12
+                                 + int(latest_period[-2:]) - int(current_period[-2:])) // 3)
         issuers.append({
-            "rut": rut, "company": rows[0].company, "scope": rows[0].scope,
+            "rut": rut, "company": rows[0].company, "scope": selected_scope,
+            "scopes_available": scopes,
             "currency": rows[0].currency, "analysis": analysis,
             "latest_available_period": current_period,
+            "months_covered": _months_covered(current_period),
+            "periods_behind": periods_behind,
+            "stale": periods_behind >= 4,
+            "available_at": None,
+            "feature_use": "forbidden_until_telegram_join",
         })
     issuers.sort(key=lambda item: item["company"].casefold())
-    sources = [{
-        "period": period, "url": DEFAULT_URL,
-        "sha256": hashlib.sha256(payloads[period]).hexdigest(),
-        "rows": len(parsed_by_period[period]),
-    } for period in periods]
+    sources = []
+    source_metadata = source_metadata or {}
+    for period in periods:
+        prior_year = str(int(period) - 100)
+        baseline_rows = len(parsed_by_period.get(prior_year, []))
+        ratio = round(len(parsed_by_period[period]) / baseline_rows, 6) if baseline_rows else None
+        meta = source_metadata.get(period, {})
+        sources.append({
+            "period": period,
+            "url": meta.get("effective_url") or f"{DEFAULT_URL}?inicio={period}&termino={period}",
+            "retrieved_at": meta.get("retrieved_at"),
+            "http_status": meta.get("http_status"),
+            "content_length": meta.get("content_length"),
+            "bytes_received": meta.get("bytes_received", len(payloads[period])),
+            "sha256": hashlib.sha256(payloads[period]).hexdigest(),
+            "rows": len(parsed_by_period[period]),
+            "completeness_ratio_yoy": ratio,
+            "partial": ratio is not None and ratio < 0.7,
+            "raw_artifact": meta.get("raw_artifact"),
+        })
+    metric_coverage = {}
+    for metric in ("revenue", "operating_profit", "net_income"):
+        present = sum(item["analysis"].get(metric) is not None for item in issuers)
+        metric_coverage[metric] = round(present / len(issuers), 6) if issuers else 0.0
+    months = sorted({item["months_covered"] for item in issuers if not item["stale"]})
     videos = parse_feed(videos_payload) if videos_payload else []
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at_ms": int(time.time() * 1000),
-        "cmf": {"periods": periods, "sources": sources, "issuers": issuers},
+        "feature_use": "forbidden_until_availability_join",
+        "cmf": {
+            "periods": periods, "sources": sources, "issuers": issuers,
+            "metric_coverage": metric_coverage,
+            "cross_section_comparable": len(months) <= 1,
+            "months_covered_present": months,
+        },
         "youtube": {"url": FEED_URL, "entries": videos, "source_role": "secondary_thesis"},
     }
 
@@ -101,6 +151,9 @@ def build_audit_snapshot(data: dict) -> dict:
             "issuer_count": len(cmf.get("issuers", [])),
             "sources": cmf.get("sources", []),
             "known_gap": "listed banks require the separate CMF Bancos source",
+            "feature_use": data.get("feature_use"),
+            "metric_coverage": cmf.get("metric_coverage", {}),
+            "cross_section_comparable": cmf.get("cross_section_comparable"),
         },
         "youtube": {
             "entry_count": len(youtube.get("entries", [])),
@@ -110,7 +163,7 @@ def build_audit_snapshot(data: dict) -> dict:
         "claims": [
             "CMF values are primary evidence with source hashes",
             "YouTube content is secondary thesis material, never ground truth",
-            "latest available period is selected per issuer to tolerate partial reporting",
+            "mixed accounting horizons are labeled and forbidden for feature use",
         ],
     }
 
@@ -118,8 +171,26 @@ def build_audit_snapshot(data: dict) -> dict:
 def refresh_dataset(path: str, base_url: str = DEFAULT_URL) -> dict:
     periods = available_periods()
     selected = select_refresh_periods(periods)
-    payloads = {period: download_period(period, base_url=base_url) for period in selected}
-    dataset = build_multi_period_dataset(payloads, fetch_feed())
+    downloads = {period: download_period_details(period, base_url=base_url) for period in selected}
+    payloads = {period: item.payload for period, item in downloads.items()}
+    metadata = {}
+    raw_dir = os.path.join(os.path.dirname(path), "acciones_chile_cmf_raw")
+    os.makedirs(raw_dir, exist_ok=True)
+    for period, item in downloads.items():
+        artifact = os.path.join(raw_dir, f"eifrs_{period}.txt.gz")
+        temp = artifact + ".tmp"
+        with open(temp, "wb") as handle:
+            handle.write(gzip.compress(item.payload, compresslevel=9))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, artifact)
+        metadata[period] = {
+            "effective_url": item.effective_url, "retrieved_at": item.retrieved_at,
+            "http_status": item.http_status, "content_length": item.content_length,
+            "bytes_received": item.bytes_received,
+            "raw_artifact": os.path.relpath(artifact, os.path.dirname(path)),
+        }
+    dataset = build_multi_period_dataset(payloads, fetch_feed(), metadata)
     write_dataset(path, dataset)
     return dataset
 

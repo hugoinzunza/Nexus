@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT))
 
 from core.paths import persist_dir  # noqa: E402
 from modules.acciones_chile.dataset import build_audit_snapshot, refresh_dataset  # noqa: E402
-from modules.acciones_chile.predictor import readiness  # noqa: E402
+from modules.acciones_chile.predictor import feature_join_report, readiness  # noqa: E402
 
 
 def main() -> int:
@@ -25,6 +25,7 @@ def main() -> int:
     except (OSError, ValueError):
         pass
     audit_snapshot["predictor"] = readiness(telegram, price_history_ready=False)
+    audit_snapshot["predictor"]["cmf_telegram_join"] = feature_join_report(data, telegram)
     audit_path = path.with_name("acciones_chile_audit_snapshot.json")
     audit_path.write_text(json.dumps(audit_snapshot, ensure_ascii=False, indent=2),
                           encoding="utf-8")

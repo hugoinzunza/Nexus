@@ -13,7 +13,7 @@ from core.paths import persist_dir
 from . import auditor
 from . import dataset as dataset_store
 from .portfolio import normalize_portfolio
-from .predictor import readiness as predictor_readiness
+from .predictor import feature_join_report, readiness as predictor_readiness
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -55,7 +55,8 @@ class AccionesChileModule(NexusModule):
 
     def api(self, subpath, query, user=None):
         if subpath == "status":
-            portfolio = self._read_portfolio()
+            uid = (user or {}).get("uid")
+            portfolio = self._read_portfolio(uid) if uid is not None else None
             dataset = self._read_dataset()
             cmf = (dataset or {}).get("cmf", {})
             telegram = self._read_telegram()
@@ -71,13 +72,17 @@ class AccionesChileModule(NexusModule):
                 },
                 "cmf": {
                     "source": "CMF IFRS TXT oficial",
-                    "ready": True,
+                    "ready": bool(dataset),
+                    "feature_ready": False,
+                    "data_status": "partial" if dataset else "waiting",
                     "automatic_fetch": bool(self.config.get("cmf_auto_refresh", False)),
                     "cached": bool(dataset),
                     "periods": cmf.get("periods", []),
                     "issuers": len(cmf.get("issuers", [])),
                     "generated_at_ms": (dataset or {}).get("generated_at_ms"),
                     "known_gaps": ["bancos listados requieren fuente CMF Bancos"],
+                    "metric_coverage": cmf.get("metric_coverage", {}),
+                    "cross_section_comparable": cmf.get("cross_section_comparable", False),
                 },
                 "renta4": {
                     "public_api_documented": False,
@@ -99,7 +104,10 @@ class AccionesChileModule(NexusModule):
                 "auditor": auditor.availability(self.config),
             })
         if subpath == "portfolio":
-            data = self._read_portfolio()
+            uid = (user or {}).get("uid")
+            if uid is None:
+                return self._json(401, {"error": "necesitas iniciar sesión"})
+            data = self._read_portfolio(uid)
             return self._json(200, data or {"connected": False, "holdings": []})
         if subpath == "issuers":
             dataset = self._read_dataset()
@@ -107,14 +115,24 @@ class AccionesChileModule(NexusModule):
                 return self._json(503, {"error": "dataset CMF todavía no disponible", "issuers": []})
             search = str(query.get("q") or "").strip().casefold()
             issuers = dataset["cmf"].get("issuers", [])
+            include_stale = str(query.get("include_stale") or "") == "1"
+            if not include_stale:
+                issuers = [item for item in issuers if not item.get("stale", False)]
             if search:
                 issuers = [item for item in issuers
                            if search in item["company"].casefold() or search in item["rut"]]
             compact = [{"rut": item["rut"], "company": item["company"],
                         "scope": item["scope"], "currency": item["currency"],
-                        "latest_available_period": item.get("latest_available_period")}
+                        "latest_available_period": item.get("latest_available_period"),
+                        "months_covered": item.get("months_covered"),
+                        "periods_behind": item.get("periods_behind"),
+                        "stale": item.get("stale", False)}
                        for item in issuers[:100]]
-            return self._json(200, {"count": len(issuers), "issuers": compact})
+            return self._json(200, {
+                "count": len(issuers), "issuers": compact,
+                "cross_section_comparable": len({item.get("months_covered") for item in issuers}) <= 1,
+                "warning": "no comparar ventas entre distintos months_covered",
+            })
         if subpath == "analysis":
             rut = "".join(ch for ch in str(query.get("rut") or "") if ch.isdigit())[:8]
             if not rut:
@@ -124,13 +142,22 @@ class AccionesChileModule(NexusModule):
                 return self._json(503, {"error": "dataset CMF todavía no disponible"})
             issuer = next((item for item in dataset["cmf"].get("issuers", [])
                            if item["rut"] == rut), None)
-            return self._json(200, issuer) if issuer else self._json(404, {"error": "sociedad no encontrada"})
+            if not issuer:
+                return self._json(404, {"error": "sociedad no encontrada"})
+            issuer = dict(issuer)
+            issuer["warnings"] = [
+                "dato exploratorio: no habilitado como feature",
+                f"cubre {issuer.get('months_covered')} meses del año",
+            ]
+            return self._json(200, issuer)
         if subpath == "videos":
             dataset = self._read_dataset()
             entries = ((dataset or {}).get("youtube") or {}).get("entries", [])
             return self._json(200, {"count": len(entries), "entries": entries[:30],
                                     "source_role": "secondary_thesis"})
         if subpath == "events":
+            if (user or {}).get("uid") is None:
+                return self._json(401, {"error": "necesitas iniciar sesión"})
             data = self._read_telegram()
             events = (data or {}).get("events", [])
             event_type = str(query.get("type") or "").strip()
@@ -139,7 +166,13 @@ class AccionesChileModule(NexusModule):
             return self._json(200, {"count": len(events), "events": events[:200],
                                     "source": "telegram:hechosesencialeschile"})
         if subpath == "predictor-status":
-            return self._json(200, predictor_readiness(self._read_telegram(), price_history_ready=False))
+            telegram = self._read_telegram()
+            state = predictor_readiness(telegram, price_history_ready=False)
+            dataset = self._read_dataset() or {}
+            state["cmf_telegram_join"] = feature_join_report(dataset, telegram)
+            state["causal_feature_candidates"] = state["cmf_telegram_join"]["candidate_records"]
+            state["fundamental_dataset_feature_use"] = dataset.get("feature_use", "forbidden")
+            return self._json(200, state)
         if subpath == "boundaries":
             return self._json(200, {
                 "orders": "prohibited", "broker_credentials": "not_stored",
@@ -162,27 +195,39 @@ class AccionesChileModule(NexusModule):
         if len(json.dumps(body, ensure_ascii=False).encode("utf-8")) > MAX_BODY_BYTES:
             return self._json(413, {"error": "payload demasiado grande"})
         try:
+            if not isinstance(body, dict) or body.get("user_id") is None:
+                return self._json(400, {"error": "falta user_id"})
+            user_id = int(body["user_id"])
             normalized = normalize_portfolio(body)
         except ValueError as exc:
             return self._json(400, {"error": str(exc)})
         normalized["received_at_ms"] = int(time.time() * 1000)
-        self._write_portfolio(normalized)
+        self._write_portfolio(user_id, normalized)
         return self._json(200, {"ok": True, "positions": len(normalized["holdings"])})
 
-    def _read_portfolio(self):
+    def _read_portfolio(self, uid):
+        if uid is None:
+            return None
         with self._lock:
             try:
                 with open(PORTFOLIO_PATH, encoding="utf-8") as handle:
-                    return json.load(handle)
+                    store = json.load(handle)
+                return (store.get("portfolios") or {}).get(str(int(uid)))
             except (FileNotFoundError, OSError, ValueError):
                 return None
 
-    def _write_portfolio(self, data: dict):
+    def _write_portfolio(self, uid: int, data: dict):
         os.makedirs(os.path.dirname(PORTFOLIO_PATH), exist_ok=True)
         temp = PORTFOLIO_PATH + ".tmp"
         with self._lock:
+            try:
+                with open(PORTFOLIO_PATH, encoding="utf-8") as handle:
+                    store = json.load(handle)
+            except (FileNotFoundError, OSError, ValueError):
+                store = {"schema_version": "acciones-chile-portfolios-0.1.0", "portfolios": {}}
+            store.setdefault("portfolios", {})[str(int(uid))] = data
             with open(temp, "w", encoding="utf-8") as handle:
-                json.dump(data, handle, ensure_ascii=False, indent=2)
+                json.dump(store, handle, ensure_ascii=False, separators=(",", ":"))
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temp, PORTFOLIO_PATH)
@@ -218,7 +263,7 @@ class AccionesChileModule(NexusModule):
 
     def health(self):
         return {"slug": self.slug, "status": "ok", "mode": "read_only",
-                "portfolio_connected": bool(self._read_portfolio()),
+                "portfolio_storage": "per_user",
                 "dataset_ready": bool(self._read_dataset()),
                 "telegram_events_ready": bool(self._read_telegram())}
 

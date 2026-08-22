@@ -1,9 +1,11 @@
 import json
+import ast
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
-from modules.acciones_chile.cmf import parse_rows, rows_for_rut
+from modules.acciones_chile.cmf import _validated_url, parse_rows, rows_for_rut
 from modules.acciones_chile.fundamentals import analyze_company
 from modules.acciones_chile.portfolio import normalize_portfolio
 from modules.acciones_chile.auditor import availability
@@ -13,7 +15,10 @@ from modules.acciones_chile.dataset import (
     select_refresh_periods,
 )
 from modules.acciones_chile.telegram_events import parse_event
-from modules.acciones_chile.predictor import event_features, normalize_company, readiness
+from modules.acciones_chile.predictor import (
+    build_feature_records, event_features, feature_join_report, normalize_company, readiness,
+    telegram_period_to_cmf,
+)
 
 
 def _payload(period="202603", revenue="1200", profit="120"):
@@ -104,6 +109,7 @@ def test_compact_dataset_preserves_provenance_and_secondary_videos():
     assert data["cmf"]["periods"] == ["202603", "202503"]
     assert data["cmf"]["sources"][0]["rows"] == 3
     assert len(data["cmf"]["sources"][0]["sha256"]) == 64
+    assert data["cmf"]["sources"][0]["url"].endswith("?inicio=202603&termino=202603")
     assert data["cmf"]["issuers"][0]["analysis"]["revenue_growth_yoy"] == 0.2
     assert data["youtube"]["entries"][0]["source_role"] == "secondary_thesis"
 
@@ -119,6 +125,9 @@ def test_partial_latest_period_keeps_catalog_from_previous_quarter():
     by_rut = {item["rut"]: item for item in data["cmf"]["issuers"]}
     assert set(by_rut) == {"11111111", "76543210"}
     assert by_rut["76543210"]["latest_available_period"] == "202603"
+    assert by_rut["76543210"]["months_covered"] == 3
+    assert data["cmf"]["cross_section_comparable"] is False
+    assert data["feature_use"] == "forbidden_until_availability_join"
     assert by_rut["76543210"]["analysis"]["revenue_growth_yoy"] == 0.2
     snapshot = build_audit_snapshot(data)
     assert snapshot["cmf"]["issuer_count"] == 2
@@ -157,8 +166,64 @@ def test_predictor_readiness_fails_closed_without_history_and_prices():
     state = readiness({"events": [{
         "event_type": "financial_statement", "company": "ENEL CHILE S.A.",
         "available_at": "2026-08-17T22:44:03+00:00", "period": "2T 2026",
-    }]})
+    }], "window_truncated": False})
     assert state["can_train"] is False
     assert state["can_generate_signal"] is False
     assert state["youtube_feature_allowed"] is False
     assert len(state["blockers"]) == 2
+
+
+def test_real_cmf_fixture_covers_operating_profit():
+    root = Path(__file__).resolve().parents[1]
+    rows = parse_rows((root / "fixtures/cmf_enel_chile_202603_sample.txt").read_bytes())
+    result = analyze_company(rows)
+    assert result["operating_profit"] == "325120000"
+    assert result["operating_margin"] > 0
+
+
+def test_cmf_base_url_rejects_preexisting_query():
+    with pytest.raises(ValueError, match="allowlisted"):
+        _validated_url("https://www.cmfchile.cl/institucional/estadisticas/ver_archivo.php?x=1",
+                       "202603")
+
+
+def test_causal_join_requires_matching_period_scope_and_event():
+    dataset = build_dataset(_payload().encode())
+    telegram = {"events": [{
+        "event_type": "financial_statement", "company": "EMPRESA CHILENA S.A.",
+        "available_at": "2026-05-01T12:00:00+00:00", "period": "1T 2026",
+        "balance_type": "Individual", "message_id": 42,
+    }]}
+    records = build_feature_records(dataset, telegram)
+    assert telegram_period_to_cmf("1T 2026") == "202603"
+    assert len(records) == 1
+    assert records[0]["available_at"] == "2026-05-01T12:00:00+00:00"
+    assert records[0]["feature_use"] == "causal_feature_candidate_no_price_label"
+    report = feature_join_report(dataset, telegram)
+    assert report["match_complete"] is True
+
+
+def test_join_report_exposes_unmatched_company_instead_of_silent_no_news():
+    dataset = build_dataset(_payload().encode())
+    telegram = {"events": [{
+        "event_type": "financial_statement", "company": "EMPRESA SIN MAPEO S.A.",
+        "available_at": "2026-05-01T12:00:00+00:00", "period": "1T 2026",
+        "balance_type": "Individual", "message_id": 99,
+    }]}
+    report = feature_join_report(dataset, telegram)
+    assert report["match_complete"] is False
+    assert report["unmatched_companies"] == ["EMPRESA SIN MAPEO"]
+
+
+def test_acciones_chile_has_no_crypto_or_executor_imports():
+    root = Path(__file__).resolve().parents[1] / "modules/acciones_chile"
+    forbidden = ("modules.trading", "modules.bot", "modules.coinsignals", "executor")
+    for path in root.glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        names = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                names.append(node.module or "")
+        assert not any(any(name.startswith(prefix) for prefix in forbidden) for name in names), path

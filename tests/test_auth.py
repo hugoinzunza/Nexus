@@ -85,6 +85,27 @@ def test_bot_web_es_solo_admin(monkeypatch):
     assert ("coinglass", "visual-ingest") in app._TOKEN_AUTH_POSTS
     assert ("coinsignals", "ingest") in app._TOKEN_AUTH_POSTS
     assert ("journal", "ingest") in app._TOKEN_AUTH_POSTS
+    assert ("acciones_chile", "ingest-portfolio") in app._TOKEN_AUTH_POSTS
+
+
+def test_acciones_chile_exige_sesion(monkeypatch):
+    from core import app
+
+    class FakeAccionesChile:
+        def sse(self, subpath, query, user=None):
+            return None
+
+        def api(self, subpath, query, user=None):
+            return (200, "application/json", b'{"ok":true}')
+
+    request = SimpleNamespace(url=SimpleNamespace(path="/m/acciones_chile/api/events"))
+    monkeypatch.setitem(app.hub.modules_by_slug, "acciones_chile", FakeAccionesChile())
+    monkeypatch.setattr(app.auth, "enabled", lambda: True)
+    monkeypatch.setattr(app.auth, "current_user", lambda request: None)
+    blocked = app._gate("acciones_chile", request)
+    assert blocked.status_code == 401
+    response = TestClient(app.app).get("/m/acciones_chile/api/events")
+    assert response.status_code == 401
 
 
 def test_admin_puede_designar_otro_admin(monkeypatch):

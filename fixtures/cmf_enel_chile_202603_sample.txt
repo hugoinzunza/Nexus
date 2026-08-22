@@ -1,0 +1,3 @@
+202603;76536353;ENEL CHILE S.A.;C;USD;Ingresos de actividades ordinarias;1034063000;TAX CI;ERNG
+202603;76536353;ENEL CHILE S.A.;C;USD;Ganancias (pérdidas) de actividades operacionales;325120000;TAX CI;ERNG
+202603;76536353;ENEL CHILE S.A.;C;USD;Ganancia (pérdida);174384000;TAX CI;ERNG

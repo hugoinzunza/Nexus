@@ -384,7 +384,7 @@ async def admin_set_user_role(user_id: int, request: Request):
 
 
 # Slugs que exigen sesión iniciada (datos personales). El resto es público.
-_LOGIN_REQUIRED = {"journal", "coinsignals", "coinglass", "hypothesis-lab"}
+_LOGIN_REQUIRED = {"journal", "coinsignals", "coinglass", "hypothesis-lab", "acciones_chile"}
 _ADMIN_REQUIRED = {"bot"}
 # Tope duro del cuerpo de CUALQUIER POST de modulo, aplicado antes de leerlo.
 # Es holgado a proposito: el snapshot visual de CoinGlass ronda los 40 KB y el mas
@@ -403,6 +403,7 @@ _TOKEN_AUTH_POSTS = {
     ("journal", "connections"),
     ("journal", "connection-status"),
     ("journal", "vault-check"),
+    ("acciones_chile", "ingest-portfolio"),
 }
 
 

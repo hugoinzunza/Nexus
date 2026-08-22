@@ -41,5 +41,9 @@ def audit(snapshot: dict, config: dict) -> dict | None:
         text = "\n".join(block.text for block in response.content if block.type == "text")
         return {"auditor": "Claude/Opus", "model": status["model"], "report": text,
                 "authority": "advisory_only"}
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001 - error estructurado, nunca aprobación silenciosa
+        return {
+            "auditor": "Claude/Opus", "model": status["model"],
+            "authority": "advisory_only", "report": None,
+            "error": {"type": type(exc).__name__, "message": str(exc)[:300]},
+        }

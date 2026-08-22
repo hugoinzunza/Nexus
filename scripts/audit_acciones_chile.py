@@ -36,8 +36,9 @@ def main() -> int:
         print("auditor pendiente: falta ANTHROPIC_API_KEY en el entorno", file=sys.stderr)
         return 3
     report = audit(snapshot, config)
-    if report is None:
-        print("auditoría falló cerrada: no se generó reporte", file=sys.stderr)
+    if report is None or report.get("error"):
+        detail = (report or {}).get("error", {}).get("type", "unknown")
+        print(f"auditoría falló cerrada: {detail}", file=sys.stderr)
         return 4
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
