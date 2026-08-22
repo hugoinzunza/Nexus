@@ -16,7 +16,7 @@ from . import banks
 from . import dataset as dataset_store
 from .portfolio import normalize_portfolio
 from .predictor import build_feature_records, feature_join_report, readiness as predictor_readiness
-from .strategy import build_radar, evaluate_observation
+from .strategy import build_radar, evaluate_observation, evaluate_valuation
 from .universe import load_universe, snapshot_as_of, universe_status
 
 
@@ -101,7 +101,10 @@ class AccionesChileModule(NexusModule):
                 "renta4": {
                     "public_api_documented": False,
                     "manual_export_supported": True,
-                    "authenticated_web_automation": False,
+                    "authenticated_web_snapshot_supported": True,
+                    "automatic_background_sync": False,
+                    "automatic_sync_blocker": "Renta 4 no publica API; requiere sesión web activa del usuario",
+                    "orders": "prohibited",
                 },
                 "youtube": {
                     "channel": "@inversorchileno",
@@ -183,9 +186,13 @@ class AccionesChileModule(NexusModule):
             history.sort(key=lambda item: item.get("period", ""))
             if not history:
                 return self._json(404, {"error": "sociedad no encontrada"})
+            portfolio = self._read_portfolio((user or {}).get("uid"))
+            holding = next((item for item in (portfolio or {}).get("holdings", [])
+                            if item.get("company_rut") == rut), None)
             return self._json(200, {
                 "rut": rut, "company": history[-1]["company"], "history": history,
                 "reading": evaluate_observation(history[-1], history),
+                "valuation": evaluate_valuation(history, (holding or {}).get("market_price")),
                 "price_history_ready": False,
             })
         if subpath == "radar":
@@ -215,22 +222,46 @@ class AccionesChileModule(NexusModule):
             issuers = (dataset.get("cmf") or {}).get("issuers", [])
             by_rut = {item.get("rut"): item for item in issuers}
             monitored = []
+            total_initial = 0.0
+            total_market = 0.0
+            priced_positions = 0
             for holding in portfolio.get("holdings", []):
                 issuer = by_rut.get(holding.get("company_rut"))
                 history = [item for item in observations
                            if issuer and item.get("rut") == issuer.get("rut")]
+                initial_value = self._as_float(holding.get("initial_value"))
+                market_value = self._as_float(holding.get("market_value"))
+                if market_value is not None:
+                    priced_positions += 1
+                    total_market += market_value
+                    if initial_value is not None:
+                        total_initial += initial_value
                 monitored.append({
                     **holding,
                     "company": issuer.get("company") if issuer else None,
                     "latest_period": issuer.get("latest_available_period") if issuer else None,
                     "analysis": issuer.get("analysis") if issuer else None,
                     "reading": evaluate_observation(issuer, history) if issuer else None,
-                    "market_value": None, "unrealized_pnl": None,
-                    "price_gate": "waiting_for_authorized_market_data",
+                    "valuation": evaluate_valuation(history, holding.get("market_price")) if issuer else None,
+                    "price_gate": ("renta4_authenticated_snapshot"
+                                   if market_value is not None
+                                   else "waiting_for_authorized_market_data"),
                 })
+            for item in monitored:
+                value = self._as_float(item.get("market_value"))
+                item["allocation_pct"] = value / total_market if value is not None and total_market else None
+            total_pnl = total_market - total_initial if priced_positions else None
             return self._json(200, {
                 "connected": True, "source": portfolio.get("source"),
                 "as_of": portfolio.get("as_of"), "holdings": monitored,
+                "summary": {
+                    "positions": len(monitored), "priced_positions": priced_positions,
+                    "initial_value": total_initial if priced_positions else None,
+                    "market_value": total_market if priced_positions else None,
+                    "unrealized_pnl": total_pnl,
+                    "return_pct": total_pnl / total_initial if total_pnl is not None and total_initial else None,
+                    "available_cash": self._as_float(portfolio.get("available_cash")),
+                },
                 "orders": "prohibited", "recommendations": "research_only",
             })
         if subpath == "videos":
@@ -396,6 +427,13 @@ class AccionesChileModule(NexusModule):
             with open(path, encoding="utf-8") as handle:
                 return json.load(handle)
         except (FileNotFoundError, OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _as_float(value):
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
             return None
 
     def _write_json_atomic(self, path: str, data: dict, mode: int | None = None):

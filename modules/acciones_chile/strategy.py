@@ -139,6 +139,35 @@ def evaluate_observation(observation: dict, history: list[dict] | None = None) -
     }
 
 
+def evaluate_valuation(history: list[dict], market_price) -> dict:
+    """Calcula sólo múltiplos compatibles; no inventa precio justo."""
+    price = _number(market_price)
+    annual = next((item for item in sorted(history, key=lambda row: row.get("period", ""), reverse=True)
+                   if str(item.get("period", "")).endswith("12")), None)
+    analysis = (annual or {}).get("analysis") or {}
+    eps = _number(analysis.get("basic_eps"))
+    currency = (annual or {}).get("currency") or analysis.get("currency")
+    result = {
+        "market_price": price, "annual_period": (annual or {}).get("period"),
+        "annual_eps": eps, "reporting_currency": currency,
+        "pe": None, "fair_multiple": None, "fair_value": None,
+        "margin_of_safety": None, "buy_sell_recommendation": None,
+    }
+    if price is None:
+        result["status"] = "waiting_for_authorized_market_price"
+    elif annual is None or eps is None:
+        result["status"] = "annual_eps_unavailable"
+    elif currency != "CLP":
+        result["status"] = "fx_and_eps_unit_verification_required"
+    elif eps <= 0:
+        result["status"] = "pe_not_meaningful_for_nonpositive_eps"
+    else:
+        result["pe"] = round(price / eps, 4)
+        result["status"] = "observed_multiple_ready_fair_value_pending"
+    result["gate"] = "sector_fair_multiple_and_margin_of_safety_required"
+    return result
+
+
 def build_radar(dataset: dict, limit: int = 40, allowed_ruts: set[str] | None = None) -> dict:
     cmf = dataset.get("cmf") or {}
     sources = cmf.get("sources") or []

@@ -14,6 +14,7 @@ ACCOUNT_ALIASES = {
         "Ganancia (pérdida) de actividades operacionales",
     ),
     "net_income": ("Ganancia (pérdida)",),
+    "basic_eps": ("Ganancia (pérdida) por acción básica",),
     "total_assets": ("Total de activos",),
     "total_liabilities": ("Total de pasivos",),
     "current_assets": ("Activos corrientes totales",),
@@ -60,6 +61,7 @@ def analyze_company(current: Iterable[CMFRow], previous: Iterable[CMFRow] = ()) 
         "revenue": str(values["revenue"]) if values["revenue"] is not None else None,
         "operating_profit": str(values["operating_profit"]) if values["operating_profit"] is not None else None,
         "net_income": str(values["net_income"]) if values["net_income"] is not None else None,
+        "basic_eps": str(values["basic_eps"]) if values["basic_eps"] is not None else None,
         "revenue_growth_yoy": _ratio(
             None if values["revenue"] is None or old["revenue"] is None else values["revenue"] - old["revenue"],
             old["revenue"],

@@ -35,6 +35,9 @@ un benchmark simple?
 - Sector y tamaño, si provienen de una fuente trazable.
 - Flujo operativo, capex, flujo de caja libre, caja, inventarios, activos,
   pasivos, patrimonio y cobertura corriente CMF.
+- EPS básico anual para mostrar un P/E observado sólo cuando precio y moneda son
+  compatibles. Precio justo y margen de seguridad permanecen nulos hasta
+  calibrar el múltiplo sectorial.
 
 ## Features prohibidas en la primera cohorte
 

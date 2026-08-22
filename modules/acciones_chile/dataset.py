@@ -13,7 +13,7 @@ from .fundamentals import analyze_company
 from .youtube import FEED_URL, fetch_feed, parse_feed
 
 
-SCHEMA_VERSION = "acciones-chile-dataset-0.4.0"
+SCHEMA_VERSION = "acciones-chile-dataset-0.5.0"
 
 
 def select_comparison_periods(periods: list[str]) -> tuple[str, str | None]:
@@ -123,6 +123,8 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
             "retrieved_at": meta.get("retrieved_at"),
             "http_status": meta.get("http_status"),
             "content_length": meta.get("content_length"),
+            "content_length_status": ("provided_by_server" if meta.get("content_length") is not None
+                                      else "absent_from_server_response"),
             "bytes_received": meta.get("bytes_received", len(payloads[period])),
             "sha256": hashlib.sha256(payloads[period]).hexdigest(),
             "rows": len(parsed_by_period[period]),
@@ -131,7 +133,7 @@ def build_multi_period_dataset(payloads: dict[str, bytes], videos_payload: bytes
             "raw_artifact": meta.get("raw_artifact"),
         })
     metric_coverage = {}
-    for metric in ("revenue", "operating_profit", "net_income", "operating_cash_flow",
+    for metric in ("revenue", "operating_profit", "net_income", "basic_eps", "operating_cash_flow",
                    "free_cash_flow", "total_assets", "total_liabilities"):
         present = sum(item["analysis"].get(metric) is not None for item in issuers)
         metric_coverage[metric] = round(present / len(issuers), 6) if issuers else 0.0
@@ -167,6 +169,19 @@ def build_audit_snapshot(data: dict) -> dict:
             "orders": "prohibited", "broker_credentials": "not_stored",
             "crypto_dependency": "prohibited", "auditor_authority": "advisory_only",
         },
+        "enforcement_evidence": {
+            "partial_periods": "excluded in build_feature_records and cross-sectional radar",
+            "universe_history": "price label readiness requires survivorship_free_backtest_allowed",
+            "youtube": "youtube_feature_allowed=false; rubric emits research reading only",
+            "portfolio_privacy": "stored by authenticated uid; excluded from audit snapshots and model features",
+            "module_isolation": "acciones_chile imports no crypto or order-executor modules",
+            "negative_tests": [
+                "test_partial_cmf_period_is_enforced_out_of_causal_features",
+                "test_versioned_universe_is_partial_and_blocks_survivorship_backtest",
+                "test_acciones_chile_has_no_crypto_or_executor_imports",
+                "test_authenticated_user_can_save_own_read_only_portfolio",
+            ],
+        },
         "cmf": {
             "periods": cmf.get("periods", []),
             "issuer_count": len(cmf.get("issuers", [])),
@@ -201,7 +216,7 @@ def build_audit_snapshot(data: dict) -> dict:
             "gate": "authorized prices, valuation and verified listed universe required",
         },
         "claims": [
-            "CMF values are primary evidence with source hashes",
+            "CMF values are primary evidence with artifact hashes; transport Content-Length may be absent",
             "YouTube content is secondary thesis material, never ground truth",
             "mixed accounting horizons are labeled and forbidden for feature use",
         ],

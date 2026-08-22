@@ -108,6 +108,10 @@ def build_feature_records(dataset: dict, telegram: dict | None) -> list[dict]:
 
 def feature_join_report(dataset: dict, telegram: dict | None) -> dict:
     records = build_feature_records(dataset, telegram)
+    cmf = dataset.get("cmf") or {}
+    fundamentals = cmf.get("observations") or cmf.get("issuers", [])
+    partial_periods = sorted(str(source.get("period")) for source in cmf.get("sources", [])
+                             if source.get("partial"))
     statement_companies = {
         normalize_company(event.get("company", ""))
         for event in (telegram or {}).get("events", [])
@@ -117,10 +121,21 @@ def feature_join_report(dataset: dict, telegram: dict | None) -> dict:
     unmatched = sorted(statement_companies - matched_companies)
     return {
         "candidate_records": len(records),
+        "cmf_catalog_issuers": len(cmf.get("issuers", [])),
+        "cmf_historical_observations": len(fundamentals),
         "telegram_companies": len(statement_companies),
         "matched_companies": len(matched_companies),
         "unmatched_companies": unmatched,
         "match_complete": not unmatched,
+        "reduction_manifest": {
+            "cmf_catalog_role": "all issuers with CMF IFRS observations; not a trading universe",
+            "telegram_company_role": "companies announced by the bot; not a subset selected from CMF",
+            "join_keys": ["normalized exact company name", "period", "consolidated_or_individual_scope"],
+            "fuzzy_matching": False,
+            "unmatched_policy": "exclude; never fabricate or approximate a match",
+            "partial_periods_excluded": partial_periods,
+            "candidate_role": "causal research record without price label",
+        },
     }
 
 

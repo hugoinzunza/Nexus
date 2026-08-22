@@ -67,3 +67,22 @@ se incorporaron así:
 Los bloqueos de precios/valoración, universo bursátil completo y CMF Bancos se
 mantienen. La nueva interfaz puede publicarse como terminal de investigación,
 pero no como recomendador operable.
+
+## Tercera revisión Opus — snapshot 0.5.0
+
+Opus confirmó nuevamente los gates cerrados (`can_train=false`,
+`can_generate_signal=false`, recomendación nula) y señaló que precios ajustados,
+benchmark e historia del IPSA siguen siendo condiciones críticas. Antes de
+publicar se añadió evidencia verificable al snapshot:
+
+- manifiesto de reducción que explica los conteos CMF → Telegram → join causal;
+- join exacto por empresa, período y alcance, sin fuzzy matching ni matches
+  fabricados;
+- lista de períodos parciales excluidos y nombres de pruebas negativas;
+- frontera de privacidad de cartera, aislamiento cripto y ausencia declarada de
+  `Content-Length` cuando el servidor CMF no entrega ese header;
+- EPS nulo sin imputación y P/E observado sólo con moneda compatible; precio
+  justo, margen de seguridad y compra/venta siguen nulos.
+
+El auditor no aprobó entrenamiento ni recomendación operable. Estas capas se
+mantienen bloqueadas deliberadamente.

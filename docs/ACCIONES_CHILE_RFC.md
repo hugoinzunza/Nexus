@@ -16,12 +16,14 @@ una orden.
 ### Renta 4 Chile
 
 - No se encontró una API pública chilena documentada.
-- Fase inicial: exportación personal de cartera y movimientos, normalizada al
-  contrato `{ticker, company_rut, quantity, average_cost, currency}`.
+- La cartera se normaliza al contrato `{ticker, company_rut, quantity,
+  average_cost, market_price, currency}`; NexUX recalcula inversión, valor,
+  P/L, rentabilidad y pesos sin confiar en totales del navegador.
 - La ingesta está deshabilitada por defecto y exige un token separado.
-- No se automatiza el login, no se guardan claves y no se interceptan endpoints
-  privados. Antes de crear un adaptador web se requiere autorización/confirmación
-  escrita de Renta 4 sobre acceso automatizado y uso de los datos.
+- Con autorización explícita del owner se permite capturar un snapshot desde su
+  sesión web ya iniciada. No se automatiza el login, no se guardan claves y no
+  se interceptan endpoints privados. La sincronización de fondo sigue bloqueada
+  mientras Renta 4 no publique una API o autorice formalmente un adaptador.
 - El módulo jamás incluye endpoints de compra, venta, modificación o cancelación.
 
 ### CMF
@@ -165,6 +167,8 @@ ni datos personales en `data/acciones_chile_audit_snapshot.json`.
 
 La interfaz del Command Center ya permite guardar manualmente una cartera por
 usuario, abrir fichas históricas y consultar un radar fundamental comparable.
+También acepta precios provenientes de un snapshot web autenticado de Renta 4
+y muestra valorización, P/L y asignación sin exponer credenciales del broker.
 Las etiquetas `FUNDAMENTOS FUERTES`, `EN OBSERVACIÓN` y `REVISAR TESIS` son
 lecturas de investigación. `comprar` o `vender` permanece nulo hasta incorporar
 precio autorizado, valoración, margen de seguridad y reglas personales.

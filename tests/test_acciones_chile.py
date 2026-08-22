@@ -29,7 +29,7 @@ from modules.acciones_chile.market_data import parse_market_csv
 from modules.acciones_chile.universe import (
     UniverseIncompleteError, load_universe, resolve_ticker, snapshot_as_of, universe_status,
 )
-from modules.acciones_chile.strategy import build_radar, evaluate_observation
+from modules.acciones_chile.strategy import build_radar, evaluate_observation, evaluate_valuation
 from modules.acciones_chile import module as acciones_module
 
 
@@ -68,6 +68,16 @@ def test_fundamentals_include_balance_and_free_cash_flow():
     assert result["current_coverage"] == 1.5
 
 
+def test_valuation_only_computes_compatible_observed_multiple():
+    clp = [{"period": "202512", "currency": "CLP", "analysis": {"basic_eps": "20"}}]
+    result = evaluate_valuation(clp, "300")
+    assert result["pe"] == 15
+    assert result["fair_value"] is None
+    assert result["buy_sell_recommendation"] is None
+    usd = [{"period": "202512", "currency": "USD", "analysis": {"basic_eps": "1.2"}}]
+    assert evaluate_valuation(usd, "6000")["status"] == "fx_and_eps_unit_verification_required"
+
+
 def test_strategy_rubric_is_explainable_and_never_emits_trade_order():
     observation = {"period": "202603", "analysis": {
         "revenue_growth_yoy": 0.12, "operating_margin": 0.15, "net_margin": 0.1,
@@ -102,7 +112,9 @@ def test_portfolio_is_normalized_and_read_only():
     }]})
     assert result["holdings"][0] == {
         "ticker": "ENELCHILE", "company_rut": "76536353", "quantity": "10",
-        "average_cost": "52.5", "currency": "CLP",
+        "average_cost": "52.5", "currency": "CLP", "initial_value": "525.0",
+        "market_price": None, "market_value": None, "unrealized_pnl": None,
+        "return_pct": None,
     }
     assert result["read_only"] is True
 
@@ -112,6 +124,19 @@ def test_portfolio_rejects_negative_positions():
         normalize_portfolio({"holdings": [{
             "ticker": "TEST", "quantity": Decimal("-1"), "average_cost": "1",
         }]})
+
+
+def test_portfolio_computes_market_snapshot_server_side():
+    result = normalize_portfolio({"available_cash": "2331", "holdings": [{
+        "ticker": "COPEC", "quantity": "1525", "average_cost": "6047.82",
+        "market_price": "6600", "market_value": "1",
+    }]})
+    holding = result["holdings"][0]
+    assert holding["initial_value"] == "9222925.50"
+    assert holding["market_value"] == "10065000"
+    assert holding["unrealized_pnl"] == "842074.50"
+    assert holding["return_pct"] == pytest.approx(0.09130232)
+    assert result["available_cash"] == "2331"
 
 
 def test_authenticated_user_can_save_own_read_only_portfolio(monkeypatch, tmp_path):
@@ -128,6 +153,26 @@ def test_authenticated_user_can_save_own_read_only_portfolio(monkeypatch, tmp_pa
     assert saved["holdings"][0]["ticker"] == "ENELCHILE"
     assert instance._read_portfolio(8) is None
     assert instance.api_post("save-portfolio", {"holdings": []}, {}, user=None)[0] == 401
+
+
+def test_portfolio_monitor_summarizes_only_priced_positions(monkeypatch, tmp_path):
+    monkeypatch.setattr(acciones_module, "PORTFOLIO_PATH", str(tmp_path / "portfolio.json"))
+    context = SimpleNamespace(module_config={}, module_dir=str(tmp_path), log=lambda message: None)
+    instance = acciones_module.AccionesChileModule(context)
+    monkeypatch.setattr(instance, "_read_dataset", lambda: {})
+    payload = {"available_cash": "2331", "holdings": [
+        {"ticker": "COPEC", "quantity": "2", "average_cost": "100", "market_price": "120"},
+        {"ticker": "MINERA", "quantity": "3", "average_cost": "50"},
+    ]}
+    assert instance.api_post("save-portfolio", payload, {}, user={"uid": 7})[0] == 200
+    status, _, raw = instance.api("portfolio-monitor", {}, user={"uid": 7})
+    result = json.loads(raw)
+    assert status == 200
+    assert result["summary"]["priced_positions"] == 1
+    assert result["summary"]["initial_value"] == 200
+    assert result["summary"]["market_value"] == 240
+    assert result["summary"]["unrealized_pnl"] == 40
+    assert result["holdings"][0]["allocation_pct"] == 1
 
 
 def test_token_authenticated_telegram_export_ingest(monkeypatch, tmp_path):
@@ -251,6 +296,9 @@ def test_partial_cmf_period_is_enforced_out_of_causal_features():
     ]}
     records = build_feature_records(data, telegram)
     assert [record["period"] for record in records] == ["202603"]
+    report = feature_join_report(data, telegram)
+    assert report["reduction_manifest"]["partial_periods_excluded"] == ["202606"]
+    assert report["reduction_manifest"]["fuzzy_matching"] is False
 
 
 def test_telegram_parser_keeps_causal_message_time_and_ignores_chat():
