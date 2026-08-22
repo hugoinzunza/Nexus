@@ -13,6 +13,26 @@ const INDICATOR_DEFAULTS = Object.freeze({
   adx: false,
 });
 
+// Series y cálculos canónicos: UNA sola definición, compartida con NexUX
+// Trading. Antes esto estaba duplicado acá y en `app.js`, y dos copias del
+// mismo algoritmo pueden divergir sin que nadie lo note (gate 1 del renderer
+// compartido). Se re-exportan para no romper a quien importe del proveedor.
+export {
+  INTERVALS,
+  intervalSpec,
+  aggregateCandles,
+  emaValues,
+  rsiValues,
+  adxValues,
+} from "../../../static/nexux-chart-series.js";
+import {
+  intervalSpec,
+  aggregateCandles,
+  emaValues,
+  rsiValues,
+  adxValues,
+} from "../../../static/nexux-chart-series.js";
+
 const SYMBOLS = Object.freeze({
   BTCUSDT: { binance: "BTCUSDT", local: "BTC_USDT", label: "BTC / USDT Perpetuo" },
   ETHUSDT: { binance: "ETHUSDT", local: "ETH_USDT", label: "ETH / USDT Perpetuo" },
@@ -21,33 +41,12 @@ const SYMBOLS = Object.freeze({
   ADAUSDT: { binance: "ADAUSDT", local: "ADA_USDT", label: "ADA / USDT Perpetuo" },
 });
 
-const INTERVALS = Object.freeze({
-  "1m": { source: "1m", durationMs: 60_000, aggregate: 1 },
-  "3m": { source: "1m", durationMs: 180_000, aggregate: 3 },
-  "5m": { source: "5m", durationMs: 300_000, aggregate: 1 },
-  "15m": { source: "15m", durationMs: 900_000, aggregate: 1 },
-  "30m": { source: "15m", durationMs: 1_800_000, aggregate: 2 },
-  "45m": { source: "15m", durationMs: 2_700_000, aggregate: 3 },
-  "1h": { source: "1h", durationMs: 3_600_000, aggregate: 1 },
-  "2h": { source: "1h", durationMs: 7_200_000, aggregate: 2 },
-  "3h": { source: "1h", durationMs: 10_800_000, aggregate: 3 },
-  "4h": { source: "4h", durationMs: 14_400_000, aggregate: 1 },
-  "1D": { source: "1D", durationMs: 86_400_000, aggregate: 1 },
-  "1W": { source: "1D", durationMs: 604_800_000, aggregate: 7 },
-});
-
 export class NexuxChartError extends Error {
   constructor(code, message) {
     super(message);
     this.name = "NexuxChartError";
     this.code = code;
   }
-}
-
-export function intervalSpec(interval) {
-  const spec = INTERVALS[interval];
-  if (!spec) throw new NexuxChartError("nexux-chart.invalid-interval", "Temporalidad no disponible.");
-  return spec;
 }
 
 function finite(value, name) {
@@ -70,119 +69,6 @@ export function normalizeBinanceKline(row) {
     c: finite(row[4], "close"),
     v: finite(row[5], "volume"),
   };
-}
-
-function bucketStart(timestamp, durationMs) {
-  return Math.floor(timestamp / durationMs) * durationMs;
-}
-
-export function aggregateCandles(candles, interval) {
-  const spec = intervalSpec(interval);
-  if (spec.aggregate === 1) return candles.map((candle) => ({ ...candle }));
-  const buckets = new Map();
-  for (const candle of candles) {
-    const time = bucketStart(candle.t, spec.durationMs);
-    const existing = buckets.get(time);
-    if (!existing) {
-      buckets.set(time, { ...candle, t: time });
-      continue;
-    }
-    existing.h = Math.max(existing.h, candle.h);
-    existing.l = Math.min(existing.l, candle.l);
-    existing.c = candle.c;
-    existing.v += candle.v;
-  }
-  return [...buckets.values()].sort((left, right) => left.t - right.t);
-}
-
-export function emaValues(values, period) {
-  if (!Array.isArray(values) || !values.length || period < 1) return [];
-  const alpha = 2 / (period + 1);
-  const output = [Number(values[0])];
-  for (let index = 1; index < values.length; index += 1) {
-    output.push(Number(values[index]) * alpha + output[index - 1] * (1 - alpha));
-  }
-  return output;
-}
-
-export function rsiValues(values, period = 14) {
-  const output = new Array(values.length).fill(null);
-  if (values.length <= period) return output;
-  let gains = 0;
-  let losses = 0;
-  for (let index = 1; index <= period; index += 1) {
-    const delta = Number(values[index]) - Number(values[index - 1]);
-    if (delta >= 0) gains += delta;
-    else losses -= delta;
-  }
-  let averageGain = gains / period;
-  let averageLoss = losses / period;
-  const value = () => 100 - (100 / (1 + (averageLoss === 0 ? 1e9 : averageGain / averageLoss)));
-  output[period] = value();
-  for (let index = period + 1; index < values.length; index += 1) {
-    const delta = Number(values[index]) - Number(values[index - 1]);
-    averageGain = (averageGain * (period - 1) + Math.max(delta, 0)) / period;
-    averageLoss = (averageLoss * (period - 1) + Math.max(-delta, 0)) / period;
-    output[index] = value();
-  }
-  return output;
-}
-
-export function adxValues(candles, period = 14) {
-  const output = new Array(candles.length).fill(null);
-  if (candles.length < period * 2 + 1) return output;
-  const trueRange = [0];
-  const positiveDm = [0];
-  const negativeDm = [0];
-  for (let index = 1; index < candles.length; index += 1) {
-    const current = candles[index];
-    const previous = candles[index - 1];
-    const up = current.h - previous.h;
-    const down = previous.l - current.l;
-    positiveDm.push(up > down && up > 0 ? up : 0);
-    negativeDm.push(down > up && down > 0 ? down : 0);
-    trueRange.push(Math.max(
-      current.h - current.l,
-      Math.abs(current.h - previous.c),
-      Math.abs(current.l - previous.c),
-    ));
-  }
-  let atr = 0;
-  let smoothedPositive = 0;
-  let smoothedNegative = 0;
-  for (let index = 1; index <= period; index += 1) {
-    atr += trueRange[index];
-    smoothedPositive += positiveDm[index];
-    smoothedNegative += negativeDm[index];
-  }
-  const dx = new Array(candles.length).fill(null);
-  for (let index = period + 1; index < candles.length; index += 1) {
-    atr = atr - atr / period + trueRange[index];
-    smoothedPositive = smoothedPositive - smoothedPositive / period + positiveDm[index];
-    smoothedNegative = smoothedNegative - smoothedNegative / period + negativeDm[index];
-    const positiveDi = atr ? 100 * smoothedPositive / atr : 0;
-    const negativeDi = atr ? 100 * smoothedNegative / atr : 0;
-    const sum = positiveDi + negativeDi;
-    dx[index] = sum ? 100 * Math.abs(positiveDi - negativeDi) / sum : 0;
-  }
-  let currentAdx = null;
-  let accumulator = 0;
-  let count = 0;
-  for (let index = period + 1; index < candles.length; index += 1) {
-    if (dx[index] == null) continue;
-    if (currentAdx == null) {
-      accumulator += dx[index];
-      count += 1;
-      if (count === period) {
-        currentAdx = accumulator / period;
-        output[index] = currentAdx;
-      }
-    } else {
-      currentAdx = (currentAdx * (period - 1) + dx[index]) / period;
-      output[index] = currentAdx;
-    }
-  }
-  return output;
 }
 
 function loadIndicatorState() {

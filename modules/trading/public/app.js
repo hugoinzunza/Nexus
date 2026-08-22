@@ -942,56 +942,21 @@
     try { return Object.assign({}, IND_DEFAULTS, JSON.parse(localStorage.getItem(IND_KEY) || "{}")); }
     catch (e) { return Object.assign({}, IND_DEFAULTS); }
   })();
-  function emaArr(values, period) {
-    const k = 2 / (period + 1), out = [];
-    for (let i = 0; i < values.length; i++) out.push(i === 0 ? values[0] : values[i] * k + out[i - 1] * (1 - k));
-    return out;
+  // Series y cálculos canónicos: UNA sola definición, en
+  // /static/nexux-chart-series.js, compartida con Command Center. Antes cada
+  // uno tenía su copia de EMA/RSI/ADX; dos implementaciones del mismo cálculo
+  // pueden divergir sin que nadie lo note (gate 1 del renderer compartido).
+  //
+  // Se resuelve en cada uso, no al cargar: el módulo es diferido. Y si falta,
+  // esto revienta a propósito — un respaldo local recrearía la divergencia.
+  function serie() {
+    const s = globalThis.NexuxChartSeries;
+    if (!s) throw new Error("nexux-chart-series no está cargado");
+    return s;
   }
+
   function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, div: indState.div, htf: indState.htf, curso: indState.curso }; }
   function saveIndState() { try { localStorage.setItem(IND_KEY, JSON.stringify(indState)); } catch (e) {} }
-
-  function rsiCalc(closes, p) {
-    const n = closes.length, out = new Array(n).fill(null);
-    if (n <= p) return out;
-    let g = 0, l = 0;
-    for (let i = 1; i <= p; i++) { const d = closes[i] - closes[i - 1]; if (d >= 0) g += d; else l -= d; }
-    let ag = g / p, al = l / p;
-    out[p] = 100 - 100 / (1 + (al === 0 ? 1e9 : ag / al));
-    for (let i = p + 1; i < n; i++) {
-      const d = closes[i] - closes[i - 1];
-      ag = (ag * (p - 1) + (d > 0 ? d : 0)) / p;
-      al = (al * (p - 1) + (d < 0 ? -d : 0)) / p;
-      out[i] = 100 - 100 / (1 + (al === 0 ? 1e9 : ag / al));
-    }
-    return out;
-  }
-
-  function adxCalc(h, l, c, p) {
-    const n = h.length, out = new Array(n).fill(null);
-    if (n < 2 * p + 1) return out;
-    const tr = [0], pdm = [0], ndm = [0];
-    for (let i = 1; i < n; i++) {
-      const up = h[i] - h[i - 1], dn = l[i - 1] - l[i];
-      pdm.push(up > dn && up > 0 ? up : 0);
-      ndm.push(dn > up && dn > 0 ? dn : 0);
-      tr.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])));
-    }
-    let atr = 0, sp = 0, sn = 0;
-    for (let i = 1; i <= p; i++) { atr += tr[i]; sp += pdm[i]; sn += ndm[i]; }
-    const dx = new Array(n).fill(null);
-    for (let i = p + 1; i < n; i++) {
-      atr = atr - atr / p + tr[i]; sp = sp - sp / p + pdm[i]; sn = sn - sn / p + ndm[i];
-      const pdi = atr ? 100 * sp / atr : 0, ndi = atr ? 100 * sn / atr : 0, sum = pdi + ndi;
-      dx[i] = sum ? 100 * Math.abs(pdi - ndi) / sum : 0;
-    }
-    let adxv = null, cnt = 0, acc = 0;
-    for (let i = p + 1; i < n; i++) {
-      if (dx[i] == null) continue;
-      if (adxv == null) { acc += dx[i]; cnt++; if (cnt === p) { adxv = acc / p; out[i] = adxv; } }
-      else { adxv = (adxv * (p - 1) + dx[i]) / p; out[i] = adxv; }
-    }
-    return out;
-  }
 
   // (Re)crea las series de indicadores de una tarjeta según indState.
   function buildIndicators(card) {
@@ -1045,7 +1010,7 @@
 
   function setIndicatorData(card) {
     if (!card.ind) return;
-    const { cs, closes, highs, lows } = _ohlc(card);
+    const { cs, closes } = _ohlc(card);
     if (!cs.length) return;
     const ts = (c) => Math.floor(c.t / 1000);
     if (card.ind.vol) {
@@ -1053,26 +1018,26 @@
         color: (i === cs.length - 1 && tickCompatible ? card.lastPrice ?? c.c : c.c) >= c.o ? "rgba(22,199,132,0.5)" : "rgba(234,57,67,0.5)" })));
     }
     if (card.ind.rsi) {
-      const r = rsiCalc(closes, 14);
+      const r = serie().rsiValues(closes, 14);
       card.ind.rsi.setData(cs.map((c, i) => (r[i] == null ? null : { time: ts(c), value: r[i] })).filter(Boolean));
     }
     if (card.ind.adx) {
-      const a = adxCalc(highs, lows, closes, 14);
+      const a = serie().adxValues(cs, 14);
       card.ind.adx.setData(cs.map((c, i) => (a[i] == null ? null : { time: ts(c), value: a[i] })).filter(Boolean));
     }
   }
 
   function updateIndicatorsLast(card) {
     if (!card.ind || card.lastPrice == null) return;
-    const { cs, closes, highs, lows } = _ohlc(card);
+    const { cs, closes } = _ohlc(card);
     if (!cs.length) return;
     const t = Math.floor(cs[cs.length - 1].t / 1000);
     if (card.ind.vol) {
       const c = cs[cs.length - 1];
       card.ind.vol.update({ time: t, value: c.v, color: card.lastPrice >= c.o ? "rgba(22,199,132,0.5)" : "rgba(234,57,67,0.5)" });
     }
-    if (card.ind.rsi) { const r = rsiCalc(closes, 14); const v = r[r.length - 1]; if (v != null) card.ind.rsi.update({ time: t, value: v }); }
-    if (card.ind.adx) { const a = adxCalc(highs, lows, closes, 14); const v = a[a.length - 1]; if (v != null) card.ind.adx.update({ time: t, value: v }); }
+    if (card.ind.rsi) { const r = serie().rsiValues(closes, 14); const v = r[r.length - 1]; if (v != null) card.ind.rsi.update({ time: t, value: v }); }
+    if (card.ind.adx) { const a = serie().adxValues(cs, 14); const v = a[a.length - 1]; if (v != null) card.ind.adx.update({ time: t, value: v }); }
   }
 
   // Botones de toggle por tarjeta; el estado es global y se aplica a todos.
@@ -1415,7 +1380,7 @@
     if (!cs.length) { card.ribbon = []; return; }
     const closes = cs.map((c) => c.c);
     if (card.lastPrice != null) closes[closes.length - 1] = card.lastPrice;
-    const f = emaArr(closes, 21), s = emaArr(closes, 55);
+    const f = serie().emaValues(closes, 21), s = serie().emaValues(closes, 55);
     card.ribbon = cs.map((c, i) => ({ t: Math.floor(c.t / 1000), f: f[i], s: s[i] }));
   }
 
@@ -1428,7 +1393,7 @@
     const cs = card.candles || [];
     if (cs.length < 40) return;
     const closes = cs.map((c) => c.c), highs = cs.map((c) => c.h), lows = cs.map((c) => c.l);
-    const rsi = rsiCalc(closes, 14);
+    const rsi = serie().rsiValues(closes, 14);
     const L = 3;                       // barras a cada lado para confirmar un pivote
     const phs = [], pls = [];
     for (let i = L; i < cs.length - L; i++) {
