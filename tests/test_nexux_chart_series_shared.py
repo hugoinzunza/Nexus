@@ -48,19 +48,20 @@ def test_existe_una_sola_definicion_de_los_calculos():
     for nombre in ("emaValues", "rsiValues", "adxValues"):
         assert f"function {nombre}(" not in app, nombre
         assert f"serie().{nombre}(" in app, nombre
+    assert 'import * as NexuxChartSeries from "../../../static/nexux-chart-series.js";' in app
 
 
 def test_no_hay_respaldo_silencioso_si_falta_el_modulo():
     """Un fallback local recrearía justo la divergencia que esto elimina: si
     el módulo no está, la app tiene que fallar ruidosamente."""
     app = APP.read_text(encoding="utf-8")
-    assert 'if (!s) throw new Error("nexux-chart-series no está cargado")' in app
+    assert "return NexuxChartSeries;" in app
+    assert "globalThis.NexuxChartSeries" not in app
 
 
 def test_la_pagina_de_trading_carga_el_modulo_canonico():
     page = INDEX_TRADING.read_text(encoding="utf-8")
-    assert '/static/nexux-chart-series.js' in page
-    assert 'type="module"' in page
+    assert '<script type="module" src="app.js?v=20260822-series-v1"></script>' in page
 
 
 def test_los_dos_consumidores_producen_valores_identicos():
@@ -138,3 +139,17 @@ def test_las_capas_smc_legadas_siguen_apagadas_por_defecto():
             and "tpsl: false" in app and "curso: false" in app)
     for capa in ("structure", "fvg", "ob", "cdc", "ema", "rsi", "adx"):
         assert f"{capa}: false" in proveedor, capa
+
+
+def test_setindicatordata_no_lee_variables_fuera_de_alcance():
+    """`tickCompatible` es local de `_ohlc`. Leerlo desde `setIndicatorData`
+    tiraba ReferenceError y abortaba la función ANTES de sembrar RSI y ADX:
+    los panes parecían andar porque `updateIndicatorsLast` dibujaba el último
+    punto en cada tick, pero la serie histórica nunca se seteaba."""
+    app = APP.read_text(encoding="utf-8")
+    assert "return { cs, closes, highs, lows, tickCompatible };" in app
+    cuerpo = app[app.index("function setIndicatorData("):
+                 app.index("function updateIndicatorsLast(")]
+    assert "tickCompatible" in cuerpo
+    # se recibe por destructuring, no se lee del alcance externo
+    assert "const { cs, closes, tickCompatible } = _ohlc(card);" in cuerpo

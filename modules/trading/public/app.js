@@ -1,3 +1,5 @@
+import * as NexuxChartSeries from "../../../static/nexux-chart-series.js";
+
 (function () {
 
 
@@ -947,12 +949,10 @@
   // uno tenía su copia de EMA/RSI/ADX; dos implementaciones del mismo cálculo
   // pueden divergir sin que nadie lo note (gate 1 del renderer compartido).
   //
-  // Se resuelve en cada uso, no al cargar: el módulo es diferido. Y si falta,
-  // esto revienta a propósito — un respaldo local recrearía la divergencia.
+  // La importacion estatica garantiza que esta dependencia se evalua antes que
+  // la app. Si falta, el loader detiene la app: no existe respaldo local.
   function serie() {
-    const s = globalThis.NexuxChartSeries;
-    if (!s) throw new Error("nexux-chart-series no está cargado");
-    return s;
+    return NexuxChartSeries;
   }
 
   function luxShow() { return { ribbon: indState.ribbon, levels: indState.levels, tpsl: indState.tpsl, div: indState.div, htf: indState.htf, curso: indState.curso }; }
@@ -1005,12 +1005,16 @@
       highs[i] = Math.max(highs[i], card.lastPrice);
       lows[i] = Math.min(lows[i], card.lastPrice);
     }
-    return { cs, closes, highs, lows };
+    return { cs, closes, highs, lows, tickCompatible };
   }
 
   function setIndicatorData(card) {
     if (!card.ind) return;
-    const { cs, closes } = _ohlc(card);
+    // `tickCompatible` es local de `_ohlc`: leerlo desde acá tiraba
+    // ReferenceError y abortaba la función ANTES de sembrar RSI y ADX. Los
+    // panes parecían andar porque `updateIndicatorsLast` sí dibujaba el
+    // último punto en cada tick, pero la serie histórica nunca se seteaba.
+    const { cs, closes, tickCompatible } = _ohlc(card);
     if (!cs.length) return;
     const ts = (c) => Math.floor(c.t / 1000);
     if (card.ind.vol) {
