@@ -1088,6 +1088,77 @@ visual vigente del Command Center.
 
 ---
 
+## VAL-0030 — Reserva visual de Aurora en ARZOPA 16 QHD
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-08-10 |
+| Hardware | ARZOPA 16 pulgadas QHD, viewport efectivo 1920 × 1200 @ 60 Hz |
+| Pregunta | ¿Puede reservarse una superficie futura para Aurora sin degradar la composición actual? |
+| Estado probado | Aurora `responding`, vista previa local sin integración real |
+
+### Evidencia
+
+- Aurora aparece como banda transitoria entre Atención inmediata y Música.
+- La superficie desaparece completamente cuando no existe una vista previa
+  explícita; no deja una tarjeta vacía ni cambia la cuadrícula normal.
+- Se conserva la estructura 67/33, el protagonismo del gráfico y la lectura de
+  Posiciones abiertas.
+- Atención inmediata mantiene precedencia ante estados críticos.
+- No se crearon endpoints, providers, factories ni conexiones con Aurora.
+- Contrato de reserva:
+  `docs/AURORA_COMMAND_CENTER_SURFACE_RESERVATION.md`.
+- Captura física:
+  `docs/evidence/command-center-aurora-reservation-arzopa-16.png`.
+
+### Resolución
+
+**APROBADO COMO RESERVA VISUAL, NO COMO INTEGRACIÓN.** Hugo aprobó la composición
+para retomarla cuando Aurora llegue al Command Center. Hasta un Gate futuro y
+explícito, Aurora debe permanecer ausente y la cuadrícula de tres superficies del
+rail derecho continúa siendo la experiencia normativa.
+
+---
+
+## VAL-0031 — Streaming de fútbol en ARZOPA 16 QHD
+
+### Contexto
+
+| Campo | Resultado |
+|---|---|
+| Fecha | 2026-08-11 |
+| Hardware | ARZOPA 16 pulgadas QHD, viewport efectivo 1920 × 1200 @ 60 Hz |
+| Pregunta | ¿Puede NexUX abrir únicamente los servicios deportivos autorizados sin agregar módulos ni barras de navegador? |
+| Proveedores | Disney+, Apple TV y HBO Max |
+
+### Evidencia técnica
+
+- La vista `Streaming` reutiliza la superficie principal y conserva el layout
+  67/33; no agrega paneles al Command Center.
+- Disney+ y HBO Max se abren mediante una lista cerrada de dominios oficiales en
+  Chrome modo app, usando el perfil local `Default` y sin barra de navegación.
+- HBO Max alcanzó correctamente el selector de perfil de la sesión existente.
+- Disney+ cargó correctamente su sitio de Chile; la autenticación de la cuenta
+  continúa pendiente de intervención del usuario.
+- Apple TV utiliza su sitio oficial en el mismo modo app de Chrome para conservar
+  dimensiones y navegación consistentes con Disney+ y HBO Max.
+- Las tres aperturas son externas a la superficie operacional: no comparten
+  credenciales con NexUX ni introducen endpoints, providers o factories.
+- Captura física:
+  `docs/evidence/command-center-streaming-arzopa-16-technical.png`.
+- La suite específica del Command Center conserva 336 pruebas aprobadas.
+
+### Resolución
+
+**APROBADO TÉCNICAMENTE, VALIDACIÓN DE REPRODUCCIÓN PENDIENTE.** La integración
+visual y las rutas de apertura quedan aceptadas. La certificación final requiere
+reproducir contenido autenticado una vez en cada proveedor y comprobar retorno al
+Command Center.
+
+---
+
 ## Próximas validaciones
 
 ### VAL-0002 — Viewport secundario

@@ -116,6 +116,25 @@ def test_puente_multimedia_es_local_dirigido_y_sin_coordenadas():
     assert "api.tidal" not in source.lower()
 
 
+def test_tidal_usa_el_control_global_y_revalida_playback():
+    source = (CORE / "DesktopMediaAccessibility.swift").read_text(
+        encoding="utf-8"
+    )
+    assert "tidalGlobalPlaybackButton" in source
+    assert 'muchos botones "Reproducir"' in source
+    assert "knownPlayback: observed" in source
+
+
+def test_puente_multimedia_publica_tiempos_exactos_cuando_son_observables():
+    source = (CORE / "DesktopMediaAccessibility.swift").read_text(
+        encoding="utf-8"
+    )
+    assert 'case positionSeconds = "position_seconds"' in source
+    assert 'case durationSeconds = "duration_seconds"' in source
+    assert "playbackTiming(player)" in source
+    assert "parseTimecode" in source
+
+
 def test_fase_a5_documenta_spotify_diferido_y_agente_macos():
     rfc = (ROOT / "docs" / "RFC_COMMAND_CENTER.md").read_text(
         encoding="utf-8"

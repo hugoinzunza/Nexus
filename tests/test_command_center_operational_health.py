@@ -87,3 +87,37 @@ def test_explainability_reutiliza_evidencia_visible() -> None:
     assert 'summary.title = attention.explanation' in script
     assert 'insightNode.title = insight.evidence' in script
     assert "Sistema, Binance, Macro y Bot no publican una alerta activa." in script
+
+
+def test_health_confirma_un_fallo_transitorio_antes_de_degradar() -> None:
+    script_uri = (PUBLIC / "command-center.js").resolve().as_uri()
+    node = f"""
+      import({json.dumps(script_uri)}).then(async (module) => {{
+        let attempt = 0;
+        const client = new module.OperationalHealthClient({{
+          fetcher: async () => {{
+            attempt += 1;
+            if (attempt > 1) throw new Error("transient");
+            return {{ ok: true, json: async () => ({{ status: "ok", modules: [] }}) }};
+          }}
+        }});
+        await client.refresh();
+        await client.refresh();
+        const firstFailure = client.state().status;
+        await client.refresh();
+        const secondFailure = client.state().status;
+        client.stop();
+        process.stdout.write(JSON.stringify({{ firstFailure, secondFailure }}));
+      }});
+    """
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", node],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert json.loads(result.stdout) == {
+        "firstFailure": "ready",
+        "secondFailure": "degraded",
+    }

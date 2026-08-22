@@ -180,7 +180,8 @@ def test_b6_alimenta_atencion_inmediata_sin_recuperar_su_panel() -> None:
         "</section>", 1
     )[0]
     assert "solo lectura" in panel
-    assert "<button" not in panel
+    assert panel.count("<button") == 3
+    assert 'id="calendar-today"' in panel
     assert "<a " not in panel
     assert "/m/command-center/api/bot-context" in script
     assert '"/m/bot/' not in script

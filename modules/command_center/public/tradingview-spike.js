@@ -193,8 +193,15 @@ export class TradingViewWidgetAdapter {
       XRPUSDT: "BINANCE:XRPUSDT.P",
     };
     const intervalMap = {
+      "1m": "1",
+      "3m": "3",
+      "5m": "5",
       "15m": "15",
+      "30m": "30",
+      "45m": "45",
       "1h": "60",
+      "2h": "120",
+      "3h": "180",
       "4h": "240",
       "1D": "D",
       "1W": "W",
@@ -228,6 +235,7 @@ export class TradingViewWidgetAdapter {
       style: "1",
       locale: "es",
       allow_symbol_change: true,
+      hide_top_toolbar: true,
       calendar: false,
       support_host: "https://www.tradingview.com",
     };

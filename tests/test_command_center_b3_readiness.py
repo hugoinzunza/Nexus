@@ -57,14 +57,30 @@ def _run_readiness_cases() -> dict:
             commandState, healthState, online, now
           }});
         const ready = derive(command());
+        const normalRefreshJitter = derive(command(), health(now - 35_000));
+        const delayedTrading = derive(command(), health(now - 61_000));
         const staleTrading = derive(command(), health(now - 121_000));
+        const awaitingHealth = derive(command(), {{
+          status: "loading", health: null
+        }});
         const staleSnapshot = derive(command("ready", now - 1, now + 30_000));
+        const transientReconnect = derive({{
+          ...command("degraded"), connectionDegradedAt: now - 2_000
+        }});
+        const persistentReconnect = derive({{
+          ...command("degraded"), connectionDegradedAt: now - 9_000
+        }});
         const disconnected = derive(command("disconnected"));
         const offline = derive(command(), health(), false);
         process.stdout.write(JSON.stringify({{
           ready,
+          normalRefreshJitter: normalRefreshJitter.overall,
+          delayedTrading: delayedTrading.overall,
           staleTrading: staleTrading.overall,
+          awaitingHealth: awaitingHealth.overall,
           staleSnapshot: staleSnapshot.overall,
+          transientReconnect: transientReconnect.overall,
+          persistentReconnect: persistentReconnect.overall,
           disconnected: disconnected.overall,
           offline: offline.overall
         }}));
@@ -130,8 +146,13 @@ def test_b3_nucleo_ready_no_oculta_unknown_opcionales() -> None:
 def test_b3_falla_cerrado_en_senales_esenciales() -> None:
     result = _run_readiness_cases()
 
+    assert result["normalRefreshJitter"] == "ready"
+    assert result["delayedTrading"] == "degraded"
     assert result["staleTrading"] == "failed"
+    assert result["awaitingHealth"] == "unknown"
     assert result["staleSnapshot"] == "degraded"
+    assert result["transientReconnect"] == "ready"
+    assert result["persistentReconnect"] == "degraded"
     assert result["disconnected"] == "failed"
     assert result["offline"] == "failed"
 

@@ -25,11 +25,15 @@ public struct DesktopMediaSnapshot: Codable, Equatable, Sendable {
     public let album: String?
     public let itemRef: String?
     public let progress: Double?
+    public let positionSeconds: Double?
+    public let durationSeconds: Double?
     public let code: String
 
     enum CodingKeys: String, CodingKey {
         case provider, running, playback, track, artist, album, progress, code
         case itemRef = "item_ref"
+        case positionSeconds = "position_seconds"
+        case durationSeconds = "duration_seconds"
     }
 }
 
@@ -65,6 +69,11 @@ public struct DesktopMediaAccessibilityBridge {
 
     public init() {}
 
+    private func accessibilityIsTrusted() -> Bool {
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        return AXIsProcessTrustedWithOptions(options)
+    }
+
     public func snapshot(
         provider: DesktopMediaProvider
     ) throws -> DesktopMediaSnapshot {
@@ -78,10 +87,12 @@ public struct DesktopMediaAccessibilityBridge {
                 album: nil,
                 itemRef: nil,
                 progress: nil,
+                positionSeconds: nil,
+                durationSeconds: nil,
                 code: "\(provider.rawValue).not-running"
             )
         }
-        guard AXIsProcessTrusted() else {
+        guard accessibilityIsTrusted() else {
             throw DesktopMediaBridgeError.permissionDenied
         }
         let player = try accessiblePlayerNodes(for: app, provider: provider)
@@ -95,6 +106,7 @@ public struct DesktopMediaAccessibilityBridge {
             artist: metadata.artist,
             album: metadata.album
         )
+        let timing = playbackTiming(player)
         return DesktopMediaSnapshot(
             provider: provider.rawValue,
             running: true,
@@ -104,6 +116,8 @@ public struct DesktopMediaAccessibilityBridge {
             album: metadata.album,
             itemRef: itemRef,
             progress: progressFraction(player),
+            positionSeconds: timing.position,
+            durationSeconds: timing.duration,
             code: metadata.track == nil
                 ? "\(provider.rawValue).player-empty"
                 : "\(provider.rawValue).accessible"
@@ -118,7 +132,7 @@ public struct DesktopMediaAccessibilityBridge {
         guard let app = runningApplication(provider) else {
             throw DesktopMediaBridgeError.appNotRunning
         }
-        guard AXIsProcessTrusted() else {
+        guard accessibilityIsTrusted() else {
             throw DesktopMediaBridgeError.permissionDenied
         }
         let player = try accessiblePlayerNodes(
@@ -128,7 +142,12 @@ public struct DesktopMediaAccessibilityBridge {
         )
         switch provider {
         case .tidal:
-            try executeTidal(action: action, nodes: player)
+            try executeTidal(
+                action: action,
+                app: app,
+                nodes: player,
+                knownPlayback: knownPlayback
+            )
         case .qobuz:
             try executeQobuz(
                 action: action,
@@ -140,17 +159,27 @@ public struct DesktopMediaAccessibilityBridge {
         if action == "play" || action == "pause" {
             let expected = action == "play" ? "playing" : "paused"
             var observed = try verifiedPlayback(provider: provider)
-            if observed != expected, provider == .qobuz {
+            if observed != expected {
                 let refreshed = try accessiblePlayerNodes(
                     for: app,
                     provider: provider
                 )
-                try executeQobuz(
-                    action: action,
-                    app: app,
-                    nodes: refreshed,
-                    knownPlayback: observed
-                )
+                switch provider {
+                case .qobuz:
+                    try executeQobuz(
+                        action: action,
+                        app: app,
+                        nodes: refreshed,
+                        knownPlayback: observed
+                    )
+                case .tidal:
+                    try executeTidal(
+                        action: action,
+                        app: app,
+                        nodes: refreshed,
+                        knownPlayback: observed
+                    )
+                }
                 observed = try verifiedPlayback(provider: provider)
             }
             guard observed == expected else {
@@ -197,22 +226,19 @@ public struct DesktopMediaAccessibilityBridge {
             "AXEnhancedUserInterface" as CFString,
             kCFBooleanTrue
         )
+        if provider == .qobuz,
+           collapseExpandedQobuz,
+           collapseExpandedQobuzPlayer(root: root) {
+            // El player expandido contiene botones de pistas que comparten
+            // semántica con el transporte. Volver al mini player antes de
+            // resolver controles evita ejecutar una pista de la cola.
+            Thread.sleep(forTimeInterval: 0.25)
+        }
         for _ in 0..<3 {
             Thread.sleep(forTimeInterval: 0.18)
             let refreshed = accessibilityRoot(for: app)
             if let nodes = findPlayerNodes(
                 root: refreshed,
-                provider: provider
-            ) {
-                return nodes
-            }
-        }
-        if provider == .qobuz,
-           collapseExpandedQobuz,
-           collapseExpandedQobuzPlayer(root: accessibilityRoot(for: app)) {
-            Thread.sleep(forTimeInterval: 0.25)
-            if let nodes = findPlayerNodes(
-                root: accessibilityRoot(for: app),
                 provider: provider
             ) {
                 return nodes
@@ -278,8 +304,6 @@ public struct DesktopMediaAccessibilityBridge {
                 isAnchor = normalized == "mute"
                     || role == kAXSliderRole as String
                     || role == kAXProgressIndicatorRole as String
-                    || (role == kAXButtonRole as String
-                        && ["reproducir", "pausar", "pausa"].contains(normalized))
             case .tidal:
                 isAnchor = role == kAXSliderRole as String
                     && normalized == "progress bar"
@@ -392,13 +416,13 @@ public struct DesktopMediaAccessibilityBridge {
             return (
                 links.first,
                 links.count > 1 ? links[1] : nil,
-                links.count > 2 ? links[2] : nil
+                links.count > 2 ? links.last : nil
             )
         case .tidal:
             return (
                 links.first,
                 links.count > 1 ? links[1] : nil,
-                links.count > 2 ? links[2] : nil
+                links.count > 2 ? links.last : nil
             )
         }
     }
@@ -426,8 +450,15 @@ public struct DesktopMediaAccessibilityBridge {
         initialNodes: [AccessibleNode],
         app: NSRunningApplication
     ) throws -> String {
+        if let global = qobuzGlobalPlayback(app: app) {
+            return global
+        }
+        let explicit = playback(for: .qobuz, nodes: initialNodes)
+        if explicit == "playing" || explicit == "paused" {
+            return explicit
+        }
         guard let first = progressValue(initialNodes) else {
-            return playback(for: .qobuz, nodes: initialNodes)
+            return explicit
         }
         // Qobuz actualiza el progreso aproximadamente una vez por segundo.
         Thread.sleep(forTimeInterval: 1.10)
@@ -458,30 +489,80 @@ public struct DesktopMediaAccessibilityBridge {
         return (0...1).contains(value) ? value : nil
     }
 
+    private func playbackTiming(
+        _ nodes: [AccessibleNode]
+    ) -> (position: Double?, duration: Double?) {
+        let progressFrame = nodes.first(where: {
+            $0.role == kAXSliderRole as String
+                || $0.role == kAXProgressIndicatorRole as String
+        })?.frame
+        let candidates = nodes.compactMap { node -> (Double, CGRect)? in
+            guard let frame = node.frame else { return nil }
+            let value = parseTimecode(node.label) ?? parseTimecode(node.value)
+            guard let value else { return nil }
+            if let progressFrame,
+               abs(frame.midY - progressFrame.midY) > 52 {
+                return nil
+            }
+            return (value, frame)
+        }.sorted { $0.1.midX < $1.1.midX }
+        guard candidates.count >= 2,
+              let first = candidates.first?.0,
+              let last = candidates.last?.0,
+              last >= first else {
+            return (nil, nil)
+        }
+        return (first, last)
+    }
+
+    private func parseTimecode(_ raw: String) -> Double? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.hasPrefix("-"),
+              value.allSatisfy({ $0.isNumber || $0 == ":" }) else {
+            return nil
+        }
+        let parts = value.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 2 || parts.count == 3,
+              parts.dropFirst().allSatisfy({ (0..<60).contains($0) }) else {
+            return nil
+        }
+        if parts.count == 2 {
+            return Double(parts[0] * 60 + parts[1])
+        }
+        return Double(parts[0] * 3600 + parts[1] * 60 + parts[2])
+    }
+
     private func executeTidal(
         action: String,
-        nodes: [AccessibleNode]
+        app: NSRunningApplication,
+        nodes: [AccessibleNode],
+        knownPlayback: String?
     ) throws {
+        let current: String
+        if let knownPlayback,
+           knownPlayback == "playing" || knownPlayback == "paused" {
+            current = knownPlayback
+        } else {
+            current = playback(for: .tidal, nodes: nodes)
+        }
         let target: String
         switch action {
-        case "play":
-            if nodes.contains(where: { normalize($0.label) == "pausar" }) {
-                return
-            }
-            target = "reproducir"
-        case "pause":
-            if nodes.contains(where: { normalize($0.label) == "reproducir" }) {
-                return
-            }
-            target = "pausar"
+        case "play" where current == "playing": return
+        case "pause" where current == "paused": return
+        case "play": target = "reproducir"
+        case "pause": target = "pausar"
         case "next": target = "siguiente"
         case "previous": target = "anterior"
         default: throw DesktopMediaBridgeError.actionUnavailable
         }
-        guard let button = nodes.first(where: {
+        let button = tidalGlobalPlaybackButton(
+            app: app,
+            label: target
+        ) ?? nodes.last(where: {
             $0.role == kAXButtonRole as String
                 && normalize($0.label) == target
-        }) else {
+        })
+        guard let button else {
             throw DesktopMediaBridgeError.actionUnavailable
         }
         guard AXUIElementPerformAction(
@@ -489,6 +570,26 @@ public struct DesktopMediaAccessibilityBridge {
             kAXPressAction as CFString
         ) == .success else {
             throw DesktopMediaBridgeError.commandFailed
+        }
+    }
+
+    private func tidalGlobalPlaybackButton(
+        app: NSRunningApplication,
+        label: String
+    ) -> AccessibleNode? {
+        let candidates = descendants(
+            accessibilityRoot(for: app),
+            limit: Self.maximumNodes
+        ).filter {
+            $0.role == kAXButtonRole as String
+                && normalize($0.label) == label
+        }
+        // TIDAL expone muchos botones "Reproducir" en listas. El control
+        // persistente del player es el candidato situado más abajo.
+        return candidates.max {
+            let leftY = $0.frame?.midY ?? -.greatestFiniteMagnitude
+            let rightY = $1.frame?.midY ?? -.greatestFiniteMagnitude
+            return leftY < rightY
         }
     }
 
@@ -513,7 +614,10 @@ public struct DesktopMediaAccessibilityBridge {
             let expectedLabels = action == "play"
                 ? ["reproducir"]
                 : ["pausar", "pausa"]
-            let button = nodes.first(where: {
+            let button = qobuzGlobalPlaybackButton(
+                app: app,
+                labels: expectedLabels
+            ) ?? nodes.first(where: {
                 $0.role == kAXButtonRole as String
                     && expectedLabels.contains(normalize($0.label))
             }) ?? nodes.first(where: {
@@ -522,10 +626,7 @@ public struct DesktopMediaAccessibilityBridge {
                       let frame = $0.frame else { return false }
                 return frame.width >= 56 && frame.height >= 56
                     && abs(frame.width - frame.height) <= 8
-            }) ?? qobuzGlobalPlaybackButton(
-                app: app,
-                labels: expectedLabels
-            )
+            })
             guard let button else {
                 throw DesktopMediaBridgeError.actionUnavailable
             }
@@ -560,6 +661,20 @@ public struct DesktopMediaAccessibilityBridge {
             let rightY = $1.frame?.midY ?? -.greatestFiniteMagnitude
             return leftY < rightY
         } ?? candidates.last
+    }
+
+    private func qobuzGlobalPlayback(
+        app: NSRunningApplication
+    ) -> String? {
+        guard let button = qobuzGlobalPlaybackButton(
+            app: app,
+            labels: ["reproducir", "pausar", "pausa"]
+        ) else { return nil }
+        switch normalize(button.label) {
+        case "pausar", "pausa": return "playing"
+        case "reproducir": return "paused"
+        default: return nil
+        }
     }
 
     private func postKey(

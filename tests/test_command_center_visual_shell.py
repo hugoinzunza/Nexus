@@ -45,8 +45,8 @@ def test_shell_publica_assets_y_estados_operacionales() -> None:
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
 
-    assert 'src="./command-center.js"' in page
-    assert 'href="./command-center.css"' in page
+    assert 'src="./command-center.js?v=' in page
+    assert 'href="./command-center.css?' in page
     for state in (
         "loading",
         "ready",
@@ -77,6 +77,15 @@ def test_experience_layer_usa_lenguaje_operacional_y_footer_en_calma() -> None:
     assert 'document.querySelector(".status-footer").dataset.state' in script
     assert '.status-footer[data-state="ready"] .provider-status' in styles
     assert '.status-footer[data-state="ready"] .readiness-list' in styles
+
+
+def test_selector_multimedia_reserva_aire_sobre_la_caratula() -> None:
+    styles = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
+
+    header = styles.split(".music-panel .panel-header {", 1)[1].split("}", 1)[0]
+    selector = styles.split(".media-provider-selector {", 1)[1].split("}", 1)[0]
+    assert "margin-bottom: 30px" in header
+    assert "transform: translateY(-5px)" in selector
 
 
 def test_shell_fija_el_abi_y_no_agrega_superficie_de_comandos() -> None:
@@ -112,6 +121,101 @@ def test_b2_agrega_un_contexto_macro_y_salto_honesto_a_tradingview() -> None:
     assert '"/m/command-center/api/media-command"' in script
 
 
+def test_vista_tv_reutiliza_superficie_principal_sin_agregar_panel() -> None:
+    page = (PUBLIC / "index.html").read_text(encoding="utf-8")
+    script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
+    styles = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
+
+    assert 'data-primary-view="market"' in page
+    assert 'data-primary-view="tv"' in page
+    assert 'id="zapping-target" hidden' in page
+    assert 'data-src="https://app.zapping.com/"' in page
+    assert 'allow="autoplay; encrypted-media; fullscreen; picture-in-picture"' in page
+    assert 'const ZAPPING_URL = "https://app.zapping.com/"' in script
+    assert 'localStorage.setItem("nexux.primary-view", view)' in script
+    assert 'handler.postMessage({' in script
+    assert 'zappingFrame.hidden = nativeTV' in script
+    assert '.zapping-stage iframe {' in styles
+    assert 'class="workspace"' in page
+    assert page.count('class="context-rail"') == 1
+
+
+def test_streaming_reutiliza_superficie_y_solo_abre_proveedores_permitidos() -> None:
+    page = (PUBLIC / "index.html").read_text(encoding="utf-8")
+    script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
+    styles = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
+    native = (
+        ROOT / "agents" / "macos" / "CommandCenterShell" / "main.swift"
+    ).read_text(encoding="utf-8")
+
+    assert 'data-primary-view="streaming"' in page
+    assert 'id="streaming-target" hidden' in page
+    assert page.count("data-streaming-provider=") == 4
+    assert 'data-streaming-provider="disney"' in page
+    assert 'data-streaming-provider="apple_tv"' in page
+    assert 'data-streaming-provider="max"' in page
+    assert 'data-streaming-provider="youtube"' in page
+    assert '"https://www.disneyplus.com/"' in script
+    assert '"https://tv.apple.com/"' in script
+    assert '"https://www.hbomax.com/"' in script
+    assert '"https://www.youtube.com/"' in script
+    assert 'document.querySelector("#streaming-target").getBoundingClientRect()' in script
+    assert 'type: "openStreaming"' in script
+    assert '["market", "tv", "streaming"]' in script
+    assert ".streaming-provider-list" in styles
+    assert 'case "apple_tv":' in native
+    assert 'case "disney":' in native
+    assert 'case "max":' in native
+    assert 'case "youtube":' in native
+    assert 'URL(string: "https://tv.apple.com/")!' in native
+    assert '"--app=\\(url.absoluteString)"' in native
+    assert '"--user-data-dir=\\(profileDirectory.path)"' in native
+    assert '"--no-first-run"' in native
+    assert '"--no-default-browser-check"' in native
+    assert '"--disable-background-mode"' in native
+    assert 'appendingPathComponent(provider, isDirectory: true)' in native
+    assert '"--profile-directory=Default"' not in native
+    assert "Google Chrome.app/Contents/MacOS/Google Chrome" in native
+    assert "application.setActivationPolicy(.regular)" in native
+    assert "NSApp.activate(ignoringOtherApps: true)" in native
+    assert "NSApp.presentationOptions = [.hideMenuBar, .hideDock]" in native
+    assert "private var streamingProcesses: [String: Process] = [:]" in native
+    assert "private var hasActiveStreamingProcess: Bool" in native
+    assert "private func bringStreamingToFront(_ process: Process)" in native
+    assert "if !self.hasActiveStreamingProcess" in native
+    assert "application.unhide()" in native
+    assert "application.activate(options: [.activateAllWindows])" in native
+    assert "NSApp.setActivationPolicy(.regular)" in native
+    assert "process.terminationHandler" in native
+    assert "application.mainMenu = mainMenu" in native
+    assert "application.applicationIconImage = NSImage(size: NSSize(width: 1, height: 1))" in native
+    assert "private func closeStreamingProcesses()" in native
+    assert "stopOrphanedStreamingProcesses()" in native
+    assert 'process.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")' in native
+    assert ".external-action[hidden]" in styles
+    assert 'let rect = body["rect"] as? [String: Any]' in native
+    assert 'case "http"' not in native
+
+
+def test_aurora_preview_es_visual_reversible_y_sin_integracion_real() -> None:
+    page = (PUBLIC / "index.html").read_text(encoding="utf-8")
+    script = (PUBLIC / "command-center.js").read_text(encoding="utf-8")
+    styles = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
+    native = (
+        ROOT / "agents" / "macos" / "CommandCenterShell" / "main.swift"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="aurora-preview" hidden' in page
+    assert 'parameters.get("aurora_preview")' in script
+    assert 'delete app.dataset.auroraPreviewActive' in script
+    assert 'data-aurora-preview-active="true"' in styles
+    assert '(min-height: 1120px)' in styles
+    assert '?? "http://127.0.0.1:8812/m/command-center/"' in native
+    assert "aurora_preview" not in native
+    assert "/aurora" not in script.lower()
+    assert "fetch(" not in script[script.index("configureAuroraPreview"):script.index("function syncNativeTV")]
+
+
 def test_shell_declara_modo_aplicacion_y_lanzador_sin_barra() -> None:
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     manifest = (PUBLIC / "manifest.webmanifest").read_text(encoding="utf-8")
@@ -126,6 +230,14 @@ def test_shell_declara_modo_aplicacion_y_lanzador_sin_barra() -> None:
         ROOT / "agents" / "macos" / "CommandCenterShell" / "main.swift"
     ).read_text(encoding="utf-8")
     assert "styleMask: [.borderless]" in native
+    assert "override var canBecomeKey: Bool { true }" in native
+    assert "window.initialFirstResponder = webView" in native
+    assert 'configuration.userContentController.add(self, name: "commandCenter")' in native
+    assert 'source: "window.__nexuxNativeShell = true;"' in native
+    assert 'webView.load(URLRequest(url: URL(string: "https://app.zapping.com/")!))' in native
+    assert 'contentView.addSubview(webView, positioned: .above, relativeTo: nil)' in native
+    assert 'round(value * scale) / scale' in native
+    assert 'contentView.isFlipped' in native
     assert "WKWebView" in native
     assert ".hideMenuBar" in native
 
@@ -224,7 +336,7 @@ def test_experience_layer_unifica_rieles_y_reserva_color_para_prioridad() -> Non
     assert ".positions-panel {\n  padding: var(--space-4);" in css
     assert ".music-panel {\n  display: flex;\n  flex-direction: column;\n  padding: var(--space-4);" in css
     assert '.positions-panel [data-account-pnl][data-sign="negative"]' in css
-    assert "var(--danger) 52%, var(--text-2)" in css
+    assert '.position-performance [data-sign="negative"] {\n  color: var(--danger);' in css
     assert "var(--accent) 8%, transparent" in css
 
 

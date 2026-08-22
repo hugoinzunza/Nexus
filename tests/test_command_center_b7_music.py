@@ -17,6 +17,7 @@ from modules.command_center.media_controller import (
     MediaAckStatus,
     MediaAction,
     MediaCapability,
+    MediaCommand,
 )
 from modules.command_center.media_surface import (
     MediaCommandsDisabled,
@@ -24,6 +25,7 @@ from modules.command_center.media_surface import (
 )
 from modules.command_center.module import CommandCenterModule
 from modules.command_center.module_registry import command_center_module_registry
+from modules.command_center.operations import OperationContext
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -340,6 +342,52 @@ def test_comando_http_usa_surface_y_rechaza_acciones_fuera_del_alcance() -> None
     _run(scenario())
 
 
+def test_play_pausa_otro_proveedor_activo() -> None:
+    async def scenario():
+        apple = FakeMediaController(
+            controller_id="apple-music",
+            clock_ms=lambda: NOW,
+        )
+        tidal = FakeMediaController(
+            controller_id="tidal",
+            clock_ms=lambda: NOW,
+        )
+        await apple.execute(
+            MediaCommand("start-apple", MediaAction.PLAY, NOW),
+            OperationContext(),
+        )
+        module = object.__new__(CommandCenterModule)
+        module.media_surfaces = {
+            "apple-music": MediaSurfaceService(
+                apple, commands_enabled=True, clock_ms=lambda: NOW
+            ),
+            "tidal": MediaSurfaceService(
+                tidal, commands_enabled=True, clock_ms=lambda: NOW
+            ),
+        }
+        module.context = type("Context", (), {"log": lambda *_args: None})()
+
+        response = await module.api_post(
+            "media-command",
+            {
+                "command_id": "switch-to-tidal",
+                "action": "play",
+                "provider": "tidal",
+            },
+            {},
+            user={"uid": 1},
+        )
+
+        assert response[0] == 200
+        assert apple.effects[-1] == (
+            "switch-to-tidal.pause-apple-music",
+            MediaAction.PAUSE,
+        )
+        assert tidal.effects == [("switch-to-tidal", MediaAction.PLAY)]
+
+    _run(scenario())
+
+
 def test_selector_lee_cada_proveedor_sin_cambiar_estado_global() -> None:
     module = object.__new__(CommandCenterModule)
     module.context = type("Context", (), {"log": lambda *_args: None})()
@@ -513,6 +561,59 @@ def test_cliente_cambia_selector_pista_y_caratula_del_proveedor_activo() -> None
     assert payload["second"]["track"] == "Hombre Lobo"
     assert payload["second"]["artworkUrl"] == "/artwork-qobuz"
     assert all("provider=auto" in url for url in payload["urls"])
+
+
+def test_cliente_espera_lectura_en_curso_antes_de_enviar_comando() -> None:
+    script_uri = (PUBLIC / "command-center.js").resolve().as_uri()
+    node = f"""
+      globalThis.location = {{ origin: "http://localhost" }};
+      import({json.dumps(script_uri)}).then(async (module) => {{
+        let releaseRead;
+        const calls = [];
+        const context = {{
+          selected_provider: "qobuz", provider: "qobuz",
+          lifecycle: "ready", playback: "paused",
+          commands_enabled: true, capabilities: ["current_state", "pause"]
+        }};
+        const client = new module.MediaContextClient({{
+          fetcher: async (_url, options = {{}}) => {{
+            const method = options.method || "GET";
+            calls.push(method);
+            if (calls.length === 1) {{
+              return await new Promise((resolve) => {{ releaseRead = resolve; }});
+            }}
+            if (method === "POST") {{
+              return {{
+                ok: true,
+                json: async () => ({{
+                  status: "applied",
+                  reconciled_state: context
+                }})
+              }};
+            }}
+            return {{ ok: true, json: async () => context }};
+          }}
+        }});
+        const reading = client.refresh();
+        await Promise.resolve();
+        const command = client.execute("pause");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const beforeRelease = [...calls];
+        releaseRead({{ ok: true, json: async () => context }});
+        await Promise.all([reading, command]);
+        process.stdout.write(JSON.stringify({{ beforeRelease, calls }}));
+      }});
+    """
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", node],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+
+    assert payload["beforeRelease"] == ["GET"]
+    assert payload["calls"] == ["GET", "POST", "GET"]
 
 
 def test_endpoint_de_caratula_entrega_solo_imagen_local_acotada() -> None:

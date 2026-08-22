@@ -63,6 +63,18 @@ class MacOSContextService:
         )
         return self._ratio(used_pages * page_size, total)
 
+    def _memory_pressure(self) -> tuple[str, float | None]:
+        raw = self._runner(["/usr/bin/memory_pressure", "-Q"])
+        match = re.search(r"free percentage:\s*(\d+(?:\.\d+)?)%", raw, re.I)
+        if not match:
+            return "unknown", None
+        available = round(max(0.0, min(100.0, float(match.group(1)))), 1)
+        if available < 10:
+            return "critical", available
+        if available < 20:
+            return "elevated", available
+        return "normal", available
+
     def _uptime_seconds(self) -> int | None:
         raw = self._runner(["/usr/sbin/sysctl", "-n", "kern.boottime"])
         match = re.search(r"sec\s*=\s*(\d+)", raw)
@@ -89,16 +101,22 @@ class MacOSContextService:
             cpu_count = max(1, os.cpu_count() or 1)
             load_percent = round(min(100.0, load / cpu_count * 100), 1)
             memory_percent = self._memory_percent()
+            memory_pressure, memory_available_percent = self._memory_pressure()
             disk = shutil.disk_usage("/")
             disk_percent = self._ratio(disk.used, disk.total)
             power_source, battery_percent = self._power()
             uptime_seconds = self._uptime_seconds()
             observed = [
                 value
-                for value in (load_percent, memory_percent, disk_percent)
+                for value in (load_percent, disk_percent)
                 if value is not None
             ]
-            state = "degraded" if any(value >= 90 for value in observed) else "ready"
+            state = (
+                "degraded"
+                if memory_pressure in {"elevated", "critical"}
+                or any(value >= 90 for value in observed)
+                else "ready"
+            )
             return {
                 "generated_at_ms": now,
                 "state": state,
@@ -106,6 +124,8 @@ class MacOSContextService:
                 "os_version": platform.mac_ver()[0] or "macOS",
                 "load_percent": load_percent,
                 "memory_percent": memory_percent,
+                "memory_pressure": memory_pressure,
+                "memory_available_percent": memory_available_percent,
                 "disk_percent": disk_percent,
                 "power_source": power_source,
                 "battery_percent": battery_percent,

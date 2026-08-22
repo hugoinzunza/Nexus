@@ -1,15 +1,23 @@
-# Bot3.v9 - Gate de validacion del grafico NexUX
+# Bot3.v13 - Gate de validacion del grafico NexUX
 
 **Fecha de registro:** 2026-08-17
-**Estado:** `PENDIENTE / OBLIGATORIO ANTES DE ACEPTAR LA IMPLEMENTACION VISUAL`
-**Contrato relacionado:** Bot3.v9
-**contrato_hash:** `9d24166a33aa74af7f2b2dd7d0bdf4e2d16866e13eec7c48e7b1480512001530`
+**Estado:** `PENDIENTE PRIORITARIO / BLOQUEA SU INCORPORACION DEFINITIVA AL COMMAND CENTER`
+**Contrato vigente relacionado:** Bot3.v13
+**contrato_hash vigente:** `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d`
+**Origen registral:** este gate se abrio durante Bot3.v9 y permanece vigente
+tras la congelacion e implementacion de Bot3.v13.
 
 ## Motivo
 
-La conformidad pre-implementacion de Bot3.v9 fue exclusivamente contractual y
-cientifica. No audito el grafico de NexUX ni certifico que sus velas, capas SMC,
-marcas o controles representen correctamente el futuro motor Bot3.v9.
+La conformidad e implementacion de Bot3.v13 fueron exclusivamente contractuales,
+cientificas y de motor. No auditaron el grafico de NexUX ni certificaron que sus
+velas, capas SMC, marcas o controles representen correctamente el motor Bot3.v13.
+
+El usuario utiliza actualmente un grafico NexUX dentro del Command Center y ha
+reportado que aparenta no estar actualizado. Esa percepcion se registra como una
+incidencia pendiente de diagnostico, no como una conclusion sobre la fuente. La
+primera tarea del gate es medir y mostrar explicitamente la frescura real del
+feed, la ultima vela cerrada y la edad de la vela en formacion.
 
 El usuario ha observado errores recurrentes en el grafico actual:
 
@@ -21,7 +29,28 @@ El usuario ha observado errores recurrentes en el grafico actual:
   origina.
 
 Estos defectos no quedan cubiertos por la conformidad del protocolo y deben
-tratarse como un gate independiente.
+tratarse como un gate independiente. El grafico actual es provisional: no se
+considera la superficie visual certificada de Bot3.v13 y no debe adquirir esa
+condicion por despliegue implicito.
+
+## Pendiente prioritario para Command Center
+
+La incorporacion definitiva del grafico NexUX al Command Center requiere cerrar,
+en este orden, los siguientes bloques:
+
+1. **Frescura del feed:** medir ultima vela recibida, ultima vela cerrada, edad,
+   fuente y continuidad; comparar contra Binance y fallar cerrado si divergen.
+2. **Temporalidades y concurrencia:** impedir regresiones de seleccion y que una
+   respuesta tardia sobrescriba la temporalidad vigente.
+3. **Refresco incremental:** eliminar reconstrucciones periodicas, parpadeo,
+   pantallas vacias y perdida de viewport.
+4. **Paridad causal:** reconciliar OHLC y cada marca SMC con el almacen y ledger
+   canonicos de Bot3.v13, incluyendo pruebas de prefijo.
+5. **Validacion perceptual:** ejecutar una prueba prolongada y registrar capturas
+   en el Arzopa QHD de 16 pulgadas con el viewport operativo real.
+
+Hasta cerrar los cinco bloques, el grafico no reemplaza una fuente visual ya
+validada ni se usa como evidencia cientifica o decisional.
 
 ## Alcance obligatorio
 
@@ -79,7 +108,7 @@ Auditar por separado, cuando existan:
 - entrada, stop, target, fill y cierre.
 
 Cada capa debe declarar su fuente, algoritmo, disponibilidad causal y
-temporalidad. No mezclar heuristicas visuales heredadas con eventos Bot3.v9 sin
+temporalidad. No mezclar heuristicas visuales heredadas con eventos Bot3.v13 sin
 una etiqueta explicita.
 
 ### 6. Consistencia de precios y velas
@@ -120,7 +149,7 @@ El gate solo puede cerrarse cuando:
 
 ## Restricciones
 
-- Este documento no modifica Bot3.v9 ni su `contrato_hash`.
+- Este documento no modifica Bot3.v13 ni su `contrato_hash`.
 - No autoriza despliegue, cohorte, Testnet, Live ni cambios al Bot.
 - No autoriza reinterpretar el curso ni agregar indicadores no contratados.
 - No permite usar el grafico como fuente cientifica primaria.
@@ -129,7 +158,8 @@ El gate solo puede cerrarse cuando:
 
 ## Estado registral
 
-- Protocolo Bot3.v9: `CONFORME PARA IMPLEMENTACION`.
-- Motor Bot3.v9: `NO IMPLEMENTADO`.
-- Grafico NexUX frente a Bot3.v9: `NO AUDITADO`.
-- Gate visual: `ABIERTO / OBLIGATORIO`.
+- Protocolo Bot3.v13: `CONGELADO`.
+- Motor Bot3.v13: `IMPLEMENTADO / NO DESPLEGADO / COHORTE NO INICIADA`.
+- Grafico NexUX frente a Bot3.v13: `NO AUDITADO / PROVISIONAL`.
+- Integracion definitiva en Command Center: `BLOQUEADA POR ESTE GATE`.
+- Gate visual: `ABIERTO / PENDIENTE PRIORITARIO`.

@@ -96,7 +96,8 @@ trabajar?** con cuatro estados: `Ready`, `Degraded`, `Failed` y `Unknown`.
 
 Los servicios esenciales son Gateway, EventBus, Snapshot, Internet y Trading.
 `Ready` exige evidencia positiva de los cinco. Trading se degrada después de
-30 segundos sin actualización y falla después de 120 segundos. Internet usa
+60 segundos sin actualización y falla después de 120 segundos. Este margen
+evita degradaciones espurias por la variación normal del ciclo de refresco. Internet usa
 como evidencia conjunta la conectividad del navegador y un upstream de Trading
 operativo; no se presenta como medidor de calidad de red.
 

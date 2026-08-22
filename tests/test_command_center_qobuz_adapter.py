@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import modules.command_center.qobuz_adapter as qobuz_module
 from modules.command_center import QobuzAdapter as PublicAdapter
 from modules.command_center.conformance import (
     HeadlessIntegrationHarness,
@@ -53,6 +54,8 @@ class RecordingPort:
             "Libertinaje",
             "qobuz:TRACK",
             0.34,
+            72.0,
+            240.0,
         )
         self.effects = []
         self.known_playbacks = []
@@ -163,6 +166,8 @@ def test_current_state_y_playback_provienen_del_puente_local():
             "artist": "Bersuit Vergarabat",
             "album": "Libertinaje",
             "progress": 0.34,
+            "position_seconds": 72.0,
+            "duration_seconds": 240.0,
         }
         for action in (
             MediaAction.PLAY,
@@ -349,6 +354,15 @@ def test_puerto_real_usa_agente_fijo_sin_shell_ni_api_remota():
     assert "structuralCandidate" in bridge
     assert "metadataLinks >= 2" in bridge
     assert "qobuzGlobalPlaybackButton" in bridge
+    assert 'let explicit = playback(for: .qobuz, nodes: initialNodes)' in bridge
+    assert 'if explicit == "playing" || explicit == "paused"' in bridge
+    assert '|| (role == kAXButtonRole as String\n                        && ["reproducir"' not in bridge
+    player_lookup = bridge.split(
+        "private func accessiblePlayerNodes", 1
+    )[1].split("private func collapseExpandedQobuzPlayer", 1)[0]
+    assert player_lookup.index("collapseExpandedQobuzPlayer(root: root)") < (
+        player_lookup.index("for _ in 0..<3")
+    )
 
 
 def test_puerto_reutiliza_helper_persistente_y_lo_cierra(tmp_path):
@@ -393,6 +407,87 @@ for line in sys.stdin:
     _run(port.close_helper())
     assert port._agent_process is None
     assert process.poll() is not None
+
+
+def test_bundle_instalado_se_ejecuta_mediante_launchservices(
+    tmp_path, monkeypatch
+):
+    app = tmp_path / "NexUX Media Agent.app"
+    helper = app / "Contents" / "MacOS" / "nexus-agent"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("agent", encoding="utf-8")
+    helper.chmod(0o755)
+    fake_open = tmp_path / "open"
+    fake_open.write_text(
+        f"""#!{sys.executable}
+import json
+import pathlib
+import sys
+
+output = pathlib.Path(sys.argv[sys.argv.index("-o") + 1])
+arguments = sys.argv[sys.argv.index("--args") + 1:]
+if arguments[0] == "--media-state":
+    payload = {{
+        "playback": "paused", "track": "Track", "artist": "Artist",
+        "album": "Album", "item_ref": "qobuz:TRACK", "progress": 0.2,
+    }}
+else:
+    payload = {{"status": "applied", "code": "qobuz.applied"}}
+output.write_text(json.dumps(payload), encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
+    fake_open.chmod(0o755)
+    monkeypatch.setattr(qobuz_module, "OPEN", str(fake_open))
+
+    port = OsaScriptQobuzPort(helper)
+    state = _run(port.current_state(OperationContext.with_timeout(2)))
+    assert state == DesktopPlaybackSnapshot(
+        "paused", "Track", "Artist", "Album", "qobuz:TRACK", 0.2
+    )
+    _run(
+        port.execute(
+            MediaAction.PLAY,
+            OperationContext.with_timeout(2),
+            known_playback="paused",
+        )
+    )
+    assert port._agent_process is None
+
+
+def test_reconcilia_command_failed_si_el_playback_cambio(
+    monkeypatch,
+):
+    class DelayedPort(OsaScriptQobuzPort):
+        def __init__(self):
+            pass
+
+        async def _agent_json(self, request, context, *, command=False):
+            if command:
+                raise QobuzPortError(
+                    "qobuz.command-failed",
+                    "estado AX tardio",
+                    retryable=True,
+                )
+            return {
+                "playback": "playing",
+                "track": "Track",
+                "artist": "Artist",
+                "album": "Album",
+                "item_ref": "qobuz:TRACK",
+            }
+
+    async def no_wait(_seconds):
+        return None
+
+    monkeypatch.setattr(qobuz_module.asyncio, "sleep", no_wait)
+    _run(
+        DelayedPort().execute(
+            MediaAction.PLAY,
+            OperationContext.with_timeout(2),
+            known_playback="paused",
+        )
+    )
 
 
 

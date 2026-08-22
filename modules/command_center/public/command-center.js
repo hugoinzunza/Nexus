@@ -1,4 +1,5 @@
-import { TradingViewWidgetAdapter } from "./tradingview-spike.js";
+import { TradingViewWidgetAdapter } from "./tradingview-spike.js?v=20260815-chart-clock";
+import { NexuxChartProvider } from "./nexux-chart-provider.js?v=20260816-chart-stability-v3";
 
 export const CONTRACT_VERSION = 1;
 export const CONTRACT_FINGERPRINT =
@@ -16,6 +17,8 @@ const MEDIA_COMMAND_URL = "/m/command-center/api/media-command";
 const HEALTH_URL = "/health";
 const WS_PATH = "/m/command-center/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 15000];
+const TRADING_DEGRADED_AFTER_MS = 60_000;
+const TRADING_FAILED_AFTER_MS = 120_000;
 const FIXTURE_STATES = new Set([
   "ready",
   "degraded",
@@ -86,6 +89,7 @@ export class MacroContextClient {
     this.now = now;
     this.status = "loading";
     this.event = null;
+    this.events = [];
     this.generatedAt = null;
     this.error = null;
     this.refreshTimer = null;
@@ -96,6 +100,7 @@ export class MacroContextClient {
     return {
       status: this.status,
       event: this.event,
+      events: this.events,
       generatedAt: this.generatedAt,
       error: this.error,
       now: this.now(),
@@ -125,8 +130,11 @@ export class MacroContextClient {
       });
       if (!response.ok) throw new Error(`dashboard HTTP ${response.status}`);
       const dashboard = await response.json();
+      this.events = Array.isArray(dashboard?.calendar)
+        ? dashboard.calendar.filter((event) => Number.isFinite(Number(event?.ts)))
+        : [];
       this.event = selectNextHighImpact(
-        dashboard?.calendar,
+        this.events,
         this.now() / 1000,
       );
       this.generatedAt = Number.isFinite(Number(dashboard?.generated_at_ms))
@@ -139,6 +147,212 @@ export class MacroContextClient {
       this.error = error?.message || "calendario no disponible";
     }
     this.onChange(this.state());
+  }
+}
+
+export function calendarMonthCells(year, month) {
+  const first = new Date(year, month, 1);
+  const mondayOffset = (first.getDay() + 6) % 7;
+  const start = new Date(year, month, 1 - mondayOffset);
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return {
+      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+      timestampMs: date.getTime(),
+      day: date.getDate(),
+      currentMonth: date.getMonth() === month,
+    };
+  });
+}
+
+export function formatCalendarMonth(year, month, locale = "es-CL") {
+  const monthName = new Intl.DateTimeFormat(locale, { month: "long" })
+    .format(new Date(year, month, 1))
+    .replace(/^./, (value) => value.toUpperCase());
+  return `${monthName} ${year}`;
+}
+
+export function localCalendarDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function formatCalendarEventTime(event, locale = "es-CL") {
+  if (event?.all_day === true) return "Todo el día";
+  const timestampMs = Number(event?.start_ms ?? Number(event?.ts) * 1000);
+  if (!Number.isFinite(timestampMs)) return "Hora pendiente";
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(timestampMs));
+}
+
+export function formatCalendarEventLabel(event, locale = "es-CL") {
+  return `${formatCalendarEventTime(event, locale)} · ${String(event?.title || "Evento")}`;
+}
+
+class CalendarSurface {
+  constructor() {
+    const now = new Date();
+    this.year = now.getFullYear();
+    this.month = now.getMonth();
+    this.todayKey = localCalendarDateKey(now);
+    this.selectedDateKey = this.todayKey;
+    this.personalEvents = [];
+    this.macroEvents = [];
+    this.requestGeneration = 0;
+    this.retryTimer = null;
+    this.native = Boolean(window.webkit?.messageHandlers?.commandCenter);
+  }
+
+  start() {
+    window.__nexuxCalendarReceive = (payload) => {
+      if (Number(payload?.year) !== this.year || Number(payload?.month) !== this.month + 1) return;
+      this.requestGeneration += 1;
+      clearTimeout(this.retryTimer);
+      this.personalEvents = Array.isArray(payload?.events) ? payload.events : [];
+      const status = document.querySelector("#calendar-status");
+      status.textContent = payload?.status === "ready"
+        ? `${this.personalEvents.length} evento${this.personalEvents.length === 1 ? "" : "s"}`
+        : payload?.message || "Calendar no disponible";
+      this.render();
+    };
+    document.querySelector("#calendar-previous").addEventListener("click", () => this.move(-1));
+    document.querySelector("#calendar-next").addEventListener("click", () => this.move(1));
+    document.querySelector("#calendar-today").addEventListener("click", () => {
+      const now = new Date();
+      this.year = now.getFullYear();
+      this.month = now.getMonth();
+      this.selectedDateKey = localCalendarDateKey(now);
+      this.request();
+    });
+    this.render();
+    setTimeout(() => this.request(), this.native ? 750 : 0);
+    this.dayTimer = setInterval(() => this.syncCalendarDay(), 30_000);
+  }
+
+  syncCalendarDay(now = new Date()) {
+    const nextKey = localCalendarDateKey(now);
+    if (nextKey === this.todayKey) return;
+    this.todayKey = nextKey;
+    this.selectedDateKey = nextKey;
+    this.year = now.getFullYear();
+    this.month = now.getMonth();
+    this.personalEvents = [];
+    this.request();
+  }
+
+  setMacroEvents(events) {
+    this.macroEvents = Array.isArray(events) ? events : [];
+    this.render();
+  }
+
+  move(delta) {
+    const date = new Date(this.year, this.month + delta, 1);
+    this.year = date.getFullYear();
+    this.month = date.getMonth();
+    this.selectedDateKey = null;
+    this.personalEvents = [];
+    this.request();
+  }
+
+  request(allowRetry = true) {
+    this.render();
+    if (!this.native) {
+      document.querySelector("#calendar-status").textContent = "Disponible en la app NexUX";
+      return;
+    }
+    const generation = ++this.requestGeneration;
+    window.webkit.messageHandlers.commandCenter.postMessage({
+      type: "calendarMonth", year: this.year, month: this.month + 1,
+    });
+    clearTimeout(this.retryTimer);
+    if (allowRetry) {
+      this.retryTimer = setTimeout(() => {
+        if (this.requestGeneration === generation) this.request(false);
+      }, 2500);
+    }
+  }
+
+  render() {
+    document.querySelector("#calendar-title").textContent = formatCalendarMonth(
+      this.year,
+      this.month,
+    );
+    const personalByDay = new Map();
+    for (const event of this.personalEvents) {
+      const date = new Date(Number(event.start_ms));
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      if (!personalByDay.has(key)) personalByDay.set(key, []);
+      personalByDay.get(key).push(event);
+    }
+    const macroByDay = new Map();
+    for (const event of this.macroEvents) {
+      const date = new Date(Number(event.ts) * 1000);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      if (!macroByDay.has(key)) macroByDay.set(key, []);
+      macroByDay.get(key).push(event);
+    }
+    const todayKey = localCalendarDateKey();
+    const grid = document.querySelector("#calendar-grid");
+    grid.replaceChildren(...calendarMonthCells(this.year, this.month).map((cell) => {
+      const personal = personalByDay.get(cell.key) || [];
+      const macro = macroByDay.get(cell.key) || [];
+      const dayButton = document.createElement("button");
+      dayButton.type = "button";
+      dayButton.className = "calendar-day";
+      dayButton.dataset.outside = String(!cell.currentMonth);
+      dayButton.dataset.today = String(cell.key === todayKey);
+      dayButton.dataset.selected = String(cell.key === this.selectedDateKey);
+      dayButton.disabled = !personal.length && !macro.length;
+      dayButton.title = [
+        ...personal.map((event) => formatCalendarEventLabel(event)),
+        ...macro.map((event) => formatCalendarEventLabel(event)),
+      ].join(" · ");
+      const number = document.createElement("span");
+      number.textContent = String(cell.day);
+      const dots = document.createElement("i");
+      dots.className = "calendar-dots";
+      if (personal.length) dots.append(Object.assign(document.createElement("b"), { className: "personal" }));
+      if (macro.length) dots.append(Object.assign(document.createElement("b"), { className: "macro" }));
+      dayButton.append(number, dots);
+      dayButton.addEventListener("click", () => {
+        this.selectedDateKey = cell.key;
+        this.render();
+        if (this.native) {
+          window.webkit.messageHandlers.commandCenter.postMessage({
+            type: "openCalendar", timestampMs: cell.timestampMs,
+          });
+        }
+      });
+      return dayButton;
+    }));
+    const selectedPersonal = personalByDay.get(this.selectedDateKey) || [];
+    const selectedMacro = macroByDay.get(this.selectedDateKey) || [];
+    const selectedEvents = [...selectedPersonal, ...selectedMacro]
+      .sort((left, right) => Number(left.start_ms ?? Number(left.ts) * 1000) -
+        Number(right.start_ms ?? Number(right.ts) * 1000));
+    const selectedLabels = [...new Map(selectedEvents.map((event) => [
+      formatCalendarEventLabel(event), event,
+    ])).values()];
+    const selection = document.querySelector("#calendar-selection");
+    if (selectedLabels.length) {
+      selection.replaceChildren(...selectedLabels.slice(0, 2).map((event) => {
+        const row = document.createElement("span");
+        row.className = "calendar-event-summary";
+        const time = document.createElement("small");
+        time.textContent = formatCalendarEventTime(event);
+        const title = document.createElement("b");
+        title.textContent = String(event.title || "Evento");
+        row.append(time, title);
+        return row;
+      }));
+    } else {
+      selection.textContent = this.selectedDateKey === todayKey
+        ? "Sin eventos para hoy"
+        : "Selecciona un día con actividad";
+    }
   }
 }
 
@@ -526,6 +740,10 @@ export function normalizeMacOSContext(payload) {
     osVersion: String(payload?.os_version || "macOS").slice(0, 30),
     loadPercent: number(payload?.load_percent),
     memoryPercent: number(payload?.memory_percent),
+    memoryPressure: ["normal", "elevated", "critical", "unknown"].includes(
+      payload?.memory_pressure,
+    ) ? payload.memory_pressure : "unknown",
+    memoryAvailablePercent: number(payload?.memory_available_percent),
     diskPercent: number(payload?.disk_percent),
     powerSource: String(payload?.power_source || "Sin lectura").slice(0, 30),
     batteryPercent: number(payload?.battery_percent),
@@ -1025,13 +1243,14 @@ export class MediaContextClient {
     this.refreshTimer = null;
     this.autoRefreshBusy = false;
     this.refreshSequence = 0;
+    this.refreshPromise = null;
   }
 
   async start() {
     await this.refresh({ detectActive: true });
     this.refreshTimer = setInterval(() => {
       if (document.visibilityState === "hidden") return;
-      if (this.autoRefreshBusy) return;
+      if (this.busy || this.autoRefreshBusy) return;
       this.autoRefreshBusy = true;
       this.refresh({ detectActive: true })
         .catch(() => {})
@@ -1047,6 +1266,18 @@ export class MediaContextClient {
   }
 
   async refresh({ detectActive = false } = {}) {
+    const previousRefresh = this.refreshPromise;
+    if (previousRefresh) await previousRefresh;
+    const operation = this.performRefresh({ detectActive });
+    this.refreshPromise = operation;
+    try {
+      await operation;
+    } finally {
+      if (this.refreshPromise === operation) this.refreshPromise = null;
+    }
+  }
+
+  async performRefresh({ detectActive = false } = {}) {
     const sequence = ++this.refreshSequence;
     try {
       const url = new URL(this.contextUrl, location.origin);
@@ -1083,6 +1314,10 @@ export class MediaContextClient {
       globalThis.crypto?.randomUUID?.() ||
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     try {
+      // Accessibility reads and transport commands must not overlap. Qobuz can
+      // otherwise reject a valid command while its player tree is being read.
+      const pendingRefresh = this.refreshPromise;
+      if (pendingRefresh) await pendingRefresh;
       const response = await this.fetcher(MEDIA_COMMAND_URL, {
         method: "POST",
         headers: {
@@ -1124,6 +1359,7 @@ export class MediaContextClient {
   }
 
   async selectProvider(provider) {
+    if (this.busy) return;
     if (!["apple-music", "qobuz", "tidal"].includes(provider)) return;
     this.provider = provider;
     this.feedback = null;
@@ -1152,6 +1388,8 @@ export class OperationalHealthClient {
     this.checkedAt = null;
     this.error = null;
     this.refreshTimer = null;
+    this.confirmationTimer = null;
+    this.consecutiveFailures = 0;
   }
 
   state() {
@@ -1172,7 +1410,9 @@ export class OperationalHealthClient {
 
   stop() {
     clearInterval(this.refreshTimer);
+    clearTimeout(this.confirmationTimer);
     this.refreshTimer = null;
+    this.confirmationTimer = null;
   }
 
   async refresh() {
@@ -1186,9 +1426,22 @@ export class OperationalHealthClient {
       this.status = "ready";
       this.checkedAt = this.now();
       this.error = null;
+      this.consecutiveFailures = 0;
+      clearTimeout(this.confirmationTimer);
+      this.confirmationTimer = null;
     } catch (error) {
-      this.status = this.health ? "degraded" : "failed";
+      this.consecutiveFailures += 1;
+      this.status = this.health && this.consecutiveFailures === 1
+        ? "ready"
+        : this.health ? "degraded" : "failed";
       this.error = error?.message || "health no disponible";
+      if (this.health && this.consecutiveFailures === 1) {
+        clearTimeout(this.confirmationTimer);
+        this.confirmationTimer = setTimeout(() => {
+          this.confirmationTimer = null;
+          this.refresh().catch(() => {});
+        }, 2_500);
+      }
     }
     this.onChange(this.state());
   }
@@ -1215,6 +1468,7 @@ const REQUIRED_READINESS_IDS = new Set([
   "internet",
   "trading",
 ]);
+const GATEWAY_RECONNECT_GRACE_MS = 8_000;
 
 function normalizeServiceState(value) {
   if (value === "ready" || value === "ok") return "ready";
@@ -1253,21 +1507,28 @@ export function deriveOperationalReadiness({
       : freshness === "stale"
         ? "degraded"
         : "ready";
-  const gateway = {
+  const gatewayReconnectIsTransient = commandState?.connection === "degraded" &&
+    Number.isFinite(commandState?.connectionDegradedAt) &&
+    now - commandState.connectionDegradedAt < GATEWAY_RECONNECT_GRACE_MS &&
+    freshness !== "expired";
+  const gateway = gatewayReconnectIsTransient ? "ready" : ({
     ready: "ready",
     degraded: "degraded",
     stale: "degraded",
     expired: "failed",
     disconnected: "failed",
     loading: "unknown",
-  }[commandState?.connection] || "unknown";
+  }[commandState?.connection] || "unknown");
 
   let tradingState = normalizeServiceState(trading?.status);
   if (trading?.upstream_ok === false) tradingState = "degraded";
   if (trading?.upstream_ok === true && tradingState === "ready") {
     const age = now - Number(trading?.last_update_ms || 0);
-    if (!Number.isFinite(age) || age > 120_000) tradingState = "failed";
-    else if (age > 30_000) tradingState = "degraded";
+    if (!Number.isFinite(age) || age > TRADING_FAILED_AFTER_MS) {
+      tradingState = "failed";
+    } else if (age > TRADING_DEGRADED_AFTER_MS) {
+      tradingState = "degraded";
+    }
   }
 
   const healthAvailable = healthState?.status === "ready";
@@ -1276,7 +1537,9 @@ export function deriveOperationalReadiness({
       id: "gateway",
       name: "Gateway",
       state: gateway,
-      evidence: `Conexión: ${commandState?.connection || "sin lectura"}`,
+      evidence: gatewayReconnectIsTransient
+        ? "Conexión: reconectando dentro de tolerancia"
+        : `Conexión: ${commandState?.connection || "sin lectura"}`,
     },
     {
       id: "event-bus",
@@ -1335,11 +1598,12 @@ export function deriveOperationalReadiness({
   const overall = required.some((service) => service.state === "failed")
     ? "failed"
     : required.some(
-        (service) =>
-          service.state === "degraded" || service.state === "unknown",
+        (service) => service.state === "degraded",
       )
       ? "degraded"
-      : "ready";
+      : required.some((service) => service.state === "unknown")
+        ? "unknown"
+        : "ready";
   return { overall, services };
 }
 
@@ -1439,6 +1703,7 @@ export class CommandCenterClient {
     this.subject = null;
     this.snapshotAt = null;
     this.connection = "loading";
+    this.connectionDegradedAt = null;
     this.lastError = null;
     this.reconnectAttempt = 0;
     this.reconnectTimer = null;
@@ -1454,6 +1719,7 @@ export class CommandCenterClient {
       subject: this.subject,
       snapshotAt: this.snapshotAt,
       connection: this.connection,
+      connectionDegradedAt: this.connectionDegradedAt,
       lastError: this.lastError,
       resyncing: this.resyncing,
       now: this.now(),
@@ -1504,12 +1770,16 @@ export class CommandCenterClient {
       this.#acceptSnapshot(snapshot);
       this.connection =
         this.socket?.readyState === WebSocket.OPEN ? "ready" : "degraded";
+      this.connectionDegradedAt = this.connection === "degraded"
+        ? (this.connectionDegradedAt ?? this.now())
+        : null;
       this.lastError = null;
       this.#emit();
     } catch (error) {
       this.connection = Object.keys(this.readModel).length
         ? "degraded"
         : "disconnected";
+      this.connectionDegradedAt = this.connection === "degraded" ? this.now() : null;
       this.lastError = error?.message || "snapshot unavailable";
       this.#emit();
       throw error;
@@ -1540,6 +1810,7 @@ export class CommandCenterClient {
       this.connection = Object.keys(this.readModel).length
         ? "degraded"
         : "disconnected";
+      this.connectionDegradedAt = this.connection === "degraded" ? this.now() : null;
       this.#emit();
       this.#scheduleReconnect();
     });
@@ -1579,6 +1850,7 @@ export class CommandCenterClient {
     if (message?.contract === "nexux.command-center.snapshot") {
       this.#acceptSnapshot(message);
       this.connection = "ready";
+      this.connectionDegradedAt = null;
       this.resyncing = false;
       this.reconnectAttempt = 0;
       this.lastError = null;
@@ -1647,6 +1919,7 @@ export class CommandCenterClient {
     this.connection = Object.keys(this.readModel).length
       ? "degraded"
       : "disconnected";
+    this.connectionDegradedAt = this.connection === "degraded" ? this.now() : null;
     this.#emit();
   }
 
@@ -1819,6 +2092,8 @@ function fixtureMacOSContext() {
     os_version: "26.0",
     load_percent: 24,
     memory_percent: 58,
+    memory_pressure: "normal",
+    memory_available_percent: 42,
     disk_percent: 41,
     power_source: "Corriente",
     uptime_seconds: 86_400,
@@ -2224,6 +2499,18 @@ function renderMacOSContext(context) {
     ? `${value.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%`
     : "--";
   document.querySelector("#macos-load").textContent = percent(context.loadPercent);
+  const memoryPressure = document.querySelector("#macos-memory-pressure");
+  const pressureLabels = {
+    normal: "Normal",
+    elevated: "Elevada",
+    critical: "Crítica",
+    unknown: "Sin lectura",
+  };
+  memoryPressure.dataset.state = context.memoryPressure;
+  memoryPressure.textContent = pressureLabels[context.memoryPressure] || "Sin lectura";
+  memoryPressure.title = Number.isFinite(context.memoryAvailablePercent)
+    ? `${percent(context.memoryAvailablePercent)} disponible · ${percent(context.memoryPercent)} ocupado`
+    : `${percent(context.memoryPercent)} ocupado`;
   document.querySelector("#macos-memory").textContent = percent(context.memoryPercent);
   document.querySelector("#macos-disk").textContent = percent(context.diskPercent);
   document.querySelector("#macos-power").textContent = context.batteryPercent === null
@@ -2246,6 +2533,7 @@ function renderImmediateAttention(attention, timelineEntries = []) {
   document.querySelector(".app-shell").dataset.attentionMode = attentionMode;
   document.querySelector(".attention-panel").dataset.attentionMode = attentionMode;
   const badge = document.querySelector("#attention-state");
+  document.querySelector("#calendar-alert").dataset.state = attention.state;
   badge.dataset.state = attention.state;
   const labels = {
     normal: "Sin alertas",
@@ -2372,17 +2660,12 @@ function renderMediaContext(context) {
         : context.provider || `${selectedLabel} · integración local inactiva`;
 
   const artworkImage = document.querySelector("#music-artwork-image");
-  const artworkPlaceholder = document.querySelector(
-    "#music-artwork-placeholder",
-  );
   if (context.artworkUrl) {
     artworkImage.src = context.artworkUrl;
     artworkImage.hidden = false;
-    artworkPlaceholder.hidden = true;
   } else {
     artworkImage.removeAttribute("src");
     artworkImage.hidden = true;
-    artworkPlaceholder.hidden = false;
   }
 
   const canControl =
@@ -2488,11 +2771,186 @@ const FRESHNESS_LABELS = {
   stale: "Desactualizado",
   unknown: "Sin lectura",
 };
+const ZAPPING_URL = "https://app.zapping.com/";
+const STREAMING_PROVIDERS = Object.freeze({
+  disney: { label: "Disney+", url: "https://www.disneyplus.com/" },
+  apple_tv: { label: "Apple TV", url: "https://tv.apple.com/" },
+  max: { label: "HBO Max", url: "https://www.hbomax.com/" },
+  youtube: { label: "YouTube", url: "https://www.youtube.com/" },
+});
 let selectedMarketAssetId = "btcusdt";
 let lastMarketRibbonState = null;
 let activeChartAdapter = null;
 let chartQueue = Promise.resolve();
 let lastChartFailureDetail = null;
+let primaryView = "market";
+const CHART_INTERVAL_STORAGE_KEY = "nexux.command-center.chart-interval.v1";
+let selectedChartInterval = (() => {
+  try {
+    const saved = localStorage.getItem(CHART_INTERVAL_STORAGE_KEY);
+    return ["1m", "3m", "5m", "15m", "30m", "45m", "1h", "2h", "3h", "4h", "1D", "1W"]
+      .includes(saved) ? saved : "1h";
+  } catch (_error) {
+    return "1h";
+  }
+})();
+let candleCountdownTimer = null;
+let chartIntervalRevision = 0;
+
+const CHART_INTERVAL_SECONDS = Object.freeze({
+  "1m": 60,
+  "3m": 3 * 60,
+  "5m": 5 * 60,
+  "15m": 15 * 60,
+  "30m": 30 * 60,
+  "45m": 45 * 60,
+  "1h": 60 * 60,
+  "2h": 2 * 60 * 60,
+  "3h": 3 * 60 * 60,
+  "4h": 4 * 60 * 60,
+  "1D": 24 * 60 * 60,
+  "1W": 7 * 24 * 60 * 60,
+});
+
+const AURORA_PREVIEW_STATES = Object.freeze({
+  listening: ["Escuchando", "Conversación local"],
+  thinking: ["Procesando", "Evidencia local"],
+  responding: ["Respondiendo", "Conversación local"],
+  waiting: ["En espera", "Sesión disponible"],
+});
+
+export function configureAuroraPreview(parameters = new URLSearchParams()) {
+  const panel = document.querySelector("#aurora-preview");
+  const app = document.querySelector("#app");
+  const state = parameters.get("aurora_preview");
+  const copy = AURORA_PREVIEW_STATES[state];
+  if (!panel || !app || !copy) {
+    if (panel) panel.hidden = true;
+    if (app) delete app.dataset.auroraPreviewActive;
+    return false;
+  }
+  document.querySelector("#aurora-preview-title").textContent = copy[0];
+  document.querySelector("#aurora-preview-detail").textContent = copy[1];
+  panel.dataset.state = state;
+  panel.hidden = false;
+  app.dataset.auroraPreviewActive = "true";
+  return true;
+}
+
+function syncNativeTV(view) {
+  const handler = window.webkit?.messageHandlers?.commandCenter;
+  if (!handler) return false;
+  const rect = document.querySelector("#zapping-target").getBoundingClientRect();
+  handler.postMessage({
+    type: "primaryView",
+    view,
+    rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+  });
+  return true;
+}
+
+function selectedMarketAsset() {
+  return lastMarketRibbonState?.assets?.find(
+    (asset) => asset.id === selectedMarketAssetId,
+  ) || {
+    id: "btcusdt",
+    symbol: "BTCUSDT.P",
+    chartSymbol: "BTCUSDT",
+    tvSymbol: "BINANCE:BTCUSDT.P",
+  };
+}
+
+export function openStreamingProvider(provider) {
+  const definition = STREAMING_PROVIDERS[provider];
+  if (!definition) return false;
+  const handler = window.webkit?.messageHandlers?.commandCenter;
+  if (handler) {
+    const rect = document.querySelector("#streaming-target").getBoundingClientRect();
+    handler.postMessage({
+      type: "openStreaming",
+      provider,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    });
+  } else {
+    window.open(definition.url, "_blank", "noopener,noreferrer");
+  }
+  return true;
+}
+
+export function setPrimaryView(view) {
+  if (!(["market", "tv", "streaming"].includes(view))) return false;
+  primaryView = view;
+  const chartTarget = document.querySelector("#chart-target");
+  const zappingTarget = document.querySelector("#zapping-target");
+  const streamingTarget = document.querySelector("#streaming-target");
+  const zappingFrame = document.querySelector("#zapping-frame");
+  const source = document.querySelector("#primary-source-label");
+  const external = document.querySelector("#full-analysis-link");
+  const externalLabel = document.querySelector("#full-analysis-label");
+  const chartTimeControls = document.querySelector("#chart-time-controls");
+
+  document.querySelectorAll("[data-primary-view]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.primaryView === view));
+  });
+  chartTarget.hidden = view !== "market";
+  zappingTarget.hidden = view !== "tv";
+  streamingTarget.hidden = view !== "streaming";
+  external.hidden = view === "streaming";
+  chartTimeControls.hidden = view !== "market";
+
+  if (view === "tv") {
+    document.querySelector("#market-symbol-title").textContent = "Zapping TV";
+    document.querySelector("#market-interval-title").textContent = "· En vivo";
+    source.textContent = "Zapping · señal oficial";
+    external.href = ZAPPING_URL;
+    externalLabel.textContent = "Abrir Zapping";
+    const nativeTV = syncNativeTV("tv");
+    zappingFrame.hidden = nativeTV;
+    if (!nativeTV && !zappingFrame.src) zappingFrame.src = zappingFrame.dataset.src;
+  } else if (view === "streaming") {
+    syncNativeTV("streaming");
+    document.querySelector("#market-symbol-title").textContent = "Streaming";
+    document.querySelector("#market-interval-title").textContent = "· fútbol";
+    source.textContent = "Entretenimiento · sesión local";
+  } else {
+    syncNativeTV("market");
+    setChartLabels(selectedMarketAsset());
+    source.textContent = chartProviderPreference() === "tradingview"
+      ? "TradingView · reversión"
+      : "NexUX Chart · fuente declarada";
+    externalLabel.textContent = "Análisis completo";
+  }
+  try {
+    localStorage.setItem("nexux.primary-view", view);
+  } catch (_error) {
+    // La preferencia es conveniente, no necesaria para operar.
+  }
+  return true;
+}
+
+function wirePrimaryViewSelector() {
+  document.querySelectorAll("[data-primary-view]").forEach((button) => {
+    button.addEventListener("click", () => setPrimaryView(button.dataset.primaryView));
+  });
+  let saved = "market";
+  try {
+    saved = localStorage.getItem("nexux.primary-view") || "market";
+  } catch (_error) {
+    saved = "market";
+  }
+  setPrimaryView(["tv", "streaming"].includes(saved) ? saved : "market");
+  window.addEventListener("resize", () => {
+    if (primaryView === "tv") syncNativeTV("tv");
+  });
+}
+
+function wireStreamingProviders() {
+  document.querySelectorAll("[data-streaming-provider]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openStreamingProvider(button.dataset.streamingProvider);
+    });
+  });
+}
 
 function marketChangeDirection(change) {
   if (!Number.isFinite(change) || change === 0) return "flat";
@@ -2509,7 +2967,7 @@ export function describeChartFallback(asset, detail = null) {
   return {
     title: "Gráfico no disponible",
     explanation: detail ||
-      "TradingView no respondió. El resto del Command Center continúa disponible.",
+      "El proveedor gráfico no respondió. El resto del Command Center continúa disponible.",
     reading: hasPrice
       ? `${asset.symbol} ${formatMarketPrice(asset)} · ${formatMarketChange(asset.changePct)}`
       : "Sin una lectura de precio confirmada.",
@@ -2523,6 +2981,10 @@ export function describeChartFallback(asset, detail = null) {
         }`
       : "Use Análisis completo para continuar en TradingView.",
   };
+}
+
+export function chartProviderPreference(parameters = new URLSearchParams(location.search)) {
+  return parameters.get("provider") === "tradingview" ? "tradingview" : "nexux";
 }
 
 function renderChartFallback(target, asset, detail = null) {
@@ -2636,10 +3098,28 @@ export function openTradingViewAnalysis(asset) {
 }
 
 function setChartLabels(asset) {
+  if (primaryView !== "market") return;
   document.querySelector("#market-symbol-title").textContent = asset.symbol;
-  document.querySelector("#market-interval-title").textContent = "· 1H";
+  document.querySelector("#market-interval-title").textContent =
+    `· ${selectedChartInterval}`;
   const fullAnalysis = document.querySelector("#full-analysis-link");
   fullAnalysis.href = tradingViewAnalysisUrl(asset);
+}
+
+function synchronizeRibbonWithChart(reading) {
+  const asset = lastMarketRibbonState?.assets?.find(
+    (candidate) => candidate.chartSymbol === reading?.symbol,
+  );
+  if (!asset || asset.id !== selectedMarketAssetId || !Number.isFinite(reading.price)) return;
+  asset.price = reading.price;
+  asset.observedAt = reading.observedAt;
+  asset.freshness = "live";
+  const control = document.querySelector(`[data-asset-id="${asset.id}"]`);
+  if (!control) return;
+  control.querySelector(".market-price").textContent = formatMarketPrice(asset);
+  const freshness = control.querySelector(".market-freshness");
+  freshness.dataset.state = "live";
+  freshness.setAttribute("aria-label", `Frescura: ${FRESHNESS_LABELS.live}`);
 }
 
 async function remountChart(asset) {
@@ -2656,30 +3136,34 @@ async function remountChart(asset) {
   }
   if (activeChartAdapter) await activeChartAdapter.destroy();
   target.dataset.chartState = "mounting";
+  const provider = chartProviderPreference();
+  const providerLabel = provider === "tradingview" ? "TradingView" : "NexUX Chart";
   target.innerHTML =
-    '<div class="chart-placeholder"><span>TradingView</span>' +
+    `<div class="chart-placeholder"><span>${providerLabel}</span>` +
     `<small>Montando ${asset.symbol}</small></div>`;
-  const adapter = new TradingViewWidgetAdapter();
+  const adapter = provider === "tradingview"
+    ? new TradingViewWidgetAdapter()
+    : new NexuxChartProvider();
   activeChartAdapter = adapter;
   window.__nexuxCommandCenterChart = adapter;
   try {
     await adapter.mount(target, {
       targetRef: "command-center:market",
       symbol: asset.chartSymbol,
-      interval: "1h",
+      interval: selectedChartInterval,
       themeRef: "dark",
+      onPrice: synchronizeRibbonWithChart,
     });
     const stats = adapter.stats();
     target.dataset.chartState = "ready";
     lastChartFailureDetail = null;
     document.querySelector("#chart-health").textContent =
-      "Proveedor disponible";
+      provider === "tradingview" ? "TradingView disponible" : "NexUX Chart en vivo";
     document.querySelector("#chart-latency").textContent =
       `Montaje ${stats.lastMountLatencyMs} ms`;
   } catch (error) {
     target.dataset.chartState = "degraded";
-    lastChartFailureDetail =
-      "TradingView no respondió. El resto del Command Center continúa disponible.";
+    lastChartFailureDetail = `${providerLabel} no respondió. El resto del Command Center continúa disponible.`;
     const latestAsset = lastMarketRibbonState?.assets?.find(
       (candidate) => candidate.id === selectedMarketAssetId,
     ) || asset;
@@ -2712,6 +3196,87 @@ export function selectMarketAsset(asset) {
   return chartQueue.then(() => true);
 }
 
+export function formatCandleCountdown(interval, now = Date.now()) {
+  const duration = CHART_INTERVAL_SECONDS[interval];
+  if (!duration) return "--:--";
+  let remaining;
+  if (interval === "1W") {
+    const current = new Date(now);
+    const midnightUtc = Date.UTC(
+      current.getUTCFullYear(),
+      current.getUTCMonth(),
+      current.getUTCDate(),
+    );
+    const daysSinceMonday = (current.getUTCDay() + 6) % 7;
+    const nextMonday = midnightUtc - daysSinceMonday * 86_400_000 + 7 * 86_400_000;
+    remaining = Math.max(1, Math.ceil((nextMonday - now) / 1000));
+  } else {
+    const epochSeconds = Math.floor(now / 1000);
+    remaining = duration - (epochSeconds % duration);
+  }
+  const days = Math.floor(remaining / 86_400);
+  const hours = Math.floor((remaining % 86_400) / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+  const clock = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  if (days) return `${days}d ${clock}`;
+  if (hours) return clock;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function renderChartTimeControls(now = Date.now()) {
+  document.querySelector("#chart-interval-select").value = selectedChartInterval;
+  document.querySelector("#candle-countdown").textContent =
+    `Próxima vela ${formatCandleCountdown(selectedChartInterval, now)}`;
+  if (primaryView === "market") {
+    document.querySelector("#market-interval-title").textContent =
+      `· ${selectedChartInterval}`;
+  }
+}
+
+function wireChartTimeControls() {
+  document.querySelector("#chart-interval-select").addEventListener("change", (event) => {
+    const interval = event.currentTarget.value;
+    if (!CHART_INTERVAL_SECONDS[interval] || interval === selectedChartInterval) {
+      return;
+    }
+    const previousInterval = selectedChartInterval;
+    const revision = ++chartIntervalRevision;
+    selectedChartInterval = interval;
+    renderChartTimeControls();
+    const adapter = activeChartAdapter;
+    if (!adapter || adapter.providerId === "tradingview" || typeof adapter.setInterval !== "function") {
+      chartQueue = chartQueue
+        .catch(() => {})
+        .then(() => remountChart(selectedMarketAsset()));
+      return;
+    }
+    event.currentTarget.disabled = true;
+    adapter.setInterval(interval)
+      .then(() => {
+        if (revision !== chartIntervalRevision || adapter !== activeChartAdapter) return;
+        try { localStorage.setItem(CHART_INTERVAL_STORAGE_KEY, interval); } catch (_error) {
+          // La selección continúa funcionando aunque el almacenamiento esté restringido.
+        }
+        document.querySelector("#chart-health").textContent = "NexUX Chart en vivo";
+        document.querySelector("#chart-latency").textContent = `Temporalidad ${interval}`;
+      })
+      .catch(() => {
+        if (revision !== chartIntervalRevision || adapter !== activeChartAdapter) return;
+        selectedChartInterval = previousInterval;
+        renderChartTimeControls();
+        document.querySelector("#chart-health").textContent = "Temporalidad no disponible";
+      })
+      .finally(() => {
+        if (revision === chartIntervalRevision) {
+          document.querySelector("#chart-interval-select").disabled = false;
+        }
+      });
+  });
+  renderChartTimeControls();
+  candleCountdownTimer = setInterval(() => renderChartTimeControls(), 1000);
+}
+
 function startClock() {
   const tick = () => {
     document.querySelector("#clock").textContent =
@@ -2727,9 +3292,11 @@ function startClock() {
 
 export function bootstrap() {
   startClock();
+  wirePrimaryViewSelector();
+  wireChartTimeControls();
+  wireStreamingProviders();
   document.querySelector("#music-artwork-image").addEventListener("error", (event) => {
     event.currentTarget.hidden = true;
-    document.querySelector("#music-artwork-placeholder").hidden = false;
   });
   remountChart({
     id: "btcusdt",
@@ -2739,6 +3306,9 @@ export function bootstrap() {
   });
 
   const parameters = new URLSearchParams(location.search);
+  configureAuroraPreview(parameters);
+  const calendarSurface = new CalendarSurface();
+  calendarSurface.start();
   const fixture = parameters.get("fixture");
   if (
     FIXTURE_STATES.has(fixture) &&
@@ -2759,6 +3329,7 @@ export function bootstrap() {
     });
     render(state);
     renderMacro(macroState);
+    calendarSurface.setMacroEvents(macroState.events);
     renderMarketRibbon(fixtureMarketRibbonState());
     renderPositionsContext(positionsState);
     renderMacOSContext(macosState);
@@ -2831,6 +3402,7 @@ export function bootstrap() {
   const macroClient = new MacroContextClient({
     onChange: (state) => {
       attentionInputs.macro = state;
+      calendarSurface.setMacroEvents(state.events);
       renderMacro(state);
       paintAttention();
     },

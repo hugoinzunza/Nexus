@@ -1,7 +1,7 @@
 # NexUX Chart - Auditoria de estabilizacion
 
 **Fecha:** 2026-08-22
-**Estado:** `AUDITADO / ESTABILIZACION EN CURSO / GATE BOT3 ABIERTO`
+**Estado:** `BASE VISUAL ESTABILIZADA / INTEGRACION POR GATES / GATE BOT3 ABIERTO`
 **Superficie canonica:** `modules/trading/` (NexUX Trading)
 **Consumidor secundario:** Command Center, layout 67/33, Arzopa QHD 16 pulgadas
 
@@ -74,12 +74,18 @@ vista por defecto debe conservar solo indicadores descriptivos calculados sobre
 las mismas velas visibles. Las capas heredadas deben requerir activacion manual y
 mostrar su estado no certificado.
 
-### 7. Command Center aun no es un consumidor puro
+### 7. Integracion de Command Center por gates
 
-El adaptador provisional de Command Center consulta Binance directamente y
-mantiene calculos visuales propios. Aunque reutiliza `/m/trading/api/smc`, todavia
-no hereda de punta a punta el contrato del grafico NexUX. Esta divergencia no se
-amplia en esta pasada: queda como gate de integracion prioritario.
+El primer gate de integracion queda cerrado: Command Center obtiene velas, fuente
+declarada y nombre del stream desde los endpoints de NexUX Trading. Ya no consulta
+el REST de Binance como una segunda autoridad ni inventa el origen visible del
+feed. Las temporalidades sinteticas solo agregan velas de una temporalidad
+canonica de NexUX.
+
+Command Center aun conserva un renderer propio y calculos descriptivos de EMA,
+RSI y ADX. Por ello todavia no es un consumidor visual puro de punta a punta. La
+extraccion de un componente visual compartido queda como gate posterior; no debe
+resolverse copiando mas logica entre ambas superficies.
 
 ## Contrato provisional de estabilizacion
 
@@ -95,15 +101,29 @@ amplia en esta pasada: queda como gate de integracion prioritario.
    no compatible con Bot3.
 8. TP/SL, niveles y otras capas SMC legadas quedan apagadas por defecto.
 
+## Verificacion de esta pasada
+
+- Las seis temporalidades canonicas (`1m`, `5m`, `15m`, `1h`, `4h`, `1D`)
+  devolvieron velas y declararon su fuente mediante NexUX Trading.
+- Las doce opciones de Command Center derivan de esas seis series; `3m`, `30m`,
+  `45m`, `2h`, `3h` y `1W` son agregaciones deterministas y no consultas a otra
+  autoridad.
+- El ciclo rapido `4h -> 1D -> 4h` conserva una sola seleccion y descarta
+  respuestas antiguas.
+- La suite completa termino con `957 passed` y dos warnings preexistentes.
+- El service worker no intercepta `fetch`, no conserva assets y elimina caches al
+  activarse. El mensaje ocasional al obtener su script no puede servir JavaScript
+  antiguo del grafico; no se modifico esa pieza en esta pasada.
+- `modules/bot3/` no fue modificado.
+
 ## Pendientes para cerrar el gate
 
 - endpoint visual canonico derivado del ledger Bot3.v13;
 - paridad evento por evento y pruebas de prefijo;
 - salud completa de velas: cierre, edad, continuidad y brechas;
 - prueba prolongada sin parpadeo;
-- validacion de todas las temporalidades en NexUX;
-- validacion posterior del adaptador de Command Center;
-- eliminacion de la obtencion y semantica duplicadas en ese adaptador;
+- extraccion de un renderer compartido entre NexUX Trading y Command Center;
+- eliminacion de los calculos visuales duplicados restantes en el adaptador;
 - capturas antes/despues en el Arzopa fisico;
 - re-auditoria independiente de `BOT3_V9_GRAPH_VALIDATION_GATE.md`.
 

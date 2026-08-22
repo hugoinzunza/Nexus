@@ -12,6 +12,10 @@
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>NexUX muestra puntos de actividad de tus calendarios en modo solo lectura.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>NexUX muestra puntos de actividad de tus calendarios en modo solo lectura.</string>
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsLocalNetworking</key><true/>

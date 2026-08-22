@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-title" content="NexUX">
   <link rel="icon" href="/static/icons/nexux-favicon-v5.ico">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./command-center.css">
+  <link rel="stylesheet" href="./command-center.css?v=20260816-nexux-indicators">
   <title>NexUX Command Center</title>
 </head>
 <body>
@@ -54,58 +54,158 @@
       <div class="market-column">
         <section class="chart-region" aria-labelledby="market-title">
         <header class="region-header">
-          <div>
-            <span class="eyebrow">Mercado</span>
+          <div class="primary-view-heading">
+            <div class="primary-view-selector" aria-label="Vista principal">
+              <button type="button" data-primary-view="market"
+                aria-pressed="true">Mercado</button>
+              <button type="button" data-primary-view="tv"
+                aria-pressed="false">TV</button>
+              <button type="button" data-primary-view="streaming"
+                aria-pressed="false">Streaming</button>
+            </div>
             <h1 id="market-title"><span id="market-symbol-title">BTCUSDT.P</span>
-              <span id="market-interval-title">· 1H</span></h1>
+              <span id="market-interval-title"></span></h1>
           </div>
           <div class="chart-actions">
-            <span class="source-label">TradingView · contexto</span>
+            <div class="chart-time-controls" id="chart-time-controls">
+              <label class="chart-timeframe-selector">
+                <span>Temporalidad</span>
+                <select id="chart-interval-select" aria-label="Temporalidad del gráfico">
+                  <option value="1m">1 minuto</option>
+                  <option value="3m">3 minutos</option>
+                  <option value="5m">5 minutos</option>
+                  <option value="15m">15 minutos</option>
+                  <option value="30m">30 minutos</option>
+                  <option value="45m">45 minutos</option>
+                  <option value="1h" selected>1 hora</option>
+                  <option value="2h">2 horas</option>
+                  <option value="3h">3 horas</option>
+                  <option value="4h">4 horas</option>
+                  <option value="1D">1 día</option>
+                  <option value="1W">1 semana</option>
+                </select>
+              </label>
+              <output id="candle-countdown" class="candle-countdown"
+                aria-live="off">Próxima vela --:--</output>
+            </div>
+            <span class="source-label" id="primary-source-label">NexUX Chart · fuente declarada</span>
             <a class="external-action" id="full-analysis-link"
               href="https://www.tradingview.com/chart/?symbol=BINANCE%3ABTCUSDT.P"
               target="_blank" rel="noopener noreferrer">
-              <span>Análisis completo</span>
+              <span id="full-analysis-label">Análisis completo</span>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>
               </svg>
             </a>
           </div>
         </header>
-        <div class="chart-stage" id="chart-target">
-          <div class="chart-placeholder">
-            <span>TradingView</span>
-            <small>Montando proveedor</small>
+        <div class="primary-stage">
+          <div class="chart-stage" id="chart-target">
+            <div class="chart-placeholder">
+              <span>NexUX Chart</span>
+              <small>Sincronizando NexUX Trading</small>
+            </div>
+          </div>
+          <div class="zapping-stage" id="zapping-target" hidden>
+            <iframe id="zapping-frame" title="Zapping TV"
+              data-src="https://app.zapping.com/"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allowfullscreen></iframe>
+          </div>
+          <div class="streaming-stage" id="streaming-target" hidden>
+            <div class="streaming-provider-list" aria-label="Servicios de streaming">
+              <button type="button" class="streaming-provider disney"
+                data-streaming-provider="disney">
+                <span>Disney+</span>
+                <small>Deportes y fútbol</small>
+              </button>
+              <button type="button" class="streaming-provider apple-tv"
+                data-streaming-provider="apple_tv">
+                <span>Apple TV</span>
+                <small>MLS y eventos en vivo</small>
+              </button>
+              <button type="button" class="streaming-provider max"
+                data-streaming-provider="max">
+                <span>HBO Max</span>
+                <small>Deportes en vivo</small>
+              </button>
+              <button type="button" class="streaming-provider youtube"
+                data-streaming-provider="youtube">
+                <span>YouTube</span>
+                <small>Video y transmisiones en vivo</small>
+              </button>
+            </div>
           </div>
         </div>
         </section>
       </div>
 
       <aside class="context-rail" aria-label="Contexto operativo">
-        <section class="attention-panel" aria-labelledby="attention-title">
-          <header class="panel-header">
+        <section class="attention-panel" data-calendar-panel
+          aria-labelledby="calendar-title">
+          <header class="calendar-header">
             <div>
-              <span class="eyebrow">NexUX · solo lectura</span>
-              <h2 id="attention-title">Atención inmediata</h2>
+              <span class="eyebrow">Calendario · solo lectura</span>
+              <h2 id="calendar-title">Calendario</h2>
             </div>
+            <div class="calendar-controls" aria-label="Navegar por meses">
+              <button type="button" class="icon-button" id="calendar-previous"
+                title="Mes anterior" aria-label="Mes anterior">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <button type="button" class="icon-button" id="calendar-today"
+                title="Ir a hoy" aria-label="Ir a hoy">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/><path d="M9 14h.01M12 14h.01M15 14h.01M9 17h.01M12 17h.01"/></svg>
+              </button>
+              <button type="button" class="icon-button" id="calendar-next"
+                title="Mes siguiente" aria-label="Mes siguiente">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            </div>
+          </header>
+          <div class="calendar-alert" data-state="unknown" id="calendar-alert">
             <span class="context-badge" data-state="unknown"
               id="attention-state">Esperando</span>
-          </header>
-          <p class="context-summary" data-state="unknown"
-            id="attention-summary">Reuniendo contexto operacional.</p>
+            <p class="context-summary" data-state="unknown"
+              id="attention-summary">Reuniendo contexto operacional.</p>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span>
+            <span>Vi</span><span>Sa</span><span>Do</span>
+          </div>
+          <div class="calendar-grid" id="calendar-grid"
+            aria-label="Mes del calendario"></div>
           <div class="attention-list" id="attention-list"
-            data-timeline-active="false"
+            data-timeline-active="false" hidden
             aria-label="Alertas y actividad operacional"></div>
-          <footer class="context-footer">
-            <span id="attention-detail">Sin evaluación completa</span>
-            <span id="attention-updated">Sin lectura</span>
+          <footer class="calendar-footer">
+            <div id="calendar-selection">Selecciona un día con actividad</div>
+            <span id="calendar-status">Esperando permiso de Calendar</span>
+            <span id="attention-detail" hidden>Sin evaluación completa</span>
+            <span id="attention-updated" hidden>Sin lectura</span>
           </footer>
         </section>
 
-        <section class="music-panel" aria-labelledby="music-title">
+        <section class="aurora-panel" id="aurora-preview" hidden
+          aria-labelledby="aurora-preview-title">
+          <div class="aurora-presence" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </div>
+          <div class="aurora-copy">
+            <span class="eyebrow">Aurora</span>
+            <h2 id="aurora-preview-title">Respondiendo</h2>
+            <span id="aurora-preview-detail">Conversación local</span>
+          </div>
+          <div class="aurora-wave" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+          <span class="aurora-preview-badge">Vista previa</span>
+        </section>
+
+        <section class="music-panel" aria-label="Música">
           <header class="panel-header">
             <div>
               <span class="eyebrow">Música</span>
-              <h2 id="music-title">Reproducción</h2>
             </div>
             <div class="media-provider-selector" aria-label="Aplicación de música">
               <button type="button" data-media-provider="apple-music"
@@ -121,9 +221,6 @@
           <div class="music-content">
             <div class="music-artwork" id="music-artwork" aria-hidden="true">
               <img id="music-artwork-image" alt="" hidden>
-              <svg id="music-artwork-placeholder" viewBox="0 0 24 24">
-                <path d="M9 18V5l10-2v13M9 9l10-2M6 21c1.7 0 3-1.1 3-2.5S7.7 16 6 16s-3 1.1-3 2.5S4.3 21 6 21Zm10-2c1.7 0 3-1.1 3-2.5S17.7 14 16 14s-3 1.1-3 2.5S14.3 19 16 19Z"/>
-              </svg>
             </div>
             <div class="music-now">
               <strong id="music-track">Sin reproducción disponible</strong>
@@ -207,7 +304,10 @@
         <span class="macos-compact-state" data-state="unknown"
           id="macos-state">macOS</span>
         <span><small>Carga</small><strong id="macos-load">--</strong></span>
-        <span><small>Mem</small><strong id="macos-memory">--</strong></span>
+        <span><small>Memoria</small><span class="macos-memory-value">
+          <strong data-state="unknown" id="macos-memory-pressure">--</strong>
+          <span id="macos-memory">--</span>
+        </span></span>
         <span><small>Disco</small><strong id="macos-disk">--</strong></span>
         <span><small>Energía</small><strong id="macos-power">--</strong></span>
         <span class="visually-hidden" id="macos-answer">Verificando el equipo local.</span>
@@ -221,6 +321,7 @@
     </footer>
   </div>
 
-  <script type="module" src="./command-center.js"></script>
+  <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
+    <script type="module" src="./command-center.js?v=20260816-health-stability"></script>
 </body>
 </html>

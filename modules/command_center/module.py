@@ -328,6 +328,33 @@ class CommandCenterModule(NexusModule):
             return getattr(self, "media_surface", None)
         return None
 
+    async def _pause_competing_media(
+        self,
+        selected_provider: str,
+        command_id: str,
+    ) -> None:
+        surfaces = getattr(self, "media_surfaces", {})
+        if not isinstance(surfaces, dict):
+            return
+        for provider, surface in surfaces.items():
+            if provider == selected_provider or surface is None:
+                continue
+            try:
+                snapshot = await surface.snapshot()
+                if snapshot.get("playback") != "playing":
+                    continue
+                result = await surface.execute(
+                    command_id=f"{command_id}.pause-{provider}",
+                    action=MediaAction.PAUSE,
+                )
+                if result.get("status") == "applied":
+                    self._invalidate_media_snapshot(provider)
+            except Exception as exc:  # noqa: BLE001
+                self.context.log(
+                    "command-center: no pudo pausar reproductor previo "
+                    f"{provider} ({type(exc).__name__})"
+                )
+
     def _cached_media_snapshot_sync(
         self,
         provider: str,
@@ -691,9 +718,10 @@ class CommandCenterModule(NexusModule):
                 snapshot["available_providers"] = list(_MEDIA_PROVIDERS)
                 return self._json(200, snapshot)
             except Exception as exc:  # noqa: BLE001
+                error_code = getattr(exc, "code", type(exc).__name__)
                 self.context.log(
                     "command-center: contexto multimedia fallo "
-                    f"({type(exc).__name__})"
+                    f"({error_code})"
                 )
                 return self._json(
                     502,
@@ -784,6 +812,8 @@ class CommandCenterModule(NexusModule):
                 ),
             )
         try:
+            if action is MediaAction.PLAY:
+                await self._pause_competing_media(provider, command_id)
             result = await surface.execute(
                 command_id=command_id,
                 action=action,

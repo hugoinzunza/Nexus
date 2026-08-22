@@ -20,6 +20,10 @@ def test_contexto_macos_proyecta_metricas_locales_sin_procesos(monkeypatch):
             "Pages wired down: 500000.\n"
             "Pages occupied by compressor: 500000.\n"
         ),
+        ("/usr/bin/memory_pressure", "-Q"): (
+            "The system has 16000000000 bytes.\n"
+            "System-wide memory free percentage: 37%\n"
+        ),
         ("/usr/bin/pmset", "-g", "batt"): "Now drawing from 'AC Power'",
         ("/usr/sbin/sysctl", "-n", "kern.boottime"): (
             f"{{ sec = {int(time.time()) - 86400}, usec = 0 }}"
@@ -47,6 +51,8 @@ def test_contexto_macos_proyecta_metricas_locales_sin_procesos(monkeypatch):
     assert result["device"] == "NexUX-Mac"
     assert result["load_percent"] == 25.0
     assert result["memory_percent"] == 51.2
+    assert result["memory_pressure"] == "normal"
+    assert result["memory_available_percent"] == 37.0
     assert result["disk_percent"] == 40.0
     assert result["power_source"] == "Corriente"
     assert result["uptime_seconds"] >= 86400
@@ -66,6 +72,23 @@ def test_contexto_macos_fuera_del_host_local_falla_explicito(monkeypatch):
     }
 
 
+def test_contexto_macos_clasifica_presion_por_capacidad_disponible():
+    expected = {
+        37: "normal",
+        15: "elevated",
+        9: "critical",
+    }
+    for available, state in expected.items():
+        service = MacOSContextService(
+            enabled=True,
+            runner=lambda _command, value=available: (
+                f"System-wide memory free percentage: {value}%"
+            ),
+        )
+
+        assert service._memory_pressure() == (state, float(available))
+
+
 def test_shell_compacta_macos_y_devuelve_protagonismo_a_trading():
     page = (PUBLIC / "index.html").read_text(encoding="utf-8")
     css = (PUBLIC / "command-center.css").read_text(encoding="utf-8")
@@ -75,6 +98,7 @@ def test_shell_compacta_macos_y_devuelve_protagonismo_a_trading():
     assert page.count('class="market-column"') == 1
     assert 'id="macos-load"' in page
     assert 'id="macos-memory"' in page
+    assert 'id="macos-memory-pressure"' in page
     assert 'id="macos-disk"' in page
     assert 'id="macos-power"' in page
     assert "grid-template-columns: minmax(0, 2.08fr) minmax(560px, 1fr)" in css

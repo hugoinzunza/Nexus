@@ -12,6 +12,7 @@ cp "$PLIST" "$APP/Contents/Info.plist"
 xcrun swiftc "$SOURCE" \
   -O \
   -framework AppKit \
+  -framework EventKit \
   -framework WebKit \
   -o "$MACOS/NexUXCommandCenter"
 

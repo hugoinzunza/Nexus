@@ -7,6 +7,7 @@ import json
 import os
 import select
 import subprocess
+import tempfile
 import threading
 import time
 from collections import OrderedDict
@@ -50,15 +51,15 @@ _CAPABILITIES = frozenset(
         MediaCapability.OPEN_APP,
     }
 )
-_DEFAULT_AGENT = (
-    Path(__file__).resolve().parents[2]
-    / "agents"
-    / "macos"
-    / "NexusAgent"
-    / ".build"
-    / "release"
-    / "nexus-agent"
+_INSTALLED_AGENT = (
+    Path.home() / "Applications" / "NexUX Media Agent.app"
+    / "Contents" / "MacOS" / "nexus-agent"
 )
+_BUILD_AGENT = (
+    Path(__file__).resolve().parents[2]
+    / "agents" / "macos" / "NexusAgent" / ".build" / "release" / "nexus-agent"
+)
+_DEFAULT_AGENT = _INSTALLED_AGENT if _INSTALLED_AGENT.is_file() else _BUILD_AGENT
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,8 @@ class DesktopPlaybackSnapshot:
     album: str | None
     item_ref: str | None
     progress: float | None = None
+    position_seconds: float | None = None
+    duration_seconds: float | None = None
 
 
 class QobuzPortError(RuntimeError):
@@ -166,10 +169,15 @@ class OsaScriptQobuzPort:
     async def current_state(
         self, context: OperationContext
     ) -> DesktopPlaybackSnapshot:
-        payload = await self._agent_json(
-            {"kind": "state", "provider": self.code_prefix},
-            context,
-        )
+        request = {"kind": "state", "provider": self.code_prefix}
+        try:
+            payload = await self._agent_json(request, context)
+        except QobuzPortError as exc:
+            if exc.code != f"{self.code_prefix}.player-unavailable":
+                raise
+            await self.open_app(context)
+            await asyncio.sleep(0.25)
+            payload = await self._agent_json(request, context)
         playback = payload.get("playback")
         if playback not in {"playing", "paused", "stopped", "unknown"}:
             raise QobuzPortError(
@@ -188,7 +196,20 @@ class OsaScriptQobuzPort:
             and 0 <= float(progress_value) <= 1
             else None
         )
-        return DesktopPlaybackSnapshot(playback, progress=progress, **fields)
+        timing = {}
+        for key in ("position_seconds", "duration_seconds"):
+            value = payload.get(key)
+            timing[key] = (
+                float(value)
+                if type(value) in (int, float) and float(value) >= 0
+                else None
+            )
+        return DesktopPlaybackSnapshot(
+            playback,
+            progress=progress,
+            **fields,
+            **timing,
+        )
 
     async def execute(
         self,
@@ -214,7 +235,30 @@ class OsaScriptQobuzPort:
         }
         if known_playback in {"playing", "paused"}:
             request["known_playback"] = known_playback
-        payload = await self._agent_json(request, context, command=True)
+        try:
+            payload = await self._agent_json(request, context, command=True)
+        except QobuzPortError as exc:
+            expected = {
+                MediaAction.PLAY: "playing",
+                MediaAction.PAUSE: "paused",
+            }.get(action)
+            if (
+                expected is not None
+                and exc.code == f"{self.code_prefix}.command-failed"
+            ):
+                # TIDAL y Qobuz pueden aplicar el control antes de actualizar
+                # su árbol AX. Reconciliar evita reportar un rechazo falso.
+                await asyncio.sleep(0.8)
+                observed = await self.current_state(context)
+                if observed.playback == expected:
+                    return
+            if exc.code != f"{self.code_prefix}.player-unavailable":
+                raise
+            # El rechazo ocurre antes de ejecutar la acción; es seguro despertar
+            # la ventana accesible y enviar la misma intención idempotente.
+            await self.open_app(context)
+            await asyncio.sleep(0.25)
+            payload = await self._agent_json(request, context, command=True)
         if payload.get("status") != "applied":
             raise QobuzPortError(
                 str(payload.get("code") or f"{self.code_prefix}.rejected"),
@@ -242,12 +286,19 @@ class OsaScriptQobuzPort:
                 cancel_event=context.cancel_event,
             )
         try:
-            output = await asyncio.to_thread(
-                self._agent_request,
-                request,
-                operation_context,
-                command,
-            )
+            if self._agent_app_path() is not None:
+                output = await self._agent_app_request(
+                    request,
+                    operation_context,
+                    command,
+                )
+            else:
+                output = await asyncio.to_thread(
+                    self._agent_request,
+                    request,
+                    operation_context,
+                    command,
+                )
             payload = json.loads(output.decode("utf-8", errors="strict"))
         except json.JSONDecodeError as exc:
             await self.close_helper()
@@ -276,6 +327,97 @@ class OsaScriptQobuzPort:
                 retryable=bool(payload.get("retryable", True)),
             )
         return payload
+
+    def _agent_app_path(self) -> Path | None:
+        try:
+            contents = self.agent_path.parents[1]
+            app = self.agent_path.parents[2]
+        except IndexError:
+            return None
+        if contents.name == "Contents" and app.suffix == ".app":
+            return app
+        return None
+
+    async def _agent_app_request(
+        self,
+        request: dict[str, str],
+        context: OperationContext,
+        command: bool,
+    ) -> bytes:
+        app = self._agent_app_path()
+        if app is None:
+            raise QobuzPortError(
+                f"{self.code_prefix}.helper-unavailable",
+                "el bundle del agente macOS no es valido",
+                retryable=False,
+            )
+        if request.get("kind") == "state":
+            arguments = ("--media-state", request["provider"])
+        else:
+            arguments = [
+                "--media-command",
+                request["provider"],
+                request["action"],
+            ]
+            if request.get("known_playback") in {"playing", "paused"}:
+                arguments.append(request["known_playback"])
+            arguments = tuple(arguments)
+
+        with tempfile.TemporaryDirectory(prefix="nexux-media-") as directory:
+            output_path = Path(directory) / "stdout.json"
+            error_path = Path(directory) / "stderr.log"
+            output_path.touch(mode=0o600)
+            error_path.touch(mode=0o600)
+            process = await asyncio.create_subprocess_exec(
+                OPEN,
+                "-W",
+                "-n",
+                "-j",
+                "-a",
+                str(app),
+                "-i",
+                "/dev/null",
+                "-o",
+                str(output_path),
+                "--stderr",
+                str(error_path),
+                "--args",
+                *arguments,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            try:
+                await await_operation(process.communicate(), context)
+            except OperationCancelled:
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
+                raise
+            except OperationDeadlineExceeded as exc:
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
+                raise QobuzPortError(
+                    f"{self.code_prefix}.timeout",
+                    f"la automatizacion de {self.provider_name} excedio el deadline",
+                    retryable=True,
+                    ambiguous=command,
+                ) from exc
+
+            while context.remaining() != 0:
+                output = output_path.read_bytes()
+                if output.strip():
+                    return output.strip()
+                await asyncio.sleep(0.05)
+            detail = error_path.read_text(
+                encoding="utf-8", errors="replace"
+            ).strip()
+            raise QobuzPortError(
+                f"{self.code_prefix}.helper-stopped",
+                detail or "el agente macOS termino sin responder",
+                retryable=True,
+                ambiguous=command,
+            )
 
     async def close_helper(self) -> None:
         await asyncio.to_thread(self._close_helper_sync)
@@ -566,6 +708,16 @@ class QobuzAdapter:
                 **(
                     {"progress": snapshot.progress}
                     if snapshot.progress is not None
+                    else {}
+                ),
+                **(
+                    {"position_seconds": snapshot.position_seconds}
+                    if snapshot.position_seconds is not None
+                    else {}
+                ),
+                **(
+                    {"duration_seconds": snapshot.duration_seconds}
+                    if snapshot.duration_seconds is not None
                     else {}
                 ),
             }
