@@ -69,6 +69,6 @@ El backfill completo contiene 809 publicaciones financieras y 564 observaciones
 empresa–trimestre de 97 sociedades entre marzo de 2025 y agosto de 2026. Cubre
 siete períodos; la mediana por empresa es seis y ninguna puede aportar ocho
 trimestres desde este canal todavía. También falta la fuente autorizada de
-precios. El join histórico CMF↔Telegram entrega 460 candidatos causales y deja
+precios. El join histórico CMF↔Telegram entrega 428 candidatos causales y deja
 tres AFP explícitamente sin matching. Por lo tanto no existe predictor ni señal
 autorizada.

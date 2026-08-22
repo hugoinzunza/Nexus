@@ -85,7 +85,7 @@ def test_bot_web_es_solo_admin(monkeypatch):
     assert ("coinglass", "visual-ingest") in app._TOKEN_AUTH_POSTS
     assert ("coinsignals", "ingest") in app._TOKEN_AUTH_POSTS
     assert ("journal", "ingest") in app._TOKEN_AUTH_POSTS
-    assert ("acciones_chile", "ingest-portfolio") in app._TOKEN_AUTH_POSTS
+    assert ("acciones_chile", "ingest-portfolio") not in app._TOKEN_AUTH_POSTS
     assert ("acciones_chile", "ingest-telegram-events") in app._TOKEN_AUTH_POSTS
 
 

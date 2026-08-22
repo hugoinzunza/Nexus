@@ -24,7 +24,7 @@ PUBLIC_PATH = "/Siete/ES/Siete/Cuadro/CAP_TIPO_CAMBIO/MN_TIPO_CAMBIO4/DOLAR_OBS_
 SERIES_ID = "F073.TCO.PRE.Z.D"
 TOKEN_ENV = "BCCH_API_TOKEN"
 SCHEMA_VERSION = "acciones-chile-fx-0.1.0"
-EPS_UNIT_SCHEMA_VERSION = "acciones-chile-eps-units-0.2.0"
+EPS_UNIT_SCHEMA_VERSION = "acciones-chile-eps-units-0.3.0"
 MAX_DOWNLOAD_BYTES = 1_000_000
 PUBLIC_URL = urllib.parse.urlunparse((
     "https", API_HOST, PUBLIC_PATH, "", urllib.parse.urlencode({"idSerie": SERIES_ID}), ""))
@@ -358,6 +358,8 @@ def validate_eps_unit_record(rut: str, record: dict) -> dict:
         raise ValueError("registro de unidad EPS inválido")
     if record.get("status") != "verified":
         raise ValueError(f"unidad EPS de {rut} no verificada")
+    if str(record.get("rut") or "") != str(rut):
+        raise ValueError(f"identidad de emisor EPS de {rut} inválida")
     if record.get("metric") != "basic_eps" or not re.fullmatch(
             r"\d{6}", str(record.get("period") or "")):
         raise ValueError(f"período o métrica EPS de {rut} inválido")

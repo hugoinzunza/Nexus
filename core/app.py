@@ -403,7 +403,6 @@ _TOKEN_AUTH_POSTS = {
     ("journal", "connections"),
     ("journal", "connection-status"),
     ("journal", "vault-check"),
-    ("acciones_chile", "ingest-portfolio"),
     ("acciones_chile", "ingest-telegram-events"),
 }
 

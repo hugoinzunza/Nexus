@@ -81,7 +81,17 @@ def test_fundamentals_include_balance_and_free_cash_flow():
 
 def test_valuation_only_computes_compatible_observed_multiple():
     clp = [{"period": "202512", "currency": "CLP", "analysis": {"basic_eps": "20"}}]
-    result = evaluate_valuation(clp, "300")
+    assert evaluate_valuation(clp, "300")["status"] == "eps_unit_verification_required"
+    clp_verified = {
+        "rut": "76543210", "status": "verified", "metric": "basic_eps",
+        "period": "202512", "unit": "CLP_PER_SHARE", "cmf_value": "20",
+        "reported_value": "20", "cmf_value_multiplier": "1", "source_page": 10,
+        "source_reference": "https://issuer.example/annual-report.pdf",
+        "verification_method": "audited_annual_report_note",
+        "source_sha256": "b" * 64, "verified_as_of": "2026-08-22",
+    }
+    result = evaluate_valuation(
+        clp, "300", eps_unit_verification=clp_verified, issuer_rut="76543210")
     assert result["pe"] == 15
     assert result["fair_value"] is None
     assert result["buy_sell_recommendation"] is None
@@ -90,7 +100,7 @@ def test_valuation_only_computes_compatible_observed_multiple():
     usd_without_eps = [{"period": "202512", "currency": "USD", "analysis": {}}]
     assert evaluate_valuation(usd_without_eps, "6000")["status"] == "annual_eps_unavailable"
     verified = {
-        "status": "verified", "metric": "basic_eps", "period": "202512",
+        "rut": "76543210", "status": "verified", "metric": "basic_eps", "period": "202512",
         "unit": "USD_PER_SHARE", "cmf_value": "1.2", "reported_value": "1.2",
         "cmf_value_multiplier": "1", "source_page": 10,
         "source_reference": "https://issuer.example/annual-report.pdf",
@@ -98,10 +108,12 @@ def test_valuation_only_computes_compatible_observed_multiple():
         "source_sha256": "a" * 64, "verified_as_of": "2026-08-22",
     }
     converted = evaluate_valuation(
-        usd, "6000", {"date": "2026-08-21", "clp_per_usd": "1000"}, verified)
+        usd, "6000", {"date": "2026-08-21", "clp_per_usd": "1000"}, verified,
+        issuer_rut="76543210")
     assert converted["pe"] == 5
     assert converted["eps_clp_per_share"] == 1200
-    assert evaluate_valuation(usd, "6000", None, verified)["status"] == "official_fx_rate_required"
+    assert evaluate_valuation(
+        usd, "6000", None, verified, issuer_rut="76543210")["status"] == "official_fx_rate_required"
 
 
 def _fx_payload():
@@ -205,9 +217,9 @@ def test_bcch_public_table_rejects_ambiguous_or_redirected_source(monkeypatch):
 
 
 def test_eps_unit_requires_audited_hashed_evidence():
-    valid = {"schema_version": "acciones-chile-eps-units-0.2.0", "entries": {
+    valid = {"schema_version": "acciones-chile-eps-units-0.3.0", "entries": {
         "90412000": {
-            "status": "verified", "metric": "basic_eps", "period": "202512",
+            "rut": "90412000", "status": "verified", "metric": "basic_eps", "period": "202512",
             "unit": "USD_PER_SHARE", "cmf_value": "1.3495",
             "reported_value": "1.3495", "cmf_value_multiplier": "1",
             "verification_method": "audited_annual_report_note",
@@ -220,24 +232,35 @@ def test_eps_unit_requires_audited_hashed_evidence():
     valid["entries"]["90412000"]["verification_method"] = "heuristic"
     with pytest.raises(ValueError, match="método de unidad EPS"):
         validate_eps_unit_dataset(valid)
+    valid["entries"]["90412000"]["verification_method"] = "audited_annual_report_note"
+    valid["entries"]["90412000"]["rut"] = "90690000"
+    with pytest.raises(ValueError, match="identidad de emisor EPS"):
+        validate_eps_unit_dataset(valid)
 
 
 def test_packaged_eps_evidence_reconciles_copec_cmf_scale_and_minera_unit():
     root = Path(__file__).resolve().parents[1]
     evidence = validate_eps_unit_dataset(json.loads(
-        (root / "config/acciones_chile_eps_units_v0.2.json").read_text(encoding="utf-8")))
+        (root / "config/acciones_chile_eps_units_v0.3.json").read_text(encoding="utf-8")))
     copec = evidence["entries"]["90690000"]
     assert Decimal(copec["cmf_value"]) * Decimal(copec["cmf_value_multiplier"]) == Decimal("0.67457")
     assert copec["reported_value"] == "0.674577"
     history = [{"period": "202512", "currency": "USD",
                 "analysis": {"basic_eps": "674.57"}}]
     valuation = evaluate_valuation(
-        history, "6600", {"date": "2026-08-21", "clp_per_usd": "933"}, copec)
+        history, "6600", {"date": "2026-08-21", "clp_per_usd": "933"}, copec,
+        issuer_rut="90690000")
     assert valuation["eps_verified_per_share"] == 0.674577
     assert valuation["eps_clp_per_share"] == pytest.approx(629.380341)
     assert valuation["pe"] == pytest.approx(10.4865)
     assert evidence["entries"]["90412000"]["reported_value"] == "1.3495"
-    status = eps_unit_availability(str(root / "config/acciones_chile_eps_units_v0.2.json"))
+    aguas = evidence["entries"]["61808000"]
+    aguas_valuation = evaluate_valuation(
+        [{"period": "202512", "currency": "CLP", "analysis": {"basic_eps": "22.848"}}],
+        "330", eps_unit_verification=aguas, issuer_rut="61808000")
+    assert aguas_valuation["pe"] == pytest.approx(14.4433)
+    assert aguas_valuation["eps_verified_unit"] == "CLP_PER_SHARE"
+    status = eps_unit_availability(str(root / "config/acciones_chile_eps_units_v0.3.json"))
     assert status["mechanism_ready"] is True
     assert status["ready"] is False
     assert status["universe_complete"] is False
@@ -462,6 +485,52 @@ def test_token_authenticated_telegram_export_ingest(monkeypatch, tmp_path):
     assert instance.api_post(
         "ingest-telegram-events", invalid,
         {"x-nexux-token": "collector-secret"}, user=None)[0] == 400
+
+    malformed_time = {**export, "events": [{**export["events"][0],
+                                             "available_at": "MAÑANA"}]}
+    assert instance.api_post(
+        "ingest-telegram-events", malformed_time,
+        {"x-nexux-token": "collector-secret"}, user=None)[0] == 400
+    future_time = {**export, "events": [{**export["events"][0],
+                                          "available_at": "2099-01-01T00:00:00+00:00"}]}
+    assert instance.api_post(
+        "ingest-telegram-events", future_time,
+        {"x-nexux-token": "collector-secret"}, user=None)[0] == 400
+
+
+def test_portfolio_ingest_uses_authenticated_session_uid(monkeypatch, tmp_path):
+    monkeypatch.setattr(acciones_module, "PORTFOLIO_PATH", str(tmp_path / "portfolio.json"))
+    context = SimpleNamespace(
+        module_config={"portfolio_ingest_enabled": True}, module_dir=str(tmp_path),
+        log=lambda message: None)
+    instance = acciones_module.AccionesChileModule(context)
+    payload = {"user_id": 999, "holdings": [{
+        "ticker": "COPEC", "quantity": "1", "average_cost": "6000",
+    }]}
+    assert instance.api_post("ingest-portfolio", payload, {}, user=None)[0] == 401
+    status, _, _ = instance.api_post(
+        "ingest-portfolio", payload, {"x-nexux-token": "shared-token"}, user={"uid": 7})
+    assert status == 200
+    assert instance._read_portfolio(7)["holdings"][0]["ticker"] == "COPEC"
+    assert instance._read_portfolio(999) is None
+
+
+def test_portfolio_monitor_labels_unverified_listing(monkeypatch, tmp_path):
+    monkeypatch.setattr(acciones_module, "PORTFOLIO_PATH", str(tmp_path / "portfolio.json"))
+    context = SimpleNamespace(module_config={}, module_dir=str(tmp_path), log=lambda message: None)
+    instance = acciones_module.AccionesChileModule(context)
+    monkeypatch.setattr(instance, "_read_dataset", lambda: build_dataset(_payload().encode()))
+    assert instance.api_post("save-portfolio", {"as_of": "2026-08-22", "holdings": [{
+        "ticker": "TEST", "company_rut": "76543210", "quantity": "1",
+        "average_cost": "100", "market_price": "120",
+    }]}, {}, user={"uid": 7})[0] == 200
+    status, _, raw = instance.api("portfolio-monitor", {}, user={"uid": 7})
+    holding = json.loads(raw)["holdings"][0]
+    assert status == 200
+    assert holding["listing_status"] == "not_verified_by_available_snapshot"
+    assert holding["universe_coverage"] == "partial_top_weight_constituents"
+    assert holding["data_source_gate"]["code"] == "listing_not_verified"
+    assert "cotización no verificada" in holding["decision_evidence"]["blockers"][-1]
 
 
 def test_auditor_is_manual_and_advisory(monkeypatch):
@@ -875,7 +944,10 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
     assert "./api/save-portfolio" in page
     assert "./api/radar" in page
     assert "no es una cotización en vivo" in page
-    assert "unidad EPS por validar" in page
+    assert "unidad/escala EPS por validar" in page
+    assert "EPS verificado" in page
+    assert "EPS del ejercicio" in page
+    assert "cotización no verificada" in page
     assert "Ausencia en el feed no prueba" in page
     assert "no implica orden de rebalanceo" in page
 

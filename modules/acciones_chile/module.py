@@ -6,7 +6,7 @@ import json
 import os
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from core.module_base import NexusModule
 from core.paths import persist_dir
@@ -37,7 +37,7 @@ MARKET_STATUS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_market_data
 BANKS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_banks.json")
 FX_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_fx.json")
 EPS_UNITS_PATH = os.path.join(persist_dir(ROOT), "acciones_chile_eps_units.json")
-PACKAGED_EPS_UNITS_PATH = os.path.join(ROOT, "config", "acciones_chile_eps_units_v0.2.json")
+PACKAGED_EPS_UNITS_PATH = os.path.join(ROOT, "config", "acciones_chile_eps_units_v0.3.json")
 MAX_BODY_BYTES = 500_000
 MAX_TELEGRAM_BODY_BYTES = 2_000_000
 
@@ -215,7 +215,8 @@ class AccionesChileModule(NexusModule):
                          or fx.read_eps_unit_dataset(PACKAGED_EPS_UNITS_PATH) or {})
             unit_verification = (eps_units.get("entries") or {}).get(rut)
             valuation = evaluate_valuation(
-                history, (holding or {}).get("market_price"), fx_rate, unit_verification)
+                history, (holding or {}).get("market_price"), fx_rate,
+                unit_verification, issuer_rut=rut)
             event_state = portfolio_event_monitor(
                 (self._read_telegram() or {}).get("events", []), [history[-1]["company"]])
             company_events = (event_state.get("by_company") or {}).get(
@@ -267,6 +268,16 @@ class AccionesChileModule(NexusModule):
             eps_units = (fx.read_eps_unit_dataset(EPS_UNITS_PATH)
                          or fx.read_eps_unit_dataset(PACKAGED_EPS_UNITS_PATH) or {})
             bank_status = banks.availability(BANKS_PATH)
+            try:
+                universe_data = load_universe(self._universe_path())
+                universe_snapshot = snapshot_as_of(
+                    universe_data, portfolio.get("as_of") or date.today(),
+                    require_complete=False)
+                universe_members = universe_snapshot.get("members", [])
+                universe_coverage = universe_snapshot.get("coverage")
+            except (OSError, ValueError):
+                universe_members = []
+                universe_coverage = "unavailable"
             monitored = []
             total_initial = 0.0
             total_market = 0.0
@@ -287,6 +298,11 @@ class AccionesChileModule(NexusModule):
                 unit_verification = (eps_units.get("entries") or {}).get(
                     holding.get("company_rut"))
                 ticker = str(holding.get("ticker") or "").upper()
+                member = next((candidate for candidate in universe_members
+                               if candidate.get("ticker") == ticker
+                               and candidate.get("rut") == holding.get("company_rut")), None)
+                listing_status = ("verified_member_in_snapshot" if member else
+                                  "not_verified_by_available_snapshot")
                 data_source_gate = None
                 if ticker in banks.LISTED_BANKS:
                     data_source_gate = {
@@ -299,8 +315,14 @@ class AccionesChileModule(NexusModule):
                         "status": "blocked", "code": "issuer_not_mapped_to_cmf",
                         "label": "emisor sin mapeo contable CMF verificado",
                     }
+                elif not member:
+                    data_source_gate = {
+                        "status": "blocked", "code": "listing_not_verified",
+                        "label": "cotización no verificada en el universo bursátil disponible",
+                    }
                 valuation = (evaluate_valuation(
-                    history, holding.get("market_price"), fx_rate, unit_verification)
+                    history, holding.get("market_price"), fx_rate, unit_verification,
+                    issuer_rut=issuer.get("rut"))
                     if issuer else None)
                 if valuation and valuation.get("pe") is not None:
                     observed_multiple_positions += 1
@@ -313,6 +335,9 @@ class AccionesChileModule(NexusModule):
                     "analysis": issuer.get("analysis") if issuer else None,
                     "reading": evaluate_observation(issuer, history) if issuer else None,
                     "valuation": valuation,
+                    "listing_status": listing_status,
+                    "universe_coverage": universe_coverage,
+                    "universe_member": member,
                     "data_source_gate": data_source_gate,
                     "events": (event_monitor.get("by_company") or {}).get(
                         normalize_company(issuer.get("company", "")) if issuer else ""),
@@ -431,6 +456,15 @@ class AccionesChileModule(NexusModule):
                    or event.get("event_type") not in allowed_types
                    for event in body["events"]):
                 return self._json(400, {"error": "evento Telegram inválido"})
+            now = datetime.now(timezone.utc)
+            for event in body["events"]:
+                try:
+                    available = datetime.fromisoformat(
+                        str(event["available_at"]).replace("Z", "+00:00"))
+                except (TypeError, ValueError):
+                    return self._json(400, {"error": "available_at Telegram inválido"})
+                if available.tzinfo is None or available > now:
+                    return self._json(400, {"error": "available_at Telegram fuera de rango"})
             self._write_json_atomic(TELEGRAM_PATH, body, mode=0o600)
             return self._json(200, {"ok": True, "events": len(body["events"])})
         if subpath == "save-portfolio":
@@ -448,23 +482,17 @@ class AccionesChileModule(NexusModule):
             return None
         if not self.config.get("portfolio_ingest_enabled", False):
             return self._json(503, {"error": "ingesta de cartera deshabilitada"})
-        expected = os.environ.get("NEXUX_CHILE_INGEST_TOKEN", "")
-        provided = headers.get("x-nexux-token", "")
-        if not expected:
-            return self._json(503, {"error": "falta NEXUX_CHILE_INGEST_TOKEN"})
-        if not hmac.compare_digest(str(provided), str(expected)):
-            return self._json(401, {"error": "token inválido"})
+        uid = (user or {}).get("uid")
+        if uid is None:
+            return self._json(401, {"error": "necesitas iniciar sesión"})
         if len(json.dumps(body, ensure_ascii=False).encode("utf-8")) > MAX_BODY_BYTES:
             return self._json(413, {"error": "payload demasiado grande"})
         try:
-            if not isinstance(body, dict) or body.get("user_id") is None:
-                return self._json(400, {"error": "falta user_id"})
-            user_id = int(body["user_id"])
             normalized = normalize_portfolio(body)
         except ValueError as exc:
             return self._json(400, {"error": str(exc)})
         normalized["received_at_ms"] = int(time.time() * 1000)
-        self._write_portfolio(user_id, normalized)
+        self._write_portfolio(int(uid), normalized)
         return self._json(200, {"ok": True, "positions": len(normalized["holdings"])})
 
     def _read_portfolio(self, uid):

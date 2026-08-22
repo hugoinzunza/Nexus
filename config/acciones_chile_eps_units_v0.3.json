@@ -1,7 +1,23 @@
 {
-  "schema_version": "acciones-chile-eps-units-0.2.0",
+  "schema_version": "acciones-chile-eps-units-0.3.0",
   "entries": {
+    "61808000": {
+      "rut": "61808000",
+      "status": "verified",
+      "metric": "basic_eps",
+      "period": "202512",
+      "unit": "CLP_PER_SHARE",
+      "cmf_value": "22.848",
+      "reported_value": "22.848",
+      "cmf_value_multiplier": "1",
+      "verification_method": "audited_annual_report_note",
+      "source_reference": "https://www.aguasandinasinversionistas.cl/documents/208629/456144/Estados%2BFinancieros%2BAguas%2BAndinas%2B12M25.pdf/4557e4ad-137b-b0b9-a54a-9851a856dd97?download=true&t=1773937220832",
+      "source_page": 11,
+      "source_sha256": "af104d3f9c0a87f71b0550617e919e44bb20279a70ab1ef54ac5a1d75fa0c594",
+      "verified_as_of": "2026-08-22"
+    },
     "90412000": {
+      "rut": "90412000",
       "status": "verified",
       "metric": "basic_eps",
       "period": "202512",
@@ -16,6 +32,7 @@
       "verified_as_of": "2026-08-22"
     },
     "90690000": {
+      "rut": "90690000",
       "status": "verified",
       "metric": "basic_eps",
       "period": "202512",

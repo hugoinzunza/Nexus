@@ -29,7 +29,7 @@ def main() -> int:
     audit_snapshot["fx"] = fx_availability(str(path.with_name("acciones_chile_fx.json")))
     audit_snapshot["eps_units"] = eps_unit_availability(
         str(path.with_name("acciones_chile_eps_units.json")),
-        str(ROOT / "config" / "acciones_chile_eps_units_v0.2.json"))
+        str(ROOT / "config" / "acciones_chile_eps_units_v0.3.json"))
     telegram_path = path.with_name("acciones_chile_telegram_events.json")
     telegram = None
     try:
