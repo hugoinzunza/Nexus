@@ -526,10 +526,12 @@ def test_el_estado_esperado_incluye_los_sidecars(tmp_path):
     assert D.estado_esperado(d, m15, h4, libro) != antes
 
 
-def test_dos_motivos_concurrentes_no_se_pisan_en_ningun_orden(tmp_path):
-    """La segunda transición NO reemplaza al terminal publicado: sin esto, el
-    orden de ejecución decidía el motivo y `silencio_h4` podía ganarle a
-    `determinism_divergence` pese a la precedencia contractual."""
+def test_la_divergencia_gana_en_LOS_DOS_ORDENES(tmp_path):
+    """Decide la PRECEDENCIA contractual, no el orden de ejecución:
+    `determinism_divergence` precede a `silencio_h4` llegue cuando llegue.
+
+    Congelar «gana el primero» dejaba que un silencio publicado antes
+    conservara el terminal aunque después apareciera una divergencia."""
     for primero, segundo in ((C.MOTIVO_DIVERGENCIA, C.MOTIVO_SILENCIO),
                              (C.MOTIVO_SILENCIO, C.MOTIVO_DIVERGENCIA)):
         sub = tmp_path / f"caso_{primero}"
@@ -538,16 +540,20 @@ def test_dos_motivos_concurrentes_no_se_pisan_en_ningun_orden(tmp_path):
         d = str(sub / "estado")
         os.makedirs(d)
         barrera = D.BarreraCiclo()
-        uno = D.transicion_terminal(barrera, d, primero, IDENT, {}, T0,
-                                    motor, m15, h4, libro)
+        D.transicion_terminal(barrera, d, primero, IDENT, {}, T0,
+                              motor, m15, h4, libro)
         dos = D.transicion_terminal(barrera, d, segundo, IDENT, {}, T0 + 1,
                                     motor, m15, h4, libro)
-        assert uno["cuerpo"]["motivo"] == primero
-        assert dos.get("ya_existia") is True
-        assert dos["cuerpo"]["motivo"] == primero      # el publicado manda
         crudo = json.load(open(os.path.join(d, C.ARCHIVO_BLOQUEADO),
                                encoding="utf-8"))
-        assert crudo["motivo"] == primero
+        # en los DOS órdenes gana la divergencia
+        assert crudo["motivo"] == C.MOTIVO_DIVERGENCIA, (primero, segundo)
+        assert dos["cuerpo"]["motivo"] == C.MOTIVO_DIVERGENCIA
+        if primero == C.MOTIVO_SILENCIO:
+            # y queda registrado a QUÉ terminal reemplazó
+            assert crudo["evidencia"]["reemplaza"]["motivo"] == primero
+        else:
+            assert dos.get("ya_existia") is True    # el de menor no reemplaza
         assert not os.path.exists(
             os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL))
 
@@ -650,3 +656,127 @@ def test_una_divergencia_real_dispara_BLOCKED_INTEGRITY(tmp_path):
                             encoding="utf-8"))
     assert cuerpo["motivo"] == C.MOTIVO_DIVERGENCIA
     assert barrera.terminal                         # no se abren más ciclos
+
+
+# =============== gates integrados pesados (motor y libro reales) ==========
+def test_el_corte_administrativo_NO_se_ejecuta_sin_verificacion_ok(tmp_path):
+    """`cerrar_administrativo` EMITE `abierta_al_corte`, `orden_al_corte`,
+    `degradacion_de_cobertura` y `corte_administrativo`. Llamarlo con la
+    verificación en `pending` reproducía exactamente el cierre científico que
+    la zona de corte existe para impedir."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=60)
+    d = str(tmp_path / "estado")
+    os.makedirs(d)
+    ahora = ahora_de(m15, h4)
+    D.ciclo(fetch_reloj(ahora), D.BarreraCiclo(), motor, m15, h4, libro,
+            v_ok := verif(tmp_path), lambda: ahora)
+    pasado = T_CORTE + CORTE_ADMIN_GRACIA_MS + 1
+    n = len(libro.eventos)
+
+    v = verif(tmp_path, "v2.json")
+    v.pendiente(1, "d", "f")
+    assert D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
+                                   libro, v, pasado) is None
+    assert motor.cortado is False
+    assert len(libro.eventos) == n              # NI UN evento nuevo
+    for tipo in ("corte_administrativo", "abierta_al_corte", "orden_al_corte",
+                 "degradacion_de_cobertura"):
+        assert not [e for e in libro.eventos if e["tipo"] == tipo], tipo
+
+    # con `ok`, el corte administrativo REAL sí ocurre y publica COMPLETED
+    v.conforme(2, "d", "f")
+    hecho = D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
+                                    libro, v, pasado)
+    assert motor.cortado is True
+    assert hecho["estado"] == C.COMPLETADO
+    corte = [e for e in libro.eventos if e["tipo"] == "corte_administrativo"]
+    assert corte
+    # …y su `processed_at` es el reloj OBSERVADO, no uno que el motor muestreó
+    assert corte[0]["processed_at"] == pasado
+
+
+def test_continuo_N_mas_1_vs_reinicio_da_el_MISMO_libro(tmp_path):
+    """El gate central: una corrida continua sobre N+1 velas y otra que
+    procesa N, se REINICIA desde los archivos y recibe la vela N+1 tienen que
+    producir el mismo libro y el mismo digest."""
+    n = 205
+    # --- corrida CONTINUA sobre N+1 --------------------------------------
+    cont = tmp_path / "continuo"
+    cont.mkdir()
+    mc, m15c, h4c, libroc = mundo(cont, n15=n + 1)
+    ahora = ahora_de(m15c, h4c)
+    D.ciclo(fetch_reloj(ahora), D.BarreraCiclo(), mc, m15c, h4c, libroc,
+            verif(cont), lambda: 111)
+
+    # --- corrida PARTIDA: N, reinicio, y la vela N+1 ----------------------
+    part = tmp_path / "partido"
+    part.mkdir()
+    mp, m15p, h4p, librop = mundo(part, n15=n)
+    D.ciclo(fetch_reloj(ahora_de(m15p, h4p)), D.BarreraCiclo(), mp, m15p, h4p,
+            librop, verif(part), lambda: 111)
+    # REINICIO real: almacenes y libro se releen desde los archivos
+    m15r = {m: S.Almacen.cargar(m, "15m", a.ruta, requerido=True)
+            for m, a in m15p.items()}
+    h4r = {m: S.Almacen.cargar(m, "4h", a.ruta, requerido=True)
+           for m, a in h4p.items()}
+    libror = Ledger(librop.ruta, commit="ensayo")
+    mr = Motor(m15r, h4r, MERCADOS, libror, bootstrap_hasta=1)
+    D.emitir_huecos_locales(mr, m15r, h4r, 111)
+    for T in D.cierres_de(m15r, MERCADOS):        # rehidratar el estado
+        if not D.procesar_lote_canonico(mr, T, 111):
+            break
+    # llega la vela N+1: EXACTAMENTE la misma que tuvo la corrida continua
+    ult = vela(T0 + n * DUR, 100 + n * 0.1)
+    nueva = {(m, "15m"): [[ult["t"], repr(ult["o"]), repr(ult["h"]),
+                           repr(ult["l"]), repr(ult["c"]), repr(ult["v"]),
+                           ult["t"] + DUR - 1, "0", 0, "0", "0", "0"]]
+             for m in MERCADOS}
+    D.ciclo(fetch_reloj(ahora + C.MARGEN_CIERRE_MS, nueva), D.BarreraCiclo(),
+            mr, m15r, h4r, libror, verif(part, "v2.json"), lambda: 111)
+
+    assert libroc.firma() == libror.firma(), (
+        len(libroc.eventos), len(libror.eventos))
+    assert (E.observer_state_digest(mc, m15c, h4c, None)
+            == E.observer_state_digest(mr, m15r, h4r, None))
+
+
+def test_caida_entre_el_fsync_del_almacen_y_el_append_al_libro(tmp_path):
+    """El marcador queda sellado y durable; el evento no llega. Al reiniciar,
+    el marcador ya no vuelve a declararse, así que su evento solo se repone
+    porque se emite desde los registros SELLADOS."""
+    motor, m15, h4, libro = mundo(tmp_path, n15=60)
+    alm = m15["BTCUSDT"]
+    alm.ofrecer([vela(alm.ultimo_t + (2 + i) * DUR) for i in range(4)], "push")
+    alm.drenar()
+    assert alm.declarar_hueco_local() is not None      # sellado y durable
+    alm.sincronizar()
+
+    # CAÍDA: el append al libro revienta justo después
+    real = Ledger.append
+    def caer(self, tipo, **campos):
+        if tipo == "hueco_detectado":
+            raise OSError(28, "ENOSPC")
+        return real(self, tipo, **campos)
+    Ledger.append = caer
+    try:
+        with pytest.raises(OSError):
+            D.emitir_huecos_locales(motor, m15, h4, 111)
+    finally:
+        Ledger.append = real
+    assert not [e for e in libro.eventos if e["tipo"] == "hueco_detectado"]
+
+    # REINICIO: el marcador ya está sellado y no se vuelve a declarar
+    m15r = {m: S.Almacen.cargar(m, "15m", a.ruta, requerido=True)
+            for m, a in m15.items()}
+    h4r = {m: S.Almacen.cargar(m, "4h", a.ruta, requerido=True)
+           for m, a in h4.items()}
+    assert m15r["BTCUSDT"].declarar_hueco_local() is None
+    libror = Ledger(libro.ruta, commit="ensayo")
+    mr = Motor(m15r, h4r, MERCADOS, libror, bootstrap_hasta=1)
+    D.emitir_huecos_locales(mr, m15r, h4r, 111)
+    huecos = [e for e in libror.eventos if e["tipo"] == "hueco_detectado"]
+    assert huecos, "el evento tiene que reponerse desde el marcador sellado"
+    assert huecos[0]["motivo"] == "local"
+    for campo in ("processed_at", "input_head_asof_T",
+                  "provenance_head_at_finality"):
+        assert campo in huecos[0], campo

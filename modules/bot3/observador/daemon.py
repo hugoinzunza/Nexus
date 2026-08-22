@@ -311,18 +311,21 @@ def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
     libro. Solo hace durable lo que ya existe."""
     ruta_req = os.path.join(estado_dir, C.ARCHIVO_SOLICITUD_TERMINAL)
     with barrera:
-        # Un terminal YA PUBLICADO manda (§9.1.1): la segunda transición no lo
-        # reemplaza. Sin esto, dos motivos concurrentes se resolvían por orden
-        # de ejecución —la segunda borraba el request de la primera, creaba el
-        # suyo y pisaba `blocked.json`—, así que `silencio_h4` podía ganarle a
-        # `determinism_divergence` pese a la precedencia contractual.
+        # Con un terminal YA PUBLICADO, decide la PRECEDENCIA CONTRACTUAL, no
+        # el orden de ejecución: `determinism_divergence` precede a
+        # `silencio_h4` llegue cuando llegue. Un motivo de menor precedencia
+        # no reemplaza al publicado; uno de mayor SÍ, porque la integridad
+        # manda sobre la liveness.
         ya = E.leer_terminal(estado_dir)
         if ya is not None and ya["estado"] in (C.COMPLETADO, C.BLOQUEADO):
-            barrera.cerrar_para_siempre(ya["cuerpo"].get("motivo", "terminal"))
-            if os.path.exists(ruta_req):
-                os.replace(ruta_req, ruta_req + ".archivado")
-            return {"estado": ya["estado"], "ruta": None,
-                    "cuerpo": ya["cuerpo"], "ya_existia": True}
+            previo = ya["cuerpo"].get("motivo", "terminal")
+            if not _precede(motivo, previo):
+                barrera.cerrar_para_siempre(previo)
+                if os.path.exists(ruta_req):
+                    os.replace(ruta_req, ruta_req + ".archivado")
+                return {"estado": ya["estado"], "ruta": None,
+                        "cuerpo": ya["cuerpo"], "ya_existia": True}
+            evidencia = {**evidencia, "reemplaza": {"motivo": previo}}
         # La solicitud se escribe DENTRO de la barrera: si no, dos anexiones
         # concurrentes no estarían serializadas y un ciclo en espera podría
         # colarse entre la solicitud y la publicación.
@@ -346,6 +349,16 @@ def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
         ruta = E.publicar_terminal(estado_dir, estado_final, cuerpo)
         os.remove(ruta_req)
     return {"estado": estado_final, "ruta": ruta, "cuerpo": cuerpo}
+
+
+def _precede(nuevo: str, previo: str) -> bool:
+    """¿`nuevo` tiene MÁS precedencia contractual que `previo`?"""
+    orden = C.PRECEDENCIA_MOTIVOS
+    if nuevo not in orden:
+        return False
+    if previo not in orden:
+        return True
+    return orden.index(nuevo) < orden.index(previo)
 
 
 def estado_esperado(estado_dir: str, m15: dict, h4: dict, libro) -> dict:
@@ -425,17 +438,31 @@ def cerrar_si_corresponde(barrera: BarreraCiclo, estado_dir: str,
     """Conecta los terminales CIENTÍFICOS, que sin esto quedaban a cargo de un
     `main` inexistente:
 
-    - CF-35: `cerrar_administrativo` se intenta en cada ciclo; es un no-op
+    - la verificación gobierna ANTES de tocar el motor: `cerrar_administrativo`
+      EMITE `abierta_al_corte`, `orden_al_corte`, `degradacion_de_cobertura` y
+      `corte_administrativo`. Llamarlo con la verificación en `pending`,
+      `deferred` o `divergent` reproducía exactamente el cierre científico que
+      la zona de corte existe para impedir;
+    - CF-35: con la verificación `ok`, se intenta en cada ciclo; es un no-op
       salvo que el reloj pase `T_corte + gracia` sin lote posterior;
-    - si el motor CORTÓ, se publica `COMPLETED` — pero solo con la
-      verificación `ok` y posterior a toda deferencia (§13, precisión 2). Sin
-      eso se espera al ciclo siguiente: el corte ya ocurrió y no se pierde.
+    - si el motor CORTÓ, se publica `COMPLETED`. Si el corte ya había ocurrido
+      antes y la verificación aún no habilita, se espera al ciclo siguiente:
+      el corte no se pierde.
     """
-    motor.cerrar_administrativo(int(ahora))
+    if not verificacion.habilita_cierre():
+        return ({"estado": "espera",
+                 "motivo": f"verificacion={verificacion.estado}"}
+                if motor.cortado else None)
+    # El corte administrativo va DENTRO de un ciclo con el reloj YA observado:
+    # si no, `_asegurar_ciclo` muestrea `motor.reloj()` y sus eventos llevan
+    # un `processed_at` distinto del ciclo que los produjo (CF-34).
+    motor.iniciar_ciclo(int(ahora))
+    try:
+        motor.cerrar_administrativo(int(ahora))
+    finally:
+        motor.finalizar_ciclo()
     if not motor.cortado:
         return None
-    if not verificacion.habilita_cierre():
-        return {"estado": "espera", "motivo": f"verificacion={verificacion.estado}"}
     return transicion_terminal(
         barrera, estado_dir, getattr(motor, "motivo_corte", "corte"),
         identidad, {"cierres": len(motor.cierres),
