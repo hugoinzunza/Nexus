@@ -3108,9 +3108,12 @@ def test_base_prefijo_malformado_en_el_manifiesto_es_rechazado(monkeypatch,
             R2.correr(**base)
 
 
-def test_base_el_libro_desmiente_un_manifiesto_alterado(monkeypatch, tmp_path):
-    """Un prefijo bien formado pero FALSO no alcanza: el mismo prefijo viaja
-    en el evento `nacimiento`, y el libro es append-only."""
+def test_base_el_snapshot_desmiente_un_manifiesto_alterado(monkeypatch,
+                                                           tmp_path):
+    """Un prefijo bien formado pero FALSO —con el hash REAL de un registro
+    anterior— no alcanza: el prefijo se recomputa desde el snapshot que el
+    commit autentica. Y borrar el libro no lo salva: el snapshot no es un
+    testigo, es el hecho."""
     import json
     import pytest
     from modules.bot3.v9 import runner as R
@@ -3119,7 +3122,42 @@ def test_base_el_libro_desmiente_un_manifiesto_alterado(monkeypatch, tmp_path):
     ruta_m = os.path.join(d, R.MANIFIESTO)
     crudo = json.load(open(ruta_m, encoding="utf-8"))
     prov = crudo["almacenes"]["BTCUSDT_15m"]
-    prov["snapshot_record_count"] = max(1, prov["snapshot_record_count"] - 3)
+    alm = S.Almacen.cargar("BTCUSDT", "15m",
+                           R.ruta_estado(d, "BTCUSDT", "15m"), requerido=True)
+    n = prov["snapshot_record_count"] - 3
+    prov["snapshot_record_count"] = n
+    prov["snapshot_head"] = alm.registros[n - 1]["hash_acum"]   # hash REAL
     json.dump(crudo, open(ruta_m, "w", encoding="utf-8"))
-    with pytest.raises(ValueError, match="no coincide con el libro"):
+    with pytest.raises(ValueError, match="produce el snapshot del commit"):
         R2.correr(**base)
+    os.remove(base["ledger_ruta"])                  # sin libro: igual falla
+    with pytest.raises(ValueError, match="produce el snapshot del commit"):
+        R2.correr(**base)
+
+
+def test_base_el_libro_desmiente_un_prefijo_alterado_en_el_libro(monkeypatch,
+                                                                 tmp_path):
+    """El libro es la SEGUNDA autoridad. Su `event_id` no cubre el prefijo
+    —FAM_NACIMIENTO identifica por (mercado, t, tf)— así que un prefijo
+    editado dentro del libro pasa la verificación de identidad; lo atrapa el
+    cruce contra manifiesto y snapshot."""
+    import json
+    import pytest
+    from modules.bot3.v9 import marco as MM
+    from modules.bot3.v9 import runner as R
+    R2, d, base = _estado_nacido(tmp_path, monkeypatch)
+    R2.correr(**base)
+    lr = base["ledger_ruta"]
+    tramas, _ = MM.leer(lr)
+    salida = []
+    for t in tramas:
+        ev = json.loads(t)
+        if ev["tipo"] == "nacimiento" and ev["tf"] == "15m":
+            ev["snapshot_record_count"] = ev["snapshot_record_count"] - 3
+        salida.append(json.dumps(ev, sort_keys=True, separators=(",", ":")))
+    with open(lr, "wb") as fh:
+        for t in salida:
+            fh.write(MM.enmarcar(t))
+    Ledger(lr)                                   # el `event_id` sigue válido…
+    with pytest.raises(ValueError, match="no coincide con el libro"):
+        R2.correr(**base)                        # …pero el cruce lo atrapa

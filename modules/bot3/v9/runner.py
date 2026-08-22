@@ -327,12 +327,7 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                     f"snapshot fuente ausente para {nombre}: el universo "
                     f"declarado exige ese mercado")
             continue
-        filas = sorted(filas, key=lambda r: int(r["t"]))
-        if tf == "4h":
-            filas = [r for r in filas if int(r["t"]) >= GENESIS_H4]
-            ancla = GENESIS_H4
-        else:
-            ancla = int(filas[0]["t"])
+        filas, ancla = _normalizar(filas, tf)
         if estado_dir:
             # RECUPERACIÓN (B-6): si el manifiesto DECLARA este almacén, su
             # archivo es obligatorio (fallo cerrado si desapareció); si no
@@ -389,8 +384,21 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
                     raise ValueError(
                         f"provenance inválida para {nombre}: snapshot_head "
                         f"no es un SHA-256 canónico")
-                # Y el manifiesto NO es la única autoridad: el libro append-only
-                # lleva el mismo prefijo en el evento `nacimiento`.
+                # AUTORIDAD: el snapshot autenticado por el commit. Se
+                # recomputa SIEMPRE, exista o no el libro — si no, borrarlo
+                # devolvía al manifiesto la condición de única autoridad.
+                esperado = prefijo_de_nacimiento(root, mercado, tf, limite)
+                if esperado is None:
+                    raise FileNotFoundError(
+                        f"no se puede recomputar el prefijo de {nombre}: "
+                        f"snapshot fuente ausente")
+                if (cuenta, cabeza) != esperado:
+                    raise ValueError(
+                        f"el prefijo de nacimiento de {nombre} no es el que "
+                        f"produce el snapshot del commit: ({cuenta}, "
+                        f"{cabeza[:12]}…) != ({esperado[0]}, "
+                        f"{esperado[1][:12]}…)")
+                # Y el libro append-only lo confirma cuando existe.
                 if ledger is not None:
                     nac = ledger.por_id(CT.event_id(
                         "nacimiento", mercado=mercado, t=int(ancla), tf=tf))
@@ -463,6 +471,47 @@ def construir_almacenes(root: str, mercados=MERCADOS, tf: str = "15m",
         emitir_nacimientos(ledger, registro, tf)
         emitir_incidencias(ledger, almacenes)
     return almacenes
+
+
+def _normalizar(filas: list, tf: str) -> tuple[list, int]:
+    """Orden y ancla del snapshot versionado. Uno solo para las dos rutas —
+    el nacimiento y su recomputación (§3)— para que no puedan divergir."""
+    filas = sorted(filas, key=lambda r: int(r["t"]))
+    if tf == "4h":
+        return [r for r in filas if int(r["t"]) >= GENESIS_H4], GENESIS_H4
+    return filas, int(filas[0]["t"])
+
+
+def prefijo_de_nacimiento(root: str, mercado: str, tf: str,
+                          limite: int | None = None
+                          ) -> tuple[int, str] | None:
+    """Recomputa `(snapshot_record_count, snapshot_head)` DESDE el snapshot
+    versionado, que el commit autentica (CF-28).
+
+    El manifiesto y el libro son testigos; este es el hecho. Sin esto, borrar
+    el libro devolvía al manifiesto —un archivo editable— la condición de
+    única autoridad sobre lo que se selló al nacer, y un prefijo falsificado
+    con el hash real de un registro anterior se aceptaba y se publicaba como
+    evento canónico.
+
+    Se construye con el MISMO camino que el nacimiento (no una reimplementación
+    del encadenado), sobre un almacén en memoria."""
+    filas = leer_versionado(root, mercado, tf)
+    if not filas:
+        return None
+    filas, ancla = _normalizar(filas, tf)
+    alm = S.Almacen(mercado, tf)
+    alm.nacer_en(ancla)
+    # `limite` recorta las velas OFRECIDAS, igual que en el nacimiento: si la
+    # recuperación cargara otra profundidad, el prefijo esperado sería otro y
+    # el fallo cerrado es correcto.
+    alm.ofrecer(filas if limite is None else filas[-limite:], "versionado")
+    alm.drenar()
+    # El nacimiento también declara los huecos locales del snapshot: sin este
+    # paso el prefijo recomputado ignoraría los marcadores y no coincidiría.
+    while alm.declarar_hueco_local() is not None:
+        pass
+    return len(alm.registros), alm.head
 
 
 def emitir_nacimientos(ledger, registro: dict, tf: str) -> None:
