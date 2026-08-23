@@ -1,10 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.22
+# Bot3.v13 — Observador operativo · DISEÑO rev.23
 
-**Estado: DISEÑO rev.22 — §20 acotada: cota analítica de salida, timeouts
-congelados, diagnóstico append-only. §1–§19 y §13 no se reabren. No
-desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.23 — §20 acotada: deadline absoluto de petición, cota de
+la fase posterior y primitiva de archivado exclusiva. §1–§19 y §13 no se
+reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.23 cierra dos cotas que rev.22 declaró sin serlo:
+`CONNECT_TIMEOUT + READ_TIMEOUT` no acota una petición —`READ_TIMEOUT` limita
+la inactividad entre lecturas, no la duración total, y un servidor que gotea
+bytes la sostiene para siempre—, y la fase posterior del ciclo, declarada
+indivisible, no tiene duración acotada tras una caída larga. Además congela una
+primitiva de archivado realmente exclusiva: `rename` no tiene `O_EXCL`.
 rev.22 cierra dos contradicciones ejecutables de rev.21: `ExitTimeOut` no
 tenía cota —una señal dentro de una petición HTTP no encontraba ningún punto
 de cancelación, y los timeouts de transporte ni siquiera estaban congelados—,
@@ -1332,7 +1338,8 @@ producción solo agregaría una ruta sin probar.
 `TF_OBSERVADAS`, `UNIVERSO`, `ENDPOINT_KLINES`, `ENDPOINT_TIME`,
 `CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`,
 `PRECEDENCIA_TERMINAL`, `MAX_TRANSITORIOS` y `EXIT_TIMEOUT` *(rev.20)*,
-`CONNECT_TIMEOUT` y `READ_TIMEOUT` *(rev.22)*, y las
+`CONNECT_TIMEOUT`, `READ_TIMEOUT` *(rev.22)* y `REQUEST_DEADLINE` *(rev.23)*,
+y las
 rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
 (`silencio.json`, `verificacion.json`, `fallo_cerrado.json` *(rev.20)*) y
@@ -1775,7 +1782,7 @@ Qué se termina depende de dónde llegue la señal:
 
 | llega durante | qué se hace |
 |---|---|
-| un ciclo | el ciclo TERMINA —ingesta, sellado, fase A si corresponde— y recién ahí se sale |
+| un ciclo | se aborta en el punto seguro más cercano —entre streams, o entre lotes finalizados— respetando los tres tramos indivisibles de abajo. Lo sellado queda sellado; lo que falta se rehace el ciclo siguiente *(rev.23: rev.22 decía «termina completo», que contradecía sus propios puntos de cancelación)* |
 | la copia de una captura | se ABORTA y se borra el destino incompleto. El sidecar NO queda `pending`: una copia parcial no se puede reanudar (§13.5.1) y dejaría la cohorte trabada |
 | la comparación fría | se ABORTA. El sidecar queda `pending` con su copia COMPLETA, y el arranque siguiente la retoma — que es exactamente el caso que §13.5.1 cubre |
 | la fase B, entre publicar y borrar | no se interrumpe: es una secuencia de dos operaciones atómicas y §13.6 ya resuelve el estado intermedio |
@@ -1804,19 +1811,43 @@ Se resuelve por los dos lados:
    «termina completo» y que se podía abortar entre streams: dos
    implementaciones honestas elegían distinto. La regla es:
 
-   > un ciclo se aborta **solo durante la fase de ingesta**, entre streams. Una
-   > vez ingerido el stream 14 empieza la fase POSTERIOR —silencio, huecos,
-   > lotes, fase A— y esa **no se parte**: se termina entera.
+   > un ciclo se aborta **entre streams** durante la ingesta, y **entre lotes
+   > ya finalizados** durante la fase posterior. Tres tramos son
+   > INDIVISIBLES: la actualización de silencio sobre los 14 streams, cada
+   > lote individual, y la fase A junto con la publicación terminal.
 
-   Abortar dentro de la fase posterior dejaría la máquina de silencio con
-   observaciones de algunos mercados y no de otros, que es evidencia sesgada
-   sobre la que después se decide un terminal. Abortar en la ingesta no: lo
-   sellado está sellado, y lo que falta se pide de nuevo.
+   Por qué cada uno *(rev.23)*:
+
+   - **la actualización de silencio** se hace unidad porque abortarla a mitad
+     dejaría observaciones de algunos mercados y no de otros: evidencia
+     sesgada sobre la que después se decide un terminal;
+   - **entre lotes SÍ hay punto seguro**. rev.22 declaraba la fase posterior
+     entera indivisible, y eso no tiene cota: tras una caída larga, un ciclo
+     ingiere mucho backlog y procesa miles de lotes ahí. `ExitTimeOut` volvía
+     a depender de que el futuro se pareciera al ensayo. Cada lote finalizado
+     es durable por sí mismo y el reinicio reconstruye por replay (§20.2.1)
+     exactamente hasta donde se llegó, así que abortar entre dos no pierde
+     nada. La cota pasa a ser **un lote**, no el backlog;
+   - **la fase A y la publicación** siguen indivisibles: son la transición
+     terminal, y §13 ya las gobierna.
+
+   Si el aborto ocurre entre lotes, `silencio.guardar()` se ejecuta igual
+   antes de salir: es lo único que quedaba pendiente de la unidad anterior y
+   es idempotente.
 
 2. **timeouts de transporte CONGELADOS** *(rev.22)*, sin los cuales no hay
    cota posible: `CONNECT_TIMEOUT` = 5 s y `READ_TIMEOUT` = 20 s, ambos en
    §15. Una petición sin timeout puede colgarse indefinidamente, y ahí ningún
    punto de cancelación llega nunca.
+
+   **Y un `REQUEST_DEADLINE` absoluto de 30 s** *(rev.23)*, que es la cota
+   real. Los dos anteriores NO acotan una petición: `READ_TIMEOUT` limita la
+   inactividad entre lecturas, así que un servidor que entrega un byte cada
+   19 s la sostiene indefinidamente sin disparar nada, y la resolución DNS no
+   está necesariamente cubierta por `CONNECT_TIMEOUT`. El deadline se toma al
+   iniciar la petición y cubre **DNS, conexión, TLS, cabeceras y cuerpo**;
+   vencido, se aborta el socket. Los otros dos siguen existiendo porque
+   detectan antes el caso común, pero la cota es esta.
 
    El **sueño del backoff es interruptible**: se espera sobre un evento que el
    manejador de señal levanta, no con un `sleep` ciego. Sin eso, un `SIGTERM`
@@ -1826,7 +1857,7 @@ Se resuelve por los dos lados:
 
    | cota | de dónde sale |
    |---|---|
-   | analítica | peor tramo no interrumpible = una petición en vuelo, `CONNECT_TIMEOUT + READ_TIMEOUT` = 25 s, más el sellado del stream en curso |
+   | analítica | peor tramo no interrumpible = una petición en vuelo acotada por `REQUEST_DEADLINE` (30 s), más el sellado del stream en curso y el lote más largo de la fase posterior |
    | empírica | peor tiempo MEDIDO a escala completa entre dos puntos de cancelación |
 
    `EXIT_TIMEOUT = 3 × max(analítica, empírica)`. La analítica sola no basta
@@ -1951,11 +1982,31 @@ mismo:
   **La ruta de archivo es ÚNICA y append-only** *(rev.22)*: renombrar siempre
   al mismo `fallo_cerrado.json.archivado` hacía que una segunda serie
   transitoria pisara la primera — archivar y perder la historia a la vez. Va a
-  `diagnosticos/fallo_cerrado.<ocurrido_en>.<sha8 del checksum>.json`, creada
-  con `O_EXCL`: una colisión de nombre es fallo cerrado, nunca una
-  sobrescritura. Y el rename lleva `fsync` del directorio `diagnosticos/`,
-  igual que todo rename de §4 — si no, el archivado puede no sobrevivir al
-  corte que lo motivó.
+  `diagnosticos/fallo_cerrado.<ocurrido_en>.<sha8 del checksum>.json`.
+
+  **Primitiva CONGELADA** *(rev.23)*. rev.22 decía «renombrar creado con
+  `O_EXCL`», que no es una operación realizable: `os.rename`/`os.replace`
+  sobrescriben en silencio y no admiten esa bandera, y crear el destino antes
+  con `O_EXCL` solo consigue que el rename lo pise igual. Se usa **enlace duro
+  exclusivo**:
+
+  ```
+  os.link(origen, destino)      # EEXIST si el destino ya existe → fallo cerrado
+  fsync del directorio diagnosticos/
+  os.unlink(origen)
+  fsync del directorio de estado
+  ```
+
+  `link` es atómico y falla si el destino existe, que es exactamente la
+  exclusión que hacía falta. `renameatx_np(..., RENAME_EXCL)` de macOS haría lo
+  mismo, pero exige `ctypes` y no existe en Linux: se elige el camino portable
+  para que no haya dos implementaciones honestas distintas.
+
+  **Caída entre `link` y `unlink`**: quedan las dos rutas apuntando al MISMO
+  inodo. El arranque siguiente lo detecta comparando `st_ino`, y si coinciden
+  completa el `unlink` del origen — no es ambigüedad, es la mitad de una
+  operación cuya otra mitad ya es durable. Si los inodos DIFIEREN, son dos
+  documentos distintos con el mismo nombre de destino: fallo cerrado.
 
 El punto de éxito es el ARRANQUE COMPLETO, no el primer ciclo: los transitorios
 que `2` cubre son de arranque —lock, sistema de archivos—, y esperar al primer
@@ -2079,8 +2130,11 @@ Numerados a continuación de §17, que termina en 44:
     exige lo contrario: NINGÚN documento y salida ≠ 0 *(rev.22)*;
 47quinquies. **el archivado no pisa historia** *(rev.22)*: dos series
     transitorias seguidas dejan DOS archivos en `diagnosticos/`, ninguno
-    sobrescrito; una colisión de nombre forzada falla cerrado; y el directorio
-    recibe `fsync` tras cada rename;
+    sobrescrito; una colisión de nombre forzada falla cerrado por `EEXIST` del
+    `link`, no por una comprobación previa que otro proceso podría ganar; el
+    directorio recibe `fsync`; y una caída simulada ENTRE `link` y `unlink`
+    deja las dos rutas sobre el mismo inodo, que el arranque siguiente
+    completa —y falla cerrado si los inodos difieren— *(rev.23)*;
 47bis. **el canal de diagnóstico** *(rev.20)*: el daemon escribe
     `fallo_cerrado.json` ANTES de salir; el wrapper traduce `1→0` solo si
     valida; un daemon muerto por `SIGKILL` sin diagnóstico hace que el wrapper
@@ -2098,11 +2152,17 @@ Numerados a continuación de §17, que termina en 44:
     SÍ lo deja, con la copia completa. Se agrega la señal **dentro de una
     petición HTTP colgada** y **durante el sueño del backoff**: en las dos, el
     proceso sale sin esperar a que el `fetch` agote su serie de intentos
-    *(rev.22)*. Y la señal en la fase POSTERIOR del ciclo NO la parte: se
-    termina entera. Además **MIDE**, a escala completa, el peor tiempo entre
-    dos puntos de cancelación, calcula la cota analítica
-    `CONNECT_TIMEOUT + READ_TIMEOUT` más el sellado, y **falla si el
-    `ExitTimeOut` del plist es menor a 3 × el mayor de los dos** (§20.6);
+    *(rev.22)*. Se agrega un servidor que entrega **bytes periódicamente sin
+    terminar nunca** —el caso que `READ_TIMEOUT` no detecta—: la petición se
+    corta por `REQUEST_DEADLINE` y el proceso sale dentro de la cota
+    *(rev.23)*. Y con **miles de lotes pendientes** en la fase posterior, la
+    señal aborta entre dos lotes finalizados, no al final del backlog; los
+    tres tramos indivisibles se respetan; y el reinicio reconstruye por replay
+    exactamente hasta donde se llegó *(rev.23)*. Además **MIDE**, a escala
+    completa, el peor tiempo entre dos puntos de cancelación, calcula la cota
+    analítica desde `REQUEST_DEADLINE` más el sellado y el lote más largo, y
+    **falla si el `ExitTimeOut` del plist es menor a 3 × el mayor de los dos**
+    (§20.6);
 49. **cadencia y backoff deterministas**: un ciclo que dura más que `CADENCIA`
     no acumula deuda —el siguiente arranca una sola vez—; el backoff respeta
     la fórmula y el número de intentos con un reloj y un generador
