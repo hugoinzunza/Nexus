@@ -99,7 +99,7 @@
     <div id="filas" class="filas"></div>
     <p id="filas-vacio" class="sub">Todavía no has agregado posiciones. Busca la primera arriba.</p>
     <p class="sub" id="filas-ayuda" hidden>El ticker es el símbolo con que aparece en Renta 4. El precio de hoy es opcional: sin él puedo leer los fundamentos, pero no calcular el múltiplo.</p>
-    <label class="sub" for="available-cash">Disponible para invertir (opcional)</label><input id="available-cash" inputmode="decimal" placeholder="0">
+    <label class="sub" for="available-cash">Disponible para invertir (opcional)</label><input id="available-cash" inputmode="decimal" placeholder="0"><div id="saldo-eco" class="campo-eco"></div>
     <details class="avanzado"><summary class="sub">Pegar varias posiciones de una vez</summary><p class="sub">Una por línea: TICKER, RUT, CANTIDAD, COSTO PROMEDIO y, opcionalmente, PRECIO MERCADO. Separa con punto y coma o tabulación si tus montos llevan coma decimal. Si algún número puede leerse de dos formas, te pregunto una vez por todo el archivo.</p><textarea id="portfolio-input" placeholder="ENELCHILE; 76536353; 1000; 52,40; 55,10&#10;SQM-B; 93007000; 25; 40.120; 42.000"></textarea><button class="btn ghost" id="cargar-pegado" type="button">Cargar estas líneas</button></details>
     <div id="portfolio-error" class="error"></div><div class="dialog-actions"><button class="btn ghost" id="close-portfolio">Cancelar</button><button class="btn" id="save-portfolio">Guardar y monitorear</button></div></dialog>
 </main><script>
@@ -265,6 +265,28 @@ function parseMonto(txt){
   if(!isFinite(numero)||numero<0)return{error:'número inválido'};
   return{valor:normal,numero};
 }
+// Resolver un campo es una función pura de (texto, elección). No se guarda el
+// valor canónico en ningún lado: guardarlo en paralelo al texto fue lo que
+// permitió que tras teclear "100" se enviara "1". La elección sólo dice cómo
+// leer una ambigüedad; si el texto deja de ser ambiguo, se ignora sola.
+function resolverCampo(texto,eleccion){
+  const r=parseMonto(texto);
+  if(!r.lecturas)return r;
+  if(!eleccion)return r;
+  const l=r.lecturas.find(x=>x.etiqueta===eleccion);
+  return l?{valor:l.valor,numero:Number(l.valor),resueltaComo:eleccion}:r;
+}
+// Una convención regional no es "todo miles" ni "todo decimales": es qué
+// significa cada separador. En Chile el punto son miles y la coma decimales;
+// en formato internacional es al revés. Aplicar una sola etiqueta a ambos
+// separadores convertía 52,125 en 52125.
+function eleccionSegunConvencion(texto,puntoEsMiles){
+  const r=parseMonto(texto);
+  if(!r.lecturas)return null;
+  const sep=String(texto).includes('.')?'.':',';
+  const esMiles=sep==='.'?puntoEsMiles:!puntoEsMiles;
+  return esMiles?'miles':'decimales';
+}
 const fmtCL=n=>new Intl.NumberFormat('es-CL',{maximumFractionDigits:4}).format(n);
 
 // --- catálogo ticker <-> RUT del universo versionado (sólo los miembros verificados)
@@ -298,37 +320,44 @@ function pintarFilas(){
         const refrescar=()=>{
           if(clave==='ticker'){eco.textContent='';return}
           eco.textContent='';
-          const r=parseMonto(inp.value);
-          eco.className='campo-eco'+(r.error?' bad':'');
-          if(r.vacio){f.val[clave]=null;return}
-          if(f.val[clave]!=null&&f.val[clave]!==r.valor){
-            eco.className='campo-eco';eco.textContent=`se guarda como ${f.val[clave]}`;return;
-          }
+          const r=resolverCampo(f[clave],f.eleccion[clave]);
+          eco.className='campo-eco'+(r.error&&!r.lecturas?' bad':'');
+          if(r.vacio)return;
           if(r.lecturas){
-            // Ninguna de las dos escrituras "obvias" escapa a la ambigüedad, así
-            // que en vez de pedir otra cadena se ofrecen las dos lecturas.
-            f.val[clave]=null;
             eco.append(document.createTextNode(r.error+' '));
             r.lecturas.forEach(l=>{
               const b=node('button',l.valor,'lectura');b.type='button';
-              b.title=`interpretar como ${l.etiqueta}`;
-              b.setAttribute('aria-label',`${etiqueta}: interpretar ${inp.value} como ${l.valor}, ${l.etiqueta}`);
-              b.onclick=()=>{f.val[clave]=l.valor;
-                eco.className='campo-eco';eco.textContent=`se guarda como ${l.valor}`};
+              b.setAttribute('aria-label',
+                `${etiqueta}: interpretar ${f[clave]} como ${l.valor}, ${l.etiqueta}`);
+              b.onclick=()=>{f.eleccion[clave]=l.etiqueta;refrescar()};
               eco.append(b);
             });
             return;
           }
-          if(r.error){f.val[clave]=null;eco.textContent=r.error;return}
-          f.val[clave]=r.valor;
+          if(r.error){eco.className='campo-eco bad';eco.textContent=r.error;return}
           eco.textContent=`se guarda como ${r.valor}`;
         };
-        inp.oninput=()=>{f[clave]=clave==='ticker'?inp.value.trim().toUpperCase():inp.value.trim();refrescar()};
+        inp.oninput=()=>{
+          f[clave]=clave==='ticker'?inp.value.trim().toUpperCase():inp.value.trim();
+          if(clave!=='ticker')f.eleccion[clave]=null;   // texto nuevo, elección vieja no vale
+          if(clave==='ticker')avisarTickerDuplicado(f);
+          refrescar();
+        };
         refrescar();
         c.append(lab,inp,eco);campos.append(c);
       });
     fila.append(top,campos);caja.append(fila);
   });
+}
+function avisarTickerDuplicado(fila){
+  const norm=t=>String(t||'').trim().toUpperCase();
+  const otros=filas.filter(f=>f!==fila).map(f=>norm(f.ticker));
+  const err=$('#portfolio-error');
+  if(fila.ticker&&otros.includes(norm(fila.ticker))){
+    err.textContent=`${norm(fila.ticker)} está repetido en dos posiciones.`;
+  }else if(err.textContent.includes('está repetido')){
+    err.textContent='';
+  }
 }
 function agregarFila(datos){
   // El ticker se resuelve antes de comparar: si viene del buscador llega vacío
@@ -346,7 +375,7 @@ function agregarFila(datos){
   filas.push({ticker:resuelto,company:datos.company||null,
               company_rut:datos.company_rut||null,quantity:datos.quantity||'',
               average_cost:datos.average_cost||'',market_price:datos.market_price||'',
-              val:{quantity:null,average_cost:null,market_price:null}});
+              eleccion:{quantity:null,average_cost:null,market_price:null}});
   pintarFilas();
 }
 
@@ -410,7 +439,9 @@ $('#cargar-pegado').onclick=()=>{
       // punto y coma o tabulación, ésa manda y la coma queda para los decimales.
       const delim=linea.includes(';')?';':linea.includes('\t')?'\t':',';
       const c=linea.split(delim).map(x=>x.trim());
+      if(linea.includes('"'))throw Error(`Línea ${i+1}: no manejo comillas; quítalas antes de pegar`);
       if(c.length<4)throw Error(`Línea ${i+1}: faltan columnas`);
+      if(c.length>5)throw Error(`Línea ${i+1}: sobran columnas (esperaba ticker, RUT, cantidad, costo y precio)`);
       if(i===0&&/ticker/i.test(c[0]))return;
       agregarFila({ticker:c[0],company_rut:c[1],quantity:c[2],average_cost:c[3],market_price:c[4]||''});
     });
@@ -425,21 +456,22 @@ function resolverLote(){
   const caja=$('#lote-convencion');caja.textContent='';caja.hidden=true;
   const pendientes=[];
   filas.forEach(f=>['quantity','average_cost','market_price'].forEach(clave=>{
-    if(f.val[clave]!=null||!f[clave])return;
-    const r=parseMonto(f[clave]);
-    if(r.lecturas)pendientes.push({f,clave,lecturas:r.lecturas});
+    if(!f[clave]||f.eleccion[clave])return;
+    if(parseMonto(f[clave]).lecturas)pendientes.push({f,clave});
   }));
   if(!pendientes.length)return;
   caja.hidden=false;
   caja.append(node('span',
-    `${pendientes.length} ${pendientes.length===1?'valor puede leerse':'valores pueden leerse'} de dos formas. ¿Qué es el punto en este archivo?`));
-  [['miles','Renta 4 Chile · el punto separa miles'],
-   ['decimales','Internacional · el punto es decimal']].forEach(([cual,texto])=>{
+    `${pendientes.length} ${pendientes.length===1?'valor puede leerse':'valores pueden leerse'} de dos formas. ¿Qué convención usa este archivo?`));
+  // La convención se aplica por separador, no por significado: en Chile el
+  // punto son miles Y la coma decimales. Aplicar la etiqueta "miles" a todas
+  // las celdas convertía 52,125 en 52125.
+  [[true,'Renta 4 Chile · 1.200 son mil doscientos'],
+   [false,'Internacional · 1,200 son mil doscientos']].forEach(([puntoEsMiles,texto])=>{
     const b=node('button',texto,'lectura');b.type='button';
     b.onclick=()=>{
       pendientes.forEach(p=>{
-        const l=p.lecturas.find(x=>x.etiqueta===cual);
-        if(l)p.f.val[p.clave]=l.valor;
+        p.f.eleccion[p.clave]=eleccionSegunConvencion(p.f[p.clave],puntoEsMiles);
       });
       caja.textContent='';caja.hidden=true;
       pintarFilas();
@@ -448,6 +480,27 @@ function resolverLote(){
     caja.append(b);
   });
 }
+
+
+let eleccionSaldo=null;
+function refrescarSaldo(){
+  const eco=$('#saldo-eco');eco.textContent='';eco.className='campo-eco';
+  const r=resolverCampo($('#available-cash').value,eleccionSaldo);
+  if(r.vacio)return;
+  if(r.lecturas){
+    eco.append(document.createTextNode(r.error+' '));
+    r.lecturas.forEach(l=>{
+      const b=node('button',l.valor,'lectura');b.type='button';
+      b.setAttribute('aria-label',`Disponible para invertir: interpretar como ${l.valor}, ${l.etiqueta}`);
+      b.onclick=()=>{eleccionSaldo=l.etiqueta;refrescarSaldo()};
+      eco.append(b);
+    });
+    return;
+  }
+  if(r.error){eco.className='campo-eco bad';eco.textContent=r.error;return}
+  eco.textContent=`se guarda como ${r.valor}`;
+}
+$('#available-cash').oninput=()=>{eleccionSaldo=null;refrescarSaldo()};
 
 $('#save-portfolio').onclick=()=>{
   $('#portfolio-error').textContent='';
@@ -462,19 +515,20 @@ $('#save-portfolio').onclick=()=>{
     const val={};
     for(const clave of ['quantity','average_cost','market_price']){
       if(clave==='market_price'&&!f.market_price){val[clave]=null;continue}
-      if(f.val[clave]==null){
-        const r=parseMonto(f[clave]);
+      const r=resolverCampo(f[clave],f.eleccion[clave]);
+      if(r.valor==null){
         $('#portfolio-error').textContent=r.lecturas
           ? `${donde}: elige si ${campos[clave]} son miles o decimales.`
           : `${donde}: ${campos[clave]} no se entiende (${r.error||'está vacío'}).`;
         return;
       }
-      val[clave]=f.val[clave];
+      val[clave]=r.valor;
     }
     holdings.push({ticker:f.ticker,company_rut:f.company_rut||null,quantity:val.quantity,
                    average_cost:val.average_cost,market_price:val.market_price,currency:'CLP'});
   }
-  const rs=parseMonto($('#available-cash').value);
+  const rs=resolverCampo($('#available-cash').value,eleccionSaldo);
+  if(rs.lecturas){$('#portfolio-error').textContent='Disponible para invertir: elige si son miles o decimales.';return}
   if(rs.error){$('#portfolio-error').textContent=`Disponible para invertir: ${rs.error}.`;return}
   const saldo=rs.valor||null;
   const conPrecios=holdings.every(h=>h.market_price!=null);

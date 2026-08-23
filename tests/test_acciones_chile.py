@@ -1121,19 +1121,30 @@ def test_la_guia_explica_como_leer_sin_convertirse_en_asesoria():
 # --- El parser de montos vive en el HTML; se extrae y se ejecuta con node para
 # --- probar comportamiento, no la presencia de una cadena.
 def _parse_monto(valores):
-    import subprocess, shutil
-    node = shutil.which("node")
-    if node is None:
-        # En CI el parser monetario no puede quedar sin probar: se instala Node
-        # a propósito. Fuera de CI se salta para no romper equipos sin Node.
-        if os.environ.get("CI"):
-            pytest.fail("node es obligatorio en CI: el parser monetario no puede quedar sin cubrir")
-        pytest.skip("node no disponible para ejecutar el parser del formulario")
     page = _pagina_chile()
     ini = page.index("function _grupos")   # el parser usa este helper
     fin = page.index("const fmtCL", ini)
     guion = (page[ini:fin] + "\nconst casos=" + json.dumps(valores) +
              ";console.log(JSON.stringify(casos.map(parseMonto)));")
+    return _correr_node(guion)
+
+
+def _logica_formulario(guion_cuerpo):
+    """Ejecuta las funciones puras del formulario: resolverCampo y
+    eleccionSegunConvencion salieron del DOM justamente para poder probarlas."""
+    page = _pagina_chile()
+    ini = page.index("function _grupos")
+    fin = page.index("const fmtCL", ini)
+    return _correr_node(page[ini:fin] + "\n" + guion_cuerpo)
+
+
+def _correr_node(guion):
+    import subprocess, shutil
+    node = shutil.which("node")
+    if node is None:
+        if os.environ.get("CI"):
+            pytest.fail("node es obligatorio en CI: la lógica de montos no puede quedar sin cubrir")
+        pytest.skip("node no disponible")
     salida = subprocess.run([node, "-e", guion], capture_output=True, text=True, timeout=30)
     assert salida.returncode == 0, salida.stderr
     return json.loads(salida.stdout)
@@ -1322,16 +1333,6 @@ def test_el_pegado_no_parte_los_decimales_con_coma():
     assert "ENELCHILE; 76536353; 1000; 52,40; 55,10" in page
 
 
-def test_el_lote_pregunta_la_convencion_una_sola_vez():
-    """Resolver celda por celda un archivo entero es inviable; un export usa
-    una sola convención."""
-    page = _pagina_chile()
-    assert "function resolverLote" in page
-    assert "Renta 4 Chile · el punto separa miles" in page
-    assert "Internacional · el punto es decimal" in page
-    assert "¿Qué es el punto en este archivo?" in page
-
-
 def test_el_duplicado_se_detecta_con_el_ticker_ya_resuelto():
     """El buscador entrega ticker vacío y lo completa el universo, así que
     comparar antes de resolverlo dejaba pasar dos filas COPEC."""
@@ -1341,3 +1342,80 @@ def test_el_duplicado_se_detecta_con_el_ticker_ya_resuelto():
     # La resolución ocurre antes que cualquier comparación.
     assert cuerpo.index("const resuelto=norm(") < cuerpo.index("filas.some(")
     assert "norm(f.ticker)===resuelto" in cuerpo
+
+
+def test_escribir_digito_a_digito_no_congela_el_primer_valor():
+    """Regresión P0: el valor canónico se guardaba junto al texto y un guard
+    lo conservaba al divergir, así que teclear 1, 0, 0 enviaba 1 con "100"
+    a la vista. Ahora el valor se deriva y no existe estado paralelo."""
+    guion = """
+    const tecleo=['1','10','100','100.5','1000'];
+    console.log(JSON.stringify(tecleo.map(t=>resolverCampo(t,null).valor)));
+    """
+    assert _logica_formulario(guion) == ["1", "10", "100", "100.5", "1000"]
+
+
+def test_una_eleccion_vieja_no_sobrevive_a_un_texto_que_ya_no_es_ambiguo():
+    guion = """
+    console.log(JSON.stringify({
+      ambiguo_con_eleccion: resolverCampo('52.125','decimales').valor,
+      ambiguo_otra_eleccion: resolverCampo('52.125','miles').valor,
+      ambiguo_sin_eleccion: resolverCampo('52.125',null).valor||null,
+      ya_no_ambiguo: resolverCampo('52.40','miles').valor,
+      vacio: resolverCampo('','miles').valor||null,
+      error: resolverCampo('abc','miles').valor||null
+    }));
+    """
+    r = _logica_formulario(guion)
+    assert r["ambiguo_con_eleccion"] == "52.125"
+    assert r["ambiguo_otra_eleccion"] == "52125"
+    assert r["ambiguo_sin_eleccion"] is None      # sin elegir no se puede guardar
+    assert r["ya_no_ambiguo"] == "52.40"          # la elección se ignora sola
+    assert r["vacio"] is None and r["error"] is None
+
+
+def test_la_convencion_del_lote_mapea_separador_a_significado():
+    """Regresión P0: elegir "Renta 4 Chile" aplicaba la lectura 'miles' a
+    todas las celdas, así que 52,125 se convertía en 52125. En Chile el punto
+    son miles Y la coma decimales; internacional es al revés."""
+    guion = """
+    const celdas=['1.234','52,125','2.000','10,500'];
+    const conv=p=>celdas.map(c=>resolverCampo(c,eleccionSegunConvencion(c,p)).valor);
+    console.log(JSON.stringify({chile:conv(true),internacional:conv(false)}));
+    """
+    r = _logica_formulario(guion)
+    # Chile: el punto separa miles, la coma es decimal.
+    assert r["chile"] == ["1234", "52.125", "2000", "10.500"]
+    # Internacional: exactamente al revés.
+    assert r["internacional"] == ["1.234", "52125", "2.000", "10500"]
+
+
+def test_la_convencion_no_toca_celdas_que_no_eran_ambiguas():
+    guion = """
+    const claras=['52.40','6.180,50','1000','0,5','1.234.567'];
+    console.log(JSON.stringify(claras.map(c=>({
+      eleccion: eleccionSegunConvencion(c,true),
+      valor: resolverCampo(c,eleccionSegunConvencion(c,true)).valor
+    }))));
+    """
+    for fila, entrada in zip(_logica_formulario(guion),
+                             ["52.40", "6.180,50", "1000", "0,5", "1.234.567"]):
+        assert fila["eleccion"] is None, f"{entrada} no es ambiguo"
+    valores = [f["valor"] for f in _logica_formulario(guion)]
+    assert valores == ["52.40", "6180.50", "1000", "0.5", "1234567"]
+
+
+def test_el_saldo_disponible_tiene_el_mismo_mecanismo_que_las_filas():
+    """P1: available_cash quedaba bloqueado sin botones para responder."""
+    page = _pagina_chile()
+    assert 'id="saldo-eco"' in page
+    assert "let eleccionSaldo=null" in page
+    assert "resolverCampo($('#available-cash').value,eleccionSaldo)" in page
+    assert "eleccionSaldo=l.etiqueta" in page
+
+
+def test_el_pegado_rechaza_comillas_y_columnas_sobrantes():
+    """P2: 'ABC,DEF',11111111,10,20 desplazaba las columnas en silencio."""
+    page = _pagina_chile()
+    assert "no manejo comillas" in page
+    assert "sobran columnas" in page
