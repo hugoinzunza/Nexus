@@ -1,10 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.27
+# Bot3.v13 — Observador operativo · DISEÑO rev.28
 
-**Estado: DISEÑO rev.27 — §20 acotada: enum cerrado de errores, I/O realmente
-no bloqueante, y acreditación idempotente bajo lock. §1–§19 y §13 no se
+**Estado: DISEÑO rev.28 — §20 acotada: la acreditación se invoca contra un
+checksum esperado, y toda salida clausura el trabajador. §1–§19 y §13 no se
 reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.28 cierra dos bloqueos: la máquina de acreditación exigía al segundo
+operador comprobar que su acto fuera idéntico, pero tras el primero ya no queda
+`fallo_cerrado.json` y el segundo caía en «no-op» sin poder comparar nada; y
+nada definía qué pasa con el proceso trabajador cuando el padre termina por
+cualquier vía que no sea el deadline — en macOS no hay garantía de que el hijo
+muera con el padre.
 rev.27 cierra tres problemas ejecutables: §20.4 y §20.4.1 se contradecían
 sobre qué se reintenta y el campo `error` no tenía enum; `poll` sin
 `O_NONBLOCK` no garantiza el deadline, porque un descriptor marcado escribible
@@ -1361,8 +1367,8 @@ producción solo agregaría una ruta sin probar.
 `TF_OBSERVADAS`, `UNIVERSO`, `ENDPOINT_KLINES`, `ENDPOINT_TIME`,
 `CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`,
 `PRECEDENCIA_TERMINAL`, `MAX_TRANSITORIOS` y `EXIT_TIMEOUT` *(rev.20)*,
-`CONNECT_TIMEOUT`, `READ_TIMEOUT` *(rev.22)*, `REQUEST_DEADLINE` *(rev.23)* y
-`MAX_SOBRE` *(rev.26)*, y las
+`CONNECT_TIMEOUT`, `READ_TIMEOUT` *(rev.22)*, `REQUEST_DEADLINE` *(rev.23)*,
+`MAX_SOBRE` *(rev.26)* y `CIERRE_COOPERATIVO` *(rev.28)*, y las
 rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
 (`silencio.json`, `verificacion.json`, `fallo_cerrado.json` *(rev.20)*) y
@@ -2038,6 +2044,30 @@ SIGKILL → waitpid → cerrar los DOS extremos del canal viejo
         → crear tuberías nuevas → respawn con generation_id + 1
 ```
 
+**Clausura COMÚN a toda salida** *(rev.28)*. rev.27 solo definía
+`SIGKILL → waitpid` al vencer el deadline. Por cualquier otra vía —salida
+ordenada, `SIGTERM`, corrupción del IPC, fallo cerrado, o el propio wrapper
+terminando— el padre podía irse dejando al trabajador vivo, y en macOS no hay
+ninguna garantía de que un hijo muera con su padre: quedaban trabajadores
+huérfanos hablando con el exchange sin nadie que los leyera. La misma secuencia
+corre en TODA salida, sin excepción:
+
+```
+cerrar el extremo de ESCRITURA del pedido      (el trabajador ve EOF)
+esperar CIERRE_COOPERATIVO = 2 s a que salga solo
+si sigue vivo → SIGKILL
+waitpid  (siempre, o queda zombi)
+cerrar los descriptores restantes
+```
+
+El EOF primero para que el caso normal sea una salida limpia del trabajador y
+no un `SIGKILL`; los 2 s porque no tiene nada durable que cerrar —no escribe
+almacenes, libro ni sidecars (§20.4)—, así que un plazo largo solo retrasaría
+la salida del padre y comería el `ExitTimeOut` de §20.6; y el `waitpid`
+siempre, incluso tras el `SIGKILL`, porque si no el zombi sobrevive al padre.
+
+`CIERRE_COOPERATIVO` se agrega a §15.
+
 Cerrar los descriptores viejos ANTES de crear los nuevos es lo que hace
 imposible leer bytes residuales tras el respawn: los bytes que el trabajador
 muerto alcanzó a escribir viven en un buffer de kernel que se destruye con el
@@ -2238,36 +2268,78 @@ Existe una **herramienta de acreditación**, separada del daemon y del wrapper.
 Son DOS artefactos y varias operaciones, así que es una máquina IDEMPOTENTE
 bajo lock, no una pasada lineal *(rev.27)*:
 
+**Se invoca contra un `checksum` ESPERADO, obligatorio** *(rev.28)*. rev.27
+hacía que el segundo operador comprobara que su acto fuera idéntico al primero,
+pero tras el primero ya no hay `fallo_cerrado.json`: el segundo caía en
+«no-op» y nunca llegaba a comparar. El acto que se acredita se nombra en la
+invocación, y por eso se puede resolver esté el diagnóstico o no:
+
 ```
 0. tomar acreditacion.lock                    (flock exclusivo, §7)
-1. validar fallo_cerrado.json: schema, checksum e identidad
+1. resolver el caso contra el `checksum` esperado que trae la invocación
 2. exigir `operador` y `motivo_humano` no vacíos
-3. escribir diagnosticos/acreditacion.<sha8 del checksum>.json  (link exclusivo)
+3. publicar la acreditación                   (durable, §20.6.5.1)
 4. archivar el diagnóstico: link → fsync → unlink → fsync       (§20.6.4)
 ```
 
-**La acreditación se hace durable ANTES de archivar**, y su nombre DERIVA del
-`checksum` del diagnóstico: por eso siempre se puede demostrar que la
-acreditación corresponde al diagnóstico que se retiró, y no a otro que pasó
-por ahí.
+| qué hay en disco | qué se hace |
+|---|---|
+| diagnóstico activo cuyo `checksum` COINCIDE | se continúa por los pasos 2–4 |
+| diagnóstico ausente y acreditación archivada IDÉNTICA | **éxito idempotente**: el acto ya ocurrió, no se repite nada |
+| diagnóstico ausente y acreditación archivada con OTRO `operador` o `motivo_humano` | **conflicto**: otro humano ya decidió sobre este diagnóstico. No se sobrescribe |
+| diagnóstico o acreditación con un `checksum` DISTINTO del esperado | **fallo cerrado**: se está acreditando otra cosa que la que el operador miró |
+| nada de lo anterior | fallo cerrado: no hay nada que acreditar con ese checksum |
 
-**Recuperación en cada frontera**, sin colisiones:
+Exigir el checksum en la invocación es además lo que hace que la acreditación
+sea de un documento **leído**: sin él, acreditar sería «lo que haya ahí», y el
+diagnóstico pudo haber cambiado entre que el operador lo miró y que corrió la
+herramienta.
+
+**Recuperación en cada frontera**:
 
 | dónde cayó | qué hace el reintento |
 |---|---|
 | antes del paso 3 | nada quedó escrito: se empieza de nuevo |
-| después de 3, antes de 4 | encuentra la acreditación. Si el contenido es IDÉNTICO —mismo checksum citado, mismo `operador`, mismo `motivo_humano`— continúa por el paso 4. Si DIFIERE, fallo cerrado: dos personas distintas decidieron cosas distintas sobre el mismo diagnóstico |
+| durante el paso 3 | la fuente temporal queda huérfana y se descarta; el `link` no llegó a ocurrir |
+| después de 3, antes de 4 | la acreditación ya está: idéntica continúa por el paso 4, distinta es conflicto |
 | entre `link` y `unlink` del paso 4 | las dos rutas comparten `(st_dev, st_ino)`: se completa el `unlink` (§20.6.4) |
-| todo hecho | no hay `fallo_cerrado.json` que acreditar: no-op |
 
-**Dos operadores a la vez** los serializa `acreditacion.lock`. El segundo entra
-después del primero, encuentra la acreditación ya escrita, y la fila de arriba
-decide: idéntica sigue —es el mismo acto repetido—, distinta falla cerrado. Sin
-el lock, los dos podían escribir su acreditación y quedarse cada uno con la
-mitad de la operación del otro.
+**Dos operadores a la vez** los serializa `acreditacion.lock`, y ahora el
+segundo SÍ puede resolverse: entra con su checksum esperado, encuentra el
+diagnóstico ya archivado, y la tabla decide entre éxito idempotente y
+conflicto. Sin el lock, los dos podían escribir su acreditación y quedarse cada
+uno con la mitad de la operación del otro.
 
 Recién con el diagnóstico archivado, el arranque siguiente deja de estar
 bloqueado.
+
+##### 20.6.5.1 El registro de acreditación es un sidecar registral *(rev.28)*
+
+Mismo tratamiento que los demás; rev.26 lo introdujo sin schema propio:
+
+| campo | qué es |
+|---|---|
+| `schema_version` | cerrada y versionada |
+| `cohorte`, `contrato`, `commit` | identidad, igual que el diagnóstico |
+| `diagnostico_checksum` | el documento acreditado, citado por su checksum |
+| `acreditado_por` | operador, no vacío |
+| `motivo_humano` | por qué se decidió continuar, no vacío |
+| `acreditado_en` | instante entero |
+| `checksum` | del propio registro |
+
+**Publicación durable**, con la fuente temporal declarada —`link` necesita un
+origen, y rev.27 no decía de dónde salía—:
+
+```
+escribir diagnosticos/acreditacion.<sha8>.json.tmp   (atómico) → fsync del archivo
+link(tmp, diagnosticos/acreditacion.<sha8>.json)     EEXIST → comparar contenido
+fsync del directorio
+unlink(tmp) → fsync del directorio
+```
+
+El `.tmp` vive en `diagnosticos/` porque `link` no cruza filesystems (§20.6.4),
+y un `.tmp` huérfano de una caída se descarta: no es la acreditación, que es
+solo el nombre definitivo.
 
 **El arranque comprueba ausencia, no acreditación**: si hay un
 `fallo_cerrado.json` con `codigo: 1` en el directorio de estado, bloquea. La
@@ -2459,6 +2531,12 @@ Numerados a continuación de §17, que termina en 44:
     analítica desde `REQUEST_DEADLINE` más el sellado y el lote más largo, y
     **falla si el `ExitTimeOut` del plist es menor a 3 × el mayor de los dos**
     (§20.6);
+48octies. **ningún trabajador huérfano** *(rev.28)*: tras salida ordenada,
+    `SIGTERM`, corrupción del IPC, fallo cerrado y muerte del wrapper, no queda
+    NINGÚN proceso trabajador vivo ni zombi —se comprueba por PID, no por
+    ausencia de log—; el caso normal sale por EOF sin llegar al `SIGKILL`; un
+    trabajador que ignora el EOF recibe `SIGKILL` tras `CIERRE_COOPERATIVO`; y
+    en todos los casos hay `waitpid`;
 48sexies. **enum de errores y política de reintento** *(rev.27)*: cada valor
     de la tabla de §20.4 produce lo que declara —`dns`, `conexion`, `tls`,
     `lectura`, `http_429`, `http_5xx` consumen intento; `http_4xx`, `interno` y
@@ -2476,8 +2554,10 @@ Numerados a continuación de §17, que termina en 44:
     de la tabla de fallo cerrado de §20.4.1 produce `codigo: 1` y **NO**
     consume intento —`request_id` ajeno, `generation_id` ajeno, sobre
     truncado, checksum roto, schema inválido, longitud sobre `MAX_SOBRE`, y
-    muerte espontánea del trabajador—; solo el deadline vencido consume
-    intento y entra al backoff; tras un respawn no se lee ni un byte de la
+    muerte espontánea del trabajador—; entre los fallos de la CAPA IPC, solo
+    el deadline vencido consume intento y entra al backoff *(rev.28: decía
+    «solo el deadline», que contradecía los seis errores de red de 48sexies —
+    esos viajan en un sobre bien formado y no son fallos del IPC)*; tras un respawn no se lee ni un byte de la
     generación anterior, con el trabajador escribiendo una respuesta parcial
     justo antes de morir; y `status` y `Retry-After` llegan como campos del
     sobre, no inferidos del cuerpo;
@@ -2496,10 +2576,16 @@ Numerados a continuación de §17, que termina en 44:
     previa, y recién entonces el arranque deja de bloquear; y la herramienta no
     puede levantar un terminal publicado. Además, **interrupción después de
     CADA escritura** —tras la acreditación y entre `link` y `unlink`—: el
-    reintento completa sin duplicar y sin colisionar; una acreditación
-    reaparecida con contenido DISTINTO falla cerrado; y **dos procesos
+    reintento completa sin duplicar y sin colisionar; y **dos procesos
     concurrentes** se serializan por `acreditacion.lock`, con el segundo
-    aceptando solo si su acto es idéntico *(rev.27)*;
+    entrando cuando el diagnóstico YA fue archivado y resolviéndose por su
+    `checksum` esperado: éxito idempotente si su acto es idéntico, conflicto si
+    el `operador` o el `motivo_humano` difieren, y fallo cerrado si el checksum
+    no es el mismo *(rev.28: rev.27 exigía una comparación que el segundo
+    operador no podía llegar a hacer)*. Más: invocar sin `checksum` esperado se
+    rechaza; una caída DURANTE la publicación deja un `.tmp` huérfano que se
+    descarta; y el registro de acreditación valida contra el schema de
+    §20.6.5.1 con vectores adversariales por campo;
 49. **cadencia y backoff deterministas**: un ciclo que dura más que `CADENCIA`
     no acumula deuda —el siguiente arranca una sola vez—; el backoff respeta
     la fórmula y el número de intentos con un reloj y un generador
