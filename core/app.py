@@ -211,6 +211,19 @@ def whoami(request: Request):
 
 
 ACCOUNT_PAGE = os.path.join(ROOT, "core", "account.html")
+INICIO_PAGE = os.path.join(ROOT, "core", "inicio.html")
+
+
+@app.get("/inicio", response_class=HTMLResponse)
+def inicio_page(request: Request):
+    """Selector de mundo tras iniciar sesión: cripto o acciones chilenas.
+
+    `/` sigue siendo la portada pública de marketing; esta es la casa del
+    usuario ya autenticado, y el destino por defecto del login."""
+    if auth.enabled() and not auth.current_user(request):
+        return RedirectResponse(url="/login?next=/inicio", status_code=307)
+    with open(INICIO_PAGE, "r", encoding="utf-8") as fh:
+        return HTMLResponse(fh.read(), headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/account", response_class=HTMLResponse)
@@ -251,13 +264,13 @@ LOGIN_PAGE = os.path.join(ROOT, "core", "login.html")
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login(request: Request, next: str = "/m/journal/"):
+def login(request: Request, next: str = "/inicio"):
     # Auth inerte → no hay nada que loguear: a la portada.
     if not auth.enabled():
         return RedirectResponse(url="/", status_code=307)
     # Ya con sesión → directo a su destino (no mostramos el login de nuevo).
     if auth.current_user(request):
-        dest = next if next.startswith("/") else "/m/journal/"
+        dest = next if next.startswith("/") else "/inicio"
         return RedirectResponse(url=dest, status_code=307)
     # Sin sesión → pantalla de acceso branded (el botón salta a /auth/google).
     with open(LOGIN_PAGE, "r", encoding="utf-8") as fh:
@@ -265,7 +278,7 @@ def login(request: Request, next: str = "/m/journal/"):
 
 
 @app.get("/auth/google")
-def auth_google(request: Request, next: str = "/m/journal/"):
+def auth_google(request: Request, next: str = "/inicio"):
     """Inicia el flujo OAuth con Google (lo que antes hacía /login directo)."""
     if not auth.enabled():
         return RedirectResponse(url="/", status_code=307)
@@ -292,9 +305,9 @@ def auth_callback(request: Request, code: str = "", state: str = "", error: str 
     if not info.get("email_verified") or not auth.is_allowed(info.get("email", "")):
         return RedirectResponse(url="/login?e=denied", status_code=307)
     user = auth.upsert_user(info)
-    nxt = st.get("next") or "/m/journal/"
+    nxt = st.get("next") or "/inicio"
     if not nxt.startswith("/"):   # solo rutas internas (anti open-redirect)
-        nxt = "/m/journal/"
+        nxt = "/inicio"
     resp = RedirectResponse(url=nxt, status_code=307)
     resp.set_cookie(auth.COOKIE, auth.make_cookie(user), max_age=60 * 60 * 24 * 30,
                     httponly=True, secure=True, samesite="lax", path="/")
@@ -424,7 +437,7 @@ def _gate(slug: str, request: Request):
     if slug in _ADMIN_REQUIRED and not auth.is_admin(user):
         if is_api:
             return JSONResponse({"error": "solo administradores"}, status_code=403)
-        return RedirectResponse(url="/m/journal/", status_code=307)
+        return RedirectResponse(url="/inicio", status_code=307)
     return None
 
 

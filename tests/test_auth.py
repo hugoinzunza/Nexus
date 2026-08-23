@@ -76,7 +76,8 @@ def test_bot_web_es_solo_admin(monkeypatch):
         "uid": 8, "email": "beta@example.com", "role": "beta"})
     blocked = app._gate("bot", request)
     assert blocked.status_code == 307
-    assert blocked.headers["location"] == "/m/journal/"
+    # El rebote va a la casa del usuario, no a un módulo cripto cualquiera.
+    assert blocked.headers["location"] == "/inicio"
 
     monkeypatch.setattr(app.auth, "current_user", lambda request: {
         "uid": 1, "email": "admin@example.com", "role": "admin"})
