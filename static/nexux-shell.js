@@ -17,6 +17,13 @@
       ],
     },
     {
+      label: "Acciones Chile",
+      links: [
+        { href: "/m/acciones_chile/", text: "Cartera y CMF", icon: "CL",
+          tag: "research", match: ["/m/acciones_chile"] },
+      ],
+    },
+    {
       label: "Mercado",
       links: [
         { href: "/m/trading/", text: "Trading", icon: "TV", match: ["/m/trading"] },
