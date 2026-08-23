@@ -1058,8 +1058,12 @@ def test_las_fechas_de_resultado_se_atribuyen_al_feed_y_no_al_emisor():
     for prohibido in ("Está al día", "Publicó el ${", "Todavía no le veo publicaciones",
                       "ya publicó", "ya publicaron", "si ya publicó resultados"):
         assert prohibido not in page, prohibido
-    # El resumen de cartera atribuye la detección al feed, igual que las tarjetas.
-    assert "El feed detectó el ${s.latest_market_period" in page
+    # `latest_market_period` es el máximo de los eventos del export cargado: no
+    # mide el mercado ni prueba cobertura, así que la copia no puede insinuarlo.
+    assert "el período más reciente detectado en el feed" in page
+    assert "es el período más reciente del feed" in page
+    for prohibido in ("el resto del mercado", "todo el mercado", "que el mercado"):
+        assert prohibido not in page, prohibido
 
 
 def test_ver_evidencia_conserva_toda_la_trazabilidad_exigida():
