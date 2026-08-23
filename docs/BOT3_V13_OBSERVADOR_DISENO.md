@@ -1,10 +1,19 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.19
+# Bot3.v13 — Observador operativo · DISEÑO rev.20
 
-**Estado: DISEÑO rev.19 — §20 acotada: fase de activación, política de reinicio
-realizable, taxonomía de salidas, decisiones deterministas y gates. §1–§19 y
+**Estado: DISEÑO rev.20 — §20 acotada: replay del motor al arrancar, canal de
+diagnóstico, activación recuperable y `fallo_cerrado.json` registral. §1–§19 y
 §13 no se reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.20 cierra tres bloqueos de rev.19: §20.2 creaba un `Motor` VACÍO y pasaba
+directo a `reanudar()` —el motor no persiste candidatos, órdenes, posiciones ni
+`lotes_finalizados`, y su recuperación contractual es por replay—; el wrapper
+tenía que registrar «la excepción» sin más canal que el código de salida; y
+`ExitTimeOut = 300 s` contradecía «terminar el ciclo» contra los 402 s de
+replay que el ensayo a escala ya midió. Además hace recuperable la activación,
+acota la taxonomía transitoria —`ENOSPC` y `EIO` NO son transitorios y el lock
+ocupado significa que hay otra instancia sana— y da tratamiento registral a
+`fallo_cerrado.json`.
 rev.19 cierra §20, acotada exclusivamente a esa sección y sus gates. rev.18
 tenía dos bloqueos operacionales: la política de reinicio NO era realizable
 —`KeepAlive.SuccessfulExit=false` reinicia ante cualquier salida no cero, así
@@ -1309,10 +1318,11 @@ producción solo agregaría una ruta sin probar.
 `DERIVA_MAX`, `SILENCIO_MAX_H4`, `TOPE_INTERVALO`, `BACKOFF_BASE`, `BACKOFF_MAX`, `BACKOFF_INTENTOS`,
 `TF_OBSERVADAS`, `UNIVERSO`, `ENDPOINT_KLINES`, `ENDPOINT_TIME`,
 `CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`,
-`PRECEDENCIA_TERMINAL`, y las
+`PRECEDENCIA_TERMINAL`, `MAX_TRANSITORIOS` y `EXIT_TIMEOUT` *(rev.20)*, y las
 rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
-(`silencio.json`, `verificacion.json`) y `terminal.request`.
+(`silencio.json`, `verificacion.json`, `fallo_cerrado.json` *(rev.20)*) y
+`terminal.request`.
 Ninguno se elige en operación.
 
 `bootstrap_hasta` **no** es parámetro del observador: es la identidad de la
@@ -1503,27 +1513,50 @@ Los crea una **herramienta de activación de una sola pasada**, que no es el
 servicio y no ingiere: corresponde a los pasos 6–7 de §18 y corre una vez,
 antes de habilitar el daemon.
 
+**Todo se construye en `cohorte.new/` y se publica con UN SOLO rename**
+*(rev.20)*. rev.19 creaba seis artefactos por etapas sobre el directorio
+definitivo, y cualquier caída después de `acta.json` dejaba «estado existente»
+— que la propia herramienta declara motivo de fallo cerrado. La activación era
+irreintentable justo en el momento más probable de fallar.
+
 ```
-1. acta.json          cohorte, commit, bootstrap_hasta y la frontera de §16
-2. nacimiento STAGED  los 14 almacenes desde los snapshots canónicos, en
-                      `almacenes.new/`, y un solo rename (§4)
-3. libro y manifiesto  con el prefijo de nacimiento de cada stream (§3)
-4. comparación fría REAL en la frontera: se copia el estado recién nacido,
-   se reconstruye en frío y se compara digest y firma
-5. verificacion.json   `ok`, con el digest y la firma de ESA comparación
-6. habilitación del servicio
+en cohorte.new/  (descartable entero, nunca es el estado vivo)
+  1. acta.json          cohorte, commit, bootstrap_hasta y la frontera de §16
+  2. nacimiento de los 14 almacenes desde los snapshots canónicos (§4)
+  3. libro y manifiesto  con el prefijo de nacimiento de cada stream (§3)
+  4. REPLAY del prefijo sellado sobre ese motor recién nacido      (§20.2.1)
+  5. comparación fría REAL en la frontera: se copia el estado, se reconstruye
+     en frío y se comparan digest y firma — DOS motores reconstruidos, no dos
+     instancias vacías que coinciden por estar ambas en cero
+  6. verificacion.json   `ok`, con el digest y la firma de ESA comparación
+publicación
+  7. un solo rename: cohorte.new/ → el directorio de estado
+  8. habilitación del servicio
 ```
 
-El paso 4 no es ceremonial. `verificacion.json` inicial en `ok` es lo que
+La recuperación es trivial y no tiene matriz: si existe `cohorte.new/`, se
+BORRA entero y se empieza de nuevo. Nunca fue el estado vivo, así que no hay
+frontera intermedia que reconciliar — el mismo argumento de §4, un nivel más
+arriba.
+
+El paso 5 no es ceremonial. `verificacion.json` inicial en `ok` es lo que
 §13.4.2 exige leer y lo que §13.4.1 usa como procedencia; escribirlo sin haber
 comparado nada sería declarar acreditado un determinismo que nadie verificó, y
 la primera comparación real —seis horas después— ya no tendría con qué
 contrastar el nacimiento.
 
-La herramienta **falla cerrado si el estado ya existe**: no re-nace una cohorte
-viva, no pisa un `acta.json` previo y no toca marcadores terminales. Reactivar
-una cohorte cerrada exige borrar el directorio a mano, que es una decisión
-humana y deja rastro.
+La herramienta **falla cerrado si el estado vivo ya existe**: no re-nace una
+cohorte viva, no pisa un `acta.json` publicado y no toca marcadores terminales.
+
+**Una cohorte cerrada se ARCHIVA, no se borra** *(rev.20)*. rev.19 decía que
+borrar el directorio «deja rastro»: es falso, borra exactamente la evidencia
+—el libro, los almacenes sellados y el marcador terminal— que hace evaluable a
+la cohorte. El directorio se renombra a `cohortes/<id>/` y queda intacto.
+
+Y una reactivación **exige identidad NUEVA**: otra `cohorte`, con su propia
+acta y su propia frontera. Reusar el identificador haría que dos libros
+distintos afirmaran ser la misma cohorte, y ningún resultado publicado podría
+atribuirse sin ambigüedad.
 
 ### 20.1 Identidad: de dónde sale, y no se elige en operación
 
@@ -1546,19 +1579,46 @@ la cohorte tiene que sostener.
 ```
 1. tomar singleton_lock          (flock de vida completa, §7)
 2. validar árbol limpio y commit == acta.commit
-3. cargar manifiesto y los 14 almacenes  (Almacen.cargar, requerido=True)
-4. cargar libro; construir Motor con acta.bootstrap_hasta
-5. cargar sidecars: silencio.json (si existe) y verificacion.json (OBLIGATORIO)
-6. reanudar()                    (§13.5) — ANTES de abrir ningún ciclo
-7. si hay terminal publicado o reanudar lo produjo: NO se abre ningún ciclo
-8. recién entonces, el bucle de ciclos
+3. rechazar el arranque si existe fallo_cerrado.json  (§20.6.2)
+4. cargar manifiesto y los 14 almacenes  (Almacen.cargar, requerido=True)
+5. cargar libro; construir Motor con acta.bootstrap_hasta
+6. REPLAY canónico del prefijo sellado, SIN ingerir      (§20.2.1)
+7. cargar sidecars: silencio.json (si existe) y verificacion.json (OBLIGATORIO)
+8. reanudar()                    (§13.5) — ANTES de abrir ningún ciclo
+9. si hay terminal publicado o reanudar lo produjo: NO se abre ningún ciclo
+10. recién entonces, el bucle de ciclos
 ```
 
-Los pasos 1–6 no ingieren nada. El orden importa en los dos extremos: el lock
+Los pasos 1–8 no ingieren nada. El orden importa en los dos extremos: el lock
 va PRIMERO porque dos procesos sobre los mismos almacenes es la corrupción que
 §7 impide, y `reanudar()` va antes del bucle porque un `terminal.request`
 pendiente prohíbe abrir ciclos (§13.3) y el arranque es uno de los tres
 disparadores de la fase B (§9.1.3).
+
+#### 20.2.1 El replay NO es opcional *(rev.20)*
+
+El `Motor` **no persiste** candidatos, órdenes vivas, posiciones abiertas ni
+`lotes_finalizados`. Su recuperación contractual es por REPLAY: se reconstruye
+procesando otra vez la secuencia canónica sobre el prefijo ya sellado.
+
+rev.19 construía un motor y pasaba directo a `reanudar()`. Con eso, un reinicio
+con `terminal.request` pendiente evaluaba la reanudación contra un motor
+**vacío**: sin posiciones que cerrar al corte, sin `cierres` que acreditaran el
+motivo `muestra`, y con `watermark_lotes()` en `None` — el ciclo siguiente
+habría reprocesado la historia entera sobre el motor vivo.
+
+El replay:
+
+- recorre **solo los cierres ya sellados** en los almacenes, nunca ingiere ni
+  crea lotes nuevos. Es la misma secuencia de `reconstruir_en_frio` (§9), con
+  la única diferencia de que corre sobre los almacenes vivos;
+- **no duplica eventos**: el libro es idempotente por `event_id`, así que cada
+  evento que el replay reemite ya existe y se descarta. Es la propiedad que
+  hace el replay seguro, no un efecto colateral;
+- y por eso es, además, una **verificación**: si el prefijo sellado dejara de
+  reproducir los mismos eventos, el libro rechazaría el append por «payload
+  distinto» y el arranque fallaría cerrado. Un reinicio prueba, gratis, que la
+  historia sigue siendo la que se selló.
 
 **`verificacion.json` es obligatorio** también en el primer arranque de la
 cohorte: el acta lo escribe en estado `ok` con la captura de la frontera. Un
@@ -1619,17 +1679,26 @@ techo_n = min(BACKOFF_MAX, BACKOFF_BASE * 2**(n-1))
 espera_n = uniform(0, techo_n)                        # full jitter
 ```
 
-`BACKOFF_INTENTOS` (5) es el número de INTENTOS totales, no de reintentos: el
-quinto fallo agota y `fetch` levanta. El jitter completo es deliberado —los 14
+`BACKOFF_INTENTOS` (5) es el número de INTENTOS totales, no de reintentos.
+**Solo se DUERME después de los fallos 1 a 4**; el quinto fallo levanta de
+inmediato, sin esperar. Dormir tras el último sería retrasar el fracaso sin
+cambiarlo, y la espera se la comería el `ExitTimeOut` de §20.6. El jitter completo es deliberado —los 14
 streams de un ciclo reintentando en fase sincronizada son una ráfaga contra el
 mismo endpoint—, y es **la única fuente de aleatoriedad del observador**: vive
 en la capa de transporte, no entra en ningún hash, ningún evento ni ninguna
 decisión, así que no afecta la reproducibilidad del libro.
 
-Si la respuesta `429` o `503` trae `Retry-After`, se respeta ese valor en vez
-del jitter, **acotado a `BACKOFF_MAX`** y consumiendo un intento igual. Sin la
-cota, un `Retry-After` hostil o mal configurado podría dormir el ciclo por
-horas; sin consumir intento, no habría cota al total.
+**`Retry-After`** *(rev.20, interpretación congelada)*. Si la respuesta `429`
+o `503` lo trae, reemplaza al jitter de ESE intento:
+
+- se aceptan las dos formas del estándar: **segundos** enteros y **HTTP-date**,
+  esta última convertida a `max(0, fecha − ahora)` con el reloj local;
+- un valor malformado, negativo o no numérico **se ignora** y se usa el jitter:
+  una cabecera rota no debe poder detener ni acelerar el ciclo;
+- el resultado se acota a `[0, BACKOFF_MAX]` — sin la cota, un `Retry-After`
+  hostil o mal configurado dormiría el ciclo por horas;
+- consume un intento igual, así que el total sigue acotado;
+- y **no se respeta tras el último fallo**: ahí se levanta, como arriba.
 
 ### 20.5 Quién escribe `verify.request`
 
@@ -1681,22 +1750,58 @@ Qué se termina depende de dónde llegue la señal:
 | la comparación fría | se ABORTA. El sidecar queda `pending` con su copia COMPLETA, y el arranque siguiente la retoma — que es exactamente el caso que §13.5.1 cubre |
 | la fase B, entre publicar y borrar | no se interrumpe: es una secuencia de dos operaciones atómicas y §13.6 ya resuelve el estado intermedio |
 
-`ExitTimeOut` se fija en **300 s**, no en el default de 20: una comparación
-fría sobre la frontera completa tarda más que eso, y un `SIGKILL` a mitad
-—que es lo que hace launchd al vencer el plazo— es justo lo que las tres
-primeras filas evitan.
+**Cancelación COOPERATIVA con cota medida** *(rev.20)*. rev.19 fijaba
+`ExitTimeOut = 300 s`, y el ensayo a escala ya había medido ~402 s de
+reinicio/replay: un `SIGTERM` durante ese camino terminaba en `SIGKILL`, que es
+exactamente lo que la tabla de arriba dice evitar. Prometer «terminar el ciclo»
+con un plazo menor al peor caso conocido no es una promesa.
+
+Se resuelve por los dos lados:
+
+1. **puntos de cancelación declarados**, donde la bandera se consulta y el
+   proceso puede salir sin dejar nada a medias:
+
+   | punto | por qué es seguro |
+   |---|---|
+   | entre lotes del REPLAY (§20.2.1) | el replay no muta nada durable: reconstruye estado en memoria y sus appends ya existen en el libro. Se aborta en cualquier lote y el arranque siguiente rehace el mismo camino |
+   | antes de `ofrecer` de cada stream | lo ingerido hasta ahí ya está sellado y sincronizado; lo que falta se pide de nuevo el ciclo siguiente |
+   | después de `finalizar_ciclo` | el ciclo cerró completo |
+   | entre archivos de la copia | la copia es descartable: se borra el destino incompleto |
+
+   Con esto, el peor caso de salida NO es el replay completo sino **un lote y
+   un stream**, que es lo que no se puede partir sin romper la atomicidad de
+   §5 y §12.
+
+2. **`ExitTimeOut` derivado de una medición, no elegido**: se fija en el peor
+   caso medido a escala completa entre dos puntos de cancelación, **por 3**.
+   El gate 48 lo MIDE y falla si el plist quedó por debajo. Un número escrito
+   a mano en el plist envejece en silencio; uno derivado de un gate no.
 
 #### 20.6.1 Taxonomía CERRADA de salidas
 
 | código | qué significa | ejemplos |
 |---|---|---|
-| `0` | terminal publicado, o apagado ordenado por señal | `completed.json` o `blocked.json` presentes al arrancar; `SIGTERM` |
-| `2` | error TRANSITORIO del host, registro cerrado | `singleton_lock` tomado por otro proceso; `ENOSPC`; `EIO`/`EBUSY` del sistema de archivos |
-| `1` | **todo lo demás**, incluida cualquier excepción no prevista | `MarcoCorrupto`, `VerificacionInvalida`, `RequestInvalido`, `PaginaInvalida`, árbol sucio, commit distinto del acta, estado ausente |
+| `0` | terminal publicado; apagado ordenado; **o el lock ya lo tiene otra instancia** | `completed.json`/`blocked.json` al arrancar; `SIGTERM`; `singleton_lock` ocupado |
+| `2` | error transitorio ACOTADO del host | `EBUSY`, `EAGAIN`, `ETIMEDOUT` del sistema de archivos |
+| `1` | **todo lo demás**, incluida cualquier excepción no prevista | `ENOSPC`, `EIO`, `MarcoCorrupto`, `VerificacionInvalida`, `RequestInvalido`, `PaginaInvalida`, árbol sucio, commit distinto del acta, estado ausente |
 
-El registro de `2` es **cerrado y corto**; el de `1` es el default. Fallar
-abierto acá significaría reintentar para siempre una condición que solo un
-humano puede resolver, mientras la cohorte parece viva.
+Tres correcciones sobre rev.19 *(rev.20)*:
+
+- **el lock ocupado sale `0`**, no `2`. Significa que hay otra instancia SANA
+  corriendo; este proceso no tiene nada que hacer y reintentar en loop es
+  ruido contra un sistema que funciona;
+- **`ENOSPC` y `EIO` bajan a `1`**. No son transitorios: un disco lleno o un
+  error de E/S del medio exigen intervención, y reintentarlos indefinidamente
+  contradice el fail-closed declarado — la cohorte parecería viva mientras no
+  puede escribir nada;
+- **`2` está ACOTADO**. `fallo_cerrado.json` lleva un contador de salidas `2`
+  consecutivas; a los `MAX_TRANSITORIOS` (5) el arranque siguiente escala a
+  `1` y deja de reintentar. Un `EBUSY` que no se despeja en cinco intentos ya
+  no es transitorio, sea lo que sea.
+
+El registro de `2` es **cerrado, corto y con cota**; el de `1` es el default.
+Fallar abierto acá significaría reintentar para siempre una condición que solo
+un humano puede resolver.
 
 #### 20.6.2 Por qué el plist solo no alcanza
 
@@ -1705,19 +1810,61 @@ humano puede resolver, mientras la cohorte parece viva.
 frecuencia del loop, no lo evita. La política de rev.18 no era realizable.
 
 El daemon sigue emitiendo `0/1/2` —es la taxonomía que un operador lee— y un
-**wrapper** traduce:
+**wrapper** traduce.
+
+**Quién escribe el diagnóstico** *(rev.20)*. rev.19 le pedía al wrapper
+registrar «la excepción», pero un proceso padre solo recibe el ESTADO DE
+SALIDA: no tiene el traceback ni el motivo. El canal se invierte:
+
+| quién | qué escribe |
+|---|---|
+| el DAEMON, antes de salir `1` o `2` | `fallo_cerrado.json` completo: motivo, clase de excepción, traceback, código, instante e identidad |
+| el WRAPPER | nada, si el daemon ya lo dejó válido |
 
 | salida del daemon | qué hace el wrapper | efecto en launchd |
 |---|---|---|
 | `0` | sale `0` | no reinicia |
-| `1` | escribe `fallo_cerrado.json` con el código, la excepción y el instante, y sale `0` | no reinicia |
-| `2` | sale distinto de `0` | reinicia tras `ThrottleInterval` |
+| `1` con `fallo_cerrado.json` válido | sale `0` | no reinicia |
+| `1` SIN diagnóstico válido | escribe uno con `motivo: "sin_diagnostico"`, el código crudo y la cola de `stderr`, y sale `0` | no reinicia |
+| `1` y NO puede escribirlo | sale distinto de `0` | reinicia — el loop ES el síntoma visible |
+| `2` | sale distinto de `0` | reinicia tras `ThrottleInterval`, hasta la cota de §20.6.1 |
 
-`fallo_cerrado.json` es lo que preserva el estado que la traducción a `0`
-borraría: un fail-closed que sale `0` sería indistinguible de una cohorte
-cerrada limpiamente. Mientras exista, **el arranque siguiente se niega a
-correr** y sale `1` otra vez; borrarlo es un acto humano deliberado, igual que
-reactivar una cohorte cerrada (§20.0).
+La tercera fila cubre el caso que rev.19 perdía: un daemon muerto por `SIGKILL`
+o por un fallo antes de poder escribir. Traducir `1→0` ahí, sin diagnóstico,
+habría hecho creer a launchd —y a un operador— que la cohorte terminó
+limpiamente. El wrapper **solo traduce si el diagnóstico existe y valida**.
+
+La cuarta es el único caso en que el loop se acepta: si el wrapper tampoco
+puede escribir, el disco o el permiso están rotos, y el reinicio repetido es
+la señal más ruidosa disponible — mejor que un silencio que parece éxito.
+
+`stderr` del daemon se redirige a `diagnostico.err` por el plist
+(`StandardErrorPath`), que es de dónde sale esa cola.
+
+#### 20.6.3 `fallo_cerrado.json` es un sidecar registral *(rev.20)*
+
+Gobierna el arranque, así que recibe el MISMO tratamiento que los demás
+sidecars —rev.19 lo introdujo sin ninguno—:
+
+| campo | qué es |
+|---|---|
+| `schema_version` | cerrada y versionada |
+| `cohorte`, `contrato`, `commit` | identidad, igual que `terminal.request` |
+| `motivo` | registro CERRADO: `excepcion`, `sin_diagnostico`, `transitorios_agotados` |
+| `excepcion` | clase y mensaje, ausente solo con `motivo: sin_diagnostico` |
+| `traceback` | texto, para el operador; no participa de ninguna decisión |
+| `codigo` | `1` o `2` |
+| `ocurrido_en` | instante entero |
+| `transitorios` | contador de salidas `2` consecutivas (§20.6.1) |
+| `checksum` | del propio documento |
+
+Escritura ATÓMICA (`escribir_atomico`), validación fail-closed al leerlo, y
+**identidad exigida**: un `fallo_cerrado.json` de otra cohorte no bloquea a
+esta —bloquearía a la equivocada— pero tampoco se ignora en silencio: es fallo
+cerrado, porque un archivo de otra identidad en este directorio significa que
+algo mezcló dos estados.
+
+Se agrega a la lista de §15 junto con `MAX_TRANSITORIOS` y `ExitTimeOut`.
 
 ### 20.7 Lo que el servicio NO hace
 
@@ -1732,28 +1879,52 @@ reactivar una cohorte cerrada (§20.0).
 
 Numerados a continuación de §17, que termina en 44:
 
-45. **primer nacimiento completo**: la herramienta de activación corre sobre un
-    directorio VACÍO y produce acta, los 14 almacenes por rename único, libro,
-    manifiesto y `verificacion.json` en `ok` **con el digest y la firma de una
-    comparación fría real** —no fabricado—; correrla de nuevo sobre el estado
-    ya creado falla cerrado sin tocar nada; y el servicio arranca contra ese
-    estado sin fallar;
+45. **primer nacimiento completo**: la herramienta corre sobre un directorio
+    VACÍO y produce acta, los 14 almacenes, libro, manifiesto y
+    `verificacion.json` en `ok` **con el digest y la firma de una comparación
+    fría real entre dos motores RECONSTRUIDOS** —no dos vacíos que coinciden
+    por estar ambos en cero, y no fabricado—; todo aparece por UN SOLO rename
+    desde `cohorte.new/`; correrla de nuevo sobre el estado publicado falla
+    cerrado sin tocar nada; una caída simulada en CADA etapa deja solo
+    `cohorte.new/` y el reintento la borra y completa; y el servicio arranca
+    contra ese estado sin fallar;
+45bis. **replay del arranque** *(rev.20)*: con posiciones vivas, órdenes y
+    `lotes_finalizados` en el prefijo sellado, un reinicio los RECONSTRUYE
+    —`watermark_lotes()` idéntico, `cierres` idénticos, estados por mercado
+    idénticos— sin appendear ningún evento nuevo al libro y sin ingerir; un
+    prefijo alterado hace fallar el arranque por «payload distinto»; y un
+    reinicio con `terminal.request` pendiente y ganador `muestra` publica el
+    MISMO terminal que la corrida continua, que contra un motor vacío era
+    imposible;
+45ter. **archivo, no borrado** *(rev.20)*: cerrar una cohorte y reactivar deja
+    la anterior íntegra en `cohortes/<id>/` —libro, almacenes y marcador— y
+    exige una `cohorte` NUEVA: reusar el identificador falla cerrado;
 46. **orden del arranque**: sin lock no se carga nada; sin `acta.json`,
     `verificacion.json` o manifiesto se falla cerrado; `reanudar()` corre ANTES
     del primer ciclo —gate con un `terminal.request` pendiente, comprobando que
     ningún almacén se movió—; y un terminal publicado sale `0` sin abrir
     ninguno;
 47. **taxonomía de salidas**: una excepción de cada familia produce el código
-    que le corresponde, y una excepción DESCONOCIDA produce `1`, no `2`; el
-    wrapper traduce `0→0`, `1→0` con `fallo_cerrado.json` escrito, y `2→≠0`; y
-    con `fallo_cerrado.json` presente el arranque siguiente sale `1` sin
-    cargar estado;
-48. **SIGTERM en cada frontera**: durante un ciclo, durante la copia, durante
-    la comparación fría y entre publicar y borrar. En los cuatro: el proceso
-    sale `0`, el estado en disco es consistente, y el arranque siguiente
-    continúa sin pérdida — en particular, la señal durante la copia NO deja el
-    sidecar en `pending` y la señal durante la comparación SÍ lo deja, con la
-    copia completa;
+    que le corresponde; una excepción DESCONOCIDA produce `1`, no `2`;
+    `ENOSPC` y `EIO` producen `1` y el lock ocupado produce `0`; y `2`
+    ESCALA a `1` al llegar a `MAX_TRANSITORIOS` consecutivos;
+47bis. **el canal de diagnóstico** *(rev.20)*: el daemon escribe
+    `fallo_cerrado.json` ANTES de salir; el wrapper traduce `1→0` solo si
+    valida; un daemon muerto por `SIGKILL` sin diagnóstico hace que el wrapper
+    escriba `motivo: sin_diagnostico` con la cola de `stderr` y salga `0`; un
+    wrapper que NO puede escribirlo sale distinto de `0`; con
+    `fallo_cerrado.json` presente el arranque siguiente sale `1` sin cargar
+    estado; y uno de OTRA cohorte falla cerrado en vez de bloquear o de
+    ignorarse. Vectores adversariales sobre cada campo del schema, como los de
+    §13.4.2;
+48. **SIGTERM en cada frontera**: durante el REPLAY, durante un ciclo, durante
+    la copia, durante la comparación fría y entre publicar y borrar. En los
+    cinco: el proceso sale `0`, el estado en disco es consistente, y el
+    arranque siguiente continúa sin pérdida — en particular, la señal durante
+    la copia NO deja el sidecar en `pending` y la señal durante la comparación
+    SÍ lo deja, con la copia completa. Además **MIDE**, a escala completa, el
+    peor tiempo entre dos puntos de cancelación declarados, y **falla si el
+    `ExitTimeOut` del plist es menor a ese peor caso por 3** (§20.6);
 49. **cadencia y backoff deterministas**: un ciclo que dura más que `CADENCIA`
     no acumula deuda —el siguiente arranca una sola vez—; el backoff respeta
     la fórmula y el número de intentos con un reloj y un generador
