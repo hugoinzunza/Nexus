@@ -1087,3 +1087,48 @@ def test_la_tarjeta_ofrece_un_control_enfocable_para_abrir_la_ficha():
     assert "node('button',h.ticker,'pos-tk pos-open')" in page
     assert "tk.setAttribute('aria-label'" in page
     assert ".pos-open:focus-visible" in page
+
+
+def test_la_guia_explica_como_leer_sin_convertirse_en_asesoria():
+    """La guía enseña a leer y a actuar sobre el proceso, nunca sobre qué comprar."""
+    page = _pagina_chile()
+    assert 'id="guia"' in page
+    for titulo in ("Cómo se lee una posición", "Qué significan las tres lecturas",
+                   "Qué dice y qué no dice el múltiplo",
+                   "Por qué no te digo si comprar o vender",
+                   "Qué haces tú con esto", "De dónde sale cada número"):
+        assert titulo in page, titulo
+    # El encabezado deja el rol claro antes de cualquier explicación.
+    assert "investigación, no asesoría" in page
+    assert "no te dice qué comprar ni vender" in page
+    # Desarma las dos lecturas erróneas más probables de las etiquetas.
+    assert "una empresa sólida puede estar carísima" in page
+    assert "es un aviso de que mires con calma qué cambió" in page
+    # Repite el límite del múltiplo que corrigió la auditoría externa.
+    assert "No significa</b> que recuperes tu inversión" in page
+    # La sección de acción habla de proceso, no de instrucciones de compra.
+    assert "La lectura y la decisión siguen siendo tuyas" in page
+    assert "no puede decirte si el precio es razonable" in page
+
+
+def test_el_ingreso_de_cartera_resuelve_el_rut_por_busqueda():
+    """UX-06: pedirle el RUT a quien sólo conoce el nombre era fricción evitable."""
+    page = _pagina_chile()
+    assert 'id="busca-emisor"' in page
+    assert "./api/issuers?q=" in page
+    # El ticker se precarga desde el universo versionado cuando existe.
+    assert "./api/universe" in page
+    assert "tickerPorRut[datos.company_rut]" in page
+    # Formato chileno: 6.180,50 debe llegar al backend como 6180.50
+    assert "replace(/\\./g,'').replace(',','.')" in page
+    # El pegado masivo sobrevive como opción avanzada, no como única vía.
+    assert 'id="cargar-pegado"' in page
+    assert 'class="avanzado"' in page
+
+
+def test_los_errores_de_ingreso_nombran_la_empresa_y_el_campo():
+    page = _pagina_chile()
+    for mensaje in ("falta el ticker con que aparece en Renta 4",
+                    "falta la cantidad", "falta el costo promedio",
+                    "Agrega al menos una posición"):
+        assert mensaje in page, mensaje
