@@ -1,10 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.24
+# Bot3.v13 — Observador operativo · DISEÑO rev.25
 
-**Estado: DISEÑO rev.24 — §20 acotada: transporte con deadline ejecutable, y
-las unidades de cancelación reconciliadas con la transición en dos fases de
-§9.1.1. §1–§19 y §13 no se reabren. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.25 — §20 acotada: protocolo completo del trabajador de
+transporte y gate 48bis reconciliado con la taxonomía de señales. §1–§19 y §13
+no se reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.25 cierra dos bloqueos de rev.24: el gate 48bis prometía que «el arranque
+siguiente continúa» tras un `SIGKILL`, contradiciendo la propia taxonomía
+—toda muerte por señal clasifica `codigo: 1` y BLOQUEA—; y el protocolo del
+trabajador de transporte quedaba en «devuelve el cuerpo por una tubería», que
+no determina ni cuándo empieza el deadline ni cómo se descartan las respuestas
+de una generación muerta.
 rev.24 corrige que rev.23 declaró «fase A junto con la publicación» como un
 tramo indivisible, **contradiciendo §9.1.1**, que congela exactamente lo
 contrario: fase A → liberar barrera → ventana de recolección → fase B. Y le da
@@ -1788,7 +1794,7 @@ Qué se termina depende de dónde llegue la señal:
 
 | llega durante | qué se hace |
 |---|---|
-| un ciclo | se aborta en el punto seguro más cercano —entre streams, o entre lotes finalizados— respetando los tres tramos indivisibles de abajo. Lo sellado queda sellado; lo que falta se rehace el ciclo siguiente *(rev.23: rev.22 decía «termina completo», que contradecía sus propios puntos de cancelación)* |
+| un ciclo | se aborta en el punto seguro más cercano —entre streams, o entre unidades de la fase posterior— respetando las CINCO unidades indivisibles de abajo *(rev.25: decía «tres», de antes de que fase A y fase B se separaran)*. Lo sellado queda sellado; lo que falta se rehace el ciclo siguiente *(rev.23: rev.22 decía «termina completo», que contradecía sus propios puntos de cancelación)* |
 | la copia de una captura | se ABORTA y se borra el destino incompleto. El sidecar NO queda `pending`: una copia parcial no se puede reanudar (§13.5.1) y dejaría la cohorte trabada |
 | la comparación fría | se ABORTA. El sidecar queda `pending` con su copia COMPLETA, y el arranque siguiente la retoma — que es exactamente el caso que §13.5.1 cubre |
 | la fase B, entre publicar y borrar | no se interrumpe: es una secuencia de dos operaciones atómicas y §13.6 ya resuelve el estado intermedio |
@@ -1882,9 +1888,8 @@ Se resuelve por los dos lados:
    existe, y `getaddrinfo` no es cancelable desde el proceso que la llamó. El
    transporte vive en un **proceso trabajador aislado**:
 
-   - un único subproceso hace TODO el I/O de red y devuelve el cuerpo ya
-     parseado por una tubería. No tiene estado propio: no escribe almacenes,
-     ni libro, ni sidecars;
+   - un único subproceso hace TODO el I/O de red. No tiene estado propio: no
+     escribe almacenes, ni libro, ni sidecars;
    - el proceso principal espera con el deadline. Vencido, **`SIGKILL` al
      trabajador** y lo respawnea. Matar cubre DNS, TLS y cuerpo por igual,
      porque no depende de que la operación colgada sea cancelable;
@@ -1898,6 +1903,61 @@ Se resuelve por los dos lados:
    `CONNECT_TIMEOUT` y `READ_TIMEOUT` siguen configurados en el trabajador
    porque detectan antes el caso común y evitan el `SIGKILL`, pero la cota
    que vale es el deadline del padre.
+
+#### 20.4.1 Protocolo del trabajador, congelado *(rev.25)*
+
+«Devuelve el cuerpo por una tubería» dejaba abiertas seis decisiones, y cada
+una admite dos implementaciones honestas con resultados distintos.
+
+**Identificadores.** `generation_id` se incrementa en cada respawn;
+`request_id` se incrementa en cada petición. Todo mensaje lleva los dos.
+
+**Sobres CERRADOS**, con el mismo enmarcado durable de §5
+—`<longitud>\t<sha256>\t<payload>\n`— para que un sobre a medio escribir sea
+detectable y no un JSON plausible:
+
+| pedido | respuesta |
+|---|---|
+| `generation_id`, `request_id`, `url`, `params`, `connect_timeout`, `read_timeout` | `generation_id`, `request_id`, `ok`, `status`, `retry_after`, y `body` **o** `error` |
+
+`status` y `Retry-After` viajan en el sobre como campos propios: el cuerpo
+solo no permite distinguir un `429` de un `200`, y §20.4 decide el backoff con
+los dos.
+
+**El deadline empieza cuando el padre TERMINA de escribir el sobre del
+pedido**, no antes: hasta ese instante no hay nada en vuelo y contar el tiempo
+de serialización local haría que el deadline midiera cosas distintas según la
+carga del host.
+
+**Correlación estricta.** El padre acepta una respuesta solo si
+`(generation_id, request_id)` coincide con la petición pendiente. Cualquier
+otra se **descarta**, y una respuesta con `generation_id` viejo es imposible
+de leer de todas formas por el punto siguiente.
+
+**Un canal NUEVO por generación**, en este orden exacto:
+
+```
+SIGKILL → waitpid → cerrar los DOS extremos del canal viejo
+        → crear tuberías nuevas → respawn con generation_id + 1
+```
+
+Cerrar los descriptores viejos ANTES de crear los nuevos es lo que hace
+imposible leer bytes residuales tras el respawn: los bytes que el trabajador
+muerto alcanzó a escribir viven en un buffer de kernel que se destruye con el
+canal. Reusar la tubería habría dejado media respuesta de la generación
+anterior esperando al principio del flujo.
+
+**Muerte del trabajador: dos casos, y NO son lo mismo.**
+
+| qué pasó | cómo se clasifica |
+|---|---|
+| el padre lo mató por deadline vencido | fallo de TRANSPORTE: consume un intento y entra al backoff (§20.4) |
+| murió solo —crash, OOM, sobre truncado sin que el padre matara— | **fallo cerrado**, `codigo: 1` |
+
+Un trabajador que muere por su cuenta no es una falla de red: es una falla del
+observador. Tratarla como transitoria la haría reintentar cinco veces y seguir
+como si nada, cuando lo que corresponde es que un humano mire por qué el
+proceso que habla con el exchange se cae solo.
 
    El **sueño del backoff es interruptible**: se espera sobre un evento que el
    manejador de señal levanta, no con un `sleep` ciego. Sin eso, un `SIGTERM`
@@ -2223,15 +2283,38 @@ Numerados a continuación de §17, que termina en 44:
     disco, y el arranque siguiente publica el MISMO terminal que la corrida
     continua —que es el gate 40quinquies, ejercido ahora desde un apagado
     ordenado y no solo desde una caída *(rev.24)*;
-48bis. **la evidencia de silencio sobrevive a un `SIGKILL`** *(rev.24)*: con
-    observaciones acumuladas en el ciclo y la señal aplicada DESPUÉS de la
-    unidad de silencio pero ANTES del primer lote, `silencio.json` en disco ya
-    contiene el acumulado —no se pierde ni retrocede—, y el arranque siguiente
-    continúa la serie de 72 h desde ahí en vez de reiniciarla; Además **MIDE**, a escala
+48bis. **la evidencia de silencio sobrevive a un `SIGKILL`** *(rev.24,
+    reconciliado en rev.25)*. Con observaciones acumuladas y la señal aplicada
+    DESPUÉS de la unidad de silencio pero ANTES del primer lote, se exige, en
+    este orden:
+
+    1. **recuperación de ALMACENAMIENTO**, comprobada fuera del wrapper:
+       `silencio.json` en disco contiene el acumulado, no se perdió ni
+       retrocedió, y valida contra su schema;
+    2. **la clasificación NO se debilita**: el wrapper escribe
+       `motivo: senal`, `codigo: 1`, y el arranque siguiente **BLOQUEA**. El
+       gate lo exige explícitamente — rev.24 prometía que «el arranque
+       siguiente continúa», que contradecía §20.6.3 y habría obligado a tratar
+       un `SIGKILL` como transitorio;
+    3. **reanudación por INTERVENCIÓN HUMANA**: acreditado y archivado el
+       diagnóstico (§20.6.4), el arranque continúa la serie de 72 h desde el
+       sidecar en vez de reiniciarla.
+
+    La propiedad que se prueba es la durabilidad del artefacto, no un reinicio
+    operativo automático: una muerte por señal sigue exigiendo que un humano
+    mire antes de seguir; Además **MIDE**, a escala
     completa, el peor tiempo entre dos puntos de cancelación, calcula la cota
     analítica desde `REQUEST_DEADLINE` más el sellado y el lote más largo, y
     **falla si el `ExitTimeOut` del plist es menor a 3 × el mayor de los dos**
     (§20.6);
+48ter. **protocolo del trabajador** *(rev.25)*: una respuesta con
+    `request_id` ajeno se descarta; un sobre TRUNCADO —trabajador muerto a
+    mitad de la escritura, sin que el padre lo matara— falla cerrado con
+    `codigo: 1` y NO consume intento; el deadline vencido sí consume intento y
+    entra al backoff; tras un respawn no se lee ni un byte de la generación
+    anterior —gate con el trabajador escribiendo una respuesta parcial justo
+    antes de morir—; y `status` y `Retry-After` llegan al padre como campos
+    del sobre, no inferidos del cuerpo;
 49. **cadencia y backoff deterministas**: un ciclo que dura más que `CADENCIA`
     no acumula deuda —el siguiente arranca una sola vez—; el backoff respeta
     la fórmula y el número de intentos con un reloj y un generador
