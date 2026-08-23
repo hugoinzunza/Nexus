@@ -1,10 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.23
+# Bot3.v13 — Observador operativo · DISEÑO rev.24
 
-**Estado: DISEÑO rev.23 — §20 acotada: deadline absoluto de petición, cota de
-la fase posterior y primitiva de archivado exclusiva. §1–§19 y §13 no se
-reabren. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.24 — §20 acotada: transporte con deadline ejecutable, y
+las unidades de cancelación reconciliadas con la transición en dos fases de
+§9.1.1. §1–§19 y §13 no se reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.24 corrige que rev.23 declaró «fase A junto con la publicación» como un
+tramo indivisible, **contradiciendo §9.1.1**, que congela exactamente lo
+contrario: fase A → liberar barrera → ventana de recolección → fase B. Y le da
+al `REQUEST_DEADLINE` un mecanismo que realmente lo garantice: ningún timeout
+de socket acota una resolución DNS bloqueada, porque el socket todavía no
+existe.
 rev.23 cierra dos cotas que rev.22 declaró sin serlo:
 `CONNECT_TIMEOUT + READ_TIMEOUT` no acota una petición —`READ_TIMEOUT` limita
 la inactividad entre lecturas, no la duración total, y un servidor que gotea
@@ -1811,12 +1817,28 @@ Se resuelve por los dos lados:
    «termina completo» y que se podía abortar entre streams: dos
    implementaciones honestas elegían distinto. La regla es:
 
-   > un ciclo se aborta **entre streams** durante la ingesta, y **entre lotes
-   > ya finalizados** durante la fase posterior. Tres tramos son
-   > INDIVISIBLES: la actualización de silencio sobre los 14 streams, cada
-   > lote individual, y la fase A junto con la publicación terminal.
+   > un ciclo se aborta **entre streams** durante la ingesta, y **entre
+   > unidades** durante la fase posterior. Las unidades INDIVISIBLES son
+   > cinco, y ninguna abarca a otra:
+   >
+   > | unidad | qué incluye |
+   > |---|---|
+   > | silencio | actualizar los 14 streams **y persistir `silencio.json`** |
+   > | un lote | cada `procesar_lote_canonico`, uno por uno |
+   > | fase A | marcar `cierre_en_curso` y anexar la causa al request |
+   > | *(ventana de recolección)* | **NO es una unidad**: acá se puede apagar |
+   > | fase B | evaluar el ganador y publicar el terminal |
 
-   Por qué cada uno *(rev.23)*:
+   **Fase A y fase B son unidades SEPARADAS** *(rev.24)*. rev.23 las declaró un
+   solo tramo indivisible, que contradice §9.1.1: la transición está congelada
+   en dos fases justamente para que la barrera se libere entre ellas y la
+   ventana de recolección exista. Un apagado entre A y B es un caso NORMAL y
+   ya resuelto — el request queda en disco y el arranque siguiente lo retoma
+   por el tercer disparador de §9.1.3, con la equivalencia que el gate
+   40quinquies exige. Hacerlas indivisibles habría eliminado la ventana, que
+   es lo único que hace real la precedencia.
+
+   Por qué cada una de las otras:
 
    - **la actualización de silencio** se hace unidad porque abortarla a mitad
      dejaría observaciones de algunos mercados y no de otros: evidencia
@@ -1828,12 +1850,21 @@ Se resuelve por los dos lados:
      es durable por sí mismo y el reinicio reconstruye por replay (§20.2.1)
      exactamente hasta donde se llegó, así que abortar entre dos no pierde
      nada. La cota pasa a ser **un lote**, no el backlog;
-   - **la fase A y la publicación** siguen indivisibles: son la transición
-     terminal, y §13 ya las gobierna.
+   - **cada fase por separado** es indivisible por lo que ya dice §13: anexar
+     al request es atómico (gate 44) y publicar más borrar es la secuencia que
+     §13.6 resuelve.
 
-   Si el aborto ocurre entre lotes, `silencio.guardar()` se ejecuta igual
-   antes de salir: es lo único que quedaba pendiente de la unidad anterior y
-   es idempotente.
+   **`silencio.json` se persiste DENTRO de su unidad, antes de los lotes**
+   *(rev.24)*. rev.23 lo dejaba para el camino de salida ordenada, y eso no
+   cubre un `SIGKILL`, un pánico ni un corte de energía: la evidencia
+   acumulada de los 14 streams se perdía y las 72 h volvían a empezar. La
+   escritura atómica y durable es parte de la unidad de silencio, no del
+   apagado, así que no depende de por qué el proceso terminó.
+
+   Esto **adelanta** `silencio.guardar()` respecto de dónde lo hace hoy
+   `ciclo()` —después de `avanzar_lotes`—, y es un cambio que la
+   implementación de §20 tiene que aplicar. Es estrictamente más durable y
+   nada posterior toca el sidecar, así que no altera ningún resultado.
 
 2. **timeouts de transporte CONGELADOS** *(rev.22)*, sin los cuales no hay
    cota posible: `CONNECT_TIMEOUT` = 5 s y `READ_TIMEOUT` = 20 s, ambos en
@@ -1844,10 +1875,29 @@ Se resuelve por los dos lados:
    real. Los dos anteriores NO acotan una petición: `READ_TIMEOUT` limita la
    inactividad entre lecturas, así que un servidor que entrega un byte cada
    19 s la sostiene indefinidamente sin disparar nada, y la resolución DNS no
-   está necesariamente cubierta por `CONNECT_TIMEOUT`. El deadline se toma al
-   iniciar la petición y cubre **DNS, conexión, TLS, cabeceras y cuerpo**;
-   vencido, se aborta el socket. Los otros dos siguen existiendo porque
-   detectan antes el caso común, pero la cota es esta.
+   está cubierta por `CONNECT_TIMEOUT`.
+
+   **Mecanismo CONGELADO** *(rev.24)*. «Abortar el socket» al vencer no es un
+   mecanismo: durante una resolución DNS bloqueada el socket todavía no
+   existe, y `getaddrinfo` no es cancelable desde el proceso que la llamó. El
+   transporte vive en un **proceso trabajador aislado**:
+
+   - un único subproceso hace TODO el I/O de red y devuelve el cuerpo ya
+     parseado por una tubería. No tiene estado propio: no escribe almacenes,
+     ni libro, ni sidecars;
+   - el proceso principal espera con el deadline. Vencido, **`SIGKILL` al
+     trabajador** y lo respawnea. Matar cubre DNS, TLS y cuerpo por igual,
+     porque no depende de que la operación colgada sea cancelable;
+   - matarlo es seguro precisamente porque no tiene estado: la página se
+     descarta entera —que es lo que §10 ya exige de cualquier página
+     inválida— y el intento cuenta para el backoff;
+   - es UNO solo, no uno por petición: el ciclo es de un hilo y nunca hay dos
+     peticiones en vuelo, así que el costo de arranque se amortiza y el
+     razonamiento sigue siendo de un solo trabajador a la vez.
+
+   `CONNECT_TIMEOUT` y `READ_TIMEOUT` siguen configurados en el trabajador
+   porque detectan antes el caso común y evitan el `SIGKILL`, pero la cota
+   que vale es el deadline del padre.
 
    El **sueño del backoff es interruptible**: se espera sobre un evento que el
    manejador de señal levanta, no con un `sleep` ciego. Sin eso, un `SIGTERM`
@@ -2003,10 +2053,17 @@ mismo:
   para que no haya dos implementaciones honestas distintas.
 
   **Caída entre `link` y `unlink`**: quedan las dos rutas apuntando al MISMO
-  inodo. El arranque siguiente lo detecta comparando `st_ino`, y si coinciden
-  completa el `unlink` del origen — no es ambigüedad, es la mitad de una
-  operación cuya otra mitad ya es durable. Si los inodos DIFIEREN, son dos
-  documentos distintos con el mismo nombre de destino: fallo cerrado.
+  archivo. El arranque siguiente lo detecta comparando **`(st_dev, st_ino)`**
+  *(rev.24)* —el inodo solo no identifica un archivo: el mismo número existe en
+  cada filesystem montado—, y si coinciden completa el `unlink` del origen: no
+  es ambigüedad, es la mitad de una operación cuya otra mitad ya es durable.
+  Si difieren, son dos documentos distintos con el mismo nombre de destino:
+  fallo cerrado.
+
+  `diagnosticos/` vive **en el mismo filesystem** que el estado, porque `link`
+  no cruza montajes. Un `EXDEV` es fallo cerrado y no se degrada a copiar y
+  borrar: esa degradación pierde la exclusión atómica, que es lo único por lo
+  que se eligió `link`.
 
 El punto de éxito es el ARRANQUE COMPLETO, no el primer ciclo: los transitorios
 que `2` cubre son de arranque —lock, sistema de archivos—, y esperar al primer
@@ -2155,10 +2212,22 @@ Numerados a continuación de §17, que termina en 44:
     *(rev.22)*. Se agrega un servidor que entrega **bytes periódicamente sin
     terminar nunca** —el caso que `READ_TIMEOUT` no detecta—: la petición se
     corta por `REQUEST_DEADLINE` y el proceso sale dentro de la cota
-    *(rev.23)*. Y con **miles de lotes pendientes** en la fase posterior, la
+    *(rev.23)*. Y una **resolución DNS bloqueada** —el caso que ningún timeout
+    de socket alcanza, porque el socket no existe todavía—: el trabajador
+    recibe `SIGKILL`, se respawnea, el intento cuenta para el backoff y el
+    proceso sale dentro de la cota *(rev.24)*. Y con **miles de lotes pendientes** en la fase posterior, la
     señal aborta entre dos lotes finalizados, no al final del backlog; los
-    tres tramos indivisibles se respetan; y el reinicio reconstruye por replay
-    exactamente hasta donde se llegó *(rev.23)*. Además **MIDE**, a escala
+    cinco unidades indivisibles se respetan; y el reinicio reconstruye por
+    replay exactamente hasta donde se llegó *(rev.23)*. Se agrega la señal
+    **entre fase A y fase B**: el proceso sale `0` con el `terminal.request` en
+    disco, y el arranque siguiente publica el MISMO terminal que la corrida
+    continua —que es el gate 40quinquies, ejercido ahora desde un apagado
+    ordenado y no solo desde una caída *(rev.24)*;
+48bis. **la evidencia de silencio sobrevive a un `SIGKILL`** *(rev.24)*: con
+    observaciones acumuladas en el ciclo y la señal aplicada DESPUÉS de la
+    unidad de silencio pero ANTES del primer lote, `silencio.json` en disco ya
+    contiene el acumulado —no se pierde ni retrocede—, y el arranque siguiente
+    continúa la serie de 72 h desde ahí en vez de reiniciarla; Además **MIDE**, a escala
     completa, el peor tiempo entre dos puntos de cancelación, calcula la cota
     analítica desde `REQUEST_DEADLINE` más el sellado y el lote más largo, y
     **falla si el `ExitTimeOut` del plist es menor a 3 × el mayor de los dos**
