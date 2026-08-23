@@ -1,10 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.18
+# Bot3.v13 — Observador operativo · DISEÑO rev.19
 
-**Estado: DISEÑO rev.18 — punto de entrada y servicio (§20), propuesto para
-auditoría. §13 ya está APROBADO contra rev.17 y no se toca. No desplegado.
-Cohorte no iniciada.**
+**Estado: DISEÑO rev.19 — §20 acotada: fase de activación, política de reinicio
+realizable, taxonomía de salidas, decisiones deterministas y gates. §1–§19 y
+§13 no se reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.19 cierra §20, acotada exclusivamente a esa sección y sus gates. rev.18
+tenía dos bloqueos operacionales: la política de reinicio NO era realizable
+—`KeepAlive.SuccessfulExit=false` reinicia ante cualquier salida no cero, así
+que `1` y `2` eran indistinguibles para launchd—, y nadie creaba el estado
+inicial que §20.2 exige cargar, con §20.7 prohibiéndoselo al propio servicio:
+el primer lanzamiento fallaba cerrado siempre.
 rev.18 agrega §20, el punto de entrada y el servicio, que hasta acá no existía
 en ninguna sección: §15 congela los parámetros pero nadie decía en qué ORDEN
 arranca el proceso, quién lo reinicia, ni cuándo sale. Es aditiva: §1–§19 no
@@ -1487,6 +1493,38 @@ qué orden, y qué pasa cuando se cae o cuando termina. Sin congelarlo, cada
 detalle admite dos implementaciones honestas con resultados distintos — que es
 lo que §10 evita para la ingesta y acá quedaba abierto.
 
+### 20.0 Fase de activación: quién crea el estado inicial *(rev.19)*
+
+§20.2 exige manifiesto, 14 almacenes, libro y `verificacion.json` ANTES de
+arrancar, y §20.7 le prohíbe al servicio crearlos. rev.18 no decía quién los
+creaba, así que el primer lanzamiento fallaba cerrado siempre.
+
+Los crea una **herramienta de activación de una sola pasada**, que no es el
+servicio y no ingiere: corresponde a los pasos 6–7 de §18 y corre una vez,
+antes de habilitar el daemon.
+
+```
+1. acta.json          cohorte, commit, bootstrap_hasta y la frontera de §16
+2. nacimiento STAGED  los 14 almacenes desde los snapshots canónicos, en
+                      `almacenes.new/`, y un solo rename (§4)
+3. libro y manifiesto  con el prefijo de nacimiento de cada stream (§3)
+4. comparación fría REAL en la frontera: se copia el estado recién nacido,
+   se reconstruye en frío y se compara digest y firma
+5. verificacion.json   `ok`, con el digest y la firma de ESA comparación
+6. habilitación del servicio
+```
+
+El paso 4 no es ceremonial. `verificacion.json` inicial en `ok` es lo que
+§13.4.2 exige leer y lo que §13.4.1 usa como procedencia; escribirlo sin haber
+comparado nada sería declarar acreditado un determinismo que nadie verificó, y
+la primera comparación real —seis horas después— ya no tendría con qué
+contrastar el nacimiento.
+
+La herramienta **falla cerrado si el estado ya existe**: no re-nace una cohorte
+viva, no pisa un `acta.json` previo y no toca marcadores terminales. Reactivar
+una cohorte cerrada exige borrar el directorio a mano, que es una decisión
+humana y deja rastro.
+
 ### 20.1 Identidad: de dónde sale, y no se elige en operación
 
 | campo | origen | por qué no puede ser un argumento |
@@ -1543,6 +1581,19 @@ nunca se usa para serializar dos ingestas.
 Un ciclo que no puede ingerir —sin reloj, `cierre_en_curso`, terminal— **no es
 un error**: registra su motivo y espera la cadencia siguiente.
 
+**Algoritmo exacto tras un ciclo atrasado** *(rev.19)*. Con `t0` el instante
+monótono en que arrancó el ciclo:
+
+```
+proximo = t0 + CADENCIA
+espera  = max(0, proximo - monotonic())     # 0 si el ciclo se pasó
+```
+
+La deuda **se descarta**: no se encadenan pulls para «recuperar» los que la
+cadencia perdió. Un ciclo que tardó cinco minutos no dispara cinco pulls
+seguidos — traerían las mismas velas, y la única diferencia sería cinco
+oportunidades de tropezar con el límite de tasa del exchange.
+
 ### 20.4 Reintentos: el backoff vive en el `fetch`, no en el ciclo
 
 `BACKOFF_BASE` → `BACKOFF_MAX`, `BACKOFF_INTENTOS`, exponencial. Se agota
@@ -1561,6 +1612,25 @@ Solo se reintentan fallas de TRANSPORTE (timeout, 5xx, conexión caída) y
 **no se reintenta**: pedir de nuevo lo mismo no la va a arreglar, y reintentar
 sobre datos incoherentes es cómo se cuela una serie ajena.
 
+**Fórmula CONGELADA** *(rev.19)*. Para el intento `n = 1 … BACKOFF_INTENTOS`:
+
+```
+techo_n = min(BACKOFF_MAX, BACKOFF_BASE * 2**(n-1))
+espera_n = uniform(0, techo_n)                        # full jitter
+```
+
+`BACKOFF_INTENTOS` (5) es el número de INTENTOS totales, no de reintentos: el
+quinto fallo agota y `fetch` levanta. El jitter completo es deliberado —los 14
+streams de un ciclo reintentando en fase sincronizada son una ráfaga contra el
+mismo endpoint—, y es **la única fuente de aleatoriedad del observador**: vive
+en la capa de transporte, no entra en ningún hash, ningún evento ni ninguna
+decisión, así que no afecta la reproducibilidad del libro.
+
+Si la respuesta `429` o `503` trae `Retry-After`, se respeta ese valor en vez
+del jitter, **acotado a `BACKOFF_MAX`** y consumiendo un intento igual. Sin la
+cota, un `Retry-After` hostil o mal configurado podría dormir el ciclo por
+horas; sin consumir intento, no habría cota al total.
+
 ### 20.5 Quién escribe `verify.request`
 
 Dos escritores, y ninguno es el ciclo:
@@ -1575,24 +1645,79 @@ instante de la última captura sale de `verificacion.json`, no de una variable
 en memoria: si viviera en memoria, cada reinicio reiniciaría el reloj de las
 6 h y una cohorte que se reinicia seguido no se verificaría nunca.
 
-### 20.6 Apagado y códigos de salida
+**Referencia temporal por estado** *(rev.19)*, porque «la última captura» no
+está en el mismo campo en los cuatro:
 
-`SIGTERM` y `SIGINT` marcan una bandera; el ciclo **en curso termina** y recién
-ahí el proceso sale. No se interrumpe a mitad: el framing tolera una cola
-truncada (§5), pero un apagado limpio no tiene por qué producirla.
-
-| salida | qué significa | qué hace launchd |
+| estado | campo | qué instante es |
 |---|---|---|
-| `0` | terminal publicado, o apagado ordenado | **no reinicia** |
-| `1` | fallo cerrado: exige intervención humana | **no reinicia** |
-| `2` | error transitorio del host | reinicia con `ThrottleInterval` |
+| `ok` | `ultima_ok.instante` | cuándo terminó la comparación conforme |
+| `pending` | `detalle.desde` | cuándo se tomó la captura en curso |
+| `deferred` | `ultima_deferencia` | cuándo se intentó capturar y había buffers |
+| `divergent` | `detalle.instante` | cuándo se detectó la divergencia |
 
-Que `0` y `1` NO reinicien es deliberado. `KeepAlive` incondicional sobre una
-cohorte cerrada la reabriría en loop, y sobre un fallo cerrado reintentaría
-para siempre la operación que el diseño quiere que un humano mire. Se usa
-`KeepAlive.SuccessfulExit = false` con `ThrottleInterval`, y el terminal
-publicado corta el loop por sí mismo: el arranque siguiente lee el marcador y
-sale `0` sin abrir ningún ciclo.
+Todos son el `eligibility_time` del ciclo que los produjo, nunca el reloj local:
+la cadencia de verificación se mide en el mismo tiempo que la elegibilidad, y
+mezclarlos haría que una deriva del host adelantara o atrasara las capturas.
+
+Con `pending` NO se escribe un pedido nuevo: ya hay una comparación corriendo.
+Con `divergent`, tampoco — la fase B va a publicar `BLOCKED_INTEGRITY`.
+
+**Creación ATÓMICA y sin pisar al operador** *(rev.19)*: el archivo se crea con
+`O_CREAT | O_EXCL`. Si ya existe —porque lo dejó un operador, o porque un
+ciclo anterior lo escribió y todavía no se atendió— **no se toca**. Escribirlo
+con `escribir_atomico` reemplazaría la solicitud manual con una idéntica, pero
+tras un `rename` que borra el `mtime` con que el operador la reconoce; y peor,
+si algún día el pedido llevara contenido, lo perdería.
+
+### 20.6 Apagado, códigos de salida y reinicio *(rev.19)*
+
+`SIGTERM` y `SIGINT` marcan una bandera; **no matan una operación a mitad**.
+Qué se termina depende de dónde llegue la señal:
+
+| llega durante | qué se hace |
+|---|---|
+| un ciclo | el ciclo TERMINA —ingesta, sellado, fase A si corresponde— y recién ahí se sale |
+| la copia de una captura | se ABORTA y se borra el destino incompleto. El sidecar NO queda `pending`: una copia parcial no se puede reanudar (§13.5.1) y dejaría la cohorte trabada |
+| la comparación fría | se ABORTA. El sidecar queda `pending` con su copia COMPLETA, y el arranque siguiente la retoma — que es exactamente el caso que §13.5.1 cubre |
+| la fase B, entre publicar y borrar | no se interrumpe: es una secuencia de dos operaciones atómicas y §13.6 ya resuelve el estado intermedio |
+
+`ExitTimeOut` se fija en **300 s**, no en el default de 20: una comparación
+fría sobre la frontera completa tarda más que eso, y un `SIGKILL` a mitad
+—que es lo que hace launchd al vencer el plazo— es justo lo que las tres
+primeras filas evitan.
+
+#### 20.6.1 Taxonomía CERRADA de salidas
+
+| código | qué significa | ejemplos |
+|---|---|---|
+| `0` | terminal publicado, o apagado ordenado por señal | `completed.json` o `blocked.json` presentes al arrancar; `SIGTERM` |
+| `2` | error TRANSITORIO del host, registro cerrado | `singleton_lock` tomado por otro proceso; `ENOSPC`; `EIO`/`EBUSY` del sistema de archivos |
+| `1` | **todo lo demás**, incluida cualquier excepción no prevista | `MarcoCorrupto`, `VerificacionInvalida`, `RequestInvalido`, `PaginaInvalida`, árbol sucio, commit distinto del acta, estado ausente |
+
+El registro de `2` es **cerrado y corto**; el de `1` es el default. Fallar
+abierto acá significaría reintentar para siempre una condición que solo un
+humano puede resolver, mientras la cohorte parece viva.
+
+#### 20.6.2 Por qué el plist solo no alcanza
+
+`KeepAlive.SuccessfulExit = false` reinicia ante **cualquier** salida no cero.
+`1` y `2` son indistinguibles para launchd, y `ThrottleInterval` solo limita la
+frecuencia del loop, no lo evita. La política de rev.18 no era realizable.
+
+El daemon sigue emitiendo `0/1/2` —es la taxonomía que un operador lee— y un
+**wrapper** traduce:
+
+| salida del daemon | qué hace el wrapper | efecto en launchd |
+|---|---|---|
+| `0` | sale `0` | no reinicia |
+| `1` | escribe `fallo_cerrado.json` con el código, la excepción y el instante, y sale `0` | no reinicia |
+| `2` | sale distinto de `0` | reinicia tras `ThrottleInterval` |
+
+`fallo_cerrado.json` es lo que preserva el estado que la traducción a `0`
+borraría: un fail-closed que sale `0` sería indistinguible de una cohorte
+cerrada limpiamente. Mientras exista, **el arranque siguiente se niega a
+correr** y sale `1` otra vez; borrarlo es un acto humano deliberado, igual que
+reactivar una cohorte cerrada (§20.0).
 
 ### 20.7 Lo que el servicio NO hace
 
@@ -1602,6 +1727,45 @@ sale `0` sin abrir ningún ciclo.
 - no reabre una cohorte cerrada, ni borra marcadores terminales;
 - no crea `verificacion.json` ni `acta.json` si faltan — falla cerrado;
 - no elige ningún parámetro de §15 en operación.
+
+### 20.8 Gates de aceptación de §20 *(rev.19)*
+
+Numerados a continuación de §17, que termina en 44:
+
+45. **primer nacimiento completo**: la herramienta de activación corre sobre un
+    directorio VACÍO y produce acta, los 14 almacenes por rename único, libro,
+    manifiesto y `verificacion.json` en `ok` **con el digest y la firma de una
+    comparación fría real** —no fabricado—; correrla de nuevo sobre el estado
+    ya creado falla cerrado sin tocar nada; y el servicio arranca contra ese
+    estado sin fallar;
+46. **orden del arranque**: sin lock no se carga nada; sin `acta.json`,
+    `verificacion.json` o manifiesto se falla cerrado; `reanudar()` corre ANTES
+    del primer ciclo —gate con un `terminal.request` pendiente, comprobando que
+    ningún almacén se movió—; y un terminal publicado sale `0` sin abrir
+    ninguno;
+47. **taxonomía de salidas**: una excepción de cada familia produce el código
+    que le corresponde, y una excepción DESCONOCIDA produce `1`, no `2`; el
+    wrapper traduce `0→0`, `1→0` con `fallo_cerrado.json` escrito, y `2→≠0`; y
+    con `fallo_cerrado.json` presente el arranque siguiente sale `1` sin
+    cargar estado;
+48. **SIGTERM en cada frontera**: durante un ciclo, durante la copia, durante
+    la comparación fría y entre publicar y borrar. En los cuatro: el proceso
+    sale `0`, el estado en disco es consistente, y el arranque siguiente
+    continúa sin pérdida — en particular, la señal durante la copia NO deja el
+    sidecar en `pending` y la señal durante la comparación SÍ lo deja, con la
+    copia completa;
+49. **cadencia y backoff deterministas**: un ciclo que dura más que `CADENCIA`
+    no acumula deuda —el siguiente arranca una sola vez—; el backoff respeta
+    la fórmula y el número de intentos con un reloj y un generador
+    inyectados; `Retry-After` se respeta acotado a `BACKOFF_MAX` y consume
+    intento; y una `PaginaInvalida` NO se reintenta;
+50. **`verify.request` sin carrera**: con una solicitud manual presente, el
+    ciclo no la pisa —mismo inodo y mismo `mtime`—; con `pending` o
+    `divergent` no se escribe ninguna; y la cadencia se mide contra el campo
+    que corresponde a cada estado del sidecar;
+51. **árbol y commit**: árbol sucio, `HEAD` distinto del acta, y acta de otra
+    cohorte: los tres fallan cerrado ANTES de tomar cualquier dato, y ninguno
+    deja rastro en los almacenes.
 
 ---
 
