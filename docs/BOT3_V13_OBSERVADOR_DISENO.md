@@ -1,10 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.21
+# Bot3.v13 — Observador operativo · DISEÑO rev.22
 
-**Estado: DISEÑO rev.21 — §20 acotada: el diagnóstico distingue por código, la
-muerte por señal es representable, y la activación se serializa. §1–§19 y §13
-no se reabren. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.22 — §20 acotada: cota analítica de salida, timeouts
+congelados, diagnóstico append-only. §1–§19 y §13 no se reabren. No
+desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.22 cierra dos contradicciones ejecutables de rev.21: `ExitTimeOut` no
+tenía cota —una señal dentro de una petición HTTP no encontraba ningún punto
+de cancelación, y los timeouts de transporte ni siquiera estaban congelados—,
+y la fila «falla el wrapper al escribir» exigía un documento que, por
+definición, no se pudo escribir. Además hace el archivado append-only y
+corrige una afirmación demasiado fuerte sobre el replay.
 rev.21 cierra dos bloqueos de rev.20 en la ruta de diagnóstico: el primer
 transitorio bloqueaba TODOS los reintentos —el arranque rechazaba cualquier
 `fallo_cerrado.json`, así que `MAX_TRANSITORIOS` era inalcanzable y la cota no
@@ -1325,7 +1331,8 @@ producción solo agregaría una ruta sin probar.
 `DERIVA_MAX`, `SILENCIO_MAX_H4`, `TOPE_INTERVALO`, `BACKOFF_BASE`, `BACKOFF_MAX`, `BACKOFF_INTENTOS`,
 `TF_OBSERVADAS`, `UNIVERSO`, `ENDPOINT_KLINES`, `ENDPOINT_TIME`,
 `CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`,
-`PRECEDENCIA_TERMINAL`, `MAX_TRANSITORIOS` y `EXIT_TIMEOUT` *(rev.20)*, y las
+`PRECEDENCIA_TERMINAL`, `MAX_TRANSITORIOS` y `EXIT_TIMEOUT` *(rev.20)*,
+`CONNECT_TIMEOUT` y `READ_TIMEOUT` *(rev.22)*, y las
 rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
 (`silencio.json`, `verificacion.json`, `fallo_cerrado.json` *(rev.20)*) y
@@ -1630,9 +1637,14 @@ El replay:
 - recorre **solo los cierres ya sellados** en los almacenes, nunca ingiere ni
   crea lotes nuevos. Es la misma secuencia de `reconstruir_en_frio` (§9), con
   la única diferencia de que corre sobre los almacenes vivos;
-- **no duplica eventos**: el libro es idempotente por `event_id`, así que cada
-  evento que el replay reemite ya existe y se descarta. Es la propiedad que
-  hace el replay seguro, no un efecto colateral;
+- **no DUPLICA eventos, pero sí puede REPONER los que falten** *(rev.22)*: el
+  libro es idempotente por `event_id`, así que cada evento que el replay
+  reemite y ya existe se descarta. rev.20 decía «no muta nada durable» y era
+  demasiado fuerte: §5 ordena almacén → `fsync` → libro, así que una caída en
+  esa ventana deja un marcador durable cuyo evento no alcanzó a escribirse, y
+  el replay lo repone. Es exactamente la reparación que la ordenación de §5
+  hace posible, y es idempotente: reponer lo faltante y descartar lo presente
+  convergen al mismo libro;
 - y por eso es, además, una **verificación**: si el prefijo sellado dejara de
   reproducir los mismos eventos, el libro rechazaría el append por «payload
   distinto» y el arranque fallaría cerrado. Un reinicio prueba, gratis, que la
@@ -1781,19 +1793,51 @@ Se resuelve por los dos lados:
 
    | punto | por qué es seguro |
    |---|---|
-   | entre lotes del REPLAY (§20.2.1) | el replay no muta nada durable: reconstruye estado en memoria y sus appends ya existen en el libro. Se aborta en cualquier lote y el arranque siguiente rehace el mismo camino |
+   | entre lotes del REPLAY (§20.2.1) | reconstruye estado en memoria y sus appends son idempotentes —reponen lo faltante, nunca duplican—. Se aborta en cualquier lote y el arranque siguiente rehace el mismo camino |
+   | entre INTENTOS de un `fetch` *(rev.22)* | nada se ofreció todavía; la página se vuelve a pedir entera |
+   | entre PÁGINAS de una paginación *(rev.22)* | `paginar` acumula en memoria y no ofrece nada hasta terminar: abortar descarta la acumulación, no deja media serie |
    | antes de `ofrecer` de cada stream | lo ingerido hasta ahí ya está sellado y sincronizado; lo que falta se pide de nuevo el ciclo siguiente |
    | después de `finalizar_ciclo` | el ciclo cerró completo |
    | entre archivos de la copia | la copia es descartable: se borra el destino incompleto |
 
-   Con esto, el peor caso de salida NO es el replay completo sino **un lote y
-   un stream**, que es lo que no se puede partir sin romper la atomicidad de
-   §5 y §12.
+   **Regla ÚNICA del ciclo** *(rev.22)*. rev.21 decía a la vez que un ciclo
+   «termina completo» y que se podía abortar entre streams: dos
+   implementaciones honestas elegían distinto. La regla es:
 
-2. **`ExitTimeOut` derivado de una medición, no elegido**: se fija en el peor
-   caso medido a escala completa entre dos puntos de cancelación, **por 3**.
-   El gate 48 lo MIDE y falla si el plist quedó por debajo. Un número escrito
-   a mano en el plist envejece en silencio; uno derivado de un gate no.
+   > un ciclo se aborta **solo durante la fase de ingesta**, entre streams. Una
+   > vez ingerido el stream 14 empieza la fase POSTERIOR —silencio, huecos,
+   > lotes, fase A— y esa **no se parte**: se termina entera.
+
+   Abortar dentro de la fase posterior dejaría la máquina de silencio con
+   observaciones de algunos mercados y no de otros, que es evidencia sesgada
+   sobre la que después se decide un terminal. Abortar en la ingesta no: lo
+   sellado está sellado, y lo que falta se pide de nuevo.
+
+2. **timeouts de transporte CONGELADOS** *(rev.22)*, sin los cuales no hay
+   cota posible: `CONNECT_TIMEOUT` = 5 s y `READ_TIMEOUT` = 20 s, ambos en
+   §15. Una petición sin timeout puede colgarse indefinidamente, y ahí ningún
+   punto de cancelación llega nunca.
+
+   El **sueño del backoff es interruptible**: se espera sobre un evento que el
+   manejador de señal levanta, no con un `sleep` ciego. Sin eso, un `SIGTERM`
+   durante la última espera podía costar `BACKOFF_MAX` completo.
+
+3. **`ExitTimeOut` supera las DOS cotas** *(rev.22)*, no solo la medición:
+
+   | cota | de dónde sale |
+   |---|---|
+   | analítica | peor tramo no interrumpible = una petición en vuelo, `CONNECT_TIMEOUT + READ_TIMEOUT` = 25 s, más el sellado del stream en curso |
+   | empírica | peor tiempo MEDIDO a escala completa entre dos puntos de cancelación |
+
+   `EXIT_TIMEOUT = 3 × max(analítica, empírica)`. La analítica sola no basta
+   —no cubre un disco lento— y la empírica sola tampoco: una medición hecha
+   con la red sana nunca observa los 25 s de un timeout. El gate 48 comprueba
+   las dos y falla si el plist quedó por debajo. Un número escrito a mano en
+   el plist envejece en silencio; uno derivado de un gate no.
+
+   Nótese que la cota NO es `timeout × 5 intentos + 4 backoffs`: con la
+   comprobación de señal entre intentos, la salida no espera a que el `fetch`
+   agote su serie.
 
 #### 20.6.1 Taxonomía CERRADA de salidas
 
@@ -1852,9 +1896,19 @@ o por un fallo antes de poder escribir. Traducir `1→0` ahí, sin diagnóstico,
 habría hecho creer a launchd —y a un operador— que la cohorte terminó
 limpiamente. El wrapper **solo traduce si el diagnóstico existe y valida**.
 
-La cuarta es el único caso en que el loop se acepta: si el wrapper tampoco
-puede escribir, el disco o el permiso están rotos, y el reinicio repetido es
-la señal más ruidosa disponible — mejor que un silencio que parece éxito.
+Los dos fallos del propio wrapper son distintos y rev.21 los confundía en una
+sola fila que además era imposible —pedía un documento `motivo: wrapper` en el
+caso en que la escritura falló—:
+
+- **error interno con la escritura todavía disponible** —un bug suyo, un
+  estado que no supo clasificar—: escribe `motivo: wrapper`, `codigo: 1`, y
+  sale `0`. Bloquea el arranque siguiente, que es lo correcto: un bug del
+  wrapper no se arregla reintentando;
+- **imposibilidad de escribir** —disco lleno, permiso roto, directorio que no
+  existe—: **no hay documento**, porque no puede haberlo. Sale distinto de `0`
+  y launchd reinicia. Es el único caso en que el loop se acepta: el reinicio
+  repetido es la señal más ruidosa disponible, y mejor que un silencio que
+  parece éxito.
 
 `stderr` del daemon se redirige a `diagnostico.err` por el plist
 (`StandardErrorPath`), que es de dónde sale esa cola.
@@ -1890,9 +1944,18 @@ mismo:
   transitorio;
 - **el ARRANQUE completo lo ARCHIVA**: al terminar el paso 10 —con el replay
   hecho, `reanudar()` corrido y el bucle por abrir— el diagnóstico transitorio
-  se renombra a `fallo_cerrado.json.archivado` y la serie vuelve a cero.
-  Archivar y no borrar, por lo mismo que §20.0: el rastro de cinco reintentos
-  seguidos es dato operacional, no basura.
+  se archiva y la serie vuelve a cero. Archivar y no borrar, por lo mismo que
+  §20.0: el rastro de cinco reintentos seguidos es dato operacional, no
+  basura.
+
+  **La ruta de archivo es ÚNICA y append-only** *(rev.22)*: renombrar siempre
+  al mismo `fallo_cerrado.json.archivado` hacía que una segunda serie
+  transitoria pisara la primera — archivar y perder la historia a la vez. Va a
+  `diagnosticos/fallo_cerrado.<ocurrido_en>.<sha8 del checksum>.json`, creada
+  con `O_EXCL`: una colisión de nombre es fallo cerrado, nunca una
+  sobrescritura. Y el rename lleva `fsync` del directorio `diagnosticos/`,
+  igual que todo rename de §4 — si no, el archivado puede no sobrevivir al
+  corte que lo motivó.
 
 El punto de éxito es el ARRANQUE COMPLETO, no el primer ciclo: los transitorios
 que `2` cubre son de arranque —lock, sistema de archivos—, y esperar al primer
@@ -1934,7 +1997,8 @@ Tabla de clasificación, congelada:
 | salida `2` sin diagnóstico válido | `sin_diagnostico` | `2` | `estado_crudo: 2` |
 | terminado por SEÑAL | `senal` | `1` | `senal: N`, `estado_crudo` |
 | cualquier otra salida | `sin_diagnostico` | `1` | `estado_crudo: <el valor>` |
-| falla el propio wrapper al escribir | `wrapper` | `1` | y sale ≠ 0 |
+| error INTERNO del wrapper, todavía pudiendo escribir | `wrapper` | `1` | documento válido; sale `0` |
+| **no puede escribir** el diagnóstico | — | — | ningún documento; sale ≠ 0 |
 
 Muerte por señal clasifica `1` —bloquea— y no `2`: un `SIGKILL` es el
 `ExitTimeOut` vencido o un OOM, y reintentarlo en loop repetiría la misma
@@ -2009,8 +2073,14 @@ Numerados a continuación de §17, que termina en 44:
 47quater. **clasificación de la salida** *(rev.21)*: cada fila de la tabla de
     §20.6.3, incluida la muerte por `SIGKILL` —que produce `motivo: senal`,
     `codigo: 1` y `senal: 9`, NO `codigo: 137`—, una salida arbitraria como
-    `42` que cae en `sin_diagnostico` con su `estado_crudo`, y el fallo del
-    propio wrapper. Todos los documentos producidos VALIDAN contra el schema;
+    `42` que cae en `sin_diagnostico` con su `estado_crudo`, y el error INTERNO
+    del wrapper. Todos esos documentos VALIDAN contra el schema. La fila
+    «no puede escribir» se ejerce por separado —directorio sin permiso— y se
+    exige lo contrario: NINGÚN documento y salida ≠ 0 *(rev.22)*;
+47quinquies. **el archivado no pisa historia** *(rev.22)*: dos series
+    transitorias seguidas dejan DOS archivos en `diagnosticos/`, ninguno
+    sobrescrito; una colisión de nombre forzada falla cerrado; y el directorio
+    recibe `fsync` tras cada rename;
 47bis. **el canal de diagnóstico** *(rev.20)*: el daemon escribe
     `fallo_cerrado.json` ANTES de salir; el wrapper traduce `1→0` solo si
     valida; un daemon muerto por `SIGKILL` sin diagnóstico hace que el wrapper
@@ -2025,9 +2095,14 @@ Numerados a continuación de §17, que termina en 44:
     cinco: el proceso sale `0`, el estado en disco es consistente, y el
     arranque siguiente continúa sin pérdida — en particular, la señal durante
     la copia NO deja el sidecar en `pending` y la señal durante la comparación
-    SÍ lo deja, con la copia completa. Además **MIDE**, a escala completa, el
-    peor tiempo entre dos puntos de cancelación declarados, y **falla si el
-    `ExitTimeOut` del plist es menor a ese peor caso por 3** (§20.6);
+    SÍ lo deja, con la copia completa. Se agrega la señal **dentro de una
+    petición HTTP colgada** y **durante el sueño del backoff**: en las dos, el
+    proceso sale sin esperar a que el `fetch` agote su serie de intentos
+    *(rev.22)*. Y la señal en la fase POSTERIOR del ciclo NO la parte: se
+    termina entera. Además **MIDE**, a escala completa, el peor tiempo entre
+    dos puntos de cancelación, calcula la cota analítica
+    `CONNECT_TIMEOUT + READ_TIMEOUT` más el sellado, y **falla si el
+    `ExitTimeOut` del plist es menor a 3 × el mayor de los dos** (§20.6);
 49. **cadencia y backoff deterministas**: un ciclo que dura más que `CADENCIA`
     no acumula deuda —el siguiente arranca una sola vez—; el backoff respeta
     la fórmula y el número de intentos con un reloj y un generador
