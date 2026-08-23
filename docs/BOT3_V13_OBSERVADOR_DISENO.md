@@ -1,11 +1,13 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.15
+# Bot3.v13 — Observador operativo · DISEÑO rev.16
 
-**Estado: DISEÑO rev.15 — fase A sin readquirir, disparo de fase B,
+**Estado: DISEÑO rev.16 — los tres disparadores de la fase B,
 propuesta para auditoría ANTES de seguir implementando. No desplegado. Cohorte
 no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.15 corrige que el orden congelado en rev.14 era literalmente indeadlockable
+rev.16 agrega el tercer disparador de la fase B —el arranque— que §9.1.3
+omitía aunque §13.5 lo exigiera. rev.15 corrigió que el orden congelado en
+rev.14 era literalmente indeadlockable
 —mandaba readquirir un mutex ya retenido—, declara quién dispara la fase B tras
 un corte científico, y separa borrar de archivar. rev.14 congeló el ORDEN del
 final del ciclo, que era el agujero de la
@@ -708,17 +710,25 @@ Cuando una comparación pasa de `pending` a `ok` no hay causa nueva que
 registrar, así que nadie volvería a intentar publicar y la cohorte quedaría
 detenida.
 
-Hay exactamente **dos disparadores**, y entre los dos cubren todas las causas
-*(rev.15)*:
+Hay exactamente **tres disparadores**, y entre los tres cubren todas las
+causas *(rev.16)*:
 
 | quién | cuándo |
 |---|---|
 | el CICLO que registra una causa | apenas libera `cycle_barrier` (§12) |
 | la comparación fría al terminar | en sus cuatro salidas: `ok`, `divergent`, y el fallo cerrado por copia ausente o corrupta |
+| el ARRANQUE | al encontrar un `terminal.request` validado SIN terminal publicado, antes de abrir ningún ciclo (§13.5) |
 
 Ninguno depende de polling ni de otro ciclo — los de ingesta están prohibidos
-durante la ventana, precisamente. Con un solo disparador quedaba fuera el corte
-científico sin comparación pendiente, que no tiene comparación que termine.
+durante la ventana, precisamente.
+
+Cada disparador cubre un hueco que los otros dejan:
+
+- **sin el del ciclo**, un corte científico sin comparación pendiente no tenía
+  quién publicara: no hay comparación que termine *(el hueco de rev.15)*;
+- **sin el del arranque**, una caída entre registrar y publicar dejaba el
+  request sin nadie que lo retomara — §13.5 exige esa reanudación, pero
+  §9.1.3 no la listaba como disparador *(el hueco de rev.16)*.
 
 **Contrato de `terminal.request`** *(rev.7 — MAJOR 2)*. El artefacto que
 permite reanudar necesita schema propio, o el reinicio no puede verificar qué
@@ -1352,6 +1362,10 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     ganador —gate con la escritura del sidecar y el registro separados, que es
     la carrera real—; y la finalización de la comparación intenta la fase B en
     sus cuatro salidas, sin que ningún ciclo la despierte;
+40quinquies. **los tres disparadores de la fase B** *(rev.16)*: reinicio con
+    un `terminal.request` pendiente inicia la fase B SIN ingerir —ningún ciclo
+    se abre— y produce EXACTAMENTE el mismo terminal que la ejecución continua
+    que no se cayó: mismo motivo, misma evidencia, mismos heads y misma firma;
 40quater. **orden del final del ciclo** *(rev.14)*: corte número 50 y un
     `verify.request` pendiente en el MISMO ciclo, con buffers NO vacíos. La
     causa científica se registra ANTES, no se crea ninguna deferencia nueva, la
