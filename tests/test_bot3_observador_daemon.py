@@ -32,6 +32,13 @@ T0 = GENESIS_H4 + 4000 * DUR4                  # alineado a las dos grillas
 MERCADOS = ("BTCUSDT", "ETHUSDT")
 IDENT = {"cohorte": "ensayo", "contrato": "x" * 64, "commit": "y" * 40}
 
+# SHA-256 hexadecimales canónicos: el sidecar valida FORMATO, no solo
+# presencia. Un `digest: null` o una `firma: []` pasaban la validación vieja y
+# llegaban a `exigir_captura_autorizada` comparando basura contra basura.
+DIG, FIR = "a" * 64, "b" * 64
+DIG_AJENO, FIR_AJENA = "c" * 64, "d" * 64
+DIG_X, FIR_X = "e" * 64, "f" * 64
+
 
 def vela(t, p=100.0):
     return {"t": t, "o": p, "h": p + 1, "l": p - 1, "c": p + 0.5, "v": 1.0}
@@ -86,7 +93,7 @@ def sidecar_ok(d, instante=1):
     """§13.4.2: reanudar EXIGE un sidecar legible, para cualquier ganador. Sin
     él no se sabe si hay una comparación `pending` que deba retener."""
     v = E.Verificacion(os.path.join(d, C.ARCHIVO_VERIFICACION))
-    v.conforme(instante, "d", "f")
+    v.conforme(instante, DIG, FIR)
     return v
 
 
@@ -220,15 +227,15 @@ def test_dentro_de_la_zona_no_se_procesa_sin_verificacion_ok(tmp_path):
     motor.estados["BTCUSDT"].posicion = {"P_in": 1}
     assert D.en_zona_de_corte(motor, T0) is True
     v = verif(tmp_path)
-    for preparar in (lambda: v.pendiente(1, "d", "f"),
+    for preparar in (lambda: v.pendiente(1, DIG, FIR),
                      lambda: v.diferir(1, {"BTCUSDT_15m": 2}),
                      lambda: v.divergente(1, {}, {})):
         preparar()
         assert D.puede_procesar_lote(motor, T0, v)["procesar"] is False
-    v.conforme(10, "d", "f")
+    v.conforme(10, DIG, FIR)
     v.diferir(20, {"BTCUSDT_4h": 1})               # `ok` ANTERIOR no habilita
     assert D.puede_procesar_lote(motor, T0, v)["procesar"] is False
-    v.conforme(30, "d", "f")
+    v.conforme(30, DIG, FIR)
     assert D.puede_procesar_lote(motor, T0, v)["procesar"] is True
 
 
@@ -239,7 +246,7 @@ def test_el_ciclo_real_no_procesa_ningun_lote_en_la_zona_sin_ok(tmp_path):
     motor.cierres = [{"t": i} for i in range(CORTE_N_CIERRES - 1)]
     motor.estados["BTCUSDT"].posicion = {"P_in": 1}
     v = verif(tmp_path)
-    v.pendiente(1, "d", "f")
+    v.pendiente(1, DIG, FIR)
     ahora = ahora_de(m15, h4)
     parte = D.ciclo(fetch_reloj(ahora), D.BarreraCiclo(), motor, m15, h4,
                     libro, v, lambda: ahora)
@@ -652,7 +659,7 @@ def test_el_corte_del_motor_publica_COMPLETED(tmp_path):
     d = str(tmp_path / "estado")
     os.makedirs(d)
     v = verif(tmp_path)
-    v.conforme(1, "d", "f")
+    v.conforme(1, DIG, FIR)
     motor.cortado = True
     motor.motivo_corte = "muestra"
     hecho = cerrar_y_publicar(d, motor, m15, h4, libro, v, T0)
@@ -675,7 +682,7 @@ def test_COMPLETED_no_se_publica_sin_verificacion_ok(tmp_path):
     hecho = cerrar_y_publicar(d, motor, m15, h4, libro, v, T0)
     assert hecho["estado"] == "espera"
     assert not os.path.exists(os.path.join(d, C.ARCHIVO_COMPLETADO))
-    v.conforme(2, "d", "f")
+    v.conforme(2, DIG, FIR)
     assert cerrar_y_publicar(d, motor, m15, h4, libro, v,
                              T0)["estado"] == C.COMPLETADO
 
@@ -686,7 +693,7 @@ def test_el_cierre_administrativo_se_intenta_en_cada_ciclo(tmp_path):
     d = str(tmp_path / "estado")
     os.makedirs(d)
     v = verif(tmp_path)
-    v.conforme(1, "d", "f")
+    v.conforme(1, DIG, FIR)
     llamadas = []
     real = type(motor).cerrar_administrativo
     type(motor).cerrar_administrativo = lambda self, r: (
@@ -741,7 +748,7 @@ def test_el_corte_administrativo_NO_se_ejecuta_sin_verificacion_ok(tmp_path):
     n = len(libro.eventos)
 
     v = verif(tmp_path, "v2.json")
-    v.pendiente(1, "d", "f")
+    v.pendiente(1, DIG, FIR)
     assert D.cerrar_si_corresponde(D.BarreraCiclo(), d, IDENT, motor, m15, h4,
                                    libro, v, pasado) is None
     assert motor.cortado is False
@@ -751,7 +758,7 @@ def test_el_corte_administrativo_NO_se_ejecuta_sin_verificacion_ok(tmp_path):
         assert not [e for e in libro.eventos if e["tipo"] == tipo], tipo
 
     # con `ok`, el corte administrativo REAL sí ocurre y publica COMPLETED
-    v.conforme(2, "d", "f")
+    v.conforme(2, DIG, FIR)
     hecho = cerrar_y_publicar(d, motor, m15, h4, libro, v, pasado)
     assert motor.cortado is True
     assert hecho["estado"] == C.COMPLETADO
@@ -886,7 +893,7 @@ def test_el_cierre_50_lo_produce_el_motor_y_dispara_el_corte(tmp_path):
     d = str(tmp_path / "estado")
     os.makedirs(d)
     v = verif(tmp_path)
-    v.conforme(1, "d", "f")
+    v.conforme(1, DIG, FIR)
 
     # 49 cierres repartidos en semanas ISO suficientes: uno MENOS que el corte
     semana = 7 * 24 * 3600 * 1000
@@ -979,7 +986,7 @@ def test_un_corte_cientifico_se_reanuda_como_COMPLETED_no_como_BLOCKED(
     # el sidecar vive en `estado_dir`: la reanudación lo RECARGA de disco, no
     # confía en un objeto en memoria que la caída perdió
     v = E.Verificacion(os.path.join(d, C.ARCHIVO_VERIFICACION))
-    v.conforme(1, "d", "f")
+    v.conforme(1, DIG, FIR)
     # CAÍDA: la causa quedó anotada y no se publicó
     D.registrar_causa(barrera, d, "muestra", IDENT, {"cierres": 50}, T0,
                       m15, h4, libro)
@@ -1005,11 +1012,12 @@ def test_una_divergencia_entre_registro_y_publicacion_impide_COMPLETED(
     d = str(tmp_path / "estado")
     os.makedirs(d)
     v = verif(tmp_path)
-    v.conforme(1, "d", "f")
+    v.conforme(1, DIG, FIR)
     barrera = D.BarreraCiclo()
     D.registrar_causa(barrera, d, "muestra", IDENT, {"cierres": 50}, T0,
                       m15, h4, libro)
-    v.divergente(2, {"esperado": 1}, {"obtenido": 2})   # llega la divergencia
+    v.divergente(2, {"digest": DIG, "firma": FIR},                # llega
+                 {"digest": DIG_X, "firma": FIR_X})           # la divergencia
     hecho = D.publicar_pendiente(barrera, d, T0, motor, m15, h4, libro, v,
                                  IDENT)
     assert hecho["estado"] == C.BLOQUEADO
@@ -1071,7 +1079,7 @@ def test_g40_estado_esperado_alterado_falla_cerrado(tmp_path):
         motor, m15, h4, libro = mundo(tmp_path / f"g40_{i}", n15=30)
         d = _estado_dir(tmp_path / f"g40_{i}")
         v = verif(tmp_path / f"g40_{i}")
-        v.conforme(1, "d", "f")
+        v.conforme(1, DIG, FIR)
         barrera = D.BarreraCiclo()
         D.registrar_causa(barrera, d, "muestra", IDENT, {"cierres": 50}, T0,
                           m15, h4, libro)
@@ -1095,14 +1103,14 @@ def test_g40_matriz_de_reanudacion_completa(tmp_path):
 
     # `ok` y posterior a toda deferencia → COMPLETED
     d, *mundo_ok = escenario("ok", "muestra",
-                             lambda v: v.conforme(2, "d", "f"))
+                             lambda v: v.conforme(2, DIG, FIR))
     assert D.reanudar(D.BarreraCiclo(), d, IDENT, *mundo_ok,
                       T0)["estado"] == C.COMPLETADO
 
     # `pending` con la copia AUSENTE → fallo cerrado: no se puede ni
     # certificar ni descartar el determinismo
     d, *mp = escenario("pend", "muestra", lambda v: v.pendiente(
-        2, "d", "f", "/no/existe"))
+        2, DIG, FIR, "/no/existe"))
     with pytest.raises(ValueError, match="copia no existe"):
         D.reanudar(D.BarreraCiclo(), d, IDENT, *mp, T0)
 
@@ -1118,7 +1126,9 @@ def test_g40_matriz_de_reanudacion_completa(tmp_path):
 
     # `divergent` → se ANEXA la divergencia y se publica BLOCKED_INTEGRITY
     d, *mv = escenario("div", "muestra",
-                       lambda v: v.divergente(2, {"a": 1}, {"a": 2}))
+                       lambda v: v.divergente(
+                           2, {"digest": DIG, "firma": FIR},
+                           {"digest": DIG_X, "firma": FIR_X}))
     hecho = D.reanudar(D.BarreraCiclo(), d, IDENT, *mv, T0)
     assert hecho["estado"] == C.BLOQUEADO
     assert hecho["cuerpo"]["motivo"] == C.MOTIVO_DIVERGENCIA
@@ -1130,7 +1140,7 @@ def test_g40_matriz_de_reanudacion_completa(tmp_path):
         D.reanudar(D.BarreraCiclo(), d, IDENT, *ma, T0)
 
     # request de OTRA identidad → fallo cerrado
-    d, *mo = escenario("ident", "muestra", lambda v: v.conforme(2, "d", "f"))
+    d, *mo = escenario("ident", "muestra", lambda v: v.conforme(2, DIG, FIR))
     with pytest.raises(ValueError, match="otra cohorte"):
         D.reanudar(D.BarreraCiclo(), d, dict(IDENT, cohorte="otra"), *mo, T0)
 
@@ -1141,7 +1151,7 @@ def test_g40bis_la_ventana_admite_una_segunda_causa_y_prohibe_ciclos(tmp_path):
     motor, m15, h4, libro = mundo(tmp_path, n15=30)
     d = _estado_dir(tmp_path)
     v = verif(tmp_path)
-    v.conforme(1, "d", "f")
+    v.conforme(1, DIG, FIR)
     barrera = D.BarreraCiclo()
 
     D.registrar_causa(barrera, d, "muestra", IDENT, {"cierres": 50}, T0,
@@ -1187,7 +1197,7 @@ def test_g40ter_la_ventana_se_cierra_por_GANADOR(tmp_path):
 def _v(estado):
     v = E.Verificacion("/dev/null")
     v.estado = estado
-    v.ultima_ok = {"instante": 10, "digest": "d", "firma": "f"}
+    v.ultima_ok = {"instante": 10, "digest": DIG, "firma": FIR}
     return v
 
 
@@ -1199,12 +1209,13 @@ def test_g40ter_la_fase_B_anexa_la_divergencia_que_observa(tmp_path):
     motor, m15, h4, libro = mundo(tmp_path, n15=30)
     d = _estado_dir(tmp_path)
     v = verif(tmp_path)
-    v.conforme(1, "d", "f")
+    v.conforme(1, DIG, FIR)
     barrera = D.BarreraCiclo()
     D.registrar_causa(barrera, d, C.MOTIVO_SILENCIO, IDENT, {"h": 72}, T0,
                       m15, h4, libro)
     # el sidecar YA está divergente; el registro de la causa todavía NO ocurrió
-    v.divergente(2, {"a": 1}, {"a": 2})
+    v.divergente(2, {"digest": DIG, "firma": FIR},
+                 {"digest": DIG_X, "firma": FIR_X})
     hecho = D.publicar_pendiente(barrera, d, T0, motor, m15, h4, libro, v,
                                  IDENT)
     assert hecho["cuerpo"]["motivo"] == C.MOTIVO_DIVERGENCIA
@@ -1252,7 +1263,7 @@ def test_g40quinquies_el_arranque_dispara_la_fase_B_y_no_ingiere(tmp_path):
         motor, m15, h4, libro = mundo(tmp_path / nombre, n15=30)
         d = _estado_dir(tmp_path / nombre)
         v = E.Verificacion(os.path.join(d, C.ARCHIVO_VERIFICACION))
-        v.conforme(1, "d", "f")
+        v.conforme(1, DIG, FIR)
         D.registrar_causa(D.BarreraCiclo(), d, "muestra", IDENT,
                           {"cierres": 50}, T0, m15, h4, libro)
         return d, motor, m15, h4, libro, v
@@ -1294,7 +1305,7 @@ def test_g40quater_borrar_vs_archivar_el_request(tmp_path):
     motor, m15, h4, libro = mundo(tmp_path / "normal", n15=30)
     d = _estado_dir(tmp_path / "normal")
     v = verif(tmp_path / "normal")
-    v.conforme(1, "d", "f")
+    v.conforme(1, DIG, FIR)
     E.escribir_atomico(os.path.join(d, C.ARCHIVO_PEDIDO_VERIFICACION), "{}")
     barrera = D.BarreraCiclo()
     D.registrar_causa(barrera, d, "muestra", IDENT, {"c": 50}, T0, m15, h4,
@@ -1310,7 +1321,7 @@ def test_g40quater_borrar_vs_archivar_el_request(tmp_path):
     motor2, m15b, h4b, librob = mundo(tmp_path / "residual", n15=30)
     d2 = _estado_dir(tmp_path / "residual")
     v2 = E.Verificacion(os.path.join(d2, C.ARCHIVO_VERIFICACION))
-    v2.conforme(1, "d", "f")
+    v2.conforme(1, DIG, FIR)
     D.registrar_causa(D.BarreraCiclo(), d2, "muestra", IDENT, {"c": 50}, T0,
                       m15b, h4b, librob)
     E.publicar_terminal(d2, C.COMPLETADO, dict(
@@ -1327,6 +1338,7 @@ def test_g40quater_borrar_vs_archivar_el_request(tmp_path):
     # (c) residual DISCREPANTE → fallo cerrado, y nada se archiva
     motor3, m15c, h4c, libroc = mundo(tmp_path / "discrepa", n15=30)
     d3 = _estado_dir(tmp_path / "discrepa")
+    sidecar_ok(d3)
     D.registrar_causa(D.BarreraCiclo(), d3, C.MOTIVO_SILENCIO, IDENT, {},
                       T0, m15c, h4c, libroc)
     E.publicar_terminal(d3, C.COMPLETADO, dict(IDENT, motivo="muestra"))
@@ -1348,9 +1360,9 @@ def test_g40_el_sidecar_de_verificacion_no_puede_estar_en_el_estado(tmp_path):
     motor, m15, h4, libro = mundo(tmp_path, n15=30)
     d = _estado_dir(tmp_path)
     v = E.Verificacion(os.path.join(d, C.ARCHIVO_VERIFICACION))
-    v.pendiente(1, "d", "f", str(tmp_path / "copia"))
+    v.pendiente(1, DIG, FIR, str(tmp_path / "copia"))
     antes = D.estado_esperado(d, m15, h4, libro)
-    v.conforme(2, "d", "f")                     # la comparación termina
+    v.conforme(2, DIG, FIR)                     # la comparación termina
     assert D.estado_esperado(d, m15, h4, libro) == antes
     assert C.ARCHIVO_VERIFICACION not in antes["sidecars"]
     # el silencio SÍ está: su evidencia decide el terminal
@@ -1377,7 +1389,7 @@ def test_g40quater_el_orden_del_final_del_ciclo_es_normativo(tmp_path):
     motor, m15, h4, libro = mundo(tmp_path, n15=210)
     d = _estado_dir(tmp_path)
     v = E.Verificacion(os.path.join(d, C.ARCHIVO_VERIFICACION))
-    v.conforme(1, "d", "f")
+    v.conforme(1, DIG, FIR)
     semana = 7 * 24 * 3600 * 1000
     motor.cierres = [{"t": T0 - (49 - i) * semana // 2, "mercado": "BTCUSDT",
                       "r": 0.1, "trade_id": f"t{i}"} for i in range(49)]
@@ -1537,7 +1549,7 @@ def test_g40_la_captura_autorizada_liga_el_ok_a_SU_comparacion(tmp_path):
         "firma": captura["firma"], "copia": captura["destino"]}
 
     # un `ok` de OTRA captura NO habilita
-    v.conforme(ahora + 1, "digest-ajeno", "firma-ajena")
+    v.conforme(ahora + 1, DIG_AJENO, FIR_AJENA)
     with pytest.raises(ValueError, match="no deriva de la captura autorizada"):
         D.publicar_pendiente(D.BarreraCiclo(), d, ahora, motor, m15, h4, libro,
                              v, IDENT)
@@ -1556,7 +1568,7 @@ def test_g40_las_transiciones_desde_la_captura_son_dos_y_solo_dos(tmp_path):
         _mundo_con_captura(tmp_path, "transiciones")
 
     # `pending` de OTRA captura: la comparación en curso no es la autorizada
-    v.pendiente(ahora + 1, "otro", "otra", str(tmp_path / "otra"))
+    v.pendiente(ahora + 1, DIG_AJENO, FIR_AJENA, str(tmp_path / "otra"))
     with pytest.raises(ValueError, match="no es la autorizada"):
         D.publicar_pendiente(D.BarreraCiclo(), d, ahora, motor, m15, h4, libro,
                              v, IDENT)
@@ -1568,8 +1580,8 @@ def test_g40_las_transiciones_desde_la_captura_son_dos_y_solo_dos(tmp_path):
                              v, IDENT)
 
     # una divergencia contra OTRA captura tampoco
-    v.divergente(ahora + 3, {"digest": "otro", "firma": "otra"},
-                 {"digest": "x", "firma": "y"})
+    v.divergente(ahora + 3, {"digest": DIG_AJENO, "firma": FIR_AJENA},
+                 {"digest": DIG_X, "firma": FIR_X})
     with pytest.raises(ValueError, match="no es contra la captura autorizada"):
         D.publicar_pendiente(D.BarreraCiclo(), d, ahora, motor, m15, h4, libro,
                              v, IDENT)
@@ -1577,7 +1589,7 @@ def test_g40_las_transiciones_desde_la_captura_son_dos_y_solo_dos(tmp_path):
     # la divergencia contra SU captura sí, y gana por precedencia
     v.divergente(ahora + 4,
                  {"digest": captura["digest"], "firma": captura["firma"]},
-                 {"digest": "x", "firma": "y"})
+                 {"digest": DIG_X, "firma": FIR_X})
     hecho = D.publicar_pendiente(D.BarreraCiclo(), d, ahora, motor, m15, h4,
                                  libro, v, IDENT)
     assert hecho["estado"] == C.BLOQUEADO
@@ -1585,12 +1597,17 @@ def test_g40_las_transiciones_desde_la_captura_son_dos_y_solo_dos(tmp_path):
 
 
 def test_g40bis_un_ciclo_que_esperaba_el_mutex_no_ingiere(tmp_path):
-    """La carrera REAL: el ciclo pide la barrera, la fase A la tiene y marca
-    `cierre_en_curso`, y recién ahí el ciclo entra.
+    """La carrera REAL: el ciclo ya está BLOQUEADO en `acquire`, la fase A —que
+    tiene el mutex— marca `cierre_en_curso`, y recién ahí el ciclo entra.
 
     Comprobar la bandera solo ANTES del mutex no servía: el ciclo entraba y
-    movía almacenes y libro DESPUÉS del estado que el request ya autorizó, y
-    la publicación fallaba cerrado sobre una cohorte sana."""
+    movía almacenes y libro DESPUÉS del estado que el request ya autorizó.
+
+    La señal se emite DENTRO del `acquire()` del lock real, no antes de llamar
+    a `ciclo()`: señalizar afuera dejaba al hilo pausado antes de pedir el
+    mutex, viendo `cierre_en_curso` en la comprobación EXTERIOR y saliendo por
+    ahí — el gate pasaba igual sin la recomprobación interior, que es lo que
+    pretende demostrar."""
     import threading
     motor, m15, h4, libro = mundo(tmp_path, n15=210)
     d = _estado_dir(tmp_path)
@@ -1601,22 +1618,39 @@ def test_g40bis_un_ciclo_que_esperaba_el_mutex_no_ingiere(tmp_path):
     heads = {m: a.head for m, a in m15.items()}
     firma = libro.firma()
 
-    entro = threading.Event()
-    salio = threading.Event()
+    lock_real = barrera._lock
+    pidiendo = threading.Event()
+
+    class LockQueAvisa:
+        """Avisa JUSTO cuando el ciclo se bloquea pidiendo el mutex."""
+
+        def acquire(self, *a, **k):
+            pidiendo.set()
+            return lock_real.acquire(*a, **k)
+
+        def release(self):
+            return lock_real.release()
+
     parte = {}
+    salio = threading.Event()
 
     def correr_ciclo():
-        entro.set()
         parte.update(D.ciclo(fetch_reloj(ahora), barrera, motor, m15, h4,
                              libro, v, lambda: ahora, estado_dir=d,
                              identidad=IDENT))
         salio.set()
 
     with barrera:                       # la fase A tiene el mutex
+        barrera._lock = LockQueAvisa()
         hilo = threading.Thread(target=correr_ciclo)
         hilo.start()
-        entro.wait(2)
-        # el ciclo ya está bloqueado en `acquire`; ahora se marca el cierre
+        # el ciclo pasó la comprobación EXTERIOR —`cierre_en_curso` era False—
+        # y ahora está bloqueado dentro de `acquire`
+        assert pidiendo.wait(5), "el ciclo nunca llegó a pedir el mutex"
+        assert not salio.is_set()
+        assert barrera.cierre_en_curso is False
+        # recién ahora se marca el cierre: solo la recomprobación INTERIOR
+        # puede verlo
         D.registrar_causa(barrera, d, "muestra", IDENT, {"cierres": 50},
                           ahora, m15, h4, libro, ya_retenida=True,
                           verificacion=v)
@@ -1631,6 +1665,38 @@ def test_g40bis_un_ciclo_que_esperaba_el_mutex_no_ingiere(tmp_path):
     assert libro.firma() == firma
 
     # y por eso la publicación no falla cerrado sobre una cohorte sana
+    barrera._lock = lock_real
     hecho = D.publicar_pendiente(barrera, d, ahora, motor, m15, h4, libro, v,
                                  IDENT)
     assert hecho["estado"] == C.COMPLETADO
+
+
+def test_g40_el_residual_tambien_acredita_la_captura_autorizada(tmp_path):
+    """§13.6 + §13.4.1: la caída ENTRE publicar y borrar acreditaba motivo,
+    familia, heads y firma — pero no que el `ok` vigente derivara de la
+    captura que el request congeló.
+
+    Sin esto, un `COMPLETED` publicado quedaba ratificado por un `ok` de otra
+    comparación, que es exactamente la ligadura que rev.17 introdujo."""
+    d, motor, m15, h4, libro, v, captura, ahora = \
+        _mundo_con_captura(tmp_path, "residual")
+    residual = E.leer_solicitud(os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL))
+    E.publicar_terminal(d, C.COMPLETADO, dict(
+        IDENT, motivo="muestra", evidencia={"cierres": 50},
+        heads=E.estado_almacenes(m15, h4), firma=libro.firma()))
+
+    # (a) el `ok` es de OTRA comparación → fallo cerrado, y nada se archiva
+    v.conforme(ahora + 1, DIG_AJENO, FIR_AJENA)
+    with pytest.raises(ValueError, match="no deriva de la captura autorizada"):
+        D.reanudar(D.BarreraCiclo(), d, IDENT, motor, m15, h4, libro, ahora)
+    assert os.path.exists(os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL))
+
+    # (b) el `ok` es el de SU captura → se acredita y se archiva
+    v.conforme(ahora + 2, captura["digest"], captura["firma"])
+    hecho = D.reanudar(D.BarreraCiclo(), d, IDENT, motor, m15, h4, libro,
+                       ahora)
+    assert hecho["ya_existia"] is True
+    assert not os.path.exists(os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL))
+    assert os.path.exists(
+        os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL + ".archivado"))
+    assert residual["captura_autorizada"]["digest"] == captura["digest"]

@@ -21,6 +21,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 
 from . import contrato as C
 
@@ -175,12 +176,39 @@ class VerificacionInvalida(ValueError):
     """El sidecar no cumple §13.4.2. Se falla cerrado en vez de asumir `ok`."""
 
 
+_HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
+
+
 def _exigir_campos(mapa, campos, que: str) -> None:
     if not isinstance(mapa, dict):
         raise VerificacionInvalida(f"{que} no es un objeto: {mapa!r}")
     faltan = [c for c in campos if c not in mapa]
     if faltan:
         raise VerificacionInvalida(f"{que} sin {sorted(faltan)}")
+
+
+def _exigir_entero(valor, que: str) -> None:
+    """`type(...) is int` excluye `bool`, que es subclase de `int`: sin eso
+    `True` pasaba como instante y comparaba igual a 1."""
+    if type(valor) is not int:
+        raise VerificacionInvalida(
+            f"{que} no es entero: {valor!r} ({type(valor).__name__})")
+
+
+def _exigir_sha(valor, que: str) -> None:
+    """SHA-256 hexadecimal canónico. Comprobar solo la PRESENCIA del campo era
+    fail-open: `digest: null` y `firma: []` pasaban la validación y llegaban a
+    `exigir_captura_autorizada`, donde comparaban por igualdad contra otro
+    valor basura — o habilitaban el cierre sin acreditar nada."""
+    if not isinstance(valor, str) or not _HEX64.match(valor):
+        raise VerificacionInvalida(
+            f"{que} no es un SHA-256 hexadecimal: {valor!r}")
+
+
+def _exigir_par(mapa, que: str) -> None:
+    _exigir_campos(mapa, ("digest", "firma"), que)
+    _exigir_sha(mapa["digest"], f"{que}.digest")
+    _exigir_sha(mapa["firma"], f"{que}.firma")
 
 
 class Verificacion:
@@ -221,35 +249,55 @@ class Verificacion:
             raise VerificacionInvalida(
                 f"estado de verificación fuera del registro cerrado{donde}: "
                 f"{self.estado!r}")
-        if self.ultima_deferencia is not None and \
-                type(self.ultima_deferencia) is not int:
-            raise VerificacionInvalida(
-                f"`ultima_deferencia` no entera{donde}: "
-                f"{self.ultima_deferencia!r}")
+        if self.ultima_deferencia is not None:
+            _exigir_entero(self.ultima_deferencia,
+                           f"`ultima_deferencia`{donde}")
         if self.ultima_ok is not None:
-            _exigir_campos(self.ultima_ok, ("instante", "digest", "firma"),
+            _exigir_par(self.ultima_ok, f"`ultima_ok`{donde}")
+            _exigir_campos(self.ultima_ok, ("instante",),
                            f"`ultima_ok`{donde}")
-            if type(self.ultima_ok["instante"]) is not int:
-                raise VerificacionInvalida(
-                    f"`ultima_ok.instante` no entero{donde}")
+            _exigir_entero(self.ultima_ok["instante"],
+                           f"`ultima_ok.instante`{donde}")
         if self.estado == C.VERIF_OK and not self.ultima_ok:
             raise VerificacionInvalida(
                 f"estado `ok` sin `ultima_ok`{donde}: nada acredita qué "
                 f"comparación lo produjo")
         if self.estado == C.VERIF_PENDIENTE:
-            _exigir_campos(self.detalle, ("desde", "digest", "firma", "copia"),
-                           f"`detalle` de `pending`{donde}")
-            if not self.detalle["copia"]:
-                # §13.5.1: sin la copia, la comparación no se puede reanudar
-                # tras un reinicio y la cohorte queda trabada.
+            que = f"`detalle` de `pending`{donde}"
+            _exigir_par(self.detalle, que)
+            _exigir_campos(self.detalle, ("desde", "copia"), que)
+            _exigir_entero(self.detalle["desde"], f"{que}.desde")
+            # §13.5.1: sin la copia, la comparación no se puede reanudar tras
+            # un reinicio y la cohorte queda trabada.
+            if not isinstance(self.detalle["copia"], str) \
+                    or not self.detalle["copia"].strip():
                 raise VerificacionInvalida(
-                    f"`pending` sin ruta de copia{donde}")
+                    f"{que}.copia no es una ruta: {self.detalle['copia']!r}")
         if self.estado == C.VERIF_DIVERGENTE:
-            _exigir_campos(self.detalle, ("esperado", "obtenido"),
-                           f"`detalle` de `divergent`{donde}")
-        if self.estado == C.VERIF_DIFERIDA and self.ultima_deferencia is None:
-            raise VerificacionInvalida(
-                f"`deferred` sin `ultima_deferencia`{donde}")
+            que = f"`detalle` de `divergent`{donde}"
+            _exigir_campos(self.detalle, ("esperado", "obtenido"), que)
+            _exigir_par(self.detalle["esperado"], f"{que}.esperado")
+            _exigir_par(self.detalle["obtenido"], f"{que}.obtenido")
+        if self.estado == C.VERIF_DIFERIDA:
+            if self.ultima_deferencia is None:
+                raise VerificacionInvalida(
+                    f"`deferred` sin `ultima_deferencia`{donde}")
+            # Estructura CERRADA: `{"buffers_no_vacios": {stream: n}}`, con
+            # `n` entero positivo. Es lo que produce `buffers_no_vacios`.
+            que = f"`detalle` de `deferred`{donde}"
+            _exigir_campos(self.detalle, ("buffers_no_vacios",), que)
+            buffers = self.detalle["buffers_no_vacios"]
+            if not isinstance(buffers, dict):
+                raise VerificacionInvalida(
+                    f"{que}.buffers_no_vacios no es un objeto: {buffers!r}")
+            for stream, n in buffers.items():
+                if not isinstance(stream, str) or not stream:
+                    raise VerificacionInvalida(
+                        f"{que}: nombre de stream inválido {stream!r}")
+                _exigir_entero(n, f"{que}[{stream!r}]")
+                if n <= 0:
+                    raise VerificacionInvalida(
+                        f"{que}[{stream!r}] no es positivo: {n}")
 
     def guardar(self) -> None:
         escribir_atomico(self.ruta, canon({
@@ -470,7 +518,7 @@ def publicar_terminal(estado_dir: str, estado: str, cuerpo: dict) -> str:
 
 
 def coincide_residual(req: dict, terminal: dict, identidad: dict,
-                     estado_actual: dict) -> None:
+                     estado_actual: dict, verificacion=None) -> None:
     """§13.6: cuándo un terminal publicado domina un request residual.
 
     Secuencia NORMATIVA, en este orden. Un request malformado no puede aportar
@@ -489,6 +537,10 @@ def coincide_residual(req: dict, terminal: dict, identidad: dict,
     if difs:
         raise ValueError(
             f"request residual autoriza otro estado: difieren {sorted(difs)}")
+    # §13.4.1 también acá: sin esto, una caída entre publicar y borrar
+    # acreditaba motivo, familia, heads y firma, pero NO que el `ok` o la
+    # divergencia vigentes derivaran de la captura que el request congeló.
+    exigir_captura_autorizada(req, verificacion)
     familia = (C.BLOQUEADO if ganador in C.MOTIVOS_INTEGRIDAD
                else C.COMPLETADO)
     if terminal.get("estado") != familia or terminal.get("motivo") != ganador:

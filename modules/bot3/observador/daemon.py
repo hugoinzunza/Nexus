@@ -457,7 +457,8 @@ def publicar_pendiente(barrera: BarreraCiclo, estado_dir: str, ahora: int,
         leido = E.leer_terminal(estado_dir)
         if leido is not None and leido["estado"] in (C.COMPLETADO, C.BLOQUEADO):
             return _cerrar_con_publicado(barrera, leido, estado_dir, ruta_req,
-                                         identidad, m15, h4, libro)
+                                         identidad, m15, h4, libro,
+                                         verificacion)
         req = E.leer_solicitud(ruta_req)
         if req is None:
             return None
@@ -527,8 +528,19 @@ def _exigir_estado_autorizado(req: dict, estado_dir: str, m15: dict, h4: dict,
             f"terminal.request autoriza otro estado: difieren {sorted(difs)}")
 
 
+def _cargar_verificacion(estado_dir: str):
+    """§13.4.2: el sidecar es OBLIGATORIO y se valida entero. No existe una
+    ruta que lo dé por `ok` porque falte."""
+    ruta = os.path.join(estado_dir, C.ARCHIVO_VERIFICACION)
+    if not os.path.exists(ruta):
+        raise ValueError(
+            f"falta {ruta}: no se puede acreditar el estado de la "
+            f"comparación fría")
+    return E.Verificacion.cargar(ruta)
+
+
 def _cerrar_con_publicado(barrera, leido, estado_dir, ruta_req, identidad,
-                          m15, h4, libro) -> dict:
+                          m15, h4, libro, verificacion=None) -> dict:
     """§13.6: un terminal publicado con un request residual al lado NO es una
     contradicción — es el estado normal de una caída entre publicar y borrar.
 
@@ -543,7 +555,8 @@ def _cerrar_con_publicado(barrera, leido, estado_dir, ruta_req, identidad,
                 f"{estado_dir} tiene terminal publicado y terminal.request, y "
                 f"no se recibió identidad para acreditar que coinciden")
         E.coincide_residual(residual, leido["cuerpo"], identidad,
-                            estado_esperado(estado_dir, m15, h4, libro))
+                            estado_esperado(estado_dir, m15, h4, libro),
+                            verificacion or _cargar_verificacion(estado_dir))
         E.archivar(ruta_req)
     return {"estado": leido["estado"], "ruta": None,
             "cuerpo": leido["cuerpo"], "ya_existia": True}

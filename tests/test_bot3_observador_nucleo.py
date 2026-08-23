@@ -12,6 +12,11 @@ import json
 import os
 import re
 
+# SHA-256 hexadecimales canónicos: el sidecar valida FORMATO, no solo
+# presencia (§13.4.2).
+DIG, FIR = "a" * 64, "b" * 64
+DIG_AJENO, FIR_AJENA = "c" * 64, "d" * 64
+
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -351,13 +356,13 @@ def test_el_singleton_no_admite_dos_observadores(tmp_path):
 def test_completed_exige_ok_posterior_a_toda_deferencia(tmp_path):
     v = E.Verificacion(str(tmp_path / "v.json"))
     assert v.habilita_cierre() is False           # sin verificación exitosa
-    v.conforme(100, "d", "f")
+    v.conforme(100, DIG, FIR)
     assert v.habilita_cierre() is True
     v.diferir(200, {"BTCUSDT_15m": 2})
     assert v.habilita_cierre() is False
-    v.pendiente(250, "d", "f")
+    v.pendiente(250, DIG, FIR)
     assert v.habilita_cierre() is False
-    v.conforme(300, "d", "f")
+    v.conforme(300, DIG, FIR)
     assert v.habilita_cierre() is True
 
 
@@ -366,7 +371,7 @@ def test_el_sidecar_de_verificacion_sobrevive_al_reinicio(tmp_path):
     válida una verificación anterior."""
     ruta = str(tmp_path / "v.json")
     v = E.Verificacion(ruta)
-    v.conforme(100, "d", "f")
+    v.conforme(100, DIG, FIR)
     v.diferir(200, {"BTCUSDT_4h": 1})
     r = E.Verificacion.cargar(ruta)
     assert r.estado == C.VERIF_DIFERIDA
@@ -640,3 +645,93 @@ def test_dos_primeros_arranques_simultaneos_no_dan_FileExistsError(tmp_path):
     assert all(s in ("GANO", "TOMADO") for s in salidas), salidas
     assert salidas.count("GANO") == 1, salidas
     assert not any("INESPERADO" in s for s in salidas), salidas
+
+
+# ---------- §13.4.2: vectores adversariales campo por campo ----------
+def _sidecar(tmp_path, cuerpo, nombre="verificacion.json"):
+    ruta = str(tmp_path / nombre)
+    E.escribir_atomico(ruta, E.canon(
+        dict({"schema_version": C.SCHEMA_VERIFICACION}, **cuerpo)))
+    return ruta
+
+
+def test_el_sidecar_valida_TIPOS_y_FORMATOS_no_solo_presencia(tmp_path):
+    """Comprobar solo que el campo EXISTE era fail-open.
+
+    Los tres primeros vectores son los que la auditoría reprodujo aceptados:
+    `ok_bad_digest` llevaba `digest: null` y `firma: []` y aun así devolvía
+    `habilita_cierre() is True`, habilitando el cierre científico sin que nada
+    acreditara de qué comparación salía."""
+    ok = {"instante": 10, "digest": DIG, "firma": FIR}
+    pend = {"desde": 10, "digest": DIG, "firma": FIR, "copia": "/x"}
+    div = {"esperado": {"digest": DIG, "firma": FIR},
+           "obtenido": {"digest": DIG_AJENO, "firma": FIR_AJENA}}
+
+    vectores = {
+        # los tres reproducidos por la auditoría
+        "ok_bad_digest": {"estado": C.VERIF_OK,
+                          "ultima_ok": dict(ok, digest=None, firma=[])},
+        "pending_bad_types": {"estado": C.VERIF_PENDIENTE,
+                              "detalle": dict(pend, desde="10", digest=1)},
+        "div_bad_shape": {"estado": C.VERIF_DIVERGENTE,
+                          "detalle": {"esperado": "x", "obtenido": None}},
+        # y el resto de los campos, uno por uno
+        "ok_instante_bool": {"estado": C.VERIF_OK,
+                             "ultima_ok": dict(ok, instante=True)},
+        "ok_digest_corto": {"estado": C.VERIF_OK,
+                            "ultima_ok": dict(ok, digest="a" * 63)},
+        "ok_digest_mayuscula": {"estado": C.VERIF_OK,
+                                "ultima_ok": dict(ok, digest="A" * 64)},
+        "ok_firma_no_hex": {"estado": C.VERIF_OK,
+                            "ultima_ok": dict(ok, firma="z" * 64)},
+        "pending_copia_vacia": {"estado": C.VERIF_PENDIENTE,
+                                "detalle": dict(pend, copia="   ")},
+        "pending_copia_no_str": {"estado": C.VERIF_PENDIENTE,
+                                 "detalle": dict(pend, copia=["/x"])},
+        "pending_desde_bool": {"estado": C.VERIF_PENDIENTE,
+                               "detalle": dict(pend, desde=False)},
+        "div_esperado_sin_firma": {
+            "estado": C.VERIF_DIVERGENTE,
+            "detalle": dict(div, esperado={"digest": DIG})},
+        "div_obtenido_basura": {
+            "estado": C.VERIF_DIVERGENTE,
+            "detalle": dict(div, obtenido={"digest": 1, "firma": None})},
+        "deferencia_bool": {"estado": C.VERIF_DIFERIDA,
+                            "ultima_deferencia": True,
+                            "detalle": {"buffers_no_vacios": {"BTC_15m": 1}}},
+        "deferred_buffers_no_objeto": {
+            "estado": C.VERIF_DIFERIDA, "ultima_deferencia": 10,
+            "detalle": {"buffers_no_vacios": ["BTC_15m"]}},
+        "deferred_buffers_no_entero": {
+            "estado": C.VERIF_DIFERIDA, "ultima_deferencia": 10,
+            "detalle": {"buffers_no_vacios": {"BTC_15m": "2"}}},
+        "deferred_buffers_cero": {
+            "estado": C.VERIF_DIFERIDA, "ultima_deferencia": 10,
+            "detalle": {"buffers_no_vacios": {"BTC_15m": 0}}},
+        "ok_sin_ultima_ok": {"estado": C.VERIF_OK},
+        "estado_desconocido": {"estado": "maybe", "ultima_ok": ok},
+        "estado_ausente": {"ultima_ok": ok},
+    }
+    for nombre, cuerpo in vectores.items():
+        ruta = _sidecar(tmp_path, cuerpo, f"{nombre}.json")
+        with pytest.raises(E.VerificacionInvalida):
+            E.Verificacion.cargar(ruta)
+
+    # y los documentos BIEN formados sí cargan
+    for cuerpo in ({"estado": C.VERIF_OK, "ultima_ok": ok},
+                   {"estado": C.VERIF_PENDIENTE, "detalle": pend},
+                   {"estado": C.VERIF_DIVERGENTE, "detalle": div},
+                   {"estado": C.VERIF_DIFERIDA, "ultima_deferencia": 10,
+                    "detalle": {"buffers_no_vacios": {"BTC_15m": 2}}}):
+        v = E.Verificacion.cargar(_sidecar(tmp_path, cuerpo, "bueno.json"))
+        assert v.estado == cuerpo["estado"]
+
+
+def test_un_ok_malformado_no_habilita_el_cierre(tmp_path):
+    """El vector exacto de la auditoría: `habilita_cierre=True` sobre un
+    `ultima_ok` que no acreditaba nada."""
+    ruta = _sidecar(tmp_path, {
+        "estado": C.VERIF_OK,
+        "ultima_ok": {"instante": 10, "digest": None, "firma": []}})
+    with pytest.raises(E.VerificacionInvalida, match="SHA-256"):
+        E.Verificacion.cargar(ruta)
