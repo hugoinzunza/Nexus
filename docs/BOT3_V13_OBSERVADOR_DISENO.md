@@ -1,10 +1,15 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.25
+# Bot3.v13 — Observador operativo · DISEÑO rev.26
 
-**Estado: DISEÑO rev.25 — §20 acotada: protocolo completo del trabajador de
-transporte y gate 48bis reconciliado con la taxonomía de señales. §1–§19 y §13
-no se reabren. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.26 — §20 acotada: el IPC falla cerrado ante corrupción,
+el deadline cubre el despacho, y la acreditación humana es una operación
+registral. §1–§19 y §13 no se reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.26 cierra tres puntos del IPC: descartar una respuesta con ID ajeno hacía
+que una corrupción del protocolo pareciera un deadline de red reintentable; el
+deadline arrancaba DESPUÉS de una escritura que puede bloquear, así que no era
+cota total; y la «intervención humana» del gate 48bis no tenía herramienta,
+campos ni procedimiento.
 rev.25 cierra dos bloqueos de rev.24: el gate 48bis prometía que «el arranque
 siguiente continúa» tras un `SIGKILL`, contradiciendo la propia taxonomía
 —toda muerte por señal clasifica `codigo: 1` y BLOQUEA—; y el protocolo del
@@ -1350,8 +1355,8 @@ producción solo agregaría una ruta sin probar.
 `TF_OBSERVADAS`, `UNIVERSO`, `ENDPOINT_KLINES`, `ENDPOINT_TIME`,
 `CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`,
 `PRECEDENCIA_TERMINAL`, `MAX_TRANSITORIOS` y `EXIT_TIMEOUT` *(rev.20)*,
-`CONNECT_TIMEOUT`, `READ_TIMEOUT` *(rev.22)* y `REQUEST_DEADLINE` *(rev.23)*,
-y las
+`CONNECT_TIMEOUT`, `READ_TIMEOUT` *(rev.22)*, `REQUEST_DEADLINE` *(rev.23)* y
+`MAX_SOBRE` *(rev.26)*, y las
 rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
 (`silencio.json`, `verificacion.json`, `fallo_cerrado.json` *(rev.20)*) y
@@ -1924,15 +1929,57 @@ detectable y no un JSON plausible:
 solo no permite distinguir un `429` de un `200`, y §20.4 decide el backoff con
 los dos.
 
-**El deadline empieza cuando el padre TERMINA de escribir el sobre del
-pedido**, no antes: hasta ese instante no hay nada en vuelo y contar el tiempo
-de serialización local haría que el deadline midiera cosas distintas según la
-carga del host.
+**El deadline arranca ANTES del primer byte del pedido** *(rev.26)*. rev.25 lo
+hacía arrancar cuando el padre TERMINABA de escribir, y eso no es cota total:
+escribir en una tubería bloquea cuando el buffer del kernel se llena, así que
+el padre podía quedarse detenido antes de que el reloj empezara a correr.
+`REQUEST_DEADLINE` cubre despacho **y** respuesta, desde el instante anterior
+al primer `write` hasta el último byte de la trama de respuesta.
 
-**Correlación estricta.** El padre acepta una respuesta solo si
-`(generation_id, request_id)` coincide con la petición pendiente. Cualquier
-otra se **descarta**, y una respuesta con `generation_id` viejo es imposible
-de leer de todas formas por el punto siguiente.
+**`MAX_SOBRE` = 4 MiB**, en §15. Una página de `LIMITE_PAGINA` velas ronda las
+centenas de kilobytes, así que es techo de protocolo y no expectativa de
+datos: un sobre que lo supere es fallo cerrado antes de reservar memoria por
+lo que diga un campo de longitud que ya no es confiable.
+
+**El I/O es INCREMENTAL en los dos sentidos**, con `poll` y el deadline
+recalculado en cada espera. Sin esto había un abrazo mortal real: una respuesta
+de Binance supera holgadamente el buffer de la tubería, así que el trabajador
+se bloquea escribiendo mientras el padre espera sin drenar, y los dos quedan
+detenidos hasta que el deadline mata una respuesta **válida** — un fallo
+inventado por el transporte, no por la red.
+
+**Aceptación por el borde**: la trama se acepta solo si llega **completa** en o
+antes del deadline. Una trama completa justo en el borde es válida; una
+incompleta al vencer, no.
+
+**Qué falla cerrado con `codigo: 1`** *(rev.26)*, sin consumir intento ni
+entrar al backoff:
+
+| condición | por qué no es de red |
+|---|---|
+| EOF con la trama a medias | el trabajador murió sin que el padre lo matara |
+| checksum del enmarcado que no cuadra | el canal corrompió bytes |
+| sobre que no valida contra su schema | el trabajador habla otro protocolo |
+| longitud declarada > `MAX_SOBRE` | idem, y además no se reserva la memoria |
+| `(generation_id, request_id)` ajeno | ver arriba |
+| muerte del trabajador en CUALQUIER tramo sin que el padre lo matara | falla del observador, no del exchange |
+
+El único fallo reintentable es el **deadline vencido con el trabajador vivo o
+matado por el padre**. Todo lo demás es el observador roto.
+
+**Correlación estricta, y un ID ajeno es FALLO CERRADO** *(rev.26)*. El padre
+acepta una respuesta solo si `(generation_id, request_id)` coincide con la
+petición pendiente. Cualquier otra combinación **falla cerrado con
+`codigo: 1`**, no se descarta.
+
+rev.25 decía «se descarta», y eso era un fail-open disfrazado: con **una sola
+petición en vuelo** y **un canal nuevo por generación**, un ID que no coincide
+es IMPOSIBLE en operación válida. Solo puede venir de un protocolo corrupto —un
+trabajador que responde dos veces, un sobre mal serializado, un descriptor
+reusado por error—. Descartarlo lo convertía en un tiempo de espera que
+terminaba venciendo el deadline, y el deadline es un fallo de transporte
+REINTENTABLE: una corrupción del observador se habría reintentado cinco veces y
+seguido como si nada.
 
 **Un canal NUEVO por generación**, en este orden exacto:
 
@@ -2129,6 +2176,39 @@ El punto de éxito es el ARRANQUE COMPLETO, no el primer ciclo: los transitorios
 que `2` cubre son de arranque —lock, sistema de archivos—, y esperar al primer
 ciclo mezclaría la serie con fallas de red, que no salen por acá.
 
+#### 20.6.5 La acreditación humana es una operación registral *(rev.26)*
+
+§20.6.4 define el archivado AUTOMÁTICO del diagnóstico transitorio tras un
+arranque exitoso. Un diagnóstico `codigo: 1` no tiene esa salida —bloquea, y
+solo un humano lo levanta—, pero rev.25 decía «acreditar y archivar» sin
+herramienta, campos ni procedimiento. Una operación normativa que nadie puede
+ejecutar no es una operación.
+
+Existe una **herramienta de acreditación de una sola pasada**, separada del
+daemon y del wrapper, que:
+
+1. **valida** el `fallo_cerrado.json` vigente: schema, checksum e identidad
+   (`cohorte`, `contrato`, `commit`). Un diagnóstico que no valida NO se puede
+   acreditar — se acreditaría un documento que nadie sabe qué dice;
+2. **exige** de quien la corre un `operador` y un `motivo_humano` no vacíos.
+   Sin motivo, la acreditación no registra por qué se decidió continuar, que
+   es lo único que la distingue de borrar el archivo;
+3. escribe un registro de acreditación que CITA el diagnóstico por su
+   `checksum`, con `acreditado_por`, `motivo_humano` y `acreditado_en`;
+4. **archiva** el diagnóstico junto a su acreditación en `diagnosticos/`, con
+   la MISMA primitiva de enlace exclusivo de §20.6.4 — `link` que falla con
+   `EEXIST`, `fsync`, `unlink`, `fsync`—, así que tampoco acá se pisa historia;
+5. y recién entonces el arranque siguiente deja de estar bloqueado.
+
+**El arranque comprueba ausencia, no acreditación**: si hay un
+`fallo_cerrado.json` con `codigo: 1` en el directorio de estado, bloquea. La
+acreditación lo saca de ahí, no lo marca. Un campo `acreditado: true` sobre el
+mismo archivo habría hecho que el bloqueo dependiera de leer bien un booleano
+en un documento que justamente se está leyendo porque algo salió mal.
+
+La acreditación **no** re-ejecuta nada, no toca almacenes ni libro, y no puede
+levantar un terminal publicado: eso es §20.0 y exige identidad nueva.
+
 #### 20.6.3 `fallo_cerrado.json` es un sidecar registral *(rev.20)*
 
 Gobierna el arranque, así que recibe el MISMO tratamiento que los demás
@@ -2296,9 +2376,12 @@ Numerados a continuación de §17, que termina en 44:
        gate lo exige explícitamente — rev.24 prometía que «el arranque
        siguiente continúa», que contradecía §20.6.3 y habría obligado a tratar
        un `SIGKILL` como transitorio;
-    3. **reanudación por INTERVENCIÓN HUMANA**: acreditado y archivado el
-       diagnóstico (§20.6.4), el arranque continúa la serie de 72 h desde el
-       sidecar en vez de reiniciarla.
+    3. **reanudación por INTERVENCIÓN HUMANA**, por la operación registral de
+       §20.6.5: la herramienta rechaza un diagnóstico que no valida, rechaza
+       un `motivo_humano` vacío, deja el registro de acreditación citando el
+       `checksum` del diagnóstico, y lo archiva con el enlace exclusivo. Recién
+       ahí el arranque continúa la serie de 72 h desde el sidecar en vez de
+       reiniciarla.
 
     La propiedad que se prueba es la durabilidad del artefacto, no un reinicio
     operativo automático: una muerte por señal sigue exigiendo que un humano
@@ -2307,14 +2390,29 @@ Numerados a continuación de §17, que termina en 44:
     analítica desde `REQUEST_DEADLINE` más el sellado y el lote más largo, y
     **falla si el `ExitTimeOut` del plist es menor a 3 × el mayor de los dos**
     (§20.6);
-48ter. **protocolo del trabajador** *(rev.25)*: una respuesta con
-    `request_id` ajeno se descarta; un sobre TRUNCADO —trabajador muerto a
-    mitad de la escritura, sin que el padre lo matara— falla cerrado con
-    `codigo: 1` y NO consume intento; el deadline vencido sí consume intento y
-    entra al backoff; tras un respawn no se lee ni un byte de la generación
-    anterior —gate con el trabajador escribiendo una respuesta parcial justo
-    antes de morir—; y `status` y `Retry-After` llegan al padre como campos
-    del sobre, no inferidos del cuerpo;
+48ter. **protocolo del trabajador** *(rev.25, ampliado en rev.26)*: cada fila
+    de la tabla de fallo cerrado de §20.4.1 produce `codigo: 1` y **NO**
+    consume intento —`request_id` ajeno, `generation_id` ajeno, sobre
+    truncado, checksum roto, schema inválido, longitud sobre `MAX_SOBRE`, y
+    muerte espontánea del trabajador—; solo el deadline vencido consume
+    intento y entra al backoff; tras un respawn no se lee ni un byte de la
+    generación anterior, con el trabajador escribiendo una respuesta parcial
+    justo antes de morir; y `status` y `Retry-After` llegan como campos del
+    sobre, no inferidos del cuerpo;
+48quater. **el IPC no se abraza ni se escapa** *(rev.26)*: una respuesta MUY
+    superior al buffer de la tubería se transfiere completa —el padre drena
+    incrementalmente mientras el trabajador escribe— y NO vence el deadline,
+    que es el abrazo mortal que el diseño evita; el deadline se mide desde
+    ANTES del primer byte del pedido, con un gate que bloquea la escritura del
+    padre y comprueba que el reloj ya corría; una trama completa justo en el
+    borde se ACEPTA y una incompleta al vencer no; y una longitud declarada
+    por encima de `MAX_SOBRE` falla cerrado sin reservar la memoria;
+48quinquies. **la acreditación humana** *(rev.26)*: un diagnóstico con
+    checksum roto, de otra identidad, o con `motivo_humano` vacío NO se puede
+    acreditar; una acreditación válida deja el registro citando el `checksum`,
+    archiva con enlace exclusivo sin pisar historia previa, y recién entonces
+    el arranque deja de bloquear; y la herramienta no puede levantar un
+    terminal publicado;
 49. **cadencia y backoff deterministas**: un ciclo que dura más que `CADENCIA`
     no acumula deuda —el siguiente arranca una sola vez—; el backoff respeta
     la fórmula y el número de intentos con un reloj y un generador
