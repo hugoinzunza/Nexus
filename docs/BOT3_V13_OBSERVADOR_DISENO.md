@@ -1,10 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.26
+# Bot3.v13 — Observador operativo · DISEÑO rev.27
 
-**Estado: DISEÑO rev.26 — §20 acotada: el IPC falla cerrado ante corrupción,
-el deadline cubre el despacho, y la acreditación humana es una operación
-registral. §1–§19 y §13 no se reabren. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.27 — §20 acotada: enum cerrado de errores, I/O realmente
+no bloqueante, y acreditación idempotente bajo lock. §1–§19 y §13 no se
+reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.27 cierra tres problemas ejecutables: §20.4 y §20.4.1 se contradecían
+sobre qué se reintenta y el campo `error` no tenía enum; `poll` sin
+`O_NONBLOCK` no garantiza el deadline, porque un descriptor marcado escribible
+puede aceptar menos bytes de los que el `write` intenta poner; y la
+acreditación humana, que son dos artefactos y varias operaciones, no era
+recuperable ante una caída intermedia ni estaba serializada.
 rev.26 cierra tres puntos del IPC: descartar una respuesta con ID ajeno hacía
 que una corrupción del protocolo pareciera un deadline de red reintentable; el
 deadline arrancaba DESPUÉS de una escritura que puede bloquear, así que no era
@@ -1721,10 +1727,35 @@ una paginación que falló no lo es. Un ciclo que reintentara por su cuenta
 podría cerrar la paginación con una página vacía de una respuesta parcial, y
 eso sí sería evidencia falsa de que el mercado enmudeció.
 
-Solo se reintentan fallas de TRANSPORTE (timeout, 5xx, conexión caída) y
-`429`. Una respuesta bien formada que no cumple el contrato —`PaginaInvalida`—
-**no se reintenta**: pedir de nuevo lo mismo no la va a arreglar, y reintentar
-sobre datos incoherentes es cómo se cuela una serie ajena.
+**Enum CERRADO de resultados, y una sola política** *(rev.27)*. rev.26 dejaba
+dos frases que se contradecían —§20.4 hablaba de «timeout, 5xx, conexión caída
+y 429», §20.4.1 afirmaba que «el único reintentable es el deadline»— y el campo
+`error` del sobre no tenía valores definidos. La tabla es esta, y no hay otra:
+
+| `error` del sobre | qué es | consume intento y entra al backoff |
+|---|---|---|
+| `dns` | la resolución falló | sí |
+| `conexion` | conexión rechazada o caída | sí |
+| `tls` | handshake fallido | sí |
+| `lectura` | `READ_TIMEOUT` o corte a mitad del cuerpo | sí |
+| `http_429` | límite de tasa | sí, y respeta `Retry-After` (§20.4) |
+| `http_5xx` | error del servidor | sí |
+| `http_4xx` | cualquier otro 4xx | **NO**: `codigo: 1` |
+| `interno` | el trabajador falló por su cuenta | **NO**: `codigo: 1` |
+| *(cualquier otro valor)* | protocolo desconocido | **NO**: `codigo: 1` |
+
+Más el `deadline`, que lo determina el PADRE y no viene en ningún sobre:
+consume intento y entra al backoff.
+
+`http_4xx` falla cerrado porque los parámetros del pedido están congelados
+(§15): un `400` significa que el contrato del exchange cambió y un `403`/`418`
+que estamos bloqueados. Ninguno se arregla reintentando, y reintentar un baneo
+lo empeora.
+
+Y una respuesta bien formada que no cumple el contrato de datos
+—`PaginaInvalida`— **tampoco se reintenta**: pedir de nuevo lo mismo no la va a
+arreglar, y reintentar sobre datos incoherentes es cómo se cuela una serie
+ajena.
 
 **Fórmula CONGELADA** *(rev.19)*. Para el intento `n = 1 … BACKOFF_INTENTOS`:
 
@@ -1941,16 +1972,32 @@ centenas de kilobytes, así que es techo de protocolo y no expectativa de
 datos: un sobre que lo supere es fallo cerrado antes de reservar memoria por
 lo que diga un campo de longitud que ya no es confiable.
 
-**El I/O es INCREMENTAL en los dos sentidos**, con `poll` y el deadline
-recalculado en cada espera. Sin esto había un abrazo mortal real: una respuesta
-de Binance supera holgadamente el buffer de la tubería, así que el trabajador
-se bloquea escribiendo mientras el padre espera sin drenar, y los dos quedan
-detenidos hasta que el deadline mata una respuesta **válida** — un fallo
-inventado por el transporte, no por la red.
+**El I/O es INCREMENTAL y NO BLOQUEANTE en los dos sentidos** *(rev.27)*. Sin
+esto había un abrazo mortal real: una respuesta de Binance supera holgadamente
+el buffer de la tubería, así que el trabajador se bloquea escribiendo mientras
+el padre espera sin drenar, y los dos quedan detenidos hasta que el deadline
+mata una respuesta **válida** — un fallo inventado por el transporte, no por la
+red.
 
-**Aceptación por el borde**: la trama se acepta solo si llega **completa** en o
-antes del deadline. Una trama completa justo en el borde es válida; una
-incompleta al vencer, no.
+`poll` solo no alcanza: un descriptor marcado escribible garantiza que acepta
+**al menos un byte**, no el bloque entero, así que un `write` bloqueante mayor
+al espacio libre detiene al padre DENTRO de la syscall y el deadline deja de
+gobernar. Se congela:
+
+- los cuatro descriptores en **`O_NONBLOCK`**;
+- **escrituras y lecturas PARCIALES** en bucle, avanzando por lo que la syscall
+  efectivamente movió, nunca asumiendo que movió todo;
+- **`EAGAIN`/`EWOULDBLOCK`** vuelven al `poll` con el timeout recalculado como
+  `deadline − monotonic()`; **`EINTR`** reintenta la syscall sin consumir nada
+  ni alterar el deadline — una señal no es un fallo de transporte;
+- el `poll` nunca se llama con timeout infinito: siempre el remanente del
+  deadline, y un remanente ≤ 0 es vencimiento.
+
+**Aceptación por el borde** *(rev.27, precisado)*: `monotonic()` se muestrea
+**después de recibir la trama COMPLETA**, y se acepta si `fin ≤ deadline`. Es
+la única lectura que no depende de en qué punto del bucle se miró el reloj:
+muestrear antes del último `read` haría que una trama completa pareciera
+tardía, y muestrear al entrar al `poll`, lo contrario.
 
 **Qué falla cerrado con `codigo: 1`** *(rev.26)*, sin consumir intento ni
 entrar al backoff:
@@ -1964,8 +2011,11 @@ entrar al backoff:
 | `(generation_id, request_id)` ajeno | ver arriba |
 | muerte del trabajador en CUALQUIER tramo sin que el padre lo matara | falla del observador, no del exchange |
 
-El único fallo reintentable es el **deadline vencido con el trabajador vivo o
-matado por el padre**. Todo lo demás es el observador roto.
+Dicho de otro modo, y sin contradecir §20.4: **en la capa IPC** el único
+resultado reintentable es el deadline vencido; un sobre BIEN FORMADO que trae
+un `error` de la tabla de §20.4 también lo es, porque ahí el IPC funcionó y lo
+que falló fue la red. Corrupción del canal y muerte espontánea no son ninguno
+de los dos: son el observador roto.
 
 **Correlación estricta, y un ID ajeno es FALLO CERRADO** *(rev.26)*. El padre
 acepta una respuesta solo si `(generation_id, request_id)` coincide con la
@@ -2184,21 +2234,40 @@ solo un humano lo levanta—, pero rev.25 decía «acreditar y archivar» sin
 herramienta, campos ni procedimiento. Una operación normativa que nadie puede
 ejecutar no es una operación.
 
-Existe una **herramienta de acreditación de una sola pasada**, separada del
-daemon y del wrapper, que:
+Existe una **herramienta de acreditación**, separada del daemon y del wrapper.
+Son DOS artefactos y varias operaciones, así que es una máquina IDEMPOTENTE
+bajo lock, no una pasada lineal *(rev.27)*:
 
-1. **valida** el `fallo_cerrado.json` vigente: schema, checksum e identidad
-   (`cohorte`, `contrato`, `commit`). Un diagnóstico que no valida NO se puede
-   acreditar — se acreditaría un documento que nadie sabe qué dice;
-2. **exige** de quien la corre un `operador` y un `motivo_humano` no vacíos.
-   Sin motivo, la acreditación no registra por qué se decidió continuar, que
-   es lo único que la distingue de borrar el archivo;
-3. escribe un registro de acreditación que CITA el diagnóstico por su
-   `checksum`, con `acreditado_por`, `motivo_humano` y `acreditado_en`;
-4. **archiva** el diagnóstico junto a su acreditación en `diagnosticos/`, con
-   la MISMA primitiva de enlace exclusivo de §20.6.4 — `link` que falla con
-   `EEXIST`, `fsync`, `unlink`, `fsync`—, así que tampoco acá se pisa historia;
-5. y recién entonces el arranque siguiente deja de estar bloqueado.
+```
+0. tomar acreditacion.lock                    (flock exclusivo, §7)
+1. validar fallo_cerrado.json: schema, checksum e identidad
+2. exigir `operador` y `motivo_humano` no vacíos
+3. escribir diagnosticos/acreditacion.<sha8 del checksum>.json  (link exclusivo)
+4. archivar el diagnóstico: link → fsync → unlink → fsync       (§20.6.4)
+```
+
+**La acreditación se hace durable ANTES de archivar**, y su nombre DERIVA del
+`checksum` del diagnóstico: por eso siempre se puede demostrar que la
+acreditación corresponde al diagnóstico que se retiró, y no a otro que pasó
+por ahí.
+
+**Recuperación en cada frontera**, sin colisiones:
+
+| dónde cayó | qué hace el reintento |
+|---|---|
+| antes del paso 3 | nada quedó escrito: se empieza de nuevo |
+| después de 3, antes de 4 | encuentra la acreditación. Si el contenido es IDÉNTICO —mismo checksum citado, mismo `operador`, mismo `motivo_humano`— continúa por el paso 4. Si DIFIERE, fallo cerrado: dos personas distintas decidieron cosas distintas sobre el mismo diagnóstico |
+| entre `link` y `unlink` del paso 4 | las dos rutas comparten `(st_dev, st_ino)`: se completa el `unlink` (§20.6.4) |
+| todo hecho | no hay `fallo_cerrado.json` que acreditar: no-op |
+
+**Dos operadores a la vez** los serializa `acreditacion.lock`. El segundo entra
+después del primero, encuentra la acreditación ya escrita, y la fila de arriba
+decide: idéntica sigue —es el mismo acto repetido—, distinta falla cerrado. Sin
+el lock, los dos podían escribir su acreditación y quedarse cada uno con la
+mitad de la operación del otro.
+
+Recién con el diagnóstico archivado, el arranque siguiente deja de estar
+bloqueado.
 
 **El arranque comprueba ausencia, no acreditación**: si hay un
 `fallo_cerrado.json` con `codigo: 1` en el directorio de estado, bloquea. La
@@ -2390,6 +2459,19 @@ Numerados a continuación de §17, que termina en 44:
     analítica desde `REQUEST_DEADLINE` más el sellado y el lote más largo, y
     **falla si el `ExitTimeOut` del plist es menor a 3 × el mayor de los dos**
     (§20.6);
+48sexies. **enum de errores y política de reintento** *(rev.27)*: cada valor
+    de la tabla de §20.4 produce lo que declara —`dns`, `conexion`, `tls`,
+    `lectura`, `http_429`, `http_5xx` consumen intento; `http_4xx`, `interno` y
+    cualquier valor DESCONOCIDO fallan cerrado con `codigo: 1`—; y un `429` con
+    `Retry-After` lo respeta acotado, mientras un `4xx` no reintenta ni una
+    vez;
+48septies. **el I/O no bloquea al padre** *(rev.27)*: con el buffer de la
+    tubería lleno, un `write` del padre NO lo detiene dentro de la syscall —los
+    descriptores son `O_NONBLOCK` y el bucle avanza por lo efectivamente
+    movido—; `EAGAIN` vuelve al `poll` con el remanente del deadline y `EINTR`
+    reintenta sin consumir nada; ningún `poll` se llama con timeout infinito; y
+    el veredicto del borde se resuelve con `monotonic()` muestreado DESPUÉS de
+    la trama completa;
 48ter. **protocolo del trabajador** *(rev.25, ampliado en rev.26)*: cada fila
     de la tabla de fallo cerrado de §20.4.1 produce `codigo: 1` y **NO**
     consume intento —`request_id` ajeno, `generation_id` ajeno, sobre
@@ -2407,12 +2489,17 @@ Numerados a continuación de §17, que termina en 44:
     padre y comprueba que el reloj ya corría; una trama completa justo en el
     borde se ACEPTA y una incompleta al vencer no; y una longitud declarada
     por encima de `MAX_SOBRE` falla cerrado sin reservar la memoria;
-48quinquies. **la acreditación humana** *(rev.26)*: un diagnóstico con
-    checksum roto, de otra identidad, o con `motivo_humano` vacío NO se puede
-    acreditar; una acreditación válida deja el registro citando el `checksum`,
-    archiva con enlace exclusivo sin pisar historia previa, y recién entonces
-    el arranque deja de bloquear; y la herramienta no puede levantar un
-    terminal publicado;
+48quinquies. **la acreditación humana** *(rev.26, ampliado en rev.27)*: un
+    diagnóstico con checksum roto, de otra identidad, o con `motivo_humano`
+    vacío NO se puede acreditar; una acreditación válida deja el registro
+    citando el `checksum`, archiva con enlace exclusivo sin pisar historia
+    previa, y recién entonces el arranque deja de bloquear; y la herramienta no
+    puede levantar un terminal publicado. Además, **interrupción después de
+    CADA escritura** —tras la acreditación y entre `link` y `unlink`—: el
+    reintento completa sin duplicar y sin colisionar; una acreditación
+    reaparecida con contenido DISTINTO falla cerrado; y **dos procesos
+    concurrentes** se serializan por `acreditacion.lock`, con el segundo
+    aceptando solo si su acto es idéntico *(rev.27)*;
 49. **cadencia y backoff deterministas**: un ciclo que dura más que `CADENCIA`
     no acumula deuda —el siguiente arranca una sola vez—; el backoff respeta
     la fórmula y el número de intentos con un reloj y un generador
