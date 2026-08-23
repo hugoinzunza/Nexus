@@ -339,9 +339,14 @@ def test_portfolio_is_normalized_and_read_only():
 
 
 def test_portfolio_rejects_negative_positions():
-    with pytest.raises(ValueError, match="negativos"):
+    # El mensaje nombra el campo: "cantidad", no un genérico "valores negativos".
+    with pytest.raises(ValueError, match="cantidad no puede ser negativo"):
         normalize_portfolio({"holdings": [{
             "ticker": "TEST", "quantity": Decimal("-1"), "average_cost": "1",
+        }]})
+    with pytest.raises(ValueError, match="costo promedio no puede ser negativo"):
+        normalize_portfolio({"holdings": [{
+            "ticker": "TEST", "quantity": "1", "average_cost": "-1",
         }]})
 
 
@@ -1111,24 +1116,109 @@ def test_la_guia_explica_como_leer_sin_convertirse_en_asesoria():
     assert "no puede decirte si el precio es razonable" in page
 
 
-def test_el_ingreso_de_cartera_resuelve_el_rut_por_busqueda():
-    """UX-06: pedirle el RUT a quien sólo conoce el nombre era fricción evitable."""
+# --- El parser de montos vive en el HTML; se extrae y se ejecuta con node para
+# --- probar comportamiento, no la presencia de una cadena.
+def _parse_monto(valores):
+    import subprocess, shutil
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node no disponible para ejecutar el parser del formulario")
     page = _pagina_chile()
-    assert 'id="busca-emisor"' in page
-    assert "./api/issuers?q=" in page
-    # El ticker se precarga desde el universo versionado cuando existe.
-    assert "./api/universe" in page
-    assert "tickerPorRut[datos.company_rut]" in page
-    # Formato chileno: 6.180,50 debe llegar al backend como 6180.50
-    assert "replace(/\\./g,'').replace(',','.')" in page
-    # El pegado masivo sobrevive como opción avanzada, no como única vía.
-    assert 'id="cargar-pegado"' in page
-    assert 'class="avanzado"' in page
+    ini = page.index("function parseMonto")
+    fin = page.index("const fmtCL", ini)
+    guion = (page[ini:fin] + "\nconst casos=" + json.dumps(valores) +
+             ";console.log(JSON.stringify(casos.map(parseMonto)));")
+    salida = subprocess.run([node, "-e", guion], capture_output=True, text=True, timeout=30)
+    assert salida.returncode == 0, salida.stderr
+    return json.loads(salida.stdout)
 
 
-def test_los_errores_de_ingreso_nombran_la_empresa_y_el_campo():
+def test_el_parser_de_montos_no_corrompe_ninguno_de_los_dos_formatos():
+    """Regresión: el normalizador anterior multiplicaba por 100 los decimales
+    con punto, incluidos los del propio ejemplo del formulario (52.40 -> 5240)."""
+    esperado = {
+        "6.180,50": "6180.50",   # chileno con miles y decimales
+        "6180.50": "6180.50",    # internacional, el caso que se corrompía
+        "52.40": "52.40",        # el ejemplo del propio placeholder
+        "1.200": "1200",         # punto como separador de miles
+        "1.234.567,89": "1234567.89",
+        "1,234.56": "1234.56",   # inglés con miles
+        "0,5": "0.5",
+        "1000": "1000",
+    }
+    obtenido = _parse_monto(list(esperado))
+    for (entrada, salida), r in zip(esperado.items(), obtenido):
+        assert r.get("valor") == salida, f"{entrada} -> {r}"
+
+
+def test_el_parser_rechaza_lo_que_no_puede_interpretar_sin_adivinar():
+    for r, entrada in zip(_parse_monto(["abc", "1..2", "1,2,3", "-5", "1e9", "1.23.456"]),
+                          ["abc", "1..2", "1,2,3", "-5", "1e9", "1.23.456"]):
+        assert "error" in r, f"{entrada} debería rechazarse, dio {r}"
+
+
+def test_la_cartera_rechaza_numeros_no_finitos_y_duplicados():
+    """Antes: Infinity entraba como cantidad y NaN provocaba un 500."""
+    for valor in ("Infinity", "NaN", "1e999999", "-1"):
+        with pytest.raises(ValueError):
+            normalize_portfolio({"holdings": [
+                {"ticker": "X", "quantity": valor, "average_cost": "1"}]})
+    with pytest.raises(ValueError, match="misma sociedad"):
+        normalize_portfolio({"holdings": [
+            {"ticker": "A", "company_rut": "90690000", "quantity": "1", "average_cost": "1"},
+            {"ticker": "B", "company_rut": "90690000", "quantity": "1", "average_cost": "1"}]})
+    with pytest.raises(ValueError, match="mismo ticker"):
+        normalize_portfolio({"holdings": [
+            {"ticker": "A", "quantity": "1", "average_cost": "1"},
+            {"ticker": "A", "quantity": "1", "average_cost": "1"}]})
+    ok = normalize_portfolio({"holdings": [
+        {"ticker": "COPEC", "company_rut": "90690000", "quantity": "900",
+         "average_cost": "6180.50", "market_price": "6601.57"}]})
+    assert ok["holdings"][0]["average_cost"] == "6180.50"
+
+
+def test_la_guia_no_afirma_estados_que_el_backend_calcula_por_posicion():
+    """La guía describe el sistema; si generaliza, miente.
+
+    Cada aserción de aquí corresponde a un estado que se verificó ejecutando
+    el backend, no leyendo el texto.
+    """
     page = _pagina_chile()
-    for mensaje in ("falta el ticker con que aparece en Renta 4",
-                    "falta la cantidad", "falta el costo promedio",
-                    "Agrega al menos una posición"):
-        assert mensaje in page, mensaje
+    # evaluate_decision_evidence da 0/6, 1/6 o 4/6 según la posición.
+    assert "Hoy hay cuatro" not in page
+    assert "pueden</em> estar listos, posición por posición" in page
+    # FUNDAMENTOS FUERTES admite advertencias: score>=78, >=5 datos, cero críticos.
+    assert "no hay deterioros" not in page
+    assert "Puede convivir con alguna advertencia suelta" in page
+    # fraseNegocio toma warnings[0], sin ranking.
+    assert "la advertencia más relevante" not in page
+    # available_at es la hora del mensaje del bot, no la publicación del emisor.
+    assert "cuándo cada empresa publicó" not in page
+    assert "estuvo disponible cada publicación" not in page
+    assert "hora del mensaje del bot en el export que tengo cargado" in page
+    # La doble descarga sólo ocurre cuando falta Content-Length.
+    assert "se verifica bajando el archivo dos veces" not in page
+    assert "cuando ese dato falta se baja dos veces" in page
+    # La sección de acción no puede prescribir ni acción ni inacción.
+    assert "no hagas nada" not in page
+    assert "Qué hacer con ella es cosa tuya y de tu plan" in page
+
+
+def test_la_guia_describe_los_estados_reales_de_la_linea_precio():
+    page = _pagina_chile()
+    assert "esa misma línea te dice por qué" in page
+    for motivo in ("falta el precio", "falta validar la unidad del EPS",
+                   "tuvo pérdidas", "no está mapeada en la CMF"):
+        assert motivo in page, motivo
+    # La evidencia es condicional, no un set fijo.
+    assert "los números crudos que existan para esa posición" in page
+
+
+def test_el_buscador_de_empresas_es_un_combobox_operable_con_teclado():
+    page = _pagina_chile()
+    for atributo in ('role="combobox"', 'aria-expanded', 'aria-controls="busca-resultados"',
+                     'aria-autocomplete="list"', 'role="listbox"', 'aria-live="polite"'):
+        assert atributo in page, atributo
+    for tecla in ("ArrowDown", "ArrowUp", "Enter", "Escape"):
+        assert f"'{tecla}'" in page, tecla
+    assert "aria-activedescendant" in page
