@@ -1,11 +1,15 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.13
+# Bot3.v13 — Observador operativo · DISEÑO rev.14
 
-**Estado: DISEÑO rev.13 — normalización de la condición de cierre,
+**Estado: DISEÑO rev.14 — orden congelado del final del ciclo,
 propuesta para auditoría ANTES de seguir implementando. No desplegado. Cohorte
 no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.13 normaliza la condición que cierra la ventana: la hace depender del
+rev.14 congela el ORDEN del final del ciclo, que era el agujero de la
+demostración de §13.5.0: con el orden de rev.13, un corte podía ser seguido por
+una deferencia ANTES de registrar la causa científica, y esa combinación
+—declarada imposible— habría fallado cerrado ante una secuencia legítima.
+rev.13 normalizó la condición que cierra la ventana: la hace depender del
 ganador actual, resuelve `deferred` sin productor activo, garantiza que un
 `divergent` observado esté SIEMPRE en el request antes de calcular el ganador,
 y declara quién reactiva la fase B. Acotada a §9.1.2/§13.5 y sus gates.
@@ -856,9 +860,41 @@ cada CADENCIA:
       # cada marcador creado aquí hace fsync de SU almacén antes del libro (§5)
     fsync del libro
   finalizar_ciclo()
-  atender verify.request si lo hay, SIN readquirir la barrera (§9)
+
+  # ORDEN CONGELADO del final del ciclo (rev.14). Ver abajo por qué.
+  si motor.cortado:
+      registrar la causa CIENTÍFICA (§9.1.1 fase A)
+      marcar cierre_en_curso
+      NO se atiende ningún verify.request nuevo
+  si no:
+      atender verify.request si lo hay, SIN readquirir la barrera (§9)
+
   cycle_barrier.release()
 ```
+
+**Por qué ese orden es normativo** *(rev.14)*. Con el orden anterior —procesar,
+finalizar, atender `verify.request`, y recién después registrar— esta secuencia
+era posible y legítima:
+
+1. la verificación está `ok`;
+2. el motor alcanza `muestra` o `tiempo`;
+3. antes de registrar la causa se atiende un `verify.request`;
+4. la captura encuentra buffers y pasa a `deferred`;
+5. recién ahí se registra la causa científica.
+
+Resultado: `deferred` + causa científica, que §13.5.0 declara imposible. El
+sistema habría fallado cerrado ante una operación normal — la peor clase de
+fallo cerrado, el que castiga lo correcto.
+
+Registrar la causa ANTES de atender la captura cierra el hueco, y con eso la
+demostración de §13.5.0 queda completa: una comparación que ya estuviera
+`pending` habría impedido el corte por la zona de corte (§9.0), y una
+deferencia NUEVA ya no puede aparecer entre el corte y el registro.
+
+**Qué pasa con el `verify.request` no atendido**: queda donde está. No se
+atiende —no habría ciclos posteriores que usaran su resultado— y no se borra
+—alguien lo pidió y eso queda registrado—. Se archiva junto con el terminal, en
+el mismo paso que archiva `terminal.request` (§9.1.1, paso 11).
 
 **El buffer no se persiste.** Solo `drenar` appendea; una caída con el buffer
 lleno pierde esas velas y el arranque siguiente las re-pide desde `ultimo_t`. La
@@ -1037,7 +1073,11 @@ No existe, y por construcción:
   administrativo tampoco corre sin ella (§13.5);
 - durante la ventana de recolección no se abre ningún ciclo, así que **no
   puede aparecer una deferencia nueva**: las deferencias las produce el intento
-  de captura, que vive en el ciclo.
+  de captura, que vive en el ciclo;
+- y dentro del ciclo que corta, la causa se registra ANTES de atender ningún
+  `verify.request` (§12, orden congelado en rev.14). Sin esa regla el hueco
+  quedaba abierto: bastaba que la captura del mismo ciclo encontrara buffers
+  para producir la deferencia justo antes del registro.
 
 Por lo tanto `deferred` junto a un request cuyo ganador es científico es un
 estado que la máquina no puede alcanzar. Observarlo significa que algo anterior
@@ -1278,6 +1318,11 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     ganador —gate con la escritura del sidecar y el registro separados, que es
     la carrera real—; y la finalización de la comparación intenta la fase B en
     sus cuatro salidas, sin que ningún ciclo la despierte;
+40quater. **orden del final del ciclo** *(rev.14)*: corte número 50 y un
+    `verify.request` pendiente en el MISMO ciclo, con buffers NO vacíos. La
+    causa científica se registra ANTES, no se crea ninguna deferencia nueva, la
+    verificación conserva el estado que tenía, y el `verify.request` queda sin
+    atender y se archiva con el terminal;
 41. **cota de la zona de corte demostrada** contra el orden completo de fases
     del motor —`fill+STOP` en el mismo lote incluido— sobre los siete mercados:
     ningún lote produce más cierres que mercados con posición u orden viva.
