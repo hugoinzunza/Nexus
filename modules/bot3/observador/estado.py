@@ -214,10 +214,14 @@ class Verificacion:
         self.detalle = {"buffers_no_vacios": buffers}
         self.guardar()
 
-    def pendiente(self, instante: int, digest: str, firma: str) -> None:
+    def pendiente(self, instante: int, digest: str, firma: str,
+                  copia: str | None = None) -> None:
+        """§13.5.1: se guarda la RUTA de la copia scratch para que la
+        comparación fría sobreviva a un reinicio. Sin ella no se puede
+        certificar ni descartar el determinismo, y eso es fallo cerrado."""
         self.estado = C.VERIF_PENDIENTE
         self.detalle = {"desde": int(instante), "digest": digest,
-                        "firma": firma}
+                        "firma": firma, "copia": copia}
         self.guardar()
 
     def conforme(self, instante: int, digest: str, firma: str) -> None:
@@ -254,48 +258,55 @@ def _leer(ruta: str) -> dict | None:
         return json.load(fh)
 
 
+class RequestInvalido(ValueError):
+    """El request no cumple el contrato de §13.2/§13.7."""
+
+
+def _ganador(evidencias: dict) -> str:
+    """Ganador por precedencia TOTAL. Valida el registro cerrado ANTES de
+    elegir: un motivo desconocido no puede aportar un ganador, y dos motivos
+    científicos significan que algo ya está mal (§13.2.1)."""
+    for m in evidencias:
+        if m not in C.PRECEDENCIA_TERMINAL:
+            raise RequestInvalido(
+                f"motivo fuera del registro cerrado: {m!r}")
+    cientificos = [m for m in evidencias if m in C.MOTIVOS_CIENTIFICOS]
+    if len(cientificos) > 1:
+        raise RequestInvalido(
+            f"dos motivos científicos a la vez: {sorted(cientificos)}. El "
+            f"motor corta una sola vez")
+    return min(evidencias, key=lambda m: C.PRECEDENCIA_TERMINAL.index(m))
+
+
 def solicitar_terminal(ruta: str, motivo: str, identidad: dict,
                        evidencia: dict, solicitado_en: int,
                        estado_esperado: dict) -> dict:
-    """Escribe (o ANEXA a) la solicitud persistente que permite reanudar la
-    transición tras una caída. La anexión también es una escritura y va
-    atómica; el motivo ganador se decide por PRECEDENCIA, no por orden de
-    llegada."""
+    """Fase A: anota (o anexa) la causa. NO publica.
+
+    La evidencia viaja CON su motivo: guardar una sola dejaba que un terminal
+    `determinism_divergence` se publicara con la evidencia del `silencio_h4`
+    que había llegado antes."""
     previo = _leer(ruta)
     if previo is not None:
         verificar_solicitud(previo, ruta)
         cuerpo = dict(previo)
-        # La evidencia viaja CON su motivo. Guardar una sola dejaba que un
-        # terminal `determinism_divergence` se publicara con la evidencia del
-        # `silencio_h4` que había llegado antes.
         evidencias = dict(cuerpo.get("evidencias", {}))
         evidencias.setdefault(motivo, evidencia)
         cuerpo["evidencias"] = evidencias
-        cuerpo["motivos_adicionales"] = sorted(
-            m for m in evidencias if m != previo["motivo"])
-        # El estado AUTORIZADO se refresca en cada registro: si la primera
-        # causa lo fijó y una segunda movió el libro —un cierre administrativo
-        # emite eventos—, el request habría autorizado un estado ya viejo y la
-        # reanudación lo habría rechazado por divergencia de heads/firma.
-        cuerpo["estado_esperado"] = estado_esperado
-        cuerpo["solicitado_en"] = int(solicitado_en)
     else:
         cuerpo = {
             "schema_version": C.SCHEMA_TERMINAL,
             "cohorte": identidad.get("cohorte"),
             "contrato": identidad.get("contrato"),
             "commit": identidad.get("commit"),
-            "motivos_adicionales": [],
             "evidencias": {motivo: evidencia},
-            "solicitado_en": int(solicitado_en),
-            "estado_esperado": estado_esperado,
         }
-    # El GANADOR y su evidencia se derivan juntos, siempre, de la misma tabla.
-    cuerpo["motivo"] = min(
-        cuerpo["evidencias"],
-        key=lambda m: (C.PRECEDENCIA_MOTIVOS.index(m)
-                       if m in C.PRECEDENCIA_MOTIVOS
-                       else len(C.PRECEDENCIA_MOTIVOS), m))
+    # El estado AUTORIZADO se refresca en cada registro (§13.4): si la primera
+    # causa lo fijara y una segunda moviera el libro, el request habría
+    # autorizado un estado ya viejo y la reanudación lo rechazaría.
+    cuerpo["estado_esperado"] = estado_esperado
+    cuerpo["solicitado_en"] = int(solicitado_en)
+    cuerpo["motivo"] = _ganador(cuerpo["evidencias"])
     cuerpo["evidencia"] = cuerpo["evidencias"][cuerpo["motivo"]]
     cuerpo["motivos_adicionales"] = sorted(
         m for m in cuerpo["evidencias"] if m != cuerpo["motivo"])
@@ -322,7 +333,12 @@ def verificar_solicitud(cuerpo: dict, ruta: str) -> None:
         raise ValueError(
             f"terminal.request alterado en {ruta}: checksum no corresponde")
     if cuerpo.get("schema_version") != C.SCHEMA_TERMINAL:
-        raise ValueError(f"schema de terminal.request desconocido en {ruta}")
+        # §13.7: sin migración. El formato anterior nunca se desplegó, así que
+        # aceptarlo solo agregaría una ruta sin probar.
+        raise RequestInvalido(
+            f"schema {cuerpo.get('schema_version')!r} en {ruta}: se exige "
+            f"{C.SCHEMA_TERMINAL} y no hay migración")
+    _ganador(cuerpo.get("evidencias", {}))          # registro cerrado
 
 
 def publicar_terminal(estado_dir: str, estado: str, cuerpo: dict) -> str:
@@ -332,6 +348,40 @@ def publicar_terminal(estado_dir: str, estado: str, cuerpo: dict) -> str:
     escribir_atomico(ruta, canon({**cuerpo, "estado": estado,
                                   "schema_version": C.SCHEMA_TERMINAL}))
     return ruta
+
+
+def coincide_residual(req: dict, terminal: dict, identidad: dict,
+                     estado_actual: dict) -> None:
+    """§13.6: cuándo un terminal publicado domina un request residual.
+
+    Secuencia NORMATIVA, en este orden. Un request malformado no puede aportar
+    un ganador, así que la forma se valida antes que nada."""
+    for campo in ("cohorte", "contrato", "commit"):
+        if req.get(campo) != identidad.get(campo):
+            raise ValueError(
+                f"request residual de otra cohorte: {campo} no coincide")
+    ganador = _ganador(req.get("evidencias", {}))    # registro cerrado
+    if req.get("evidencia") != req["evidencias"][ganador]:
+        raise ValueError(
+            "request residual incoherente: la evidencia no es la del ganador")
+    esperado = req.get("estado_esperado") or {}
+    difs = [k for k in set(esperado) | set(estado_actual)
+            if esperado.get(k) != estado_actual.get(k)]
+    if difs:
+        raise ValueError(
+            f"request residual autoriza otro estado: difieren {sorted(difs)}")
+    familia = (C.BLOQUEADO if ganador in C.MOTIVOS_INTEGRIDAD
+               else C.COMPLETADO)
+    if terminal.get("estado") != familia or terminal.get("motivo") != ganador:
+        raise ValueError(
+            f"el terminal publicado ({terminal.get('estado')}, "
+            f"{terminal.get('motivo')!r}) no deriva del ganador del request "
+            f"({familia}, {ganador!r})")
+
+
+def archivar(ruta: str) -> None:
+    if os.path.exists(ruta):
+        os.replace(ruta, ruta + ".archivado")
 
 
 def leer_terminal(estado_dir: str) -> dict | None:
@@ -349,14 +399,13 @@ def leer_terminal(estado_dir: str) -> dict | None:
     if bloqueado is not None and completado is not None:
         raise ValueError(
             f"{estado_dir} tiene completed.json y blocked.json a la vez")
-    if bloqueado is not None:
-        return {"estado": C.BLOQUEADO, "cuerpo": bloqueado}
-    if completado is not None:
-        if solicitud is not None:
-            raise ValueError(
-                f"{estado_dir} tiene completed.json y terminal.request a la "
-                f"vez: contradicción que exige intervención humana")
-        return {"estado": C.COMPLETADO, "cuerpo": completado}
+    if bloqueado is not None or completado is not None:
+        estado = C.BLOQUEADO if bloqueado is not None else C.COMPLETADO
+        cuerpo = bloqueado if bloqueado is not None else completado
+        # §13.6 (rev.10+): terminal + request ya NO es contradicción — es el
+        # estado normal de una caída entre publicar y borrar. La validación de
+        # coincidencia la hace el llamador, que conoce identidad y estado.
+        return {"estado": estado, "cuerpo": cuerpo, "residual": solicitud}
     if solicitud is not None:
         verificar_solicitud(solicitud, ruta_req)
         return {"estado": "reanudar", "cuerpo": solicitud}

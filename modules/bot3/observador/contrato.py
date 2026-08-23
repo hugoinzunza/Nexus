@@ -79,9 +79,18 @@ COMPLETADO = "COMPLETED"
 BLOQUEADO = "BLOCKED_INTEGRITY"
 MOTIVO_SILENCIO = "silencio_h4"
 MOTIVO_DIVERGENCIA = "determinism_divergence"
-# Precedencia CONGELADA: la integridad manda sobre la liveness. No se resuelve
-# por última escritura ni por orden de hilos (§9.1.1).
-PRECEDENCIA_MOTIVOS = (MOTIVO_DIVERGENCIA, MOTIVO_SILENCIO)
+# Registro CERRADO de motivos terminales (§13.2). Cualquier otro FALLA CERRADO:
+# fallar abierto acá significa publicar como evaluable una cohorte cuya causa
+# de cierre nadie definió.
+MOTIVOS_INTEGRIDAD = (MOTIVO_DIVERGENCIA, MOTIVO_SILENCIO)
+MOTIVOS_CIENTIFICOS = ("muestra", "tiempo", "administrativo")
+
+# Precedencia CONGELADA y total (§13.2.1): la integridad precede a lo
+# científico SIEMPRE. Entre los científicos no hay orden porque no pueden
+# coexistir — el motor corta una sola vez—, y dos de ellos en un mismo request
+# es fallo cerrado.
+PRECEDENCIA_TERMINAL = MOTIVOS_INTEGRIDAD + MOTIVOS_CIENTIFICOS
+PRECEDENCIA_MOTIVOS = MOTIVOS_INTEGRIDAD        # compat: solo integridad
 
 # --- estados de la verificación (§9.2) ------------------------------------
 VERIF_OK = "ok"
@@ -91,7 +100,7 @@ VERIF_DIVERGENTE = "divergent"
 
 SCHEMA_SILENCIO = 1
 SCHEMA_VERIFICACION = 1
-SCHEMA_TERMINAL = 1
+SCHEMA_TERMINAL = 2          # §13.7: sin migración desde 1
 SEMILLA_SILENCIO = "0" * 64
 
 PARAMS = (
@@ -110,7 +119,8 @@ PARAMS = (
     # comportamiento congelado: quedaban fuera de la huella y podían cambiar
     # qué terminal gana sin que la identidad del observador se moviera.
     "COMPLETADO", "BLOQUEADO", "MOTIVO_SILENCIO", "MOTIVO_DIVERGENCIA",
-    "PRECEDENCIA_MOTIVOS",
+    "PRECEDENCIA_MOTIVOS", "PRECEDENCIA_TERMINAL", "MOTIVOS_INTEGRIDAD",
+    "MOTIVOS_CIENTIFICOS",
     "VERIF_OK", "VERIF_DIFERIDA", "VERIF_PENDIENTE", "VERIF_DIVERGENTE",
 )
 

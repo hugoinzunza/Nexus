@@ -405,15 +405,80 @@ def test_la_integridad_precede_a_la_liveness(tmp_path):
     assert cuerpo2["motivo"] == C.MOTIVO_DIVERGENCIA
 
 
-def test_completed_y_request_a_la_vez_es_fallo_cerrado(tmp_path):
-    d = str(tmp_path)
+def test_terminal_mas_request_residual_se_acredita_o_falla_cerrado(tmp_path):
+    """§13.6: un terminal publicado con un `terminal.request` al lado NO es una
+    contradicción — es el estado NORMAL de una caída entre publicar y borrar.
+
+    Declararlo fallo cerrado exigía intervención humana en el caso más
+    probable de todos. Lo que sí falla cerrado es un residual que NO deriva el
+    terminal publicado."""
     ident = {"cohorte": "c", "contrato": "x", "commit": "y"}
-    E.publicar_terminal(d, C.COMPLETADO, {"cohorte": "c"})
-    assert E.leer_terminal(d)["estado"] == C.COMPLETADO
-    E.solicitar_terminal(os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL),
-                         C.MOTIVO_DIVERGENCIA, ident, {}, 1, {})
-    with pytest.raises(ValueError, match="intervención humana"):
-        E.leer_terminal(d)
+    estado = {"heads": {}, "firma": "f", "sidecars": {}}
+
+    # (a) COINCIDE: el ganador del residual deriva el terminal publicado
+    d = str(tmp_path / "coincide")
+    os.makedirs(d)
+    req = E.solicitar_terminal(os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL),
+                               "muestra", ident, {"cierres": 50}, 1, estado)
+    E.publicar_terminal(d, C.COMPLETADO, dict(ident, motivo="muestra"))
+    leido = E.leer_terminal(d)                      # ya NO falla cerrado
+    assert leido["estado"] == C.COMPLETADO
+    assert leido["residual"] == req
+    E.coincide_residual(req, leido["cuerpo"], ident, estado)
+
+    # (b) DISCREPA en el ganador: el terminal no deriva del request
+    d2 = str(tmp_path / "discrepa")
+    os.makedirs(d2)
+    req2 = E.solicitar_terminal(os.path.join(d2, C.ARCHIVO_SOLICITUD_TERMINAL),
+                                C.MOTIVO_SILENCIO, ident, {}, 1, estado)
+    E.publicar_terminal(d2, C.COMPLETADO, dict(ident, motivo="muestra"))
+    with pytest.raises(ValueError, match="no deriva del ganador"):
+        E.coincide_residual(req2, E.leer_terminal(d2)["cuerpo"], ident, estado)
+
+    # (c) DISCREPA en el estado autorizado
+    with pytest.raises(ValueError, match="autoriza otro estado"):
+        E.coincide_residual(req, E.leer_terminal(d)["cuerpo"], ident,
+                            {"heads": {"BTCUSDT_15m": 9}, "firma": "f",
+                             "sidecars": {}})
+
+    # (d) DISCREPA en la identidad
+    with pytest.raises(ValueError, match="otra cohorte"):
+        E.coincide_residual(req, E.leer_terminal(d)["cuerpo"],
+                            dict(ident, cohorte="otra"), estado)
+
+
+def test_el_registro_de_motivos_es_cerrado_y_falla_cerrado(tmp_path):
+    """§13.2: un motivo que nadie definió no puede aportar un ganador. Antes
+    caía en el default `COMPLETED` — un motivo mal escrito cerraba la cohorte
+    como evaluable."""
+    ruta = str(tmp_path / C.ARCHIVO_SOLICITUD_TERMINAL)
+    ident = {"cohorte": "c", "contrato": "x", "commit": "y"}
+    with pytest.raises(E.RequestInvalido, match="registro cerrado"):
+        E.solicitar_terminal(ruta, "n_cierres", ident, {}, 1, {})
+    assert not os.path.exists(ruta)
+    # dos científicos a la vez: el motor corta UNA sola vez
+    E.solicitar_terminal(ruta, "muestra", ident, {}, 1, {})
+    with pytest.raises(E.RequestInvalido, match="dos motivos científicos"):
+        E.solicitar_terminal(ruta, "tiempo", ident, {}, 2, {})
+    # y la integridad SIEMPRE precede a lo científico
+    cuerpo = E.solicitar_terminal(ruta, C.MOTIVO_SILENCIO, ident, {}, 3, {})
+    assert cuerpo["motivo"] == C.MOTIVO_SILENCIO
+    assert cuerpo["motivos_adicionales"] == ["muestra"]
+
+
+def test_el_schema_del_request_no_tiene_migracion(tmp_path):
+    """§13.7: el formato anterior nunca se desplegó, así que aceptarlo solo
+    agregaría una ruta sin probar."""
+    ruta = str(tmp_path / C.ARCHIVO_SOLICITUD_TERMINAL)
+    ident = {"cohorte": "c", "contrato": "x", "commit": "y"}
+    cuerpo = E.solicitar_terminal(ruta, "muestra", ident, {}, 1, {})
+    assert cuerpo["schema_version"] == 2
+    cuerpo["schema_version"] = 1
+    cuerpo.pop("checksum")
+    cuerpo["checksum"] = E.sha(E.canon(cuerpo))     # coherente: falla el SCHEMA
+    E.escribir_atomico(ruta, E.canon(cuerpo))
+    with pytest.raises(E.RequestInvalido, match="no hay migración"):
+        E.leer_solicitud(ruta)
 
 
 def test_blocked_manda_y_no_se_reactiva(tmp_path):
