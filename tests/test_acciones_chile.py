@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import ast
 import urllib.error
 from decimal import Decimal
@@ -1171,11 +1172,40 @@ def test_el_parser_rechaza_lo_ambiguo_en_vez_de_elegir_una_lectura():
     escrituras inequívocas, que es lo que el resto del módulo hace con la
     escala del EPS.
     """
-    ambiguos = ["1.200", "52.125", "0.001", "1000.500", "1,234", "6.180"]
+    ambiguos = ["1.200", "52.125", "0.001", "1000.500", "1,234", "6.180", "0.000"]
     for r, entrada in zip(_parse_monto(ambiguos), ambiguos):
         assert r.get("ambiguo") is True, f"{entrada} debería ser ambiguo, dio {r}"
         assert "valor" not in r, f"{entrada} no puede producir un valor"
-        assert "escríbelo" in r["error"], f"{entrada}: el error debe enseñar cómo escribirlo"
+        # Debe ofrecer las dos lecturas como valores, no una cadena que reescribir.
+        lecturas = r.get("lecturas") or []
+        assert [l["etiqueta"] for l in lecturas] == ["miles", "decimales"], entrada
+
+
+def test_las_dos_lecturas_ofrecidas_son_valores_canonicos_listos_para_guardar():
+    """El error anterior sugería escribir 52,125, que caía en la misma regla y
+    volvía a rechazarse: un callejón sin salida.
+
+    Ahora la ambigüedad devuelve los dos valores ya resueltos. El botón los
+    escribe directamente en el modelo de la fila sin volver a parsearlos, así
+    que lo que importa es que sean canónicos —lo que Decimal() acepta— y que
+    difieran por el factor mil que provocaba el error de escala.
+    """
+    for entrada, r in zip(["1.200", "52.125", "0.001", "1,234"],
+                          _parse_monto(["1.200", "52.125", "0.001", "1,234"])):
+        valores = [l["valor"] for l in r["lecturas"]]
+        for v in valores:
+            assert re.fullmatch(r"\d+(\.\d+)?", v), f"{entrada}: {v} no es canónico"
+            Decimal(v)   # lo mismo que hará normalize_portfolio
+        miles, decimales = (Decimal(v) for v in valores)
+        assert miles == decimales * 1000, f"{entrada}: las lecturas deben diferir por mil"
+
+
+def test_el_parser_no_acepta_espacios_dentro_del_numero():
+    """Antes se borraba todo espacio: '5 2.40' pasaba silenciosamente a 52.40."""
+    con_espacios = ["5 2.40", "1 200", "5 2 . 4 0", "52 .40"]
+    for r, entrada in zip(_parse_monto(con_espacios), con_espacios):
+        assert "error" in r, f"{entrada} debería rechazarse, dio {r}"
+        assert "espacios" in r["error"], entrada
 
 
 def test_la_cartera_rechaza_numeros_no_finitos_y_duplicados():
@@ -1280,3 +1310,34 @@ def test_el_mensaje_sin_coincidencias_no_es_una_opcion_navegable():
     i = page.index("Ninguna sociedad de la CMF coincide")
     contexto = page[i - 200:i]
     assert "'sug'" not in contexto, "el mensaje vacío no puede usar la clase de las opciones"
+
+
+def test_el_pegado_no_parte_los_decimales_con_coma():
+    """La coma era delimitador y separador decimal a la vez: '305,50' se partía
+    en dos columnas y el precio terminaba desplazado."""
+    page = _pagina_chile()
+    assert "linea.split(/[;,\\t]/)" not in page   # el split que rompía los decimales
+    assert "linea.includes(';')?';'" in page
+    # El ejemplo que se muestra usa el separador que no colisiona.
+    assert "ENELCHILE; 76536353; 1000; 52,40; 55,10" in page
+
+
+def test_el_lote_pregunta_la_convencion_una_sola_vez():
+    """Resolver celda por celda un archivo entero es inviable; un export usa
+    una sola convención."""
+    page = _pagina_chile()
+    assert "function resolverLote" in page
+    assert "Renta 4 Chile · el punto separa miles" in page
+    assert "Internacional · el punto es decimal" in page
+    assert "¿Qué es el punto en este archivo?" in page
+
+
+def test_el_duplicado_se_detecta_con_el_ticker_ya_resuelto():
+    """El buscador entrega ticker vacío y lo completa el universo, así que
+    comparar antes de resolverlo dejaba pasar dos filas COPEC."""
+    page = _pagina_chile()
+    i = page.index("function agregarFila")
+    cuerpo = page[i:i + 900]
+    # La resolución ocurre antes que cualquier comparación.
+    assert cuerpo.index("const resuelto=norm(") < cuerpo.index("filas.some(")
+    assert "norm(f.ticker)===resuelto" in cuerpo
