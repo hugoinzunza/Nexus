@@ -1,4 +1,5 @@
 import json
+import os
 import ast
 import urllib.error
 from decimal import Decimal
@@ -1122,9 +1123,13 @@ def _parse_monto(valores):
     import subprocess, shutil
     node = shutil.which("node")
     if node is None:
+        # En CI el parser monetario no puede quedar sin probar: se instala Node
+        # a propósito. Fuera de CI se salta para no romper equipos sin Node.
+        if os.environ.get("CI"):
+            pytest.fail("node es obligatorio en CI: el parser monetario no puede quedar sin cubrir")
         pytest.skip("node no disponible para ejecutar el parser del formulario")
     page = _pagina_chile()
-    ini = page.index("function parseMonto")
+    ini = page.index("function _grupos")   # el parser usa este helper
     fin = page.index("const fmtCL", ini)
     guion = (page[ini:fin] + "\nconst casos=" + json.dumps(valores) +
              ";console.log(JSON.stringify(casos.map(parseMonto)));")
@@ -1140,7 +1145,8 @@ def test_el_parser_de_montos_no_corrompe_ninguno_de_los_dos_formatos():
         "6.180,50": "6180.50",   # chileno con miles y decimales
         "6180.50": "6180.50",    # internacional, el caso que se corrompía
         "52.40": "52.40",        # el ejemplo del propio placeholder
-        "1.200": "1200",         # punto como separador de miles
+        "1.234.567": "1234567",  # miles inequívocos: más de un separador
+        "1,234,567": "1234567",
         "1.234.567,89": "1234567.89",
         "1,234.56": "1234.56",   # inglés con miles
         "0,5": "0.5",
@@ -1152,9 +1158,24 @@ def test_el_parser_de_montos_no_corrompe_ninguno_de_los_dos_formatos():
 
 
 def test_el_parser_rechaza_lo_que_no_puede_interpretar_sin_adivinar():
-    for r, entrada in zip(_parse_monto(["abc", "1..2", "1,2,3", "-5", "1e9", "1.23.456"]),
-                          ["abc", "1..2", "1,2,3", "-5", "1e9", "1.23.456"]):
+    malas = ["abc", "1..2", "-5", "1e9", "1.23.456", "1.23,456", "1,23.456", "12,34,56"]
+    for r, entrada in zip(_parse_monto(malas), malas):
         assert "error" in r, f"{entrada} debería rechazarse, dio {r}"
+
+
+def test_el_parser_rechaza_lo_ambiguo_en_vez_de_elegir_una_lectura():
+    """Un separador con tres dígitos detrás puede ser miles o decimales.
+
+    La versión anterior adivinaba miles y convertía 0.001 en 1: un error de
+    mil veces en un campo de dinero. Ahora se rechaza y se ofrecen las dos
+    escrituras inequívocas, que es lo que el resto del módulo hace con la
+    escala del EPS.
+    """
+    ambiguos = ["1.200", "52.125", "0.001", "1000.500", "1,234", "6.180"]
+    for r, entrada in zip(_parse_monto(ambiguos), ambiguos):
+        assert r.get("ambiguo") is True, f"{entrada} debería ser ambiguo, dio {r}"
+        assert "valor" not in r, f"{entrada} no puede producir un valor"
+        assert "escríbelo" in r["error"], f"{entrada}: el error debe enseñar cómo escribirlo"
 
 
 def test_la_cartera_rechaza_numeros_no_finitos_y_duplicados():
@@ -1163,10 +1184,12 @@ def test_la_cartera_rechaza_numeros_no_finitos_y_duplicados():
         with pytest.raises(ValueError):
             normalize_portfolio({"holdings": [
                 {"ticker": "X", "quantity": valor, "average_cost": "1"}]})
-    with pytest.raises(ValueError, match="misma sociedad"):
-        normalize_portfolio({"holdings": [
-            {"ticker": "A", "company_rut": "90690000", "quantity": "1", "average_cost": "1"},
-            {"ticker": "B", "company_rut": "90690000", "quantity": "1", "average_cost": "1"}]})
+    # Dos series del mismo emisor son instrumentos distintos y deben aceptarse:
+    # SQM-A y SQM-B comparten RUT y estados financieros pero no posición.
+    series = normalize_portfolio({"holdings": [
+        {"ticker": "SQM-A", "company_rut": "93007000", "quantity": "1", "average_cost": "1"},
+        {"ticker": "SQM-B", "company_rut": "93007000", "quantity": "1", "average_cost": "1"}]})
+    assert [h["ticker"] for h in series["holdings"]] == ["SQM-A", "SQM-B"]
     with pytest.raises(ValueError, match="mismo ticker"):
         normalize_portfolio({"holdings": [
             {"ticker": "A", "quantity": "1", "average_cost": "1"},
@@ -1190,6 +1213,9 @@ def test_la_guia_no_afirma_estados_que_el_backend_calcula_por_posicion():
     # FUNDAMENTOS FUERTES admite advertencias: score>=78, >=5 datos, cero críticos.
     assert "no hay deterioros" not in page
     assert "Puede convivir con alguna advertencia suelta" in page
+    # El gate real también exige >=5 métricas medidas: score 86 con 4 datos da
+    # EN OBSERVACIÓN, no FUNDAMENTOS FUERTES.
+    assert "se midieron al menos cinco cosas" in page
     # fraseNegocio toma warnings[0], sin ranking.
     assert "la advertencia más relevante" not in page
     # available_at es la hora del mensaje del bot, no la publicación del emisor.
@@ -1207,8 +1233,11 @@ def test_la_guia_no_afirma_estados_que_el_backend_calcula_por_posicion():
 def test_la_guia_describe_los_estados_reales_de_la_linea_precio():
     page = _pagina_chile()
     assert "esa misma línea te dice por qué" in page
-    for motivo in ("falta el precio", "falta validar la unidad del EPS",
-                   "tuvo pérdidas", "no está mapeada en la CMF"):
+    # Los seis estados de MOTIVO_PRECIO, más el emisor sin mapeo.
+    for motivo in ("falta el precio", "falta validar la unidad del EPS contra el PDF",
+                   "falta el dólar del Banco Central", "no reporta utilidad por acción",
+                   "tuvo pérdidas", "moneda que todavía no sé convertir",
+                   "no está mapeado en la CMF"):
         assert motivo in page, motivo
     # La evidencia es condicional, no un set fijo.
     assert "los números crudos que existan para esa posición" in page
@@ -1222,3 +1251,32 @@ def test_el_buscador_de_empresas_es_un_combobox_operable_con_teclado():
     for tecla in ("ArrowDown", "ArrowUp", "Enter", "Escape"):
         assert f"'{tecla}'" in page, tecla
     assert "aria-activedescendant" in page
+
+
+def test_el_eco_del_campo_es_el_valor_que_viaja_al_backend():
+    """El eco mostraba el número reformateado en es-CL, así que 52.125
+    corrupto a 52125 se veía idéntico a la entrada y ocultaba el error.
+    Ahora imprime el string canónico, el mismo que se envía."""
+    page = _pagina_chile()
+    assert "se guarda como ${r.valor}" in page
+    assert "fmtCL(r.numero)" not in page   # el formateo que escondía la corrupción
+    # Guardar toma el valor del mismo parser, no de una segunda normalización.
+    assert "val[clave]=r.valor" in page
+
+
+def test_un_saldo_disponible_invalido_bloquea_el_guardado():
+    """Antes devolvía null tanto para vacío como para basura, y la cartera
+    se guardaba sin saldo sin avisar."""
+    page = _pagina_chile()
+    assert "Disponible para invertir: ${rs.error}" in page
+    assert "const saldo=rs.valor||null" in page
+
+
+def test_el_mensaje_sin_coincidencias_no_es_una_opcion_navegable():
+    """Con role=option, las flechas lo marcaban y Enter hacía clic sobre un
+    elemento inerte."""
+    page = _pagina_chile()
+    assert "'sin-opciones'" in page
+    i = page.index("Ninguna sociedad de la CMF coincide")
+    contexto = page[i - 200:i]
+    assert "'sug'" not in contexto, "el mensaje vacío no puede usar la clase de las opciones"

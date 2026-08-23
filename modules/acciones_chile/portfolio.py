@@ -75,11 +75,11 @@ def normalize_portfolio(payload: dict) -> dict:
             "return_pct": float(return_pct) if return_pct is not None else None,
         }
         holdings.append(holding)
-    ruts = [h["company_rut"] for h in holdings if h["company_rut"]]
-    if len(set(ruts)) != len(ruts):
-        raise ValueError("hay dos posiciones en la misma sociedad")
-    sin_rut = [h["ticker"] for h in holdings if not h["company_rut"]]
-    if len(set(sin_rut)) != len(sin_rut):
+    # Un mismo RUT puede tener varias series en bolsa (SQM-A y SQM-B comparten
+    # emisor y estados financieros, pero son instrumentos distintos), así que la
+    # identidad de una posición es el ticker, no la sociedad.
+    tickers = [h["ticker"] for h in holdings]
+    if len(set(tickers)) != len(tickers):
         raise ValueError("hay dos posiciones con el mismo ticker")
     available_cash = None
     if payload.get("available_cash") not in (None, ""):
