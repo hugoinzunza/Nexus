@@ -98,6 +98,12 @@ VERIF_DIFERIDA = "deferred"
 VERIF_PENDIENTE = "pending"
 VERIF_DIVERGENTE = "divergent"
 
+# Registro CERRADO de estados del sidecar (§13.4.2). Uno desconocido es fallo
+# cerrado para CUALQUIER ganador: sin poder leerlo no se sabe si hay una
+# comparación `pending` que deba RETENER un `silencio_h4`.
+ESTADOS_VERIFICACION = (VERIF_OK, VERIF_DIFERIDA, VERIF_PENDIENTE,
+                        VERIF_DIVERGENTE)
+
 SCHEMA_SILENCIO = 1
 SCHEMA_VERIFICACION = 1
 SCHEMA_TERMINAL = 2          # §13.7: sin migración desde 1
@@ -122,6 +128,7 @@ PARAMS = (
     "PRECEDENCIA_MOTIVOS", "PRECEDENCIA_TERMINAL", "MOTIVOS_INTEGRIDAD",
     "MOTIVOS_CIENTIFICOS",
     "VERIF_OK", "VERIF_DIFERIDA", "VERIF_PENDIENTE", "VERIF_DIVERGENTE",
+    "ESTADOS_VERIFICACION",
 )
 
 

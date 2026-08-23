@@ -171,6 +171,18 @@ def observer_state_digest(motor, m15: dict, h4: dict,
 # --------------------------------------------------------------------------
 # §9.2 — sidecar de verificación
 # --------------------------------------------------------------------------
+class VerificacionInvalida(ValueError):
+    """El sidecar no cumple §13.4.2. Se falla cerrado en vez de asumir `ok`."""
+
+
+def _exigir_campos(mapa, campos, que: str) -> None:
+    if not isinstance(mapa, dict):
+        raise VerificacionInvalida(f"{que} no es un objeto: {mapa!r}")
+    faltan = [c for c in campos if c not in mapa]
+    if faltan:
+        raise VerificacionInvalida(f"{que} sin {sorted(faltan)}")
+
+
 class Verificacion:
     """Estado vigente: `ok` | `deferred` | `pending` | `divergent`."""
 
@@ -190,11 +202,54 @@ class Verificacion:
             crudo = json.load(fh)
         if crudo.get("schema_version") != C.SCHEMA_VERIFICACION:
             raise ValueError(f"schema de verificación desconocido en {ruta}")
-        v.estado = crudo.get("estado", C.VERIF_OK)
+        v.estado = crudo.get("estado")
         v.ultima_ok = crudo.get("ultima_ok")
         v.ultima_deferencia = crudo.get("ultima_deferencia")
         v.detalle = crudo.get("detalle", {})
+        v.validar(ruta)
         return v
+
+    def validar(self, ruta: str = "") -> None:
+        """§13.4.2: registro CERRADO de estados y estructura por estado.
+
+        El default `ok` de `crudo.get("estado", C.VERIF_OK)` era fail-open: un
+        sidecar sin `estado`, o con uno desconocido, se leía como habilitante
+        y dejaba publicar `silencio_h4` sin comprobar si había una comparación
+        `pending` que debiera retenerlo."""
+        donde = f" en {ruta}" if ruta else ""
+        if self.estado not in C.ESTADOS_VERIFICACION:
+            raise VerificacionInvalida(
+                f"estado de verificación fuera del registro cerrado{donde}: "
+                f"{self.estado!r}")
+        if self.ultima_deferencia is not None and \
+                type(self.ultima_deferencia) is not int:
+            raise VerificacionInvalida(
+                f"`ultima_deferencia` no entera{donde}: "
+                f"{self.ultima_deferencia!r}")
+        if self.ultima_ok is not None:
+            _exigir_campos(self.ultima_ok, ("instante", "digest", "firma"),
+                           f"`ultima_ok`{donde}")
+            if type(self.ultima_ok["instante"]) is not int:
+                raise VerificacionInvalida(
+                    f"`ultima_ok.instante` no entero{donde}")
+        if self.estado == C.VERIF_OK and not self.ultima_ok:
+            raise VerificacionInvalida(
+                f"estado `ok` sin `ultima_ok`{donde}: nada acredita qué "
+                f"comparación lo produjo")
+        if self.estado == C.VERIF_PENDIENTE:
+            _exigir_campos(self.detalle, ("desde", "digest", "firma", "copia"),
+                           f"`detalle` de `pending`{donde}")
+            if not self.detalle["copia"]:
+                # §13.5.1: sin la copia, la comparación no se puede reanudar
+                # tras un reinicio y la cohorte queda trabada.
+                raise VerificacionInvalida(
+                    f"`pending` sin ruta de copia{donde}")
+        if self.estado == C.VERIF_DIVERGENTE:
+            _exigir_campos(self.detalle, ("esperado", "obtenido"),
+                           f"`detalle` de `divergent`{donde}")
+        if self.estado == C.VERIF_DIFERIDA and self.ultima_deferencia is None:
+            raise VerificacionInvalida(
+                f"`deferred` sin `ultima_deferencia`{donde}")
 
     def guardar(self) -> None:
         escribir_atomico(self.ruta, canon({
@@ -278,9 +333,67 @@ def _ganador(evidencias: dict) -> str:
     return min(evidencias, key=lambda m: C.PRECEDENCIA_TERMINAL.index(m))
 
 
+def captura_de(verificacion) -> dict | None:
+    """§13.4.1: identidad ESTABLE de la comparación en curso, o `None`.
+
+    No son los bytes del sidecar —que la propia comparación reescribe al
+    terminar— sino de qué captura salió: `desde`, `digest`, `firma` y la ruta
+    de la copia."""
+    if verificacion is None or verificacion.estado != C.VERIF_PENDIENTE:
+        return None
+    d = verificacion.detalle
+    return {"desde": d["desde"], "digest": d["digest"], "firma": d["firma"],
+            "copia": d["copia"]}
+
+
+def exigir_captura_autorizada(req: dict, verificacion) -> None:
+    """§13.4.1: el `ok` que habilita el cierre tiene que ser EL DE LA MISMA
+    comparación que estaba `pending` cuando se registró la causa.
+
+    `habilita_cierre()` no alcanza: mira estado y tiempos, no procedencia, así
+    que un `ok` de OTRA captura habilitaba un `COMPLETED` que nadie autorizó.
+    Solo dos transiciones son legítimas; cualquier otra es fallo cerrado."""
+    cap = req.get("captura_autorizada")
+    if cap is None:
+        return                      # no había comparación de la cual derivar
+    if verificacion is None:
+        raise ValueError(
+            "el request congeló una captura autorizada y no se recibió el "
+            "sidecar para acreditar su transición")
+    est = verificacion.estado
+    if est == C.VERIF_PENDIENTE:
+        actual = captura_de(verificacion)
+        if actual != cap:
+            raise ValueError(
+                f"la comparación en curso no es la autorizada: {actual} != "
+                f"{cap}")
+        return                      # sigue corriendo: la ventana no cierra
+    if est == C.VERIF_OK:
+        ok = verificacion.ultima_ok or {}
+        if (ok.get("digest"), ok.get("firma")) != (cap["digest"],
+                                                   cap["firma"]):
+            raise ValueError(
+                f"el `ok` vigente no deriva de la captura autorizada: "
+                f"{ok.get('digest')!r}/{ok.get('firma')!r} != "
+                f"{cap['digest']!r}/{cap['firma']!r}")
+        return
+    if est == C.VERIF_DIVERGENTE:
+        esp = verificacion.detalle.get("esperado") or {}
+        if (esp.get("digest"), esp.get("firma")) != (cap["digest"],
+                                                     cap["firma"]):
+            raise ValueError(
+                f"la divergencia vigente no es contra la captura autorizada: "
+                f"{esp.get('digest')!r} != {cap['digest']!r}")
+        return
+    raise ValueError(
+        f"transición no autorizada desde la captura congelada: `pending` → "
+        f"{est!r}. Solo se admiten `ok` y `divergent` (§13.4.1)")
+
+
 def solicitar_terminal(ruta: str, motivo: str, identidad: dict,
                        evidencia: dict, solicitado_en: int,
-                       estado_esperado: dict) -> dict:
+                       estado_esperado: dict,
+                       captura_autorizada: dict | None = None) -> dict:
     """Fase A: anota (o anexa) la causa. NO publica.
 
     La evidencia viaja CON su motivo: guardar una sola dejaba que un terminal
@@ -305,6 +418,12 @@ def solicitar_terminal(ruta: str, motivo: str, identidad: dict,
     # causa lo fijara y una segunda moviera el libro, el request habría
     # autorizado un estado ya viejo y la reanudación lo rechazaría.
     cuerpo["estado_esperado"] = estado_esperado
+    # La captura se congela UNA vez, en el primer registro, y NO se refresca:
+    # es la ligadura causal con la comparación que estaba corriendo entonces.
+    # Refrescarla la borraría justo cuando esa comparación termina —que es el
+    # disparador de la publicación—, y no quedaría nada que acreditar.
+    if "captura_autorizada" not in cuerpo:
+        cuerpo["captura_autorizada"] = captura_autorizada
     cuerpo["solicitado_en"] = int(solicitado_en)
     cuerpo["motivo"] = _ganador(cuerpo["evidencias"])
     cuerpo["evidencia"] = cuerpo["evidencias"][cuerpo["motivo"]]

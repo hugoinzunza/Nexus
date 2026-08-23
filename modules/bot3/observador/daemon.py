@@ -276,6 +276,44 @@ def reconstruir_en_frio(captura: dict, commit: str = "dev") -> tuple:
     return motor, m15, h4, libro, doc
 
 
+def captura_desde_copia(verificacion, motor) -> dict:
+    """§13.5.1: rearma el manifiesto de la captura desde la copia en disco.
+
+    Tras un reinicio, el `dict` que devolvió `capturar()` se perdió con el
+    proceso; lo único que sobrevive es la RUTA guardada en el sidecar. Sin
+    esta reconstrucción, el arranque con `pending` no tenía cómo reanudar la
+    comparación y la cohorte quedaba detenida para siempre: los ciclos —los
+    únicos que capturan— están prohibidos durante la ventana.
+
+    Falla CERRADO si la copia no está o está incompleta: un `pending` que no
+    se puede ni certificar ni descartar no autoriza ningún terminal."""
+    d = verificacion.detalle
+    destino = d.get("copia")
+    if not destino or not os.path.isdir(destino):
+        raise ValueError(
+            f"verificación `pending` cuya copia no existe: {destino!r}. No se "
+            f"puede certificar ni descartar el determinismo")
+    copias = {}
+    for tf in ("15m", "4h"):
+        for mercado in motor.mercados:
+            ruta = os.path.join(destino, f"{mercado}_{tf}.jsonl")
+            if not os.path.exists(ruta):
+                raise ValueError(
+                    f"copia incompleta: falta {mercado} {tf} en {destino}")
+            copias[(mercado, tf)] = ruta
+    ruta_libro = os.path.join(destino, "libro.jsonl")
+    if not os.path.exists(ruta_libro):
+        raise ValueError(f"copia incompleta: falta el libro en {destino}")
+    ruta_silencio = os.path.join(destino, C.ARCHIVO_SILENCIO)
+    return {"digest": d["digest"], "firma": d["firma"], "destino": destino,
+            "instante": int(d["desde"]), "copias": copias,
+            "libro": ruta_libro,
+            "silencio": ruta_silencio if os.path.exists(ruta_silencio)
+            else None,
+            "bootstrap_hasta": motor.bootstrap_hasta,
+            "mercados": list(motor.mercados)}
+
+
 def _cargar_silencio_frio(ruta: str):
     """El sidecar copiado se relee con su propia validación, pero la identidad
     se toma del propio archivo: el clon frío no tiene otra fuente."""
@@ -335,7 +373,8 @@ def estado_esperado(estado_dir: str, m15: dict, h4: dict, libro) -> dict:
 def registrar_causa(barrera: BarreraCiclo, estado_dir: str, motivo: str,
                     identidad: dict, evidencia: dict, ahora: int,
                     m15: dict, h4: dict, libro,
-                    ya_retenida: bool = False) -> dict | None:
+                    ya_retenida: bool = False,
+                    verificacion=None) -> dict | None:
     """FASE A (§9.1.1): marca `cierre_en_curso` y ANEXA la causa. No publica.
 
     Separar anotar de publicar es lo que hace real la precedencia: con una sola
@@ -357,7 +396,8 @@ def registrar_causa(barrera: BarreraCiclo, estado_dir: str, motivo: str,
         return E.solicitar_terminal(
             os.path.join(estado_dir, C.ARCHIVO_SOLICITUD_TERMINAL), motivo,
             identidad, evidencia, ahora,
-            estado_esperado(estado_dir, m15, h4, libro))
+            estado_esperado(estado_dir, m15, h4, libro),
+            E.captura_de(verificacion))
 
 
 def estado_final_de(motivo: str) -> str:
@@ -434,6 +474,11 @@ def publicar_pendiente(barrera: BarreraCiclo, estado_dir: str, ahora: int,
                 ruta_req, C.MOTIVO_DIVERGENCIA,
                 identidad or req, dict(verificacion.detalle), ahora,
                 estado_esperado(estado_dir, m15, h4, libro))
+            # `captura_autorizada` no se refresca: ya viene congelada del
+            # primer registro y es lo que liga esta divergencia a SU captura.
+        # §13.4.1: la transición desde la captura congelada se acredita ANTES
+        # de decidir nada. Un `ok` de otra comparación no habilita este cierre.
+        E.exigir_captura_autorizada(req, verificacion)
         ganador = req["motivo"]
         estado_final = estado_final_de(ganador)     # registro cerrado
         if not ventana_cerrada(ganador, verificacion):
@@ -510,7 +555,7 @@ def transicion_terminal(barrera: BarreraCiclo, estado_dir: str, motivo: str,
                         verificacion=None) -> dict:
     """Anota la causa y dispara la fase B. Para un solo causante."""
     registrar_causa(barrera, estado_dir, motivo, identidad, evidencia, ahora,
-                    m15, h4, libro)
+                    m15, h4, libro, verificacion=verificacion)
     hecho = publicar_pendiente(barrera, estado_dir, ahora, motor, m15, h4,
                                libro, verificacion, identidad)
     if hecho is None:                               # ya había terminal
@@ -549,25 +594,42 @@ def reanudar(barrera: BarreraCiclo, estado_dir: str, identidad: dict,
     barrera.cierre_en_curso = True
     if verificacion is None:
         ruta_v = os.path.join(estado_dir, C.ARCHIVO_VERIFICACION)
-        if (cuerpo["motivo"] in C.MOTIVOS_CIENTIFICOS
-                and not os.path.exists(ruta_v)):
-            # §13.5: sidecar AUSENTE con ganador científico es fallo cerrado.
-            # Un objeto nuevo nace `ok` sin `ultima_ok`, así que ni habilita ni
-            # se resuelve: la cohorte quedaba esperando para siempre a una
-            # comparación que nadie iba a correr.
+        if not os.path.exists(ruta_v):
+            # §13.4.2: fallo cerrado para CUALQUIER ganador, no solo los
+            # científicos. Sin sidecar no se sabe si hay una comparación
+            # `pending` que deba RETENER un `silencio_h4`, y un objeto recién
+            # construido diría `ok` — justo la retención que se saltearía.
             raise ValueError(
-                f"reanudación con corte científico y sin {ruta_v}: no se "
-                f"puede acreditar que la verificación habilita el cierre")
-        verificacion = E.Verificacion.cargar(ruta_v)
+                f"reanudación sin {ruta_v}: no se puede acreditar el estado "
+                f"de la comparación fría")
+        verificacion = E.Verificacion.cargar(ruta_v)     # valida §13.4.2
     hecho = publicar_pendiente(barrera, estado_dir, ahora, motor, m15, h4,
                                libro, verificacion, identidad)
-    if hecho is None or hecho["estado"] == "espera":
-        # `pending`: se MANTIENE el cierre en curso. La comparación fría se
-        # reanuda desde la copia (§13.5.1) y al terminar dispara la fase B.
-        return {"estado": "espera", "cuerpo": cuerpo, "reanudado": True,
-                "verificacion": verificacion.estado}
-    return {"estado": hecho["estado"], "cuerpo": hecho["cuerpo"],
-            "reanudado": True}
+    if hecho is not None and hecho["estado"] != "espera":
+        return {"estado": hecho["estado"], "cuerpo": hecho["cuerpo"],
+                "reanudado": True}
+    if verificacion.estado != C.VERIF_PENDIENTE:
+        # Espera sin comparación activa: no hay productor que la resuelva.
+        raise ValueError(
+            f"reanudación detenida sin comparación activa "
+            f"(verificacion={verificacion.estado!r}): nadie despertaría la "
+            f"fase B")
+    # §13.5.1: el ARRANQUE **completa** la comparación, no la espera. Quedarse
+    # esperando era detener la cohorte para siempre: la comparación fría no es
+    # un ciclo y nadie más la iba a retomar.
+    captura = captura_desde_copia(verificacion, motor)
+    resultado = verificar_y_reaccionar(barrera, captura, verificacion, ahora,
+                                       estado_dir, identidad, motor, m15, h4,
+                                       libro, commit=identidad.get("commit",
+                                                                   "dev"))
+    terminal = resultado.get("terminal")
+    if terminal is None or terminal.get("estado") == "espera":
+        raise ValueError(
+            f"la comparación fría terminó ({verificacion.estado}) y la fase B "
+            f"no publicó: {terminal!r}")
+    return {"estado": terminal["estado"], "cuerpo": terminal["cuerpo"],
+            "reanudado": True, "verificacion": verificacion.estado,
+            "comparacion": resultado}
 
 
 # --------------------------------------------------------------------------
@@ -717,8 +779,16 @@ def ciclo(fetch, barrera: BarreraCiclo, motor, m15: dict, h4: dict, libro,
     if inc:
         parte["incidencias"].append(inc)
     with barrera:
+        # LAS DOS banderas se REVUELVEN adentro del mutex. Comprobar solo
+        # `terminal` dejaba una carrera real: si la fase A marcaba
+        # `cierre_en_curso` mientras este ciclo esperaba el lock, el ciclo
+        # entraba igual y movía almacenes y libro DESPUÉS del estado que el
+        # request ya había autorizado.
         if barrera.terminal:                        # se cerró mientras esperaba
             parte["motivo"] = f"terminal: {barrera.terminal}"
+            return parte
+        if barrera.cierre_en_curso:
+            parte["motivo"] = "cierre en curso: ventana de recolección abierta"
             return parte
         partes = I.ingerir_ciclo(fetch, m15, h4, elegibilidad)
         parte["ingirio"] = True
@@ -761,7 +831,8 @@ def ciclo(fetch, barrera: BarreraCiclo, motor, m15: dict, h4: dict, libro,
                     causas.append(C.MOTIVO_SILENCIO)
                     registrar_causa(barrera, estado_dir, C.MOTIVO_SILENCIO,
                                     identidad, ganadora, local, m15, h4,
-                                    libro, ya_retenida=True)
+                                    libro, ya_retenida=True,
+                                    verificacion=verificacion)
             cierre = cerrar_si_corresponde(
                 barrera, estado_dir, identidad, motor, m15, h4, libro,
                 verificacion, local)
@@ -771,7 +842,8 @@ def ciclo(fetch, barrera: BarreraCiclo, motor, m15: dict, h4: dict, libro,
                 causas.append(cierre["motivo"])
                 registrar_causa(barrera, estado_dir, cierre["motivo"],
                                 identidad, cierre["evidencia"], local, m15,
-                                h4, libro, ya_retenida=True)
+                                h4, libro, ya_retenida=True,
+                                verificacion=verificacion)
             if not motor.cortado:
                 parte["captura"] = atender_pedido_verificacion(
                     barrera, estado_dir, motor, m15, h4, libro, silencio,

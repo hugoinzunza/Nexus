@@ -1,10 +1,16 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.16
+# Bot3.v13 — Observador operativo · DISEÑO rev.17
 
-**Estado: DISEÑO rev.16 — los tres disparadores de la fase B,
-propuesta para auditoría ANTES de seguir implementando. No desplegado. Cohorte
-no iniciada.**
+**Estado: DISEÑO rev.17 — la identidad de captura autorizada, propuesta para
+auditoría. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.17 corrige una INCOMPATIBILIDAD entre §13.4 y §9.1.3 que hacía
+inalcanzable la ruta principal del diseño: «el hash de CADA sidecar» congelaba
+`verificacion.json`, pero la comparación fría lo REESCRIBE al pasar de
+`pending` a `ok` —que es el disparador normal de la fase B—, así que el estado
+autorizado nunca podía coincidir y la cohorte no cerraba jamás. rev.17 la
+reemplaza por una identidad de CAPTURA con transiciones autorizadas (§13.4.1),
+que conserva la causalidad sin congelar bytes mutables.
 rev.16 agrega el tercer disparador de la fase B —el arranque— que §9.1.3
 omitía aunque §13.5 lo exigiera. rev.15 corrigió que el orden congelado en
 rev.14 era literalmente indeadlockable
@@ -743,7 +749,8 @@ cubría integridad)*:
 | `evidencias` | evidencia POR MOTIVO: el ganador se publica con la suya |
 | `evidencia` | la que lo autorizó: `h_n` y resumen (§6.5.1.1), o digest y firma comparados |
 | `solicitado_en` | instante y barrera de la solicitud |
-| `estado_esperado` | los 14 heads, firma del libro y hash de los sidecars |
+| `estado_esperado` | los 14 heads, firma del libro y hash de `silencio.json` |
+| `captura_autorizada` | identidad de la comparación en curso, si la hay (§13.4.1) |
 | `checksum` | del propio request |
 
 Al arrancar, un `terminal.request` **sin terminal publicado** significa que la
@@ -1069,6 +1076,66 @@ rev.8 lo verificaba solo al reanudar. Refrescarlo en cada registro no cubre una
 mutación posterior al último. La publicación compara `estado_esperado` contra
 el estado actual y falla cerrado si difieren, igual que la reanudación.
 
+#### 13.4.1 Qué congela `estado_esperado` y qué NO *(rev.17)*
+
+Hasta rev.16 esta sección decía «el hash de CADA sidecar». Con `silencio.json`
+es correcto: su evidencia VIAJA al terminal, así que congelar sus bytes es
+congelar el contenido de lo que se publica.
+
+Con `verificacion.json` es **imposible**, y no por un detalle de
+implementación. §9.1.3 establece que el segundo disparador de la fase B es la
+comparación fría al terminar, y terminar significa exactamente reescribir ese
+sidecar: `pending → ok`. Es decir, el propio disparador de la publicación
+invalida el hash que autorizaría publicar. Las dos cláusulas juntas no dejan
+ninguna ruta viva: toda cohorte con una comparación en curso al momento de
+registrar la causa queda detenida para siempre.
+
+La distinción que resuelve el choque es entre **contenido** y **compuerta**:
+
+| sidecar | qué es | cómo se autoriza |
+|---|---|---|
+| `silencio.json` | CONTENIDO: su evidencia se publica en el terminal | hash de los bytes, congelado en `estado_esperado` |
+| `verificacion.json` | COMPUERTA: habilita o retiene, y no viaja al terminal | identidad de CAPTURA y transiciones autorizadas |
+
+Congelar bytes mutables no es lo que hace falta: lo que hace falta es que el
+`ok` que habilita el cierre sea **el de la misma comparación** que estaba
+`pending` cuando se registró la causa. `habilita_cierre()` no alcanza — mira
+estado y tiempos, no procedencia—, así que un `ok` de OTRA captura habilitaría
+un `COMPLETED` que nadie autorizó.
+
+Por eso el request congela, cuando hay una comparación en curso:
+
+```
+captura_autorizada = {desde, digest, firma, copia}
+```
+
+y al publicar se exige una de estas dos transiciones, y ninguna otra:
+
+| transición | qué se exige |
+|---|---|
+| `pending → ok` | `ultima_ok.digest` y `ultima_ok.firma` iguales a los de la captura autorizada |
+| `pending → divergent` | `detalle.esperado` identifica ESA captura (`digest` y `firma`) |
+
+Cualquier otra procedencia —un `ok` cuyo digest no es el autorizado, una
+divergencia contra otra captura, o un sidecar que volvió a `pending` con una
+captura distinta— es **fallo cerrado**. Sin comparación en curso al registrar,
+`captura_autorizada` es `null` y no se exige nada: no hay causalidad que
+preservar porque no hay comparación de la cual derivar.
+
+#### 13.4.2 El sidecar de verificación tiene registro cerrado *(rev.17)*
+
+Un sidecar AUSENTE, con un estado fuera de `{ok, deferred, pending,
+divergent}`, o con los campos de su estado mal formados, es **fallo cerrado
+para CUALQUIER ganador** — no solo para los científicos.
+
+rev.16 solo lo exigía para los científicos, con el argumento de que
+`BLOCKED_INTEGRITY` no ejecuta cierre científico. Pero §9.1.2 hace que
+`silencio_h4` sea RETENIDO mientras haya una comparación `pending`: sin poder
+leer el sidecar no se sabe si la hay, y publicar el bloqueo asumiendo `ok`
+—que es lo que devuelve un objeto recién construido— saltea justamente la
+retención que impide que una divergencia posterior nunca ejerza su
+precedencia.
+
 ### 13.5 Matriz de reanudación *(rev.10)*
 
 «Recargar y aplicar» admitía implementaciones distintas. Para un request cuyo
@@ -1148,7 +1215,7 @@ Para que sobreviva a un reinicio, la captura tiene que ser recuperable:
 
 | situación | qué se hace |
 |---|---|
-| la copia existe y valida | se reanuda la comparación fría desde ella |
+| la copia existe y valida | el ARRANQUE reanuda la comparación fría desde ella, la COMPLETA y dispara la fase B con su resultado — no se queda esperando: nadie más la despertaría (§9.1.3) |
 | la copia falta o no valida | **fallo cerrado**: no se puede certificar ni descartar el determinismo, y sin eso no hay `COMPLETED` posible |
 
 No se re-captura sobre el estado actual: sería comparar contra una barrera
@@ -1172,7 +1239,9 @@ El request se archiva como recuperación NORMAL solo tras pasar esta secuencia,
 3. **coherencia interna**: `evidencia == evidencias[motivo]`. Un ganador con
    la evidencia de otra causa es un request corrupto, no uno discutible;
 4. **estado autorizado**: TODOS los campos de `estado_esperado` —los 14 heads,
-   la firma del libro y el hash de CADA sidecar—, no solo heads y firma;
+   la firma del libro y el hash de `silencio.json`—, no solo heads y firma; y
+   la `captura_autorizada`, si la hay, con una de las dos transiciones
+   permitidas (§13.4.1);
 5. **familia**: el terminal publicado es exactamente el que deriva del ganador
    (§13.2). `completed.json` con un ganador de integridad no coincide.
 
