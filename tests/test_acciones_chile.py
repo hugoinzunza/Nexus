@@ -944,11 +944,13 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
     assert "./api/save-portfolio" in page
     assert "./api/radar" in page
     assert "no es una cotización en vivo" in page
-    assert "unidad/escala EPS por validar" in page
+    # El gate de unidad/escala EPS se explica en prosa, no con la etiqueta interna.
+    assert "Falta validar en el PDF auditado la unidad y la escala del EPS" in page
+    assert "Factor de escala CMF" in page
     assert "EPS verificado" in page
     assert "EPS del ejercicio" in page
-    assert "cotización no verificada" in page
-    assert "Ausencia en el feed no prueba" in page
+    assert "cotización por confirmar" in page
+    assert "no prueba que el emisor no lo haya publicado" in page
     assert "no implica orden de rebalanceo" in page
 
 
