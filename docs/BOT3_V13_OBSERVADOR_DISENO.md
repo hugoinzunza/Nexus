@@ -1,11 +1,14 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.14
+# Bot3.v13 — Observador operativo · DISEÑO rev.15
 
-**Estado: DISEÑO rev.14 — orden congelado del final del ciclo,
+**Estado: DISEÑO rev.15 — fase A sin readquirir, disparo de fase B,
 propuesta para auditoría ANTES de seguir implementando. No desplegado. Cohorte
 no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
-rev.14 congela el ORDEN del final del ciclo, que era el agujero de la
+rev.15 corrige que el orden congelado en rev.14 era literalmente indeadlockable
+—mandaba readquirir un mutex ya retenido—, declara quién dispara la fase B tras
+un corte científico, y separa borrar de archivar. rev.14 congeló el ORDEN del
+final del ciclo, que era el agujero de la
 demostración de §13.5.0: con el orden de rev.13, un corte podía ser seguido por
 una deferencia ANTES de registrar la causa científica, y esa combinación
 —declarada imposible— habría fallado cerrado ante una secuencia legítima.
@@ -657,7 +660,7 @@ FASE B — publicación (una sola vez)
   8. capturar los 14 heads y la firma del libro
   9. verificar estado autorizado (§13.4) y verificación (§13.5)
  10. publicar el marcador DERIVADO del motivo ganador (§13.2)
- 11. borrar terminal.request
+ 11. borrar terminal.request y ARCHIVAR verify.request si quedó sin atender
  12. liberar la barrera y salir
 ```
 
@@ -705,11 +708,17 @@ Cuando una comparación pasa de `pending` a `ok` no hay causa nueva que
 registrar, así que nadie volvería a intentar publicar y la cohorte quedaría
 detenida.
 
-**La finalización de la comparación fría intenta la fase B de inmediato**, en
-sus cuatro salidas —`ok`, `divergent`, y también al fallar por copia ausente o
-corrupta, que es fallo cerrado—. No depende de otro ciclo ni de un polling sin
-especificar: los ciclos de ingesta están prohibidos durante la ventana,
-precisamente.
+Hay exactamente **dos disparadores**, y entre los dos cubren todas las causas
+*(rev.15)*:
+
+| quién | cuándo |
+|---|---|
+| el CICLO que registra una causa | apenas libera `cycle_barrier` (§12) |
+| la comparación fría al terminar | en sus cuatro salidas: `ok`, `divergent`, y el fallo cerrado por copia ausente o corrupta |
+
+Ninguno depende de polling ni de otro ciclo — los de ingesta están prohibidos
+durante la ventana, precisamente. Con un solo disparador quedaba fuera el corte
+científico sin comparación pendiente, que no tiene comparación que termine.
 
 **Contrato de `terminal.request`** *(rev.7 — MAJOR 2)*. El artefacto que
 permite reanudar necesita schema propio, o el reinicio no puede verificar qué
@@ -861,15 +870,18 @@ cada CADENCIA:
     fsync del libro
   finalizar_ciclo()
 
-  # ORDEN CONGELADO del final del ciclo (rev.14). Ver abajo por qué.
-  si motor.cortado:
-      registrar la causa CIENTÍFICA (§9.1.1 fase A)
+  # ORDEN CONGELADO del final del ciclo (rev.14/15). Ver abajo por qué.
+  si motor.cortado:                      # con cycle_barrier YA RETENIDA
       marcar cierre_en_curso
+      anexar la causa CIENTÍFICA al request   (fase A, SIN readquirir)
       NO se atiende ningún verify.request nuevo
   si no:
       atender verify.request si lo hay, SIN readquirir la barrera (§9)
 
   cycle_barrier.release()
+
+  si se registró una causa terminal en este ciclo:
+      intentar la FASE B inmediatamente (§9.1.1)
 ```
 
 **Por qué ese orden es normativo** *(rev.14)*. Con el orden anterior —procesar,
@@ -886,15 +898,37 @@ Resultado: `deferred` + causa científica, que §13.5.0 declara imposible. El
 sistema habría fallado cerrado ante una operación normal — la peor clase de
 fallo cerrado, el que castiga lo correcto.
 
+**Y se anexa SIN readquirir** *(rev.15)*: el ciclo ya retiene `cycle_barrier`,
+y la fase A de §9.1.1 empieza adquiriéndola. Una implementación literal del
+orden de rev.14 entraba en deadlock contra el mutex no reentrante que el propio
+diseño congela. La adquisición y la liberación son del LLAMADOR; los pasos
+propios de la fase A son marcar y anexar.
+
+**Y alguien tiene que disparar la fase B** *(rev.15)*: §9.1.3 se la asignaba
+solo a la finalización de una comparación fría. En un corte científico sin
+comparación pendiente no había ninguna, así que el request quedaba registrado
+para siempre y la cohorte nunca cerraba. El ciclo que registra una causa
+intenta la fase B apenas suelta la barrera.
+
 Registrar la causa ANTES de atender la captura cierra el hueco, y con eso la
 demostración de §13.5.0 queda completa: una comparación que ya estuviera
 `pending` habría impedido el corte por la zona de corte (§9.0), y una
 deferencia NUEVA ya no puede aparecer entre el corte y el registro.
 
-**Qué pasa con el `verify.request` no atendido**: queda donde está. No se
-atiende —no habría ciclos posteriores que usaran su resultado— y no se borra
-—alguien lo pidió y eso queda registrado—. Se archiva junto con el terminal, en
-el mismo paso que archiva `terminal.request` (§9.1.1, paso 11).
+**Qué pasa con el `verify.request` no atendido**: no se atiende —no habría
+ciclos posteriores que usaran su resultado— y no se borra —alguien lo pidió y
+eso queda registrado—: se ARCHIVA.
+
+**Borrar y archivar no son lo mismo** *(rev.15)*, y rev.14 los confundía:
+
+| momento | `terminal.request` | `verify.request` |
+|---|---|---|
+| flujo normal, tras publicar el terminal | se BORRA: cumplió su función y su contenido ya está en el marcador | se ARCHIVA |
+| reinicio tras caída entre publicar y borrar | se valida (§13.6) y, si COINCIDE, se ARCHIVA | se ARCHIVA |
+| request DISCREPANTE | **fallo cerrado** | — |
+
+El residual coincidente se archiva en vez de borrarse porque es la evidencia de
+que la caída ocurrió ahí: borrarlo dejaría la recuperación sin rastro.
 
 **El buffer no se persiste.** Solo `drenar` appendea; una caída con el buffer
 lleno pierde esas velas y el arranque siguiente las re-pide desde `ultimo_t`. La
@@ -1322,7 +1356,11 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
     `verify.request` pendiente en el MISMO ciclo, con buffers NO vacíos. La
     causa científica se registra ANTES, no se crea ninguna deferencia nueva, la
     verificación conserva el estado que tenía, y el `verify.request` queda sin
-    atender y se archiva con el terminal;
+    atender y se ARCHIVA con el terminal. Con el mutex REAL: sin readquisición
+    dentro del ciclo —una implementación literal de rev.14 hacía deadlock— y
+    con la fase B invocada DESPUÉS de liberar. Más la distinción borrar vs.
+    archivar: `terminal.request` borrado en el flujo normal y ARCHIVADO cuando
+    es un residual coincidente tras caída, y fallo cerrado si discrepa;
 41. **cota de la zona de corte demostrada** contra el orden completo de fases
     del motor —`fill+STOP` en el mismo lote incluido— sobre los siete mercados:
     ningún lote produce más cierres que mercados con posición u orden viva.
