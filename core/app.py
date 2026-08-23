@@ -21,6 +21,7 @@ from __future__ import annotations
 import mimetypes
 import os
 import posixpath
+import urllib.parse
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -213,6 +214,27 @@ def whoami(request: Request):
 ACCOUNT_PAGE = os.path.join(ROOT, "core", "account.html")
 INICIO_PAGE = os.path.join(ROOT, "core", "inicio.html")
 
+# Destino por defecto tras iniciar sesión.
+HOME = "/inicio"
+
+
+def _safe_next(destino: str | None) -> str:
+    """Devuelve `destino` sólo si es una ruta interna; si no, la casa.
+
+    `startswith("/")` no basta: `//evil.example` es una URL protocolo-relativa
+    y el navegador la resuelve como host externo (open redirect). También se
+    rechazan la barra invertida —que algunos navegadores normalizan a `/`— y
+    cualquier cosa que urlparse lea como esquema o netloc.
+    """
+    if not isinstance(destino, str) or not destino.startswith("/"):
+        return HOME
+    if destino.startswith("//") or destino.startswith("/\\"):
+        return HOME
+    partes = urllib.parse.urlsplit(destino)
+    if partes.scheme or partes.netloc:
+        return HOME
+    return destino
+
 
 @app.get("/inicio", response_class=HTMLResponse)
 def inicio_page(request: Request):
@@ -270,7 +292,7 @@ def login(request: Request, next: str = "/inicio"):
         return RedirectResponse(url="/", status_code=307)
     # Ya con sesión → directo a su destino (no mostramos el login de nuevo).
     if auth.current_user(request):
-        dest = next if next.startswith("/") else "/inicio"
+        dest = _safe_next(next)
         return RedirectResponse(url=dest, status_code=307)
     # Sin sesión → pantalla de acceso branded (el botón salta a /auth/google).
     with open(LOGIN_PAGE, "r", encoding="utf-8") as fh:
@@ -305,9 +327,7 @@ def auth_callback(request: Request, code: str = "", state: str = "", error: str 
     if not info.get("email_verified") or not auth.is_allowed(info.get("email", "")):
         return RedirectResponse(url="/login?e=denied", status_code=307)
     user = auth.upsert_user(info)
-    nxt = st.get("next") or "/inicio"
-    if not nxt.startswith("/"):   # solo rutas internas (anti open-redirect)
-        nxt = "/inicio"
+    nxt = _safe_next(st.get("next"))   # solo rutas internas (anti open-redirect)
     resp = RedirectResponse(url=nxt, status_code=307)
     resp.set_cookie(auth.COOKIE, auth.make_cookie(user), max_age=60 * 60 * 24 * 30,
                     httponly=True, secure=True, samesite="lax", path="/")

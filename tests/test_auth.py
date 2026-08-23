@@ -145,3 +145,36 @@ def test_ingesta_token_no_exige_cookie_pero_comandos_si(monkeypatch):
         json={"research_only": True},
     ).status_code == 200
     assert client.post("/m/bot/api/command", json={"action": "kill"}).status_code == 401
+
+
+def test_next_de_login_rechaza_destinos_externos():
+    """`startswith("/")` no basta: `//host` es protocolo-relativo y sale del sitio.
+
+    Regresión de la auditoría de UX (SEC-01): el destino por defecto del login
+    pasó a /inicio y con él se revisó el saneamiento de `next`.
+    """
+    from core.app import _safe_next, HOME
+
+    for externo in ("//evil.example", "///evil.example", "/\\evil.example",
+                    "https://evil.example", "http:/evil.example",
+                    "javascript:alert(1)", "", None, 7):
+        assert _safe_next(externo) == HOME, externo
+
+    for interno in ("/inicio", "/m/trading/", "/m/acciones_chile/",
+                    "/m/journal/?tab=hoy", "/account"):
+        assert _safe_next(interno) == interno, interno
+
+
+def test_inicio_exige_sesion_cuando_la_auth_esta_activa(monkeypatch):
+    from core import app
+
+    monkeypatch.setattr(app.auth, "enabled", lambda: True)
+    monkeypatch.setattr(app.auth, "current_user", lambda request: None)
+    bloqueado = app.inicio_page(SimpleNamespace(url=SimpleNamespace(path="/inicio")))
+    assert bloqueado.status_code == 307
+    assert bloqueado.headers["location"] == "/login?next=/inicio"
+
+    monkeypatch.setattr(app.auth, "current_user", lambda request: {"uid": 1, "role": "admin"})
+    servido = app.inicio_page(SimpleNamespace(url=SimpleNamespace(path="/inicio")))
+    assert servido.status_code == 200
+    assert "Acciones Chile" in servido.body.decode("utf-8")
