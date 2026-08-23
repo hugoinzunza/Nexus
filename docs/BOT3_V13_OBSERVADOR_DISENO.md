@@ -1,9 +1,14 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.17
+# Bot3.v13 — Observador operativo · DISEÑO rev.18
 
-**Estado: DISEÑO rev.17 — la identidad de captura autorizada, propuesta para
-auditoría. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.18 — punto de entrada y servicio (§20), propuesto para
+auditoría. §13 ya está APROBADO contra rev.17 y no se toca. No desplegado.
+Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.18 agrega §20, el punto de entrada y el servicio, que hasta acá no existía
+en ninguna sección: §15 congela los parámetros pero nadie decía en qué ORDEN
+arranca el proceso, quién lo reinicia, ni cuándo sale. Es aditiva: §1–§19 no
+cambian, y §13 queda tal como se aprobó contra rev.17.
 rev.17 corrige una INCOMPATIBILIDAD entre §13.4 y §9.1.3 que hacía
 inalcanzable la ruta principal del diseño: «el hash de CADA sidecar» congelaba
 `verificacion.json`, pero la comparación fría lo REESCRIBE al pasar de
@@ -1474,6 +1479,129 @@ aunque ya exista físicamente. Hoy los snapshots terminan en instantes distintos
 
 Hueco 2023-03-24 12:45 → 13:45 (5 velas M15) en los siete mercados.
 Clasificación: **`common_upstream_gap` / causa no demostrada.**
+
+## 20. Punto de entrada y servicio *(rev.18)*
+
+Todo lo anterior describe QUÉ hace el observador. Falta quién lo arranca, en
+qué orden, y qué pasa cuando se cae o cuando termina. Sin congelarlo, cada
+detalle admite dos implementaciones honestas con resultados distintos — que es
+lo que §10 evita para la ingesta y acá quedaba abierto.
+
+### 20.1 Identidad: de dónde sale, y no se elige en operación
+
+| campo | origen | por qué no puede ser un argumento |
+|---|---|---|
+| `contrato` | `CONTRATO_HASH` del módulo | es el contrato del motor, congelado |
+| `commit` | `git rev-parse HEAD` del árbol que corre | un despliegue tiene que salir del commit versionado, nunca del working tree |
+| `cohorte` | `acta.json`, escrita en el paso 7 de §18 | la identidad de la cohorte se congela ANTES de arrancar |
+| `bootstrap_hasta` | `acta.json` | §15: no es parámetro del observador |
+
+El arranque **exige árbol limpio** (`validar_arbol_limpio`) y que el `commit`
+del acta sea el `HEAD` vigente. Un árbol sucio o un commit distinto es fallo
+cerrado: si el proceso corriera desde código no versionado, el `commit` que
+firma cada evento del libro no identificaría lo que realmente produjo el
+evento, y el libro dejaría de ser reproducible — que es la única propiedad que
+la cohorte tiene que sostener.
+
+### 20.2 Orden CONGELADO del arranque
+
+```
+1. tomar singleton_lock          (flock de vida completa, §7)
+2. validar árbol limpio y commit == acta.commit
+3. cargar manifiesto y los 14 almacenes  (Almacen.cargar, requerido=True)
+4. cargar libro; construir Motor con acta.bootstrap_hasta
+5. cargar sidecars: silencio.json (si existe) y verificacion.json (OBLIGATORIO)
+6. reanudar()                    (§13.5) — ANTES de abrir ningún ciclo
+7. si hay terminal publicado o reanudar lo produjo: NO se abre ningún ciclo
+8. recién entonces, el bucle de ciclos
+```
+
+Los pasos 1–6 no ingieren nada. El orden importa en los dos extremos: el lock
+va PRIMERO porque dos procesos sobre los mismos almacenes es la corrupción que
+§7 impide, y `reanudar()` va antes del bucle porque un `terminal.request`
+pendiente prohíbe abrir ciclos (§13.3) y el arranque es uno de los tres
+disparadores de la fase B (§9.1.3).
+
+**`verificacion.json` es obligatorio** también en el primer arranque de la
+cohorte: el acta lo escribe en estado `ok` con la captura de la frontera. Un
+observador que lo cree por su cuenta al no encontrarlo estaría fabricando la
+acreditación que §13.4.2 exige leer.
+
+### 20.3 El bucle: un pull, un ciclo, una cadencia
+
+`CADENCIA` (60 s) se mide contra un reloj **monótono** local, no contra el
+`serverTime` ni contra el reloj de pared: el reloj de pared puede saltar
+—NTP, cambio de hora— y un salto hacia atrás detendría los pulls hasta
+alcanzarlo, mientras que uno hacia adelante dispararía una ráfaga.
+
+El proceso es de **un solo hilo de ciclo**. No hay ciclos concurrentes: si un
+ciclo tarda más que la cadencia, el siguiente arranca apenas termina el
+anterior, sin acumular deuda ni ejecutar dos a la vez. La `cycle_barrier`
+sigue siendo necesaria —la comparación fría corre fuera del ciclo—, pero
+nunca se usa para serializar dos ingestas.
+
+Un ciclo que no puede ingerir —sin reloj, `cierre_en_curso`, terminal— **no es
+un error**: registra su motivo y espera la cadencia siguiente.
+
+### 20.4 Reintentos: el backoff vive en el `fetch`, no en el ciclo
+
+`BACKOFF_BASE` → `BACKOFF_MAX`, `BACKOFF_INTENTOS`, exponencial. Se agota
+DENTRO de una llamada `fetch`; el ciclo nunca reintenta por su cuenta.
+
+Es la separación que hace que un error de red no pueda convertirse en
+evidencia: si el `fetch` agota los intentos, `paginar` falla cerrado y §11
+deja el ciclo sin ingerir. La máquina de silencio solo cuenta observaciones
+PROBATORIAS —paginación válida y completa que no trajo la vela exigible—, y
+una paginación que falló no lo es. Un ciclo que reintentara por su cuenta
+podría cerrar la paginación con una página vacía de una respuesta parcial, y
+eso sí sería evidencia falsa de que el mercado enmudeció.
+
+Solo se reintentan fallas de TRANSPORTE (timeout, 5xx, conexión caída) y
+`429`. Una respuesta bien formada que no cumple el contrato —`PaginaInvalida`—
+**no se reintenta**: pedir de nuevo lo mismo no la va a arreglar, y reintentar
+sobre datos incoherentes es cómo se cuela una serie ajena.
+
+### 20.5 Quién escribe `verify.request`
+
+Dos escritores, y ninguno es el ciclo:
+
+| quién | cuándo |
+|---|---|
+| el propio proceso, al iniciar un ciclo | si pasaron ≥ `CADENCIA_VERIFICACION` (6 h) desde la última captura |
+| un operador | dejando el archivo a mano, para auditar bajo demanda |
+
+El ciclo lo **atiende**, no lo crea (§12), y solo si el motor no cortó. El
+instante de la última captura sale de `verificacion.json`, no de una variable
+en memoria: si viviera en memoria, cada reinicio reiniciaría el reloj de las
+6 h y una cohorte que se reinicia seguido no se verificaría nunca.
+
+### 20.6 Apagado y códigos de salida
+
+`SIGTERM` y `SIGINT` marcan una bandera; el ciclo **en curso termina** y recién
+ahí el proceso sale. No se interrumpe a mitad: el framing tolera una cola
+truncada (§5), pero un apagado limpio no tiene por qué producirla.
+
+| salida | qué significa | qué hace launchd |
+|---|---|---|
+| `0` | terminal publicado, o apagado ordenado | **no reinicia** |
+| `1` | fallo cerrado: exige intervención humana | **no reinicia** |
+| `2` | error transitorio del host | reinicia con `ThrottleInterval` |
+
+Que `0` y `1` NO reinicien es deliberado. `KeepAlive` incondicional sobre una
+cohorte cerrada la reabriría en loop, y sobre un fallo cerrado reintentaría
+para siempre la operación que el diseño quiere que un humano mire. Se usa
+`KeepAlive.SuccessfulExit = false` con `ThrottleInterval`, y el terminal
+publicado corta el loop por sí mismo: el arranque siguiente lee el marcador y
+sale `0` sin abrir ningún ciclo.
+
+### 20.7 Lo que el servicio NO hace
+
+- no escribe en el repositorio, ni siquiera logs: el árbol tiene que quedar
+  limpio para que §20.1 siga siendo comprobable en el arranque siguiente;
+- no toca Bot, Testnet, Live ni Railway;
+- no reabre una cohorte cerrada, ni borra marcadores terminales;
+- no crea `verificacion.json` ni `acta.json` si faltan — falla cerrado;
+- no elige ningún parámetro de §15 en operación.
 
 ---
 
