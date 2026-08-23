@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inicio · NexUX</title>
+<meta name="theme-color" content="#f4f5f8">
+<script>(function(){try{var t=localStorage.getItem('nexux-theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="icon" href="/static/icons/nexux-favicon-v5.ico" type="image/x-icon">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/theme.css">
+<style>
+  :root{
+    --bg:#f4f5f8;--card:#ffffff;--ink:#12141a;--text:#444a57;--muted:#888e9c;
+    --line:#e6e8ef;--line2:#dde0e8;
+    --accent:#6c5ce7;--accent2:#9d92ff;--accent-soft:#efedfd;--cyan:#0aa6bd;
+    --green:#0a9d63;--red:#d8394e;--amber:#c98a16;
+    /* El texto pequeño usa variantes más oscuras del mismo tono: los tokens
+       heredados del login rinden 2,9-3,5:1 sobre blanco y no pasan WCAG AA. */
+    --cyan-aa:#0b7c8c;--green-aa:#07804f;--muted-aa:#69707e}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--text);
+       font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;
+       align-items:center;justify-content:center;overflow-x:hidden;
+       padding:calc(env(safe-area-inset-top) + 36px) 20px calc(env(safe-area-inset-bottom) + 36px)}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;
+    background:
+      radial-gradient(620px 360px at 18% -8%, rgba(108,92,231,.10), transparent 70%),
+      radial-gradient(560px 360px at 88% 2%, rgba(10,166,189,.09), transparent 72%)}
+  a{text-decoration:none;color:inherit}
+
+  .brand{display:inline-flex;align-items:center;gap:9px;color:var(--ink);margin-bottom:26px}
+  .brand .iso{width:30px;height:30px;flex:0 0 auto}
+  .brand .wm{font-family:"Sora","Inter",sans-serif;font-weight:800;font-size:22px;letter-spacing:-.8px;line-height:1}
+  .brand .wm .ux{color:var(--cyan)}
+
+  .head{width:100%;max-width:820px;margin-bottom:22px}
+  .head h1{font-family:"Sora","Inter",sans-serif;font-size:clamp(26px,5vw,34px);font-weight:800;
+           letter-spacing:-.7px;line-height:1.12;color:var(--ink);margin:0 0 6px}
+  .head p{margin:0;font-size:15px;color:var(--muted-aa)}
+
+  .worlds{width:100%;max-width:820px;display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:680px){.worlds{grid-template-columns:1fr 1fr}}
+
+  .world{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);
+         border-radius:20px;padding:24px 24px 20px;display:flex;flex-direction:column;gap:11px;
+         box-shadow:0 20px 48px -30px rgba(18,20,26,.35);
+         transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease}
+  .world::before{content:"";position:absolute;inset:0 0 auto 0;height:3px}
+  .w-crypto::before{background:linear-gradient(90deg,#8b80ff,#6c5ce7)}
+  .w-chile::before{background:linear-gradient(90deg,#1fc3d8,#0b96ad)}
+  .world:hover,.world:focus-visible{transform:translateY(-3px);border-color:var(--line2);
+         box-shadow:0 26px 56px -28px rgba(18,20,26,.42)}
+
+  .ico{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-size:22px;line-height:1}
+  .w-crypto .ico{background:var(--accent-soft);color:var(--accent)}
+  .w-chile .ico{background:rgba(10,166,189,.11)}
+
+  .world h2{font-family:"Sora","Inter",sans-serif;font-size:20px;font-weight:700;letter-spacing:-.3px;
+            color:var(--ink);margin:2px 0 0}
+  .world p{margin:0;font-size:13.5px;line-height:1.55;color:var(--muted-aa)}
+
+  .facts{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
+  .fact{font-size:11.5px;font-weight:600;border:1px solid var(--line2);border-radius:99px;
+        padding:5px 9px;color:var(--muted-aa);white-space:nowrap}
+  .fact.live{color:var(--green-aa);border-color:rgba(10,157,99,.35)}
+  .fact.safe{color:var(--cyan-aa);border-color:rgba(10,166,189,.35)}
+
+  .go{margin-top:auto;padding-top:14px;font-size:13.5px;font-weight:700;display:flex;
+      align-items:center;gap:6px}
+  .w-crypto .go{color:var(--accent)}
+  .w-chile .go{color:var(--cyan-aa)}
+  .go .arrow{transition:transform .16s ease}
+  .world:hover .go .arrow{transform:translateX(4px)}
+
+  .foot{width:100%;max-width:820px;margin-top:20px;display:flex;flex-wrap:wrap;gap:14px;
+        align-items:center;justify-content:space-between;font-size:12.5px;color:var(--muted-aa)}
+  .foot a{border-bottom:1px solid transparent}
+  .foot a:hover{border-bottom-color:currentColor}
+  .foot .right{display:flex;gap:14px;flex-wrap:wrap}
+
+  :root[data-theme="dark"]{--cyan-aa:var(--cyan);--green-aa:var(--green);--muted-aa:var(--muted)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <linearGradient id="gv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b80ff"/><stop offset="1" stop-color="#6c5ce7"/></linearGradient>
+    <linearGradient id="gc" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1fc3d8"/><stop offset="1" stop-color="#0b96ad"/></linearGradient>
+  </defs></svg>
+
+  <a class="brand" href="/">
+    <svg class="iso" viewBox="0 0 100 100" aria-hidden="true"><path d="M28 28 L72 72" stroke="url(#gv)" stroke-width="13" stroke-linecap="round" fill="none"/><path d="M72 28 L28 72" stroke="url(#gc)" stroke-width="13" stroke-linecap="round" fill="none"/></svg>
+    <span class="wm">Nex<span class="ux">UX</span></span>
+  </a>
+
+  <div class="head">
+    <h1 id="saludo">Hola</h1>
+    <p>¿Dónde quieres entrar hoy?</p>
+  </div>
+
+  <main class="worlds">
+    <a class="world w-crypto" href="/m/trading/">
+      <span class="ico" aria-hidden="true">◆</span>
+      <h2>Cripto</h2>
+      <p>Radar SMC en vivo, diario de operaciones, bot espejo y laboratorio de hipótesis.</p>
+      <div class="facts">
+        <span class="fact live" id="f-crypto">Comprobando…</span>
+        <span class="fact">opera en vivo</span>
+      </div>
+      <span class="go">Abrir Cripto <span class="arrow">→</span></span>
+    </a>
+
+    <a class="world w-chile" href="/m/acciones_chile/">
+      <span class="ico" aria-hidden="true">🇨🇱</span>
+      <h2>Acciones Chile</h2>
+      <p>Tu cartera Renta 4, resultados oficiales de la CMF y lectura fundamental de cada empresa.</p>
+      <div class="facts">
+        <span class="fact safe" id="f-chile">Comprobando…</span>
+        <span class="fact safe">nunca ejecuta órdenes</span>
+      </div>
+      <span class="go">Abrir Acciones Chile <span class="arrow">→</span></span>
+    </a>
+  </main>
+
+  <div class="foot">
+    <span id="quien">&nbsp;</span>
+    <span class="right">
+      <a href="/account">Mi cuenta</a>
+      <a href="/">Portada</a>
+      <a href="/logout">Salir</a>
+    </span>
+  </div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  fetch('/me').then(r => r.json()).then(d => {
+    const u = (d && d.user) || {};
+    const nombre = String(u.name || u.email || '').split(' ')[0];
+    if (nombre) $('#saludo').textContent = 'Hola, ' + nombre;
+    if (u.email) $('#quien').textContent = u.email;
+  }).catch(() => {});
+
+  fetch('/health').then(r => r.json()).then(h => {
+    const mods = h.modules || [];
+    // `status` es lo único que dice si el módulo respondió bien; contar todos
+    // los módulos cargados afirmaría actividad que /health no comprueba.
+    const cripto = mods.filter(m => m.slug !== 'acciones_chile' && m.status === 'ok');
+    $('#f-crypto').textContent = cripto.length + (cripto.length === 1 ? ' módulo en pie' : ' módulos en pie');
+    // `dataset_ready` sólo dice que existe caché: no dice de cuándo es.
+    const chile = mods.find(m => m.slug === 'acciones_chile');
+    $('#f-chile').textContent = chile && chile.dataset_ready
+      ? 'datos CMF en caché'
+      : 'sin datos CMF todavía';
+    if (chile && !chile.dataset_ready) $('#f-chile').classList.remove('safe');
+  }).catch(() => {
+    $('#f-crypto').textContent = 'estado no disponible';
+    $('#f-chile').textContent = 'estado no disponible';
+  });
+</script>
+</body>
+</html>

@@ -944,11 +944,13 @@ def test_acciones_chile_page_exposes_verifiable_project_progress():
     assert "./api/save-portfolio" in page
     assert "./api/radar" in page
     assert "no es una cotización en vivo" in page
-    assert "unidad/escala EPS por validar" in page
+    # El gate de unidad/escala EPS se explica en prosa, no con la etiqueta interna.
+    assert "Falta validar en el PDF auditado la unidad y la escala del EPS" in page
+    assert "Factor de escala CMF" in page
     assert "EPS verificado" in page
     assert "EPS del ejercicio" in page
-    assert "cotización no verificada" in page
-    assert "Ausencia en el feed no prueba" in page
+    assert "cotización por confirmar" in page
+    assert "no prueba que el emisor no lo haya publicado" in page
     assert "no implica orden de rebalanceo" in page
 
 
@@ -1025,3 +1027,63 @@ def test_market_data_contract_fails_closed_without_license_or_benchmark_session(
     _, summary = parse_market_csv(payload, _market_manifest())
     assert summary["label_ready"] is False
     assert summary["missing_benchmark_session_count"] == 1
+
+
+def _pagina_chile():
+    root = Path(__file__).resolve().parents[1]
+    return (root / "modules/acciones_chile/public/index.html").read_text(encoding="utf-8")
+
+
+def test_la_glosa_del_pe_no_lo_convierte_en_plazo_de_recuperacion():
+    """Un P/E es un múltiplo, no los años en que recuperas lo invertido.
+
+    Decir "pagas N años de la utilidad" insinúa un payback que el dato no
+    sostiene: la utilidad no se reparte entera ni se mantiene constante.
+    """
+    page = _pagina_chile()
+    assert "veces la utilidad por acción" in page
+    assert "años de la utilidad" not in page
+
+
+def test_las_fechas_de_resultado_se_atribuyen_al_feed_y_no_al_emisor():
+    """`available_at` es la hora del mensaje de Telegram, no la emisión.
+
+    La interfaz no puede decir "publicó el X el Y" ni declarar a un emisor
+    "al día": el feed sólo prueba detección, nunca ausencia de publicación.
+    """
+    page = _pagina_chile()
+    assert "El feed detectó su" in page
+    assert "no prueba que el emisor no lo haya publicado" in page
+    assert "hora en que el bot de Telegram anunció el documento" in page
+    for prohibido in ("Está al día", "Publicó el ${", "Todavía no le veo publicaciones",
+                      "ya publicó", "ya publicaron", "si ya publicó resultados"):
+        assert prohibido not in page, prohibido
+    # `latest_market_period` es el máximo de los eventos del export cargado: no
+    # mide el mercado ni prueba cobertura, así que la copia no puede insinuarlo.
+    assert "el período más reciente detectado en el feed" in page
+    assert "es el período más reciente del feed" in page
+    for prohibido in ("el resto del mercado", "todo el mercado", "que el mercado"):
+        assert prohibido not in page, prohibido
+
+
+def test_ver_evidencia_conserva_toda_la_trazabilidad_exigida():
+    """Esconder la evidencia tras un desplegable no puede perderla."""
+    page = _pagina_chile()
+    for campo in (
+        "EPS como viene en el TXT CMF", "EPS del PDF auditado",
+        "Factor de escala CMF", "Página del PDF", "EPS en pesos",
+        "Dólar observado BCCh", "P/E observado", "Valor justo",
+        "Margen de seguridad", "Precio del snapshot",
+    ):
+        assert campo in page, campo
+    # Los seis controles de decisión se listan uno a uno, no como contador.
+    assert "de.checks.forEach" in page
+    assert "'✓ listo'" in page and "'✗ falta'" in page
+
+
+def test_la_tarjeta_ofrece_un_control_enfocable_para_abrir_la_ficha():
+    """Abrir la ficha no puede depender del mouse (A11Y-01)."""
+    page = _pagina_chile()
+    assert "node('button',h.ticker,'pos-tk pos-open')" in page
+    assert "tk.setAttribute('aria-label'" in page
+    assert ".pos-open:focus-visible" in page

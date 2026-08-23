@@ -146,6 +146,7 @@ def test_modulos_montan_navegacion_global():
         "modules/trading/public/backtest.html",
         "modules/trading/public/research-bta-v2.html",
         "modules/trading/public/research-diario-v1.html",
+        "modules/acciones_chile/public/index.html",
     ]
     for page in pages:
         html = (root / page).read_text(encoding="utf-8")
@@ -154,7 +155,10 @@ def test_modulos_montan_navegacion_global():
         assert 'href="/static/icons/nexux-favicon-v5.ico"' in html, page
 
     shell = (root / "static/nexux-shell.js").read_text(encoding="utf-8")
-    assert '{ href: "/", text: "Inicio"' in shell
+    assert '{ href: "/inicio", text: "Inicio"' in shell
+    # El menú debe ofrecer los dos mundos, no sólo el cripto.
+    assert '{ href: "/m/acciones_chile/", text: "Cartera y CMF"' in shell
+    assert 'label: "Acciones Chile"' in shell
     assert 'class="nx-shell-mark"' in shell
     assert "M28 28 L72 72" in shell
     assert '{ href: "/account", text: "Mi cuenta"' in shell

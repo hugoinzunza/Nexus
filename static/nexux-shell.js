@@ -12,8 +12,15 @@
     {
       label: "NexUX",
       links: [
-        { href: "/", text: "Inicio", icon: "NX", match: ["/"] },
+        { href: "/inicio", text: "Inicio", icon: "NX", match: ["/inicio", "/"] },
         { href: "/account", text: "Mi cuenta", icon: "YO", match: ["/account"] },
+      ],
+    },
+    {
+      label: "Acciones Chile",
+      links: [
+        { href: "/m/acciones_chile/", text: "Cartera y CMF", icon: "CL",
+          tag: "research", match: ["/m/acciones_chile"] },
       ],
     },
     {
@@ -51,8 +58,8 @@
 
   function isActive(item) {
     const matches = item.match || [];
-    if (item.href === "/") {
-      return path === "/";
+    if (item.href === "/inicio") {
+      return path === "/inicio" || path === "/";
     }
     if (item.href === "/m/trading/") {
       return path === "/m/trading";
