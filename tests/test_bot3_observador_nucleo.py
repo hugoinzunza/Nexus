@@ -664,7 +664,7 @@ def test_el_sidecar_valida_TIPOS_y_FORMATOS_no_solo_presencia(tmp_path):
     acreditara de qué comparación salía."""
     ok = {"instante": 10, "digest": DIG, "firma": FIR}
     pend = {"desde": 10, "digest": DIG, "firma": FIR, "copia": "/x"}
-    div = {"esperado": {"digest": DIG, "firma": FIR},
+    div = {"instante": 10, "esperado": {"digest": DIG, "firma": FIR},
            "obtenido": {"digest": DIG_AJENO, "firma": FIR_AJENA}}
 
     vectores = {
@@ -705,6 +705,14 @@ def test_el_sidecar_valida_TIPOS_y_FORMATOS_no_solo_presencia(tmp_path):
         "deferred_buffers_no_entero": {
             "estado": C.VERIF_DIFERIDA, "ultima_deferencia": 10,
             "detalle": {"buffers_no_vacios": {"BTC_15m": "2"}}},
+        "div_sin_instante": {
+            "estado": C.VERIF_DIVERGENTE,
+            "detalle": {k: v for k, v in div.items() if k != "instante"}},
+        "div_instante_bool": {"estado": C.VERIF_DIVERGENTE,
+                              "detalle": dict(div, instante=True)},
+        "deferred_buffers_vacio": {
+            "estado": C.VERIF_DIFERIDA, "ultima_deferencia": 10,
+            "detalle": {"buffers_no_vacios": {}}},
         "deferred_buffers_cero": {
             "estado": C.VERIF_DIFERIDA, "ultima_deferencia": 10,
             "detalle": {"buffers_no_vacios": {"BTC_15m": 0}}},

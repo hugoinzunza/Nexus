@@ -275,7 +275,9 @@ class Verificacion:
                     f"{que}.copia no es una ruta: {self.detalle['copia']!r}")
         if self.estado == C.VERIF_DIVERGENTE:
             que = f"`detalle` de `divergent`{donde}"
-            _exigir_campos(self.detalle, ("esperado", "obtenido"), que)
+            _exigir_campos(self.detalle, ("instante", "esperado", "obtenido"),
+                           que)
+            _exigir_entero(self.detalle["instante"], f"{que}.instante")
             _exigir_par(self.detalle["esperado"], f"{que}.esperado")
             _exigir_par(self.detalle["obtenido"], f"{que}.obtenido")
         if self.estado == C.VERIF_DIFERIDA:
@@ -290,6 +292,14 @@ class Verificacion:
             if not isinstance(buffers, dict):
                 raise VerificacionInvalida(
                     f"{que}.buffers_no_vacios no es un objeto: {buffers!r}")
+            if not buffers:
+                # Un `deferred` VACÍO es contradictorio: el estado solo nace
+                # porque hay buffers pendientes. Y con ganador de integridad
+                # `deferred` PUBLICA (§9.1.2), así que aceptar un documento
+                # imposible es aceptar que publique.
+                raise VerificacionInvalida(
+                    f"{que}.buffers_no_vacios vacío: `deferred` solo existe "
+                    f"porque hay buffers pendientes")
             for stream, n in buffers.items():
                 if not isinstance(stream, str) or not stream:
                     raise VerificacionInvalida(
@@ -567,6 +577,12 @@ def leer_terminal(estado_dir: str) -> dict | None:
     completado = _leer(os.path.join(estado_dir, C.ARCHIVO_COMPLETADO))
     ruta_req = os.path.join(estado_dir, C.ARCHIVO_SOLICITUD_TERMINAL)
     solicitud = _leer(ruta_req)
+    if solicitud is not None:
+        # §13.6, orden NORMATIVO: forma, schema y checksum ANTES de calcular
+        # nada. Validar solo en la rama sin terminal dejaba pasar el residual
+        # como JSON crudo: un request con el checksum alterado se acreditaba
+        # contra el terminal y se ARCHIVABA como si fuera legítimo.
+        verificar_solicitud(solicitud, ruta_req)
     if bloqueado is not None and completado is not None:
         raise ValueError(
             f"{estado_dir} tiene completed.json y blocked.json a la vez")
@@ -578,6 +594,5 @@ def leer_terminal(estado_dir: str) -> dict | None:
         # coincidencia la hace el llamador, que conoce identidad y estado.
         return {"estado": estado, "cuerpo": cuerpo, "residual": solicitud}
     if solicitud is not None:
-        verificar_solicitud(solicitud, ruta_req)
         return {"estado": "reanudar", "cuerpo": solicitud}
     return None

@@ -1057,6 +1057,17 @@ def test_el_estado_autorizado_se_refresca_con_cada_causa(tmp_path):
 
 
 # ============ gates 40..40quinquies — transición terminal (rev.16) ==========
+def _recheck(fn):
+    """Aplica `fn` y RECALCULA el checksum, para que falle la comprobación que
+    el vector apunta y no la del checksum."""
+    def envuelto(cuerpo):
+        nuevo = fn(cuerpo)
+        nuevo.pop("checksum", None)
+        nuevo["checksum"] = E.sha(E.canon(nuevo))
+        return nuevo
+    return envuelto
+
+
 def _estado_dir(tmp_path, nombre="estado"):
     d = str(tmp_path / nombre)
     os.makedirs(d, exist_ok=True)
@@ -1120,7 +1131,7 @@ def test_g40_matriz_de_reanudacion_completa(tmp_path):
         D.reanudar(D.BarreraCiclo(), d, IDENT, *md, T0)
 
     # `deferred` con ganador de INTEGRIDAD → se PUBLICA (rev.13)
-    d, *mi = escenario("defi", C.MOTIVO_SILENCIO, lambda v: v.diferir(2, {}))
+    d, *mi = escenario("defi", C.MOTIVO_SILENCIO, lambda v: v.diferir(2, {"BTCUSDT_15m": 1}))
     assert D.reanudar(D.BarreraCiclo(), d, IDENT, *mi,
                       T0)["estado"] == C.BLOQUEADO
 
@@ -1700,3 +1711,48 @@ def test_g40_el_residual_tambien_acredita_la_captura_autorizada(tmp_path):
     assert os.path.exists(
         os.path.join(d, C.ARCHIVO_SOLICITUD_TERMINAL + ".archivado"))
     assert residual["captura_autorizada"]["digest"] == captura["digest"]
+
+
+def test_g40_un_residual_INVALIDO_nunca_se_archiva(tmp_path):
+    """§13.6, orden NORMATIVO: forma, schema y checksum ANTES de calcular el
+    ganador.
+
+    Validar el request solo en la rama SIN terminal dejaba pasar el residual
+    como JSON crudo: se acreditaba contra el terminal publicado —identidad,
+    ganador, estado, captura— y se ARCHIVABA como si fuera legítimo, sin que
+    nada hubiera comprobado que era el documento que este daemon escribió."""
+    ruta_rel = C.ARCHIVO_SOLICITUD_TERMINAL
+
+    def montar(nombre, romper):
+        d, motor, m15, h4, libro, v, captura, ahora = \
+            _mundo_con_captura(tmp_path, nombre)
+        v.conforme(ahora + 1, captura["digest"], captura["firma"])
+        E.publicar_terminal(d, C.COMPLETADO, dict(
+            IDENT, motivo="muestra", evidencia={"cierres": 50},
+            heads=E.estado_almacenes(m15, h4), firma=libro.firma()))
+        ruta = os.path.join(d, ruta_rel)
+        cuerpo = json.load(open(ruta, encoding="utf-8"))
+        E.escribir_atomico(ruta, E.canon(romper(cuerpo)))
+        return d, motor, m15, h4, libro, ahora
+
+    casos = {
+        # checksum ALTERADO: el cuerpo cambió y el checksum quedó del anterior
+        "checksum_alterado": (
+            lambda c: dict(c, solicitado_en=c["solicitado_en"] + 1),
+            "checksum no corresponde"),
+        # checksum AUSENTE
+        "checksum_ausente": (
+            lambda c: {k: v for k, v in c.items() if k != "checksum"},
+            "checksum"),
+        # schema distinto de 2, con checksum COHERENTE: falla el SCHEMA
+        "schema_viejo": (_recheck(lambda c: dict(c, schema_version=1)),
+                         "no hay migración"),
+    }
+    for nombre, (romper, patron) in casos.items():
+        d, motor, m15, h4, libro, ahora = montar(nombre, romper)
+        with pytest.raises(ValueError, match=patron):
+            D.reanudar(D.BarreraCiclo(), d, IDENT, motor, m15, h4, libro,
+                       ahora)
+        # NADA se archivó: el residual sigue donde estaba
+        assert os.path.exists(os.path.join(d, ruta_rel))
+        assert not os.path.exists(os.path.join(d, ruta_rel + ".archivado"))
