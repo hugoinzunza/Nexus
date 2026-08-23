@@ -1,10 +1,17 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.20
+# Bot3.v13 — Observador operativo · DISEÑO rev.21
 
-**Estado: DISEÑO rev.20 — §20 acotada: replay del motor al arrancar, canal de
-diagnóstico, activación recuperable y `fallo_cerrado.json` registral. §1–§19 y
-§13 no se reabren. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.21 — §20 acotada: el diagnóstico distingue por código, la
+muerte por señal es representable, y la activación se serializa. §1–§19 y §13
+no se reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.21 cierra dos bloqueos de rev.20 en la ruta de diagnóstico: el primer
+transitorio bloqueaba TODOS los reintentos —el arranque rechazaba cualquier
+`fallo_cerrado.json`, así que `MAX_TRANSITORIOS` era inalcanzable y la cota no
+existía—, y la recuperación de un daemon muerto por señal producía un
+documento que el propio schema rechazaba, porque `128+N` no es `1` ni `2`.
+Además serializa la activación y hace explícita la durabilidad del rename
+exterior.
 rev.20 cierra tres bloqueos de rev.19: §20.2 creaba un `Motor` VACÍO y pasaba
 directo a `reanudar()` —el motor no persiste candidatos, órdenes, posiciones ni
 `lotes_finalizados`, y su recuperación contractual es por replay—; el wrapper
@@ -1519,6 +1526,13 @@ definitivo, y cualquier caída después de `acta.json` dejaba «estado existente
 — que la propia herramienta declara motivo de fallo cerrado. La activación era
 irreintentable justo en el momento más probable de fallar.
 
+**Serializada por un lock EXTERIOR al directorio publicado** *(rev.21)*:
+`<raiz>/activacion.lock`, un `flock` tomado ANTES de mirar, borrar o crear
+`cohorte.new/`, y sostenido hasta después del rename. Sin él, dos activaciones
+concurrentes escriben el mismo staging y publican una mezcla de las dos; el
+lock no puede vivir dentro de `cohorte.new/` porque el primer paso de la
+herramienta es borrarlo entero.
+
 ```
 en cohorte.new/  (descartable entero, nunca es el estado vivo)
   1. acta.json          cohorte, commit, bootstrap_hasta y la frontera de §16
@@ -1530,7 +1544,11 @@ en cohorte.new/  (descartable entero, nunca es el estado vivo)
      instancias vacías que coinciden por estar ambas en cero
   6. verificacion.json   `ok`, con el digest y la firma de ESA comparación
 publicación
-  7. un solo rename: cohorte.new/ → el directorio de estado
+  7. un solo rename: cohorte.new/ → el directorio de estado, con la MISMA
+     secuencia de durabilidad de §4: fsync de cada archivo, fsync de
+     cohorte.new/, rename, fsync del directorio PADRE. Sin el último, el
+     rename puede no sobrevivir a un corte de energía y el estado publicado
+     desaparece aunque su contenido esté en disco
   8. habilitación del servicio
 ```
 
@@ -1579,7 +1597,7 @@ la cohorte tiene que sostener.
 ```
 1. tomar singleton_lock          (flock de vida completa, §7)
 2. validar árbol limpio y commit == acta.commit
-3. rechazar el arranque si existe fallo_cerrado.json  (§20.6.2)
+3. clasificar fallo_cerrado.json si existe: `1` bloquea, `2` continúa (§20.6.4)
 4. cargar manifiesto y los 14 almacenes  (Almacen.cargar, requerido=True)
 5. cargar libro; construir Motor con acta.bootstrap_hasta
 6. REPLAY canónico del prefijo sellado, SIN ingerir      (§20.2.1)
@@ -1841,6 +1859,45 @@ la señal más ruidosa disponible — mejor que un silencio que parece éxito.
 `stderr` del daemon se redirige a `diagnostico.err` por el plist
 (`StandardErrorPath`), que es de dónde sale esa cola.
 
+#### 20.6.4 El arranque distingue por CÓDIGO, no por presencia *(rev.21)*
+
+rev.20 rechazaba el arranque ante **cualquier** `fallo_cerrado.json`, y el
+daemon escribía uno también antes de salir `2`. La secuencia real era:
+
+```
+EBUSY → escribe codigo=2, transitorios=1 → el wrapper reinicia
+      → el arranque ve el sidecar y sale 1
+```
+
+Nunca se llegaba al segundo intento, así que `MAX_TRANSITORIOS` era inoperante
+y la cota que rev.20 introdujo no existía. Presencia y bloqueo no son lo
+mismo:
+
+| qué encuentra el arranque | qué hace |
+|---|---|
+| nada | arranca normal, serie transitoria en cero |
+| `codigo = 1` | **BLOQUEA**: sale `1` sin cargar estado. Solo un humano lo saca |
+| `codigo = 2` válido y de ESTA cohorte | **CONTINÚA**, reanudando la serie con `transitorios` como valor de partida |
+| `codigo = 2` con `transitorios ≥ MAX_TRANSITORIOS` | lo reescribe como `transitorios_agotados` / `codigo = 1` y sale `1` |
+| de otra cohorte, corrupto o inválido | fallo cerrado (§20.6.3) |
+
+**Quién mueve el contador**, congelado:
+
+- **el DAEMON, al salir `2`**: lee el diagnóstico vigente —si es `codigo = 2` y
+  de esta cohorte— y escribe `transitorios + 1`. Si ese valor alcanza
+  `MAX_TRANSITORIOS`, escribe `transitorios_agotados` con `codigo = 1` y sale
+  `1` en vez de `2`: un `EBUSY` que no se despeja en cinco intentos ya no es
+  transitorio;
+- **el ARRANQUE completo lo ARCHIVA**: al terminar el paso 10 —con el replay
+  hecho, `reanudar()` corrido y el bucle por abrir— el diagnóstico transitorio
+  se renombra a `fallo_cerrado.json.archivado` y la serie vuelve a cero.
+  Archivar y no borrar, por lo mismo que §20.0: el rastro de cinco reintentos
+  seguidos es dato operacional, no basura.
+
+El punto de éxito es el ARRANQUE COMPLETO, no el primer ciclo: los transitorios
+que `2` cubre son de arranque —lock, sistema de archivos—, y esperar al primer
+ciclo mezclaría la serie con fallas de red, que no salen por acá.
+
 #### 20.6.3 `fallo_cerrado.json` es un sidecar registral *(rev.20)*
 
 Gobierna el arranque, así que recibe el MISMO tratamiento que los demás
@@ -1850,13 +1907,45 @@ sidecars —rev.19 lo introdujo sin ninguno—:
 |---|---|
 | `schema_version` | cerrada y versionada |
 | `cohorte`, `contrato`, `commit` | identidad, igual que `terminal.request` |
-| `motivo` | registro CERRADO: `excepcion`, `sin_diagnostico`, `transitorios_agotados` |
-| `excepcion` | clase y mensaje, ausente solo con `motivo: sin_diagnostico` |
+| `motivo` | registro CERRADO: `excepcion`, `transitorios_agotados`, `senal`, `sin_diagnostico`, `wrapper` |
+| `excepcion` | clase y mensaje; solo con `motivo: excepcion` o `transitorios_agotados` |
 | `traceback` | texto, para el operador; no participa de ninguna decisión |
-| `codigo` | `1` o `2` |
+| `codigo` | **clasificado**: `1` o `2`, siempre. No es el estado crudo |
+| `estado_crudo` | lo que el wrapper observó, tal cual; solo cuando lo escribe él |
+| `senal` | número de señal, entero; presente solo con `motivo: senal` |
 | `ocurrido_en` | instante entero |
-| `transitorios` | contador de salidas `2` consecutivas (§20.6.1) |
+| `transitorios` | contador de salidas `2` consecutivas (§20.6.1, §20.6.4) |
 | `checksum` | del propio documento |
+
+**`codigo` es CLASIFICADO, no crudo** *(rev.21)*. rev.20 hacía que el wrapper
+registrara «el código crudo» de un daemon muerto por señal, pero un proceso
+terminado por señal no devuelve `1`: el shell entrega `128 + N` —`137` para
+`SIGKILL`— y el schema solo admite `1` o `2`. El documento que el wrapper
+intentaba crear era inválido contra su propio schema.
+
+Tabla de clasificación, congelada:
+
+| lo que observa el wrapper | `motivo` | `codigo` | otros campos |
+|---|---|---|---|
+| salida `0` | — | — | no escribe nada |
+| salida `1` con diagnóstico válido del daemon | el del daemon | `1` | — |
+| salida `1` sin diagnóstico válido | `sin_diagnostico` | `1` | `estado_crudo: 1` |
+| salida `2` con diagnóstico válido | el del daemon | `2` | — |
+| salida `2` sin diagnóstico válido | `sin_diagnostico` | `2` | `estado_crudo: 2` |
+| terminado por SEÑAL | `senal` | `1` | `senal: N`, `estado_crudo` |
+| cualquier otra salida | `sin_diagnostico` | `1` | `estado_crudo: <el valor>` |
+| falla el propio wrapper al escribir | `wrapper` | `1` | y sale ≠ 0 |
+
+Muerte por señal clasifica `1` —bloquea— y no `2`: un `SIGKILL` es el
+`ExitTimeOut` vencido o un OOM, y reintentarlo en loop repetiría la misma
+muerte. El apagado ordenado por `SIGTERM` **no** cae acá: el daemon lo atiende
+y sale `0` por su cuenta (§20.6).
+
+El wrapper lee el **estado de espera del proceso**, no la convención del
+shell: con `128 + N` no se distingue un `SIGKILL` de un daemon que salió `137`
+por su cuenta. Es un proceso Python que llama `subprocess`/`os.waitpid` y
+clasifica por `WIFSIGNALED` —`returncode < 0` en la convención de Python—,
+nunca un script de shell leyendo `$?`.
 
 Escritura ATÓMICA (`escribir_atomico`), validación fail-closed al leerlo, y
 **identidad exigida**: un `fallo_cerrado.json` de otra cohorte no bloquea a
@@ -1886,8 +1975,11 @@ Numerados a continuación de §17, que termina en 44:
     por estar ambos en cero, y no fabricado—; todo aparece por UN SOLO rename
     desde `cohorte.new/`; correrla de nuevo sobre el estado publicado falla
     cerrado sin tocar nada; una caída simulada en CADA etapa deja solo
-    `cohorte.new/` y el reintento la borra y completa; y el servicio arranca
-    contra ese estado sin fallar;
+    `cohorte.new/` y el reintento la borra y completa; DOS activaciones
+    concurrentes se serializan por `activacion.lock` y la segunda falla cerrado
+    sin tocar el staging de la primera *(rev.21)*; el rename cumple la
+    secuencia de `fsync` de §4, padre incluido; y el servicio arranca contra
+    ese estado sin fallar;
 45bis. **replay del arranque** *(rev.20)*: con posiciones vivas, órdenes y
     `lotes_finalizados` en el prefijo sellado, un reinicio los RECONSTRUYE
     —`watermark_lotes()` idéntico, `cierres` idénticos, estados por mercado
@@ -1908,6 +2000,17 @@ Numerados a continuación de §17, que termina en 44:
     que le corresponde; una excepción DESCONOCIDA produce `1`, no `2`;
     `ENOSPC` y `EIO` producen `1` y el lock ocupado produce `0`; y `2`
     ESCALA a `1` al llegar a `MAX_TRANSITORIOS` consecutivos;
+47ter. **la serie transitoria es alcanzable** *(rev.21)*: `MAX_TRANSITORIOS`
+    fallos `EBUSY` seguidos llegan efectivamente al quinto —un diagnóstico con
+    `codigo = 2` NO bloquea el arranque—, el contador avanza uno por intento,
+    el quinto publica `transitorios_agotados` con `codigo = 1` y ahí sí
+    bloquea; y un arranque COMPLETO intermedio archiva el diagnóstico y
+    reinicia la serie en cero;
+47quater. **clasificación de la salida** *(rev.21)*: cada fila de la tabla de
+    §20.6.3, incluida la muerte por `SIGKILL` —que produce `motivo: senal`,
+    `codigo: 1` y `senal: 9`, NO `codigo: 137`—, una salida arbitraria como
+    `42` que cae en `sin_diagnostico` con su `estado_crudo`, y el fallo del
+    propio wrapper. Todos los documentos producidos VALIDAN contra el schema;
 47bis. **el canal de diagnóstico** *(rev.20)*: el daemon escribe
     `fallo_cerrado.json` ANTES de salir; el wrapper traduce `1→0` solo si
     valida; un daemon muerto por `SIGKILL` sin diagnóstico hace que el wrapper
