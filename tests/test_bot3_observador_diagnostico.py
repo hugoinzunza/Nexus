@@ -52,7 +52,10 @@ def test_el_enlace_exclusivo_no_sobrescribe_y_no_cruza_filesystems(tmp_path):
     escribir_atomico(a, "segundo")
     assert D.enlazar_exclusivo(a, b) is False       # EEXIST, no sobrescribe
     assert open(b).read() == "primero"              # la historia queda intacta
-    assert not os.path.exists(a)                    # el origen se consume igual
+    # y el ORIGEN se conserva: consumirlo ante `EEXIST` borraba el diagnóstico
+    # activo antes de que nadie hubiera comprobado la colisión, y bastaba que
+    # otro proceso creara el destino entre el `exists()` y el `link()`
+    assert open(a).read() == "segundo"
 
 
 def test_una_caida_entre_link_y_unlink_se_completa_por_dev_e_inodo(tmp_path):
@@ -303,3 +306,103 @@ def test_vectores_adversariales_de_incidencia_y_acreditacion(tmp_path):
         for nombre, malo in vectores.items():
             with pytest.raises(D.DocumentoInvalido):
                 validar(D._sellar(malo), nombre)
+
+
+# ==================== vectores que la primera pasada no cubría ==============
+def test_el_sha_crudo_funciona_con_bytes_que_NO_son_utf8(tmp_path):
+    """Decodificar con `surrogateescape` y recodificar estallaba: un
+    diagnóstico REALMENTE ilegible hacía fallar justo la publicación de la
+    incidencia que debe identificarlo."""
+    import hashlib
+    d = estado(tmp_path)
+    roto = os.path.join(d, C.ARCHIVO_FALLO_CERRADO)
+    crudo = b"\xff\xfe\x80{\"cohorte\": \"AJENA\""
+    with open(roto, "wb") as fh:
+        fh.write(crudo)
+    assert D.sha_de_bytes(roto) == hashlib.sha256(crudo).hexdigest()
+    _, cuerpo = D.publicar_incidencia(d, SUP, D.sha_de_bytes(roto),
+                                      D.CLAS_CORRUPTO, 3)
+    assert cuerpo["diagnostico_sha256"] == hashlib.sha256(crudo).hexdigest()
+    assert os.path.exists(roto)                      # no se tocó
+
+
+def test_archivar_exige_que_el_cuerpo_SEA_el_archivo_activo(tmp_path):
+    """Sin la comprobación, archivar A mientras el activo era B creaba una ruta
+    nombrada con el checksum de A, guardaba B adentro y borraba el diagnóstico
+    vigente: el nombre mentía sobre su contenido."""
+    d = estado(tmp_path)
+    a = D.diagnostico(IDENT, D.MOTIVO_WRAPPER, 1, 10)
+    b = D.diagnostico(IDENT, D.MOTIVO_SENAL, 1, 20, senal=9, estado_crudo=137)
+    D.publicar_diagnostico(d, b)                     # el ACTIVO es B
+    with pytest.raises(D.Conflicto, match="no es el contenido"):
+        D.archivar_diagnostico(d, a)                 # se declara A
+    # el activo sobrevive intacto y no se creó ninguna ruta con el nombre de A
+    assert D.leer_diagnostico(d) == b
+    carpeta = os.path.join(d, D.CARPETA_DIAGNOSTICOS)
+    assert not os.path.exists(carpeta) or not os.listdir(carpeta)
+
+
+def test_un_EEXIST_concurrente_no_borra_el_diagnostico_activo(tmp_path):
+    """La carrera real: otro proceso crea el destino ENTRE el `exists()` del
+    llamador y el `link()`. Consumir el origen ahí borraba
+    `fallo_cerrado.json` antes de que nadie comprobara la colisión."""
+    d = estado(tmp_path)
+    cuerpo = D.diagnostico(IDENT, D.MOTIVO_WRAPPER, 1, 42)
+    D.publicar_diagnostico(d, cuerpo)
+    origen = os.path.join(d, C.ARCHIVO_FALLO_CERRADO)
+    destino = os.path.join(d, D.CARPETA_DIAGNOSTICOS,
+                           f"fallo_cerrado.42.{cuerpo['checksum'][:8]}.json")
+    os.makedirs(os.path.dirname(destino), exist_ok=True)
+
+    real_link = os.link
+
+    def link_perdedor(src, dst, *a, **k):
+        # el competidor gana la carrera JUSTO antes de nuestro `link`
+        if dst == destino and not os.path.exists(dst):
+            with open(dst, "w") as fh:
+                fh.write("del competidor")
+        return real_link(src, dst, *a, **k)
+
+    os.link = link_perdedor
+    try:
+        with pytest.raises(D.Conflicto):
+            D.archivar_diagnostico(d, cuerpo)
+    finally:
+        os.link = real_link
+    # el diagnóstico activo SIGUE ahí: es la autoridad hasta que se enlace
+    assert os.path.exists(origen)
+    assert D.leer_diagnostico(d) == cuerpo
+
+
+def test_los_schemas_rechazan_bool_y_campos_desconocidos(tmp_path):
+    """`True == 1`, así que `codigo in (1, 2)` lo aceptaba y
+    `schema_version == 1` también. Y un campo desconocido pasaba si el
+    checksum estaba recalculado: el checksum acredita que nadie alteró el
+    documento DESPUÉS, no que sea el que el schema define."""
+    base = D.diagnostico(IDENT, D.MOTIVO_EXCEPCION, 1, 10, excepcion="X")
+    for nombre, malo in {
+        "codigo_bool": dict(base, codigo=True),
+        "schema_bool": dict(base, schema_version=True),
+        "transitorios_bool": dict(base, transitorios=True),
+        "campo_desconocido": dict(base, inventado="lo que sea"),
+        "traceback_permitido_pero_codigo_bool": dict(base, traceback="t",
+                                                     codigo=True),
+    }.items():
+        with pytest.raises(D.DocumentoInvalido):
+            D.validar_diagnostico(D._sellar(malo), nombre)
+
+    # `traceback` SÍ es un campo del schema
+    assert D.validar_diagnostico(D._sellar(dict(base, traceback="Traceback…")))
+
+    # y los constructores validan TIPOS en vez de convertirlos
+    for kwargs in ({"ocurrido_en": True}, {"ocurrido_en": "10"},
+                   {"ocurrido_en": 10.7}, {"transitorios": "1"}):
+        with pytest.raises(D.DocumentoInvalido):
+            D.diagnostico(IDENT, D.MOTIVO_WRAPPER, 1, **{"ocurrido_en": 10,
+                                                         **kwargs})
+    with pytest.raises(D.DocumentoInvalido):
+        D.publicar_incidencia(estado(tmp_path, "i"), SUP, "a" * 64,
+                              D.CLAS_CORRUPTO, "7")
+    with pytest.raises(D.DocumentoInvalido):
+        D.publicar_acreditacion(estado(tmp_path, "a"), IDENT, "b" * 64, "h",
+                                "m", True)

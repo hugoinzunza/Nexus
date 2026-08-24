@@ -27,6 +27,7 @@ cada una tapa un agujero distinto:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -71,7 +72,30 @@ DETERMINISTAS_ACREDITACION = ("schema_version", "cohorte", "contrato",
                               "commit", "diagnostico_checksum",
                               "acreditado_por", "motivo_humano")
 
-SHA_VACIO = sha("")
+SHA_VACIO = hashlib.sha256(b"").hexdigest()
+
+# Conjuntos CERRADOS de campos. Un campo desconocido con el checksum
+# recalculado se aceptaba: el checksum acredita que nadie lo alteró DESPUÉS,
+# no que el documento sea el que el schema define.
+CAMPOS_DIAGNOSTICO = {
+    "obligatorios": ("schema_version", "cohorte", "contrato", "commit",
+                     "motivo", "codigo", "ocurrido_en", "transitorios",
+                     "checksum"),
+    "opcionales": ("excepcion", "traceback", "estado_crudo", "senal",
+                   "supervision_checksum"),
+}
+CAMPOS_INCIDENCIA = {
+    "obligatorios": ("schema_version", "cohorte", "contrato", "commit",
+                     "supervision_checksum", "diagnostico_sha256",
+                     "clasificacion", "ocurrido_en", "checksum"),
+    "opcionales": (),
+}
+CAMPOS_ACREDITACION = {
+    "obligatorios": ("schema_version", "cohorte", "contrato", "commit",
+                     "diagnostico_checksum", "acreditado_por",
+                     "motivo_humano", "acreditado_en", "checksum"),
+    "opcionales": (),
+}
 
 
 class DocumentoInvalido(ValueError):
@@ -105,11 +129,15 @@ def enlazar_exclusivo(origen: str, destino: str) -> bool:
     en una sola operación atómica del kernel.
     """
     carpeta = os.path.dirname(destino) or "."
-    creado = True
     try:
         os.link(origen, destino)
     except FileExistsError:
-        creado = False
+        # El origen se CONSERVA. Consumirlo acá borraba `fallo_cerrado.json`
+        # antes de que nadie hubiera comprobado la colisión: bastaba que otro
+        # proceso creara el destino entre el `exists()` del llamador y este
+        # `link()`. Quien recibe `False` decide si es idempotencia o conflicto,
+        # y hasta entonces el origen sigue siendo la autoridad.
+        return False
     except OSError as exc:
         if getattr(exc, "errno", None) == 18:        # EXDEV
             raise DocumentoInvalido(
@@ -118,9 +146,9 @@ def enlazar_exclusivo(origen: str, destino: str) -> bool:
                 f"exclusión atómica, que es el único motivo para usarlo")
         raise
     _fsync_dir(carpeta)
-    os.unlink(origen)
+    os.unlink(origen)                               # solo tras enlazar
     _fsync_dir(os.path.dirname(origen) or ".")
-    return creado
+    return True
 
 
 def completar_enlace_a_medias(origen: str, destino: str) -> bool:
@@ -173,9 +201,17 @@ def publicar_unico(destino: str, cuerpo: dict, campos) -> dict:
     escribir_atomico(tmp, canon(cuerpo))
     if enlazar_exclusivo(tmp, destino):
         return cuerpo
-    existente = _leer_json(destino)
-    validar_por_schema(existente, destino)
-    comparar_deterministas(existente, cuerpo, campos)
+    # `enlazar_exclusivo` ya no consume el origen ante `EEXIST`; el `.tmp` es
+    # nuestro, así que lo retiramos acá — pero DESPUÉS de comparar, para no
+    # perderlo si la comparación falla cerrado.
+    try:
+        existente = _leer_json(destino)
+        validar_por_schema(existente, destino)
+        comparar_deterministas(existente, cuerpo, campos)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+            _fsync_dir(carpeta)
     return existente
 
 
@@ -196,7 +232,11 @@ def sha_de_bytes(ruta: str) -> str:
     if not os.path.exists(ruta):
         return SHA_VACIO
     with open(ruta, "rb") as fh:
-        return sha(fh.read().decode("utf-8", "surrogateescape"))
+        # Sobre los BYTES, sin decodificar: `surrogateescape` producía
+        # sustitutos que `str.encode` no puede recodificar, así que un
+        # diagnóstico REALMENTE ilegible —`b"\xff\xfe\x80"`— hacía estallar
+        # justo la publicación de la incidencia que debe identificarlo.
+        return hashlib.sha256(fh.read()).hexdigest()
 
 
 # --------------------------------------------------------------------------
@@ -211,6 +251,23 @@ def _exigir_entero(valor, que: str) -> None:
     # `type(...) is int` excluye `bool`, que es subclase de `int`: sin eso
     # `True` pasaba como instante y comparaba igual a 1.
     _exigir(type(valor) is int, f"{que} no es entero: {valor!r}")
+
+
+def _exigir_campos_cerrados(cuerpo: dict, campos: dict, donde: str) -> None:
+    permitidos = set(campos["obligatorios"]) | set(campos["opcionales"])
+    sobran = sorted(set(cuerpo) - permitidos)
+    _exigir(not sobran, f"campos fuera del schema{donde}: {sobran}")
+    faltan = sorted(set(campos["obligatorios"]) - set(cuerpo))
+    _exigir(not faltan, f"campos obligatorios ausentes{donde}: {faltan}")
+
+
+def _exigir_valor(valor, permitidos, que: str) -> None:
+    """Compara por TIPO además de por valor: `True == 1`, así que
+    `codigo in (1, 2)` aceptaba `True` y `schema_version == 1` aceptaba
+    `True` por lo mismo."""
+    _exigir(any(v == valor and type(v) is type(valor) for v in permitidos),
+            f"{que} fuera del registro cerrado: {valor!r} "
+            f"({type(valor).__name__})")
 
 
 def _exigir_texto(valor, que: str) -> None:
@@ -249,9 +306,9 @@ def _sellar(cuerpo: dict) -> dict:
 def validar_diagnostico(cuerpo, ruta: str = "") -> dict:
     donde = f" en {ruta}" if ruta else ""
     _exigir(isinstance(cuerpo, dict), f"diagnóstico no es un objeto{donde}")
-    _exigir(cuerpo.get("schema_version") == SCHEMA_DIAGNOSTICO,
-            f"schema de diagnóstico desconocido{donde}: "
-            f"{cuerpo.get('schema_version')!r}")
+    _exigir_campos_cerrados(cuerpo, CAMPOS_DIAGNOSTICO, donde)
+    _exigir_valor(cuerpo.get("schema_version"), (SCHEMA_DIAGNOSTICO,),
+                  f"`schema_version`{donde}")
     _exigir_identidad(cuerpo, donde)
     motivo = cuerpo.get("motivo")
     _exigir(motivo in MOTIVOS_DIAGNOSTICO,
@@ -259,8 +316,7 @@ def validar_diagnostico(cuerpo, ruta: str = "") -> dict:
     # `codigo` es CLASIFICADO, no crudo: un proceso muerto por señal no
     # devuelve 1, el shell entrega `128 + N`. Ese valor viaja en
     # `estado_crudo`, y `senal` lleva además el número.
-    _exigir(cuerpo.get("codigo") in CODIGOS,
-            f"`codigo`{donde} debe ser 1 o 2, no {cuerpo.get('codigo')!r}")
+    _exigir_valor(cuerpo.get("codigo"), CODIGOS, f"`codigo`{donde}")
     _exigir_entero(cuerpo.get("ocurrido_en"), f"`ocurrido_en`{donde}")
     _exigir_entero(cuerpo.get("transitorios"), f"`transitorios`{donde}")
     _exigir(cuerpo["transitorios"] >= 0,
@@ -298,8 +354,11 @@ def diagnostico(identidad: dict, motivo: str, codigo: int, ocurrido_en: int,
         "commit": identidad.get("commit"),
         "motivo": motivo,
         "codigo": codigo,
-        "ocurrido_en": int(ocurrido_en),
-        "transitorios": int(transitorios),
+        # NADA de `int(...)`: convertía `True`, `"10"` y `10.7` en enteros
+        # legítimos ANTES de validar, así que la validación nunca veía el
+        # valor que el llamador realmente pasó.
+        "ocurrido_en": ocurrido_en,
+        "transitorios": transitorios,
     }
     cuerpo.update({k: v for k, v in extra.items() if v is not None})
     cuerpo = _sellar(cuerpo)
@@ -362,6 +421,16 @@ def archivar_diagnostico(estado_dir: str, cuerpo: dict) -> str:
     origen = os.path.join(estado_dir, C.ARCHIVO_FALLO_CERRADO)
     if not os.path.exists(origen):
         raise DocumentoInvalido(f"no hay {origen} que archivar")
+    # El `cuerpo` declarado tiene que SER el archivo activo. Sin esto, archivar
+    # A mientras el activo era B creaba una ruta nombrada con el checksum de A,
+    # guardaba B adentro y borraba el diagnóstico vigente: el nombre mentía
+    # sobre su contenido y se perdía el documento que gobernaba el arranque.
+    activo = validar_diagnostico(_leer_json(origen), origen)
+    if activo != cuerpo:
+        raise Conflicto(
+            f"el cuerpo a archivar no es el contenido de {origen}: "
+            f"{activo.get('checksum')} vigente contra "
+            f"{cuerpo.get('checksum')} declarado")
     if os.path.exists(destino):
         # Dos lecturas posibles, y hay que distinguirlas: MISMO archivo es una
         # caída entre `link` y `unlink` que se completa; archivos DISTINTOS es
@@ -384,8 +453,9 @@ def archivar_diagnostico(estado_dir: str, cuerpo: dict) -> str:
 def validar_incidencia(cuerpo, ruta: str = "") -> dict:
     donde = f" en {ruta}" if ruta else ""
     _exigir(isinstance(cuerpo, dict), f"incidencia no es un objeto{donde}")
-    _exigir(cuerpo.get("schema_version") == SCHEMA_INCIDENCIA,
-            f"schema de incidencia desconocido{donde}")
+    _exigir_campos_cerrados(cuerpo, CAMPOS_INCIDENCIA, donde)
+    _exigir_valor(cuerpo.get("schema_version"), (SCHEMA_INCIDENCIA,),
+                  f"`schema_version`{donde}")
     _exigir_identidad(cuerpo, donde)
     _exigir_sha(cuerpo.get("supervision_checksum"),
                 f"`supervision_checksum`{donde}")
@@ -424,7 +494,7 @@ def publicar_incidencia(estado_dir: str, supervision: dict,
         "supervision_checksum": supervision.get("checksum"),
         "diagnostico_sha256": diagnostico_sha256,
         "clasificacion": clasificacion,
-        "ocurrido_en": int(ocurrido_en),
+        "ocurrido_en": ocurrido_en,
     })
     validar_incidencia(cuerpo)
     destino = ruta_incidencia(estado_dir, cuerpo["supervision_checksum"],
@@ -439,8 +509,9 @@ def publicar_incidencia(estado_dir: str, supervision: dict,
 def validar_acreditacion(cuerpo, ruta: str = "") -> dict:
     donde = f" en {ruta}" if ruta else ""
     _exigir(isinstance(cuerpo, dict), f"acreditación no es un objeto{donde}")
-    _exigir(cuerpo.get("schema_version") == SCHEMA_ACREDITACION,
-            f"schema de acreditación desconocido{donde}")
+    _exigir_campos_cerrados(cuerpo, CAMPOS_ACREDITACION, donde)
+    _exigir_valor(cuerpo.get("schema_version"), (SCHEMA_ACREDITACION,),
+                  f"`schema_version`{donde}")
     _exigir_identidad(cuerpo, donde)
     _exigir_sha(cuerpo.get("diagnostico_checksum"),
                 f"`diagnostico_checksum`{donde}")
@@ -473,7 +544,7 @@ def publicar_acreditacion(estado_dir: str, identidad: dict,
         "diagnostico_checksum": diagnostico_checksum,
         "acreditado_por": acreditado_por,
         "motivo_humano": motivo_humano,
-        "acreditado_en": int(acreditado_en),
+        "acreditado_en": acreditado_en,
     })
     validar_acreditacion(cuerpo)
     destino = ruta_acreditacion(estado_dir, diagnostico_checksum)
