@@ -1,10 +1,17 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.29
+# Bot3.v13 — Observador operativo · DISEÑO rev.30
 
-**Estado: DISEÑO rev.29 — §20 acotada: supervisión del árbol de procesos por
-grupo, con barrido del wrapper y red de seguridad en el arranque. §1–§19 y §13
-no se reabren. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.30 — §20 acotada: el barrido es del wrapper y bajo lock
+propio, con identidad de nacimiento verificable. §1–§19 y §13 no se reabren.
+No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.30 corrige que la red de seguridad de rev.29 podía **matar una instancia
+sana**: un segundo arranque veía el `supervision.json` vigente y hacía `killpg`
+contra el daemon activo antes de descubrir que el lock estaba ocupado — y el
+texto decía a la vez «paso 0 antes del lock» y «el lock va primero». Además el
+sidecar no permitía detectar un PGID reutilizado, y publicarlo «antes de
+arrancar el daemon» era imposible, porque el PID no existe hasta después del
+`fork`.
 rev.29 corrige que la clausura de rev.28 presuponía un daemon que sigue
 corriendo: `EOF → espera → SIGKILL → waitpid` no puede ejecutarse si al daemon
 lo mataron con `SIGKILL` —el caso que el propio gate 48bis provoca—, y el
@@ -1373,8 +1380,8 @@ producción solo agregaría una ruta sin probar.
 `CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`,
 `PRECEDENCIA_TERMINAL`, `MAX_TRANSITORIOS` y `EXIT_TIMEOUT` *(rev.20)*,
 `CONNECT_TIMEOUT`, `READ_TIMEOUT` *(rev.22)*, `REQUEST_DEADLINE` *(rev.23)*,
-`MAX_SOBRE` *(rev.26)*, `CIERRE_COOPERATIVO` *(rev.28)* y la ruta de
-`supervision.json` *(rev.29)*, y las
+`MAX_SOBRE` *(rev.26)*, `CIERRE_COOPERATIVO` *(rev.28)* y las rutas de
+`supervision.json` y `supervisor.lock` *(rev.29/30)*, y las
 rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
 (`silencio.json`, `verificacion.json`, `fallo_cerrado.json` *(rev.20)*) y
@@ -1644,7 +1651,6 @@ la cohorte tiene que sostener.
 ### 20.2 Orden CONGELADO del arranque
 
 ```
-0. barrer el grupo de una corrida anterior     (§20.4.1, nivel 3)
 1. tomar singleton_lock          (flock de vida completa, §7)
 2. validar árbol limpio y commit == acta.commit
 3. clasificar fallo_cerrado.json si existe: `1` bloquea, `2` continúa (§20.6.4)
@@ -1657,9 +1663,12 @@ la cohorte tiene que sostener.
 10. recién entonces, el bucle de ciclos
 ```
 
-Los pasos 0–8 no ingieren nada. El paso 0 va ANTES del lock a propósito: si
-fuera después, este proceso ya tendría el `singleton_lock` mientras un
-trabajador de la corrida anterior sigue pidiendo velas al exchange. El orden importa en los dos extremos: el lock
+Los pasos 1–8 no ingieren nada. El barrido de una corrida anterior **NO está
+acá** *(rev.30)*: es del WRAPPER, que es quien tiene la propiedad del árbol, y
+corre bajo su propio lock antes de que exista ningún daemon (§20.4.1, nivel 3).
+rev.29 lo ponía como paso 0 del daemon, y eso permitía que un segundo arranque
+matara al daemon sano de la corrida en curso antes de llegar a descubrir que el
+`singleton_lock` estaba ocupado. El orden importa en los dos extremos: el lock
 va PRIMERO porque dos procesos sobre los mismos almacenes es la corrupción que
 §7 impide, y `reanudar()` va antes del bucle porque un `terminal.request`
 pendiente prohíbe abrir ciclos (§13.3) y el arranque es uno de los tres
@@ -2070,7 +2079,7 @@ arrancar el daemon, el wrapper publica `supervision.json` de forma durable con
 |---|---|---|---|
 | 1. cooperativo | el DAEMON | salida ordenada, `SIGTERM`, fallo cerrado, corrupción del IPC | `cerrar el extremo de escritura` (EOF) → esperar `CIERRE_COOPERATIVO` = 2 s → `SIGKILL` al trabajador si sigue vivo → `waitpid` → cerrar descriptores |
 | 2. barrido | el WRAPPER | siempre, tras el `waitpid` del daemon —que SÍ es su hijo—, incluso si al daemon lo mataron con `SIGKILL` | `killpg(pgid, SIGKILL)` |
-| 3. red de seguridad | el ARRANQUE siguiente | si murió el wrapper y nadie barrió | lee `supervision.json`; si el `pgid` registrado no es el suyo y sigue vivo, `killpg(SIGKILL)` y espera a que desaparezca. Solo entonces continúa |
+| 3. red de seguridad | el WRAPPER siguiente, bajo `supervisor.lock` | si murió el wrapper anterior y nadie barrió | ver §20.4.2 |
 
 Por qué cada uno:
 
@@ -2083,9 +2092,8 @@ Por qué cada uno:
   ninguna clausura cooperativa lo alcanza. Solo la señal al grupo. Y cubre
   también el `SIGKILL` al daemon, donde el nivel 1 no llega a correr;
 - **el nivel 3 cubre la muerte del WRAPPER**, donde no queda nadie que barra.
-  La única red posible es diferida, y va antes del `singleton_lock`: si no,
-  el proceso nuevo tomaría el lock mientras un trabajador de la corrida
-  anterior sigue pidiendo velas.
+  La única red posible es diferida, y la ejerce el wrapper siguiente bajo su
+  propio lock (§20.4.2) — nunca el daemon, que no es dueño del árbol.
 
 **Nadie queda zombi, y nadie tiene que recolectar a su nieto.** El wrapper
 recolecta al daemon; el daemon recolecta al trabajador mientras viva. Si el
@@ -2094,6 +2102,108 @@ el `killpg` del nivel 2 solo tiene que matarlo, no esperarlo. rev.28 pedía al
 wrapper un `waitpid` que el sistema operativo no le permite.
 
 `CIERRE_COOPERATIVO` y `supervision.json` se agregan a §15.
+
+#### 20.4.2 El barrido diferido va bajo `supervisor.lock` *(rev.30)*
+
+rev.29 hacía que el arranque leyera `supervision.json` y barriera si el `pgid`
+seguía vivo. Un `pgid` vivo es exactamente lo que se ve cuando la corrida
+ANTERIOR sigue sana: un segundo arranque —manual, o solapado por launchd—
+mataba al daemon en funciones antes de descubrir que el `singleton_lock` estaba
+ocupado. La red de seguridad se comía a la instancia que debía proteger.
+
+El wrapper toma **`supervisor.lock`**, exterior al estado y propio suyo, como
+PRIMERA operación:
+
+| qué pasa con el lock | qué significa | qué se hace |
+|---|---|---|
+| está RETENIDO | hay un supervisor vivo | **salir `0` sin barrer nada**, sin leer el sidecar y sin enviar ninguna señal |
+| se ADQUIERE | el wrapper anterior murió | recién ahí inspeccionar `supervision.json` y limpiar |
+
+El lock se sostiene desde antes de crear el grupo hasta después del barrido, y
+durante toda la vida del wrapper. Sostenerlo mientras se limpia no contamina la
+cohorte: lo único que se mata es el trabajador, que **no escribe estado
+durable** —ni almacenes, ni libro, ni sidecars (§20.4)—, así que barrerlo no
+puede dejar nada a medias.
+
+Que el lock esté retenido es la ÚNICA prueba de que hay un supervisor vivo. Un
+`pgid` vivo no lo es: puede ser el árbol sano de la corrida en curso, o un PID
+reutilizado por un proceso ajeno del sistema (§20.4.3).
+
+#### 20.4.3 `supervision.json` acredita identidad de NACIMIENTO *(rev.30)*
+
+rev.29 guardaba `{pgid, wrapper_pid, iniciado_en}`, y con eso el gate no podía
+cumplir lo que exigía: esos campos no demuestran que los procesos VIVOS hoy
+sean los registrados. Los PID se reutilizan, y `SIGKILL` a un grupo ajeno del
+sistema es un daño que el observador no tiene derecho a causar.
+
+| campo | qué es |
+|---|---|
+| `schema_version` | cerrada y versionada |
+| `cohorte`, `contrato`, `commit` | identidad, igual que los demás sidecars |
+| `wrapper` | `{pid, pgid, inicio, ejecutable}` |
+| `daemon` | `{pid, pgid, inicio, ejecutable}` |
+| `trabajador` | `{pid, pgid, generacion, inicio, ejecutable}` o `null` |
+| `publicado_en` | instante entero |
+| `checksum` | del propio documento |
+
+**`inicio` y `ejecutable` se obtienen DEL SISTEMA**, no del reloj ni de la
+configuración del observador: son la identidad de nacimiento del proceso. Un
+PID reutilizado tiene otro instante de arranque, y casi siempre otro
+ejecutable; el par distingue lo que el PID solo no distingue.
+
+**Antes de enviar CUALQUIER señal** se revalida cada PID registrado contra el
+sistema. Si el proceso no existe, no hay nada que barrer. Si existe pero su
+`inicio` o su `ejecutable` NO coinciden exactamente con lo registrado, es otro
+proceso: **fallo cerrado y no se envía ninguna señal**. Nunca se barre por
+parecido.
+
+**El PID del trabajador se actualiza de forma DURABLE en cada respawn**, dentro
+del ciclo de generación de §20.4.1 y antes de escribir el primer pedido a la
+generación nueva. Sin eso, el sidecar apuntaría a la generación muerta y el
+barrido diferido dejaría vivo justamente al trabajador colgado que motiva el
+nivel 2. Los respawns solo ocurren al vencer un deadline, así que la escritura
+extra es rara.
+
+**Al terminar limpiamente, el wrapper BORRA `supervision.json`** —con `fsync`
+del directorio—, y no lo archiva. Es un puntero de liveness, no evidencia: dice
+«puede haber un árbol vivo», y una vez que no lo hay, conservarlo solo
+produciría barridos diferidos contra procesos inexistentes. Lo que sí es
+evidencia —por qué terminó la corrida— vive en `fallo_cerrado.json`, en los
+diagnósticos archivados y en el libro.
+
+#### 20.4.4 Handshake de publicación *(rev.30)*
+
+§20.4.1 pedía publicar el sidecar «antes de arrancar el daemon», y eso es
+imposible: el PID no existe hasta después del `fork`, y el PGID tampoco. Pero
+publicar DESPUÉS, sin más, deja una ventana en la que el daemon ya corre y no
+hay registro de su grupo — justo la ventana en la que una caída del wrapper
+produce el huérfano que el nivel 3 debe barrer.
+
+Se congela un handshake con dos tuberías:
+
+```
+wrapper: crea tubería CONFIRMA (hijo→padre) y tubería LIBERA (padre→hijo)
+fork
+  hijo:  setpgid(0, 0)
+         escribe {pid, pgid} por CONFIRMA
+         BLOQUEA leyendo LIBERA            ← todavía no hizo NADA
+  padre: lee CONFIRMA
+         verifica getpgid(pid) == pgid contra el SISTEMA, no contra lo que dijo
+         obtiene `inicio` y `ejecutable` del sistema
+         publica supervision.json: escritura atómica → fsync → fsync del dir
+         escribe el byte de LIBERA y la cierra
+  hijo:  recibe el byte → recién entonces empieza §20.2
+```
+
+El hijo queda bloqueado sin haber tocado nada, así que el sidecar existe y es
+durable **antes** de que el daemon pueda abrir un almacén o hablar con el
+exchange. Y el padre verifica el PGID contra el sistema y no contra lo que el
+hijo informó: un hijo que reportara mal su grupo haría que el barrido futuro
+apuntara al grupo equivocado.
+
+Si el hijo no confirma dentro de `CIERRE_COOPERATIVO`, el wrapper lo mata por
+PID, hace `waitpid` y falla cerrado: un daemon que no confirma su grupo no
+puede supervisarse.
 
 Cerrar los descriptores viejos ANTES de crear los nuevos es lo que hace
 imposible leer bytes residuales tras el respawn: los bytes que el trabajador
@@ -2570,13 +2680,29 @@ Numerados a continuación de §17, que termina en 44:
     |---|---|
     | salida NORMAL y fallo del IPC | nivel 1: el trabajador sale por EOF, sin llegar al `SIGKILL`, y el daemon lo recolecta |
     | `SIGKILL` al DAEMON con el trabajador **bloqueado en DNS** | nivel 2: el trabajador no ve ningún EOF —está detenido en `getaddrinfo`—, así que solo el `killpg` del wrapper lo alcanza |
-    | `SIGKILL` al WRAPPER, con daemon y trabajador vivos | nivel 3: nadie barre en el momento, y el ARRANQUE siguiente lo hace por `supervision.json` ANTES de tomar el `singleton_lock` |
+    | `SIGKILL` al WRAPPER, con daemon y trabajador vivos | nivel 3: nadie barre en el momento, y el WRAPPER siguiente lo hace tras ADQUIRIR `supervisor.lock` (§20.4.2) |
     | un trabajador que IGNORA el EOF | nivel 1 escala a `SIGKILL` tras `CIERRE_COOPERATIVO` |
 
     Se exige además que el wrapper **no se mate a sí mismo** con su propio
-    `killpg` —queda fuera del grupo—, y que el arranque del nivel 3 **no barra
-    un grupo ajeno**: un `pgid` reutilizado por otro proceso del sistema no se
-    toca, y `supervision.json` de otra identidad falla cerrado *(rev.29)*;
+    `killpg` —queda fuera del grupo— *(rev.29)*; y, de rev.30:
+
+    - **un segundo arranque con la corrida anterior SANA no barre nada**:
+      encuentra `supervisor.lock` retenido, sale `0`, y el daemon en funciones
+      sigue vivo con sus almacenes y su libro intactos. Es el escenario que
+      rev.29 rompía;
+    - **PID reutilizado**: se registra un árbol, se lo mata fuera de banda y se
+      ocupa el mismo PID con otro proceso. El barrido detecta que `inicio` y
+      `ejecutable` no coinciden, **no envía ninguna señal** y falla cerrado; el
+      proceso ajeno sobrevive;
+    - **el `trabajador` del sidecar sigue a la generación viva**: tras un
+      respawn por deadline, el PID registrado es el nuevo, comprobado leyendo
+      el sidecar desde otro proceso;
+    - **el handshake**: el daemon no toca nada antes de que el sidecar sea
+      durable —gate con una caída del wrapper justo tras el `fork`, que no debe
+      dejar ni un almacén abierto—; un hijo que informa un PGID falso se detecta
+      contra el sistema; y uno que no confirma es matado y falla cerrado;
+    - **al terminar limpiamente no queda `supervision.json`**, así que el
+      arranque siguiente no barre contra PIDs inexistentes;
 48sexies. **enum de errores y política de reintento** *(rev.27)*: cada valor
     de la tabla de §20.4 produce lo que declara —`dns`, `conexion`, `tls`,
     `lectura`, `http_429`, `http_5xx` consumen intento; `http_4xx`, `interno` y
