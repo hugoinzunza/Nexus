@@ -65,6 +65,17 @@ RAIZ = "~/Library/Application Support/NexUX/Bot3/v13"
 SUBRUTA_ESTADO = "state"
 SUBRUTA_LIBRO = "ledger/events.jsonl"
 ARCHIVO_LOCK = "observador.lock"
+# §20 — servicio. `supervisor.lock` y `activacion.lock` son EXTERIORES al
+# estado: el barrido diferido y la activación tienen que poder correr antes de
+# que exista ningún daemon.
+ARCHIVO_LOCK_SUPERVISOR = "supervisor.lock"
+ARCHIVO_LOCK_ACREDITACION = "acreditacion.lock"
+ARCHIVO_LOCK_ACTIVACION = "activacion.lock"
+ARCHIVO_FALLO_CERRADO = "fallo_cerrado.json"
+ARCHIVO_SUPERVISION = "supervision.json"
+# Cota de la serie transitoria (§20.6.1): un `EBUSY` que no se despeja en cinco
+# intentos ya no es transitorio, sea lo que sea.
+MAX_TRANSITORIOS = 5
 CARPETA_ALMACENES = "almacenes"
 CARPETA_STAGING = "almacenes.new"
 ARCHIVO_COMPLETADO = "completed.json"
@@ -116,6 +127,9 @@ PARAMS = (
     "SILENCIO_MAX_H4_MS", "TOPE_INTERVALO_MS", "BACKOFF_BASE_MS",
     "BACKOFF_MAX_MS", "BACKOFF_INTENTOS", "CADENCIA_VERIFICACION_MS",
     "RAIZ", "SUBRUTA_ESTADO", "SUBRUTA_LIBRO", "ARCHIVO_LOCK",
+    "ARCHIVO_LOCK_SUPERVISOR", "ARCHIVO_LOCK_ACREDITACION",
+    "ARCHIVO_LOCK_ACTIVACION", "ARCHIVO_FALLO_CERRADO", "ARCHIVO_SUPERVISION",
+    "MAX_TRANSITORIOS",
     "CARPETA_ALMACENES", "CARPETA_STAGING", "ARCHIVO_COMPLETADO",
     "ARCHIVO_BLOQUEADO", "ARCHIVO_SILENCIO", "ARCHIVO_VERIFICACION",
     "ARCHIVO_SOLICITUD_TERMINAL", "ARCHIVO_PEDIDO_VERIFICACION",
