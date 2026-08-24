@@ -50,6 +50,63 @@ una orden.
   candidatos causales se construyen únicamente tras unir sociedad, período,
   alcance y evento Telegram con `available_at`.
 
+### Dónde corre cada colector
+
+- Railway es la vista, no el colector. Un feed FIX 4.4 de la Bolsa es una sesión
+  TCP persistente con heartbeats, números de secuencia y, normalmente, IP
+  allowlisted; los contenedores de Railway se reinician y no dan IP de salida
+  estable. Un puente con la sesión web de Renta 4 tampoco puede vivir ahí sin
+  llevarse credenciales al servidor.
+- Por eso el reparto es: el Mac mini recoge lo que exige sesión o conexión
+  persistente y envía snapshots firmados; Railway guarda, normaliza y muestra.
+  La CMF y el Banco Central son públicos y se consultan directo desde donde
+  corra el módulo.
+
+### Procedencia y frescura
+
+- Toda fuente se describe con el mismo contrato: origen, modo, fecha del dato,
+  fecha de recuperación, antigüedad y estado. Los modos son cerrados:
+  `realtime`, `delayed`, `snapshot`, `official_publication` y `derived`.
+- La fecha del dato y la de su descarga son distintas y se muestran las dos: un
+  TXT de junio bajado hoy es reciente en recuperación y viejo en contenido.
+- Si no se sabe cuándo se trajo un dato, el estado es `unknown`, nunca `fresh`.
+  Cuando una fuente cae, la tarjeta queda degradada en vez de servir el último
+  valor como si fuera de ahora. El estado agregado lo manda la peor fuente.
+- Endpoints: `api/freshness` y la sección `freshness` de `api/status`.
+
+### Cadencia del colector
+
+- La CMF publica por período, no en flujo continuo. Sondear el listado cada
+  hora es una petición; descargar los TXT completos son megabytes. Sólo se
+  descarga cuando aparece un cierre que el cache no tiene, cuando no hay cache,
+  o cuando el cache cumplió su edad máxima diaria.
+- Si el listado no responde, se conserva el cache y se reintenta: una caída del
+  regulador no gatilla descargas por las dudas.
+- `cmf_probe_interval_seconds` (sondeo, por defecto 3600) y
+  `cmf_refresh_interval_seconds` (edad máxima del cache, por defecto 86400).
+
+### Precios de mercado: licencia antes que integración
+
+- La vía correcta es el Market Data de la Bolsa de Santiago/nuam por FIX 4.4.
+  No se convierten endpoints internos del sitio público en integración.
+- Antes de cotizar hay que resolver **uso interno frente a redistribución**: que
+  el owner vea sus precios y que cualquier visitante de nexux.cl los vea son
+  dos tramos de licencia distintos. Cotizar sin esa definición da un número
+  equivocado.
+- Mientras no exista feed contratado, los precios provienen del snapshot manual
+  y se rotulan como tales. `market_data` sigue exigiendo manifest con
+  exportación adquirida o API autorizada.
+
+### Qué desbloquea la valoración
+
+- Tener precios no habilita recomendar. El gate del predictor pide cuatro cosas
+  y los precios son una: ocho trimestres por empresa, precios ajustados con
+  benchmark IPSA, universo sin sesgo de supervivencia y múltiplo sectorial
+  calibrado. Hoy el mínimo por empresa es un trimestre y el universo cubre diez
+  de treinta componentes.
+- El cuello de botella es el gate, no la cañería. Ninguna mejora de transporte
+  adelanta ese punto.
+
 ### CMF Bancos
 
 - Los bancos listados usan un adaptador separado porque su catálogo contable no

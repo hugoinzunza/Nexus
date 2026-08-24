@@ -13,9 +13,11 @@ from core.paths import persist_dir
 
 from . import auditor
 from . import banks
+from . import cmf as cmf_client
 from . import dataset as dataset_store
 from . import fx
 from .portfolio import normalize_portfolio
+from . import freshness
 from .predictor import (
     build_feature_records, feature_join_report, normalize_company, portfolio_event_monitor,
     readiness as predictor_readiness,
@@ -84,10 +86,13 @@ class AccionesChileModule(NexusModule):
             bank_status = banks.availability(BANKS_PATH)
             fx_status = fx.availability(FX_PATH)
             eps_status = fx.eps_unit_availability(EPS_UNITS_PATH, PACKAGED_EPS_UNITS_PATH)
+            fuentes = self._fuentes_frescura(dataset, telegram, portfolio,
+                                             fx_status, bank_status, market)
             return self._json(200, {
                 "module": "acciones_chile",
                 "mode": "read_only",
                 "separate_from_crypto": True,
+                "freshness": {"sources": fuentes, "overall": freshness.overall(fuentes)},
                 "portfolio": {
                     "connected": bool(portfolio),
                     "source": portfolio.get("source") if portfolio else None,
@@ -424,6 +429,15 @@ class AccionesChileModule(NexusModule):
                 "sources": data["sources"],
                 "research_only": True,
             })
+        if subpath == "freshness":
+            fuentes = self._fuentes_frescura(
+                self._read_dataset(), self._read_telegram(),
+                self._read_portfolio((user or {}).get("uid")),
+                fx.availability(FX_PATH), banks.availability(BANKS_PATH),
+                self._read_json(MARKET_STATUS_PATH))
+            return self._json(200, {"sources": fuentes,
+                                    "overall": freshness.overall(fuentes),
+                                    "modes": freshness.MODES})
         if subpath == "boundaries":
             return self._json(200, {
                 "orders": "prohibited", "broker_credentials": "not_stored",
@@ -494,6 +508,68 @@ class AccionesChileModule(NexusModule):
         normalized["received_at_ms"] = int(time.time() * 1000)
         self._write_portfolio(int(uid), normalized)
         return self._json(200, {"ok": True, "positions": len(normalized["holdings"])})
+
+    def _fuentes_frescura(self, dataset, telegram, portfolio, fx_status, bank_status, market):
+        """Una entrada por fuente, con su modo y su antigüedad.
+
+        Los umbrales van con el ritmo real de cada origen: la CMF publica por
+        período y no cada minuto, así que exigirle frescura de mercado sería
+        marcarla en rojo para siempre.
+        """
+        cmf = (dataset or {}).get("cmf", {})
+        fuentes = (dataset or {}).get("cmf", {}).get("sources", [])
+        ultima_cmf = max((item.get("retrieved_at") for item in fuentes
+                          if item.get("retrieved_at")), default=None)
+        periodos = cmf.get("periods") or []
+        fx_cache = self._read_json(FX_PATH) or {}
+        fx_latest = (fx_status or {}).get("latest") or {}
+        return [
+            freshness.describe(
+                "CMF · estados financieros IFRS", "official_publication",
+                retrieved_at=ultima_cmf,
+                observed_at=self._fin_de_periodo(periodos[0]) if periodos else None,
+                stale_after_seconds=2 * 86400, available=bool(dataset),
+                detail="cierre más reciente descargado: "
+                       f"{periodos[0]}" if periodos else "sin descargas todavía"),
+            freshness.describe(
+                "HechosEsencialesChile · disponibilidad", "official_publication",
+                retrieved_at=(telegram or {}).get("exported_at"),
+                observed_at=(telegram or {}).get("events", [{}])[0].get("available_at")
+                if (telegram or {}).get("events") else None,
+                stale_after_seconds=6 * 3600, available=bool(telegram),
+                detail="hora del mensaje del bot, no de emisión del documento"),
+            freshness.describe(
+                "Banco Central · dólar observado", "official_publication",
+                retrieved_at=fx_cache.get("retrieved_at"),
+                observed_at=fx_latest.get("date"),
+                stale_after_seconds=2 * 86400,
+                available=bool((fx_status or {}).get("cached")),
+                detail=f"{fx_latest.get('clp_per_usd')} CLP/USD"
+                       if fx_latest else "sin cache"),
+            freshness.describe(
+                "Renta 4 · cartera", "snapshot",
+                retrieved_at=(portfolio or {}).get("received_at_ms"),
+                observed_at=(portfolio or {}).get("as_of"),
+                stale_after_seconds=86400, available=bool(portfolio),
+                detail="lo capturas tú; no es cotización en vivo"),
+            freshness.describe(
+                "Bolsa de Santiago · precios", "delayed",
+                available=bool((market or {}).get("label_ready")),
+                detail="requiere datafeed licenciado; sin contratar todavía"),
+            freshness.describe(
+                "CMF Bancos", "official_publication",
+                available=bool((bank_status or {}).get("cached")),
+                detail=(bank_status or {}).get("blockers", ["sin datos"])[0]),
+        ]
+
+    @staticmethod
+    def _fin_de_periodo(periodo):
+        """202606 -> 2026-06-30: la fecha del dato, distinta de su descarga."""
+        texto = str(periodo or "")
+        if len(texto) != 6 or not texto.isdigit():
+            return None
+        cierre = {"03": "31", "06": "30", "09": "30", "12": "31"}.get(texto[4:])
+        return f"{texto[:4]}-{texto[4:]}-{cierre}" if cierre else None
 
     def _read_portfolio(self, uid):
         if uid is None:
@@ -584,15 +660,34 @@ class AccionesChileModule(NexusModule):
         return LOCAL_UNIVERSE_PATH if os.path.isfile(LOCAL_UNIVERSE_PATH) else PACKAGED_UNIVERSE_PATH
 
     def _refresh_loop(self):
-        interval = max(3600, int(self.config.get("cmf_refresh_interval_seconds", 86400)))
+        """Sondeo barato frecuente, descarga cara sólo cuando hay algo nuevo.
+
+        La CMF publica por período, no en flujo continuo: bajar los TXT
+        completos cada pocos minutos serían cientos de descargas diarias de un
+        archivo que cambia unas pocas veces al año. En cambio se consulta la
+        página de listado —una petición— y sólo se descarga cuando aparece un
+        cierre que el cache no tiene, o cuando el cache cumplió su edad máxima.
+        """
+        refresco = max(3600, int(self.config.get("cmf_refresh_interval_seconds", 86400)))
+        sondeo = max(600, int(self.config.get("cmf_probe_interval_seconds", 3600)))
+        sondeo = min(sondeo, refresco)
         while not self._stop_event.is_set():
             existing = self._read_dataset()
             age = time.time() - ((existing or {}).get("generated_at_ms", 0) / 1000)
-            if not existing or age >= interval:
+            motivo = None
+            if not existing:
+                motivo = "sin cache"
+            elif age >= refresco:
+                motivo = "cache cumplió su edad máxima"
+            else:
+                nuevo = self._periodo_nuevo(existing)
+                if nuevo:
+                    motivo = f"la CMF publicó {nuevo}"
+            if motivo:
                 try:
                     dataset_store.refresh_dataset(
                         DATASET_PATH, base_url=self.config.get("cmf_base_url") or dataset_store.DEFAULT_URL)
-                    self.context.log("acciones_chile: dataset CMF/YouTube actualizado")
+                    self.context.log(f"acciones_chile: dataset CMF/YouTube actualizado ({motivo})")
                 except Exception as exc:  # noqa: BLE001 - conservar cache y reintentar luego
                     self.context.log(f"acciones_chile: actualización falló cerrada: {exc}")
             fx_data = fx.read_fx_dataset(FX_PATH)
@@ -600,15 +695,30 @@ class AccionesChileModule(NexusModule):
                 fx_age = time.time() - datetime.fromisoformat(
                     str((fx_data or {}).get("retrieved_at"))).timestamp()
             except (TypeError, ValueError):
-                fx_age = interval
-            if not fx_data or fx_age >= interval:
+                fx_age = refresco
+            if not fx_data or fx_age >= refresco:
                 try:
                     public_download = fx.download_public_observed_dollar()
                     fx.write_fx_dataset(FX_PATH, fx.build_public_fx_dataset(public_download))
                     self.context.log("acciones_chile: dólar observado BCCh público actualizado")
                 except Exception as exc:  # noqa: BLE001 - conservar cache y reintentar luego
                     self.context.log(f"acciones_chile: dólar BCCh falló cerrado: {exc}")
-            self._stop_event.wait(interval)
+            self._stop_event.wait(sondeo)
+
+    def _periodo_nuevo(self, dataset):
+        """Consulta el listado de la CMF y devuelve el cierre que falte, si hay.
+
+        Falla cerrado a `None`: si el listado no responde se conserva el cache y
+        se reintenta en el próximo sondeo, sin descargar nada por las dudas.
+        """
+        try:
+            publicados = cmf_client.available_periods()
+        except Exception:  # noqa: BLE001 - una caída del listado no gatilla descargas
+            return None
+        conocidos = set((dataset.get("cmf") or {}).get("periods") or [])
+        candidatos = dataset_store.select_refresh_periods(publicados)
+        faltantes = [periodo for periodo in candidatos if periodo not in conocidos]
+        return faltantes[0] if faltantes else None
 
     def health(self):
         return {"slug": self.slug, "status": "ok", "mode": "read_only",

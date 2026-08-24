@@ -3,6 +3,7 @@ import os
 import re
 import ast
 import urllib.error
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,6 +44,7 @@ from modules.acciones_chile.strategy import (
     build_radar, evaluate_decision_evidence, evaluate_observation, evaluate_valuation,
     portfolio_concentration,
 )
+from modules.acciones_chile import freshness
 from modules.acciones_chile import module as acciones_module
 
 
@@ -1436,3 +1438,109 @@ def test_el_pegado_rechaza_comillas_y_columnas_sobrantes():
     page = _pagina_chile()
     assert "no manejo comillas" in page
     assert "sobran columnas" in page
+
+
+# --- Frescura y procedencia -------------------------------------------------
+
+def test_la_frescura_separa_la_fecha_del_dato_de_la_de_su_descarga():
+    """Un TXT de junio bajado hoy es reciente en recuperación y viejo en
+    contenido. La interfaz tiene que poder decir las dos cosas."""
+    d = freshness.describe(
+        "CMF", "official_publication",
+        observed_at="2026-06-30", retrieved_at="2026-08-24T06:00:00+00:00",
+        stale_after_seconds=2 * 86400, now="2026-08-24T12:00:00+00:00")
+    assert d["observed_at"].startswith("2026-06-30")
+    assert d["retrieved_at"].startswith("2026-08-24")
+    assert d["age_seconds"] == 6 * 3600
+    assert d["age_label"] == "hace 6 h"
+    assert d["state"] == "fresh"
+
+
+def test_sin_fecha_de_recuperacion_el_estado_es_desconocido_no_fresco():
+    """Asumir frescura cuando no se sabe cuándo se trajo el dato es
+    exactamente la afirmación sin respaldo que este módulo evita."""
+    d = freshness.describe("X", "realtime", stale_after_seconds=60)
+    assert d["state"] == "unknown"
+    assert d["age_label"] is None
+
+
+def test_la_frescura_degrada_por_tramos_y_marca_lo_caido():
+    base = dict(source="X", mode="delayed", stale_after_seconds=1000,
+                now="2026-08-24T12:00:00+00:00")
+    def edad(segundos):
+        desde = datetime(2026, 8, 24, 12, 0, 0, tzinfo=timezone.utc) - timedelta(seconds=segundos)
+        return freshness.describe(retrieved_at=desde.isoformat(), **base)["state"]
+    assert edad(100) == "fresh"
+    assert edad(800) == "aging"      # a partir del 75% del umbral
+    assert edad(1500) == "stale"
+    assert freshness.describe("X", "delayed", available=False)["state"] == "missing"
+
+
+def test_el_estado_agregado_lo_manda_la_peor_fuente():
+    fuentes = [
+        freshness.describe("ok", "realtime", retrieved_at="2026-08-24T12:00:00+00:00",
+                           now="2026-08-24T12:00:00+00:00"),
+        freshness.describe("caida", "delayed", available=False),
+    ]
+    agregado = freshness.overall(fuentes)
+    assert agregado["state"] == "missing"
+    assert agregado["worst"] == "caida"
+    assert agregado["counts"]["fresh"] == 1
+    assert freshness.overall([])["state"] == "missing"
+
+
+def test_la_frescura_rechaza_un_modo_inventado():
+    """Los modos son un contrato cerrado: tiempo real, diferido, snapshot,
+    publicación oficial o derivado. No se admite etiquetar de otra forma."""
+    with pytest.raises(ValueError, match="modo de frescura desconocido"):
+        freshness.describe("X", "casi_en_vivo")
+    assert set(freshness.MODES) == {
+        "realtime", "delayed", "snapshot", "official_publication", "derived"}
+
+
+def test_el_fin_de_periodo_convierte_el_cierre_contable_en_fecha():
+    convertir = acciones_module.AccionesChileModule._fin_de_periodo
+    assert convertir("202606") == "2026-06-30"
+    assert convertir("202512") == "2025-12-31"
+    assert convertir("202603") == "2026-03-31"
+    for invalido in ("2026", "202607", "abcdef", None, ""):
+        assert convertir(invalido) is None
+
+
+def test_la_pagina_muestra_la_procedencia_de_cada_fuente():
+    page = _pagina_chile()
+    assert "De dónde viene cada dato" in page
+    assert "./api/status" in page and "pintarFuentes" in page
+    # Los cinco estados tienen tratamiento visual propio.
+    for estado in ("fresh", "aging", "stale", "unknown", "missing"):
+        assert f".fuente.{estado}" in page, estado
+    # Se muestran las dos fechas, no una sola.
+    assert "Dato del ${String(s.observed_at)" in page
+    assert "s.age_label" in page
+
+
+def test_el_colector_solo_descarga_cuando_hay_un_cierre_nuevo(monkeypatch):
+    """La CMF publica por período: sondear el listado es una petición, bajar
+    los TXT completos son megabytes. Sólo lo segundo cuando hay algo nuevo."""
+    modulo = acciones_module.AccionesChileModule.__new__(acciones_module.AccionesChileModule)
+    publicados = ["202609", "202606", "202603", "202506", "202503"]
+    monkeypatch.setattr(acciones_module.cmf_client, "available_periods", lambda: publicados)
+    # El cache tiene todo lo publicado: no hay razón para bajar nada.
+    assert modulo._periodo_nuevo({"cmf": {"periods": list(publicados)}}) is None
+    # Apareció un cierre nuevo: se nombra para que quede en el log del colector.
+    atrasado = {"cmf": {"periods": ["202606", "202603", "202506", "202503"]}}
+    assert modulo._periodo_nuevo(atrasado) == "202609"
+    # Un cache vacío también dispara, sin necesidad de comparar.
+    assert modulo._periodo_nuevo({"cmf": {"periods": []}}) == "202609"
+
+
+def test_si_el_listado_de_la_cmf_falla_no_se_descarga_nada(monkeypatch):
+    """Fallar cerrado: una caída del listado conserva el cache en vez de
+    disparar descargas por las dudas."""
+    modulo = acciones_module.AccionesChileModule.__new__(acciones_module.AccionesChileModule)
+
+    def caido():
+        raise OSError("listado CMF no responde")
+
+    monkeypatch.setattr(acciones_module.cmf_client, "available_periods", caido)
+    assert modulo._periodo_nuevo({"cmf": {"periods": ["202606"]}}) is None

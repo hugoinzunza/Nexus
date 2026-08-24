@@ -169,6 +169,7 @@
       "cmf_base_url": "https://www.cmfchile.cl/institucional/estadisticas/ver_archivo.php",
       "cmf_auto_refresh": true,
       "cmf_refresh_interval_seconds": 86400,
+      "cmf_probe_interval_seconds": 3600,
       "portfolio_ingest_enabled": false,
       "claude_auditor_enabled": true,
       "claude_auditor_model": "claude-opus-4-8",
