@@ -1,10 +1,15 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.28
+# Bot3.v13 — Observador operativo · DISEÑO rev.29
 
-**Estado: DISEÑO rev.28 — §20 acotada: la acreditación se invoca contra un
-checksum esperado, y toda salida clausura el trabajador. §1–§19 y §13 no se
-reabren. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.29 — §20 acotada: supervisión del árbol de procesos por
+grupo, con barrido del wrapper y red de seguridad en el arranque. §1–§19 y §13
+no se reabren. No desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.29 corrige que la clausura de rev.28 presuponía un daemon que sigue
+corriendo: `EOF → espera → SIGKILL → waitpid` no puede ejecutarse si al daemon
+lo mataron con `SIGKILL` —el caso que el propio gate 48bis provoca—, y el
+wrapper no puede hacerle `waitpid` al trabajador, que es su NIETO. «Toda
+salida, sin excepción» no era implementable con la jerarquía declarada.
 rev.28 cierra dos bloqueos: la máquina de acreditación exigía al segundo
 operador comprobar que su acto fuera idéntico, pero tras el primero ya no queda
 `fallo_cerrado.json` y el segundo caía en «no-op» sin poder comparar nada; y
@@ -1368,7 +1373,8 @@ producción solo agregaría una ruta sin probar.
 `CADENCIA_VERIFICACION`, `MOTIVOS_CIENTIFICOS`, `MOTIVOS_INTEGRIDAD`,
 `PRECEDENCIA_TERMINAL`, `MAX_TRANSITORIOS` y `EXIT_TIMEOUT` *(rev.20)*,
 `CONNECT_TIMEOUT`, `READ_TIMEOUT` *(rev.22)*, `REQUEST_DEADLINE` *(rev.23)*,
-`MAX_SOBRE` *(rev.26)* y `CIERRE_COOPERATIVO` *(rev.28)*, y las
+`MAX_SOBRE` *(rev.26)*, `CIERRE_COOPERATIVO` *(rev.28)* y la ruta de
+`supervision.json` *(rev.29)*, y las
 rutas de estado, libro, lock, staging, los dos
 marcadores terminales (`completed.json`, `blocked.json`) y los sidecars
 (`silencio.json`, `verificacion.json`, `fallo_cerrado.json` *(rev.20)*) y
@@ -1638,6 +1644,7 @@ la cohorte tiene que sostener.
 ### 20.2 Orden CONGELADO del arranque
 
 ```
+0. barrer el grupo de una corrida anterior     (§20.4.1, nivel 3)
 1. tomar singleton_lock          (flock de vida completa, §7)
 2. validar árbol limpio y commit == acta.commit
 3. clasificar fallo_cerrado.json si existe: `1` bloquea, `2` continúa (§20.6.4)
@@ -1650,7 +1657,9 @@ la cohorte tiene que sostener.
 10. recién entonces, el bucle de ciclos
 ```
 
-Los pasos 1–8 no ingieren nada. El orden importa en los dos extremos: el lock
+Los pasos 0–8 no ingieren nada. El paso 0 va ANTES del lock a propósito: si
+fuera después, este proceso ya tendría el `singleton_lock` mientras un
+trabajador de la corrida anterior sigue pidiendo velas al exchange. El orden importa en los dos extremos: el lock
 va PRIMERO porque dos procesos sobre los mismos almacenes es la corrupción que
 §7 impide, y `reanudar()` va antes del bucle porque un `terminal.request`
 pendiente prohíbe abrir ciclos (§13.3) y el arranque es uno de los tres
@@ -2044,29 +2053,47 @@ SIGKILL → waitpid → cerrar los DOS extremos del canal viejo
         → crear tuberías nuevas → respawn con generation_id + 1
 ```
 
-**Clausura COMÚN a toda salida** *(rev.28)*. rev.27 solo definía
-`SIGKILL → waitpid` al vencer el deadline. Por cualquier otra vía —salida
-ordenada, `SIGTERM`, corrupción del IPC, fallo cerrado, o el propio wrapper
-terminando— el padre podía irse dejando al trabajador vivo, y en macOS no hay
-ninguna garantía de que un hijo muera con su padre: quedaban trabajadores
-huérfanos hablando con el exchange sin nadie que los leyera. La misma secuencia
-corre en TODA salida, sin excepción:
+**Clausura en TRES niveles** *(rev.29)*. rev.28 declaraba una sola secuencia
+cooperativa «para toda salida, sin excepción», y no es implementable: no corre
+si al daemon lo matan con `SIGKILL`, y el wrapper no puede hacerle `waitpid` al
+trabajador porque es su NIETO, no su hijo. Cada nivel cubre lo que el anterior
+no puede.
 
-```
-cerrar el extremo de ESCRITURA del pedido      (el trabajador ve EOF)
-esperar CIERRE_COOPERATIVO = 2 s a que salga solo
-si sigue vivo → SIGKILL
-waitpid  (siempre, o queda zombi)
-cerrar los descriptores restantes
-```
+**Propiedad del árbol, congelada.** El wrapper lanza el daemon en un **grupo de
+procesos propio** (`setpgid` en el hijo tras el `fork`, de modo que
+`PGID == PID` del daemon). El trabajador lo hereda. El wrapper queda FUERA del
+grupo, que es lo que le permite barrerlo sin matarse a sí mismo. Antes de
+arrancar el daemon, el wrapper publica `supervision.json` de forma durable con
+`{pgid, wrapper_pid, iniciado_en}`.
 
-El EOF primero para que el caso normal sea una salida limpia del trabajador y
-no un `SIGKILL`; los 2 s porque no tiene nada durable que cerrar —no escribe
-almacenes, libro ni sidecars (§20.4)—, así que un plazo largo solo retrasaría
-la salida del padre y comería el `ExitTimeOut` de §20.6; y el `waitpid`
-siempre, incluso tras el `SIGKILL`, porque si no el zombi sobrevive al padre.
+| nivel | quién actúa | cuándo | qué hace |
+|---|---|---|---|
+| 1. cooperativo | el DAEMON | salida ordenada, `SIGTERM`, fallo cerrado, corrupción del IPC | `cerrar el extremo de escritura` (EOF) → esperar `CIERRE_COOPERATIVO` = 2 s → `SIGKILL` al trabajador si sigue vivo → `waitpid` → cerrar descriptores |
+| 2. barrido | el WRAPPER | siempre, tras el `waitpid` del daemon —que SÍ es su hijo—, incluso si al daemon lo mataron con `SIGKILL` | `killpg(pgid, SIGKILL)` |
+| 3. red de seguridad | el ARRANQUE siguiente | si murió el wrapper y nadie barrió | lee `supervision.json`; si el `pgid` registrado no es el suyo y sigue vivo, `killpg(SIGKILL)` y espera a que desaparezca. Solo entonces continúa |
 
-`CIERRE_COOPERATIVO` se agrega a §15.
+Por qué cada uno:
+
+- **el nivel 1 es el camino normal**, y por eso empieza por EOF: el trabajador
+  sale limpio y no hace falta señal. Los 2 s son cortos porque no tiene nada
+  durable que cerrar —no escribe almacenes, libro ni sidecars (§20.4)—, así
+  que un plazo largo solo comería el `ExitTimeOut` de §20.6;
+- **el nivel 2 cubre el trabajador COLGADO**, que es el caso duro: uno detenido
+  en una resolución DNS no está mirando su tubería y no ve ningún EOF, así que
+  ninguna clausura cooperativa lo alcanza. Solo la señal al grupo. Y cubre
+  también el `SIGKILL` al daemon, donde el nivel 1 no llega a correr;
+- **el nivel 3 cubre la muerte del WRAPPER**, donde no queda nadie que barra.
+  La única red posible es diferida, y va antes del `singleton_lock`: si no,
+  el proceso nuevo tomaría el lock mientras un trabajador de la corrida
+  anterior sigue pidiendo velas.
+
+**Nadie queda zombi, y nadie tiene que recolectar a su nieto.** El wrapper
+recolecta al daemon; el daemon recolecta al trabajador mientras viva. Si el
+daemon muere primero, el trabajador queda huérfano y **`init` lo recolecta**:
+el `killpg` del nivel 2 solo tiene que matarlo, no esperarlo. rev.28 pedía al
+wrapper un `waitpid` que el sistema operativo no le permite.
+
+`CIERRE_COOPERATIVO` y `supervision.json` se agregan a §15.
 
 Cerrar los descriptores viejos ANTES de crear los nuevos es lo que hace
 imposible leer bytes residuales tras el respawn: los bytes que el trabajador
@@ -2509,6 +2536,9 @@ Numerados a continuación de §17, que termina en 44:
     DESPUÉS de la unidad de silencio pero ANTES del primer lote, se exige, en
     este orden:
 
+    0. **el árbol queda limpio**: el `SIGKILL` al daemon impide toda clausura
+       cooperativa, así que el barrido lo hace el wrapper por `killpg`
+       (§20.4.1, nivel 2) y no queda ningún trabajador vivo *(rev.29)*;
     1. **recuperación de ALMACENAMIENTO**, comprobada fuera del wrapper:
        `silencio.json` en disco contiene el acumulado, no se perdió ni
        retrocedió, y valida contra su schema;
@@ -2531,12 +2561,22 @@ Numerados a continuación de §17, que termina en 44:
     analítica desde `REQUEST_DEADLINE` más el sellado y el lote más largo, y
     **falla si el `ExitTimeOut` del plist es menor a 3 × el mayor de los dos**
     (§20.6);
-48octies. **ningún trabajador huérfano** *(rev.28)*: tras salida ordenada,
-    `SIGTERM`, corrupción del IPC, fallo cerrado y muerte del wrapper, no queda
-    NINGÚN proceso trabajador vivo ni zombi —se comprueba por PID, no por
-    ausencia de log—; el caso normal sale por EOF sin llegar al `SIGKILL`; un
-    trabajador que ignora el EOF recibe `SIGKILL` tras `CIERRE_COOPERATIVO`; y
-    en todos los casos hay `waitpid`;
+48octies. **el árbol de procesos no deja huérfanos** *(rev.28, reescrito en
+    rev.29)*. Cuatro escenarios, y en los cuatro se exige lo mismo al final:
+    **cero procesos vivos y cero zombis**, comprobado por PID y por el estado
+    de proceso, nunca por ausencia de log.
+
+    | escenario | qué nivel debe actuar |
+    |---|---|
+    | salida NORMAL y fallo del IPC | nivel 1: el trabajador sale por EOF, sin llegar al `SIGKILL`, y el daemon lo recolecta |
+    | `SIGKILL` al DAEMON con el trabajador **bloqueado en DNS** | nivel 2: el trabajador no ve ningún EOF —está detenido en `getaddrinfo`—, así que solo el `killpg` del wrapper lo alcanza |
+    | `SIGKILL` al WRAPPER, con daemon y trabajador vivos | nivel 3: nadie barre en el momento, y el ARRANQUE siguiente lo hace por `supervision.json` ANTES de tomar el `singleton_lock` |
+    | un trabajador que IGNORA el EOF | nivel 1 escala a `SIGKILL` tras `CIERRE_COOPERATIVO` |
+
+    Se exige además que el wrapper **no se mate a sí mismo** con su propio
+    `killpg` —queda fuera del grupo—, y que el arranque del nivel 3 **no barra
+    un grupo ajeno**: un `pgid` reutilizado por otro proceso del sistema no se
+    toca, y `supervision.json` de otra identidad falla cerrado *(rev.29)*;
 48sexies. **enum de errores y política de reintento** *(rev.27)*: cada valor
     de la tabla de §20.4 produce lo que declara —`dns`, `conexion`, `tls`,
     `lectura`, `http_429`, `http_5xx` consumen intento; `http_4xx`, `interno` y
