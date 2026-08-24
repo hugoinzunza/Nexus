@@ -1,10 +1,15 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.33
+# Bot3.v13 — Observador operativo · DISEÑO rev.34
 
-**Estado: DISEÑO rev.33 — §20 acotada: la incidencia de interrupción es un
-sidecar registral. §1–§19 y §13 no se reabren. No desplegado. Cohorte no
+**Estado: DISEÑO rev.34 — §20 acotada: la comparación idempotente es por
+campos DETERMINISTAS. §1–§19 y §13 no se reabren. No desplegado. Cohorte no
 iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.34 corrige que rev.33 se contradecía a sí misma: la incidencia lleva
+`ocurrido_en`, tomado del reloj, y la reanudación comparaba «contenido
+idéntico» — así que el wrapper que retomaba generaba otro instante, la
+comparación fallaba y el caso que el gate exige resolver como éxito idempotente
+terminaba en fallo cerrado, siempre.
 rev.33 le da tratamiento registral a la «incidencia separada» que rev.32
 introdujo: en dos de las cuatro filas del arbitraje es lo ÚNICO que acredita la
 interrupción del supervisor, y estaba sin schema, sin ruta determinista, sin
@@ -2209,7 +2214,7 @@ registral que los demás sidecars.
 | `supervision_checksum` | el sidecar de supervisión que motivó el barrido |
 | `diagnostico_sha256` | SHA-256 de los **bytes crudos** del diagnóstico previo |
 | `clasificacion` | registro CERRADO: `codigo_1_preservado`, `corrupto`, `identidad_ajena` |
-| `ocurrido_en` | instante entero |
+| `ocurrido_en` | instante entero de la PRIMERA publicación; NO determinista (§20.4.2.4) |
 | `checksum` | del propio documento |
 
 **La identidad sale de `supervision.json`, no del diagnóstico previo.** En la
@@ -2241,10 +2246,37 @@ link(tmp, definitivo)      EEXIST → comparar CONTENIDO
 fsync del directorio → unlink(tmp) → fsync del directorio
 ```
 
-Ante `EEXIST`: contenido **idéntico** es éxito idempotente —la caída ocurrió
-después de publicar—, y contenido **distinto** es fallo cerrado. Dos
-incidencias distintas con la misma ruta significan que los dos hashes que la
-nombran no describen lo que hay.
+Ante `EEXIST` se aplica la comparación por campos DETERMINISTAS de §20.4.2.4.
+
+##### 20.4.2.4 Comparación idempotente: campos deterministas *(rev.34)*
+
+rev.33 decía «contenido idéntico es éxito idempotente». Con `ocurrido_en` en el
+documento eso era imposible de cumplir: el wrapper que retoma tras una caída
+muestrea su propio reloj, el instante difiere, la comparación falla, y el caso
+que el gate exige resolver como éxito idempotente terminaba en **fallo cerrado,
+siempre**. El artefacto contradecía su propia recuperación.
+
+Los campos se parten en dos clases:
+
+| clase | campos | qué se hace ante `EEXIST` |
+|---|---|---|
+| **deterministas** | `schema_version`, `cohorte`, `contrato`, `commit`, `supervision_checksum`, `diagnostico_sha256`, `clasificacion` | se COMPARAN todos. Cualquier diferencia es fallo cerrado |
+| **de primera publicación** | `ocurrido_en` | se CONSERVA el del documento existente. No se regenera ni se exige igualdad con el reloj del reintento |
+
+El documento existente se VALIDA antes de compararlo —schema y checksum
+propios—: uno corrupto en esa ruta no es un éxito idempotente, es fallo
+cerrado.
+
+`ocurrido_en` se conserva y no se elimina porque representa **cuándo se
+detectó la interrupción**, que es información operacional real. Derivarlo de
+`supervision.publicado_en` lo haría determinista, pero sería semánticamente
+falso: ese campo es el nacimiento de la corrida, no su interrupción, y pueden
+estar separados por días.
+
+La misma regla gobierna el registro de acreditación de §20.6.5.1, cuya
+comparación ya enumeraba campos deterministas —`diagnostico_checksum`,
+`acreditado_por`, `motivo_humano`— y dejaba `acreditado_en` fuera. rev.34 lo
+declara explícito en vez de dejarlo implícito en una enumeración.
 
 **La incidencia es durable ANTES de retirar `supervision.json`**, por lo mismo
 que el diagnóstico (§20.4.2.1): al revés queda una ventana sin sidecar y sin
@@ -2595,7 +2627,7 @@ invocación, y por eso se puede resolver esté el diagnóstico o no:
 | qué hay en disco | qué se hace |
 |---|---|
 | diagnóstico activo cuyo `checksum` COINCIDE | se continúa por los pasos 2–4 |
-| diagnóstico ausente y acreditación archivada IDÉNTICA | **éxito idempotente**: el acto ya ocurrió, no se repite nada |
+| diagnóstico ausente y acreditación archivada con los campos DETERMINISTAS iguales (§20.4.2.4) | **éxito idempotente**: el acto ya ocurrió, no se repite nada. `acreditado_en` se conserva, no se compara |
 | diagnóstico ausente y acreditación archivada con OTRO `operador` o `motivo_humano` | **conflicto**: otro humano ya decidió sobre este diagnóstico. No se sobrescribe |
 | diagnóstico o acreditación con un `checksum` DISTINTO del esperado | **fallo cerrado**: se está acreditando otra cosa que la que el operador miró |
 | nada de lo anterior | fallo cerrado: no hay nada que acreditar con ese checksum |
@@ -2902,7 +2934,8 @@ Numerados a continuación de §17, que termina en 44:
       | diagnóstico previo `codigo: 1` | se CONSERVA sin sobrescribir y la interrupción va como incidencia separada (§20.4.2.3), con `clasificacion: codigo_1_preservado`; el motivo original sigue siendo legible |
       | diagnóstico previo `codigo: 2` | se ARCHIVA con el enlace exclusivo —la serie transitoria queda en `diagnosticos/`— y se publica `supervisor_interrumpido` con `codigo: 1` |
       | diagnóstico previo corrupto o de otra identidad | no se toca; se registra la incidencia con `clasificacion: corrupto` o `identidad_ajena`; el arranque queda bloqueado por él |
-      | *(rev.33)* incidencia como ARTEFACTO | interrupción DESPUÉS de publicar la incidencia y ANTES de retirar `supervision.json`: el wrapper siguiente recalcula la MISMA ruta determinista, encuentra contenido idéntico, **no duplica** y solo completa el retiro; una incidencia con la misma ruta y contenido DISTINTO falla cerrado; un `.tmp` huérfano de una caída a mitad de la escritura se descarta |
+      | *(rev.33)* incidencia como ARTEFACTO | interrupción DESPUÉS de publicar la incidencia y ANTES de retirar `supervision.json`: el wrapper siguiente recalcula la MISMA ruta determinista, **no duplica** y solo completa el retiro; una incidencia con la misma ruta y campos DETERMINISTAS distintos falla cerrado; un `.tmp` huérfano de una caída a mitad de la escritura se descarta |
+      | *(rev.34)* reanudación con DOS RELOJES | el gate anterior se corre con el wrapper que retoma muestreando un instante DISTINTO del que publicó: el resultado debe ser éxito idempotente y no fallo cerrado, con el `ocurrido_en` del documento CONSERVADO —el de la primera publicación, no el del reintento—. Es el caso que rev.33 hacía imposible. Se ejerce también sobre el registro de acreditación de §20.6.5.1, con `acreditado_en` distinto y el resto idéntico; y un documento existente CORRUPTO en esa ruta falla cerrado en vez de contarse como éxito idempotente |
       | *(rev.33)* diagnóstico ILEGIBLE | con un diagnóstico previo cuyos campos internos NO se pueden leer —JSON roto, `checksum` ausente—, la incidencia se publica igual: identidad tomada de `supervision.json` y documento identificado por el SHA-256 de sus BYTES CRUDOS |
 
 48sexies. **enum de errores y política de reintento** *(rev.27)*: cada valor
