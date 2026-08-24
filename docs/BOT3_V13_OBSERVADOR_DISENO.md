@@ -1,10 +1,15 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.31
+# Bot3.v13 — Observador operativo · DISEÑO rev.32
 
-**Estado: DISEÑO rev.31 — §20 acotada: la muerte del supervisor deja registro
-y bloquea, y la identidad de nacimiento tiene primitiva exacta. §1–§19 y §13
-no se reabren. No desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.32 — §20 acotada: el barrido diferido CONSUME el sidecar
+y arbitra contra un diagnóstico previo. §1–§19 y §13 no se reabren. No
+desplegado. Cohorte no iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.32 cierra un DEADLOCK de rev.31: el barrido diferido escribía
+`supervisor_interrumpido` y bloqueaba, pero no retiraba `supervision.json`, así
+que tras acreditar el diagnóstico el wrapper siguiente lo encontraba otra vez,
+diagnosticaba la misma interrupción y volvía a bloquear — para siempre. Y
+define qué hacer cuando ya existe un `fallo_cerrado.json` del daemon.
 rev.31 cierra una FUGA de la taxonomía: el barrido diferido de rev.30 convertía
 una muerte no cooperativa del supervisor en un reinicio transparente, cuando
 §20.6.3 exige que toda muerte por señal produzca `codigo: 1` e intervención
@@ -2139,10 +2144,52 @@ justo lo que §20.6.3 prohíbe: toda muerte por señal clasifica `codigo: 1` y
 exige que un humano mire. La fuga era peor por asimétrica — matar al daemon
 bloqueaba, matar al wrapper no.
 
-Tras barrer, el wrapper nuevo escribe `fallo_cerrado.json` con
-`motivo: supervisor_interrumpido`, `codigo: 1`, y **no lanza ningún daemon**.
-El arranque queda bloqueado hasta la acreditación de §20.6.5, igual que
-cualquier otro fallo cerrado.
+**Orden CONGELADO y recuperable** *(rev.32)*. rev.31 barría, diagnosticaba y
+bloqueaba, pero nunca retiraba el sidecar: tras acreditar el diagnóstico, el
+wrapper siguiente volvía a encontrarlo, volvía a diagnosticar la misma
+interrupción y volvía a bloquear. La cohorte quedaba trabada sin salida, que es
+peor que el huérfano que el barrido evita.
+
+```
+1. barrer, y COMPROBAR que el grupo desapareció
+2. publicar el diagnóstico durablemente        (§20.4.2.2 arbitra qué se publica)
+3. retirar supervision.json + fsync del directorio
+4. salir sin lanzar ningún daemon
+```
+
+El diagnóstico va ANTES de retirar el sidecar, y no al revés: entre 3 y 2 se
+abriría una ventana en la que no hay sidecar ni diagnóstico, y un wrapper que
+entrara ahí arrancaría un daemon como si nada hubiera pasado — el reinicio
+automático que §20.4.2.1 prohíbe.
+
+**Recuperación idempotente** si cae entre pasos. Para que el wrapper siguiente
+sepa si el diagnóstico que ve corresponde a ESTA interrupción, el
+`supervisor_interrumpido` **cita el `checksum` del `supervision.json` que lo
+motivó**:
+
+| dónde cayó | qué hace el siguiente |
+|---|---|
+| tras 1, antes de 2 | el grupo ya no está: el paso 1 es no-op y sigue por 2 |
+| tras 2, antes de 3 | encuentra un `supervisor_interrumpido` que cita ESTE sidecar: no rediagnostica, solo completa el paso 3 |
+| tras 3 | no hay sidecar. Arranque normal, bloqueado por el diagnóstico hasta su acreditación |
+| acreditado y sin sidecar | arranque REAL: el ciclo se cierra |
+
+##### 20.4.2.2 Arbitraje con un diagnóstico previo *(rev.32)*
+
+El wrapper puede morir DESPUÉS de que el daemon publicara su propio
+diagnóstico. rev.31 no decía si preservarlo, compararlo o reemplazarlo:
+
+| lo que hay en `fallo_cerrado.json` | qué se hace |
+|---|---|
+| nada | se publica `supervisor_interrumpido`, `codigo: 1` |
+| `codigo: 1` válido y de esta identidad | **se CONSERVA sin sobrescribir**: dice por qué murió el daemon, que es la causa raíz. La interrupción del supervisor se registra como **incidencia separada** en `diagnosticos/`, con el enlace exclusivo de §20.6.4 |
+| `codigo: 2` válido y de esta identidad | se **ARCHIVA** en `diagnosticos/` —la serie transitoria no se pierde— y se publica `supervisor_interrumpido` con `codigo: 1`. La severidad no baja: una interrupción del supervisor domina a un transitorio |
+| corrupto, sin checksum válido, o de OTRA identidad | **fallo cerrado sin reemplazo**: no se toca el documento, se registra la incidencia, y el arranque queda bloqueado por él (§20.6.4, fila «corrupto o inválido») |
+
+Ninguna fila sobrescribe en silencio: la primera conserva, la segunda archiva
+antes de publicar, y la tercera no toca nada. Conservar el `codigo: 1` del
+daemon por sobre el del wrapper es deliberado — el daemon sabe POR QUÉ falló, y
+la interrupción del supervisor es una consecuencia, no la causa.
 
 Cómo se distingue de una salida limpia, sin heurística: un wrapper que termina
 ordenadamente **borra `supervision.json`** (§20.4.3). Encontrarlo presente tras
@@ -2563,6 +2610,7 @@ sidecars —rev.19 lo introdujo sin ninguno—:
 | `schema_version` | cerrada y versionada |
 | `cohorte`, `contrato`, `commit` | identidad, igual que `terminal.request` |
 | `motivo` | registro CERRADO: `excepcion`, `transitorios_agotados`, `senal`, `sin_diagnostico`, `wrapper`, `supervisor_interrumpido` *(rev.31)* |
+| `supervision_checksum` | el `supervision.json` que motivó la interrupción; solo con `motivo: supervisor_interrumpido` *(rev.32)* |
 | `excepcion` | clase y mensaje; solo con `motivo: excepcion` o `transitorios_agotados` |
 | `traceback` | texto, para el operador; no participa de ninguna decisión |
 | `codigo` | **clasificado**: `1` o `2`, siempre. No es el estado crudo |
@@ -2783,6 +2831,18 @@ Numerados a continuación de §17, que termina en 44:
       `motivo: supervisor_interrumpido` y `codigo: 1`. Se exige que el estado y
       el libro queden recuperables Y que NO haya reanudación automática: solo
       tras la acreditación de §20.6.5 vuelve a correr;
+    - y de rev.32, la recuperación COMPLETA del ciclo, que rev.31 dejaba
+      trabado para siempre:
+
+      | caso | qué se exige |
+      |---|---|
+      | caída DESPUÉS del barrido, antes del diagnóstico | el siguiente ve el grupo ya muerto, diagnostica y retira el sidecar |
+      | caída DESPUÉS del diagnóstico, antes de retirar el sidecar | el siguiente reconoce el `supervisor_interrumpido` que cita ESE `supervision.json`, **no rediagnostica**, y solo completa el retiro |
+      | acreditación seguida de arranque REAL | tras acreditar, el wrapper siguiente **arranca un daemon de verdad** — no vuelve a diagnosticar la misma interrupción. Es el deadlock de rev.31 |
+      | diagnóstico previo `codigo: 1` | se CONSERVA sin sobrescribir y la interrupción va como incidencia separada; el motivo original sigue siendo legible |
+      | diagnóstico previo `codigo: 2` | se ARCHIVA con el enlace exclusivo —la serie transitoria queda en `diagnosticos/`— y se publica `supervisor_interrumpido` con `codigo: 1` |
+      | diagnóstico previo corrupto o de otra identidad | no se toca; se registra la incidencia; el arranque queda bloqueado por él |
+
 48sexies. **enum de errores y política de reintento** *(rev.27)*: cada valor
     de la tabla de §20.4 produce lo que declara —`dns`, `conexion`, `tls`,
     `lectura`, `http_429`, `http_5xx` consumen intento; `http_4xx`, `interno` y
