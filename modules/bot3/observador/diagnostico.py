@@ -84,6 +84,36 @@ CAMPOS_DIAGNOSTICO = {
     "opcionales": ("excepcion", "traceback", "estado_crudo", "senal",
                    "supervision_checksum"),
 }
+# Tabla CONGELADA que RELACIONA motivo, código y campos (§20.6.3). Validar
+# cada campo por separado dejaba pasar documentos coherentes campo a campo y
+# absurdos como conjunto: `senal` con `codigo: 2` validaba, y con
+# `transitorios: 1` el arranque lo dejaba CONTINUAR — una muerte por `SIGKILL`
+# reiniciándose como transitoria, que es exactamente lo que §20.6.3 prohíbe.
+#
+# `codigos`: los únicos admisibles. `exige`: campos obligatorios de ese motivo.
+# Todo campo opcional que no esté en `admite` queda PROHIBIDO para el motivo.
+POR_MOTIVO = {
+    # el daemon puede fallar por una excepción camino a salir 1 o a salir 2
+    MOTIVO_EXCEPCION: {"codigos": (1, 2), "exige": ("excepcion",),
+                       "admite": ("excepcion", "traceback")},
+    # la cota de la serie: escala a 1 y nunca vuelve a ser transitoria
+    MOTIVO_TRANSITORIOS: {"codigos": (1,), "exige": ("excepcion",),
+                          "admite": ("excepcion", "traceback")},
+    # un SIGKILL es el ExitTimeOut vencido o un OOM: reintentarlo repite la
+    # misma muerte
+    MOTIVO_SENAL: {"codigos": (1,), "exige": ("senal",),
+                   "admite": ("senal", "estado_crudo")},
+    # lo escribe el wrapper cuando el daemon no dejó diagnóstico; conserva el
+    # estado crudo que observó, y el código que clasificó
+    MOTIVO_SIN_DIAGNOSTICO: {"codigos": (1, 2), "exige": ("estado_crudo",),
+                             "admite": ("estado_crudo",)},
+    # un bug del wrapper no se arregla reintentando
+    MOTIVO_WRAPPER: {"codigos": (1,), "exige": (), "admite": ("traceback",)},
+    # §20.4.2.1: la muerte del supervisor no es un reinicio
+    MOTIVO_SUPERVISOR: {"codigos": (1,), "exige": ("supervision_checksum",),
+                        "admite": ("supervision_checksum",)},
+}
+
 CAMPOS_INCIDENCIA = {
     "obligatorios": ("schema_version", "cohorte", "contrato", "commit",
                      "supervision_checksum", "diagnostico_sha256",
@@ -313,32 +343,43 @@ def validar_diagnostico(cuerpo, ruta: str = "") -> dict:
     motivo = cuerpo.get("motivo")
     _exigir(motivo in MOTIVOS_DIAGNOSTICO,
             f"motivo fuera del registro cerrado{donde}: {motivo!r}")
+    regla = POR_MOTIVO[motivo]
     # `codigo` es CLASIFICADO, no crudo: un proceso muerto por señal no
     # devuelve 1, el shell entrega `128 + N`. Ese valor viaja en
     # `estado_crudo`, y `senal` lleva además el número.
     _exigir_valor(cuerpo.get("codigo"), CODIGOS, f"`codigo`{donde}")
+    _exigir_valor(cuerpo["codigo"], regla["codigos"],
+                  f"`codigo`{donde} para `motivo: {motivo}`")
     _exigir_entero(cuerpo.get("ocurrido_en"), f"`ocurrido_en`{donde}")
     _exigir_entero(cuerpo.get("transitorios"), f"`transitorios`{donde}")
     _exigir(cuerpo["transitorios"] >= 0,
             f"`transitorios`{donde} negativo: {cuerpo['transitorios']}")
-    if motivo == MOTIVO_SENAL:
-        _exigir_entero(cuerpo.get("senal"), f"`senal`{donde}")
+    # Solo `codigo: 2` lleva serie: un fallo cerrado no se reintenta, así que
+    # un contador ahí no significaría nada y podría leerse como que sí.
+    if cuerpo["codigo"] == 1:
+        _exigir(cuerpo["transitorios"] == 0,
+                f"`transitorios`{donde} no nulo con `codigo: 1`: un fallo "
+                f"cerrado no tiene serie que continuar")
+    faltan = sorted(c for c in regla["exige"] if c not in cuerpo)
+    _exigir(not faltan,
+            f"`motivo: {motivo}`{donde} exige {faltan}")
+    sobran = sorted(c for c in CAMPOS_DIAGNOSTICO["opcionales"]
+                    if c in cuerpo and c not in regla["admite"])
+    _exigir(not sobran,
+            f"`motivo: {motivo}`{donde} no admite {sobran}")
+    if "senal" in cuerpo:
+        _exigir_entero(cuerpo["senal"], f"`senal`{donde}")
         _exigir(cuerpo["senal"] > 0, f"`senal`{donde} no positiva")
-    else:
-        _exigir("senal" not in cuerpo,
-                f"`senal`{donde} solo corresponde a `motivo: senal`")
-    if motivo in (MOTIVO_EXCEPCION, MOTIVO_TRANSITORIOS):
-        _exigir_texto(cuerpo.get("excepcion"), f"`excepcion`{donde}")
-    if motivo == MOTIVO_SUPERVISOR:
+    if "excepcion" in cuerpo:
+        _exigir_texto(cuerpo["excepcion"], f"`excepcion`{donde}")
+    if "traceback" in cuerpo:
+        _exigir_texto(cuerpo["traceback"], f"`traceback`{donde}")
+    if "supervision_checksum" in cuerpo:
         # §20.4.2.1: CITA el sidecar que lo motivó. Es lo que permite al
         # wrapper siguiente distinguir «ya diagnosticado, falta retirar» de
         # «hay que diagnosticar», sin heurística ni estado en memoria.
-        _exigir_sha(cuerpo.get("supervision_checksum"),
+        _exigir_sha(cuerpo["supervision_checksum"],
                     f"`supervision_checksum`{donde}")
-    else:
-        _exigir("supervision_checksum" not in cuerpo,
-                f"`supervision_checksum`{donde} solo corresponde a "
-                f"`motivo: supervisor_interrumpido`")
     if "estado_crudo" in cuerpo:
         _exigir_entero(cuerpo["estado_crudo"], f"`estado_crudo`{donde}")
     _exigir_checksum(cuerpo, donde)

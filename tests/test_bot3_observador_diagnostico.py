@@ -192,7 +192,7 @@ def test_un_diagnostico_de_OTRA_identidad_falla_cerrado(tmp_path):
 def test_un_diagnostico_corrupto_bloquea_en_vez_de_ignorarse(tmp_path):
     d = estado(tmp_path)
     cuerpo = D.diagnostico(IDENT, D.MOTIVO_WRAPPER, 1, 10)
-    cuerpo["codigo"] = 2                             # checksum ya no cuadra
+    cuerpo["ocurrido_en"] = 11                       # checksum ya no cuadra
     escribir_atomico(os.path.join(d, C.ARCHIVO_FALLO_CERRADO), canon(cuerpo))
     with pytest.raises(D.DocumentoInvalido, match="checksum"):
         D.bloquea_arranque(d, IDENT)
@@ -406,3 +406,41 @@ def test_los_schemas_rechazan_bool_y_campos_desconocidos(tmp_path):
     with pytest.raises(D.DocumentoInvalido):
         D.publicar_acreditacion(estado(tmp_path, "a"), IDENT, "b" * 64, "h",
                                 "m", True)
+
+
+def test_la_tabla_motivo_codigo_esta_CONGELADA(tmp_path):
+    """Validar `motivo` y `codigo` por separado dejaba pasar documentos
+    coherentes campo a campo y absurdos como conjunto: `senal` con
+    `codigo: 2` validaba, y con `transitorios: 1` el arranque lo dejaba
+    CONTINUAR — un `SIGKILL` reiniciándose como transitorio, que es
+    exactamente lo que §20.6.3 prohíbe."""
+    d = estado(tmp_path)
+    extras = {D.MOTIVO_SENAL: {"senal": 9},
+              D.MOTIVO_WRAPPER: {},
+              D.MOTIVO_SUPERVISOR: {"supervision_checksum": "a" * 64},
+              D.MOTIVO_TRANSITORIOS: {"excepcion": "EBUSY"}}
+    for motivo, extra in extras.items():
+        # con `codigo: 1` es legítimo…
+        bueno = D.diagnostico(IDENT, motivo, 1, 10, **extra)
+        D.publicar_diagnostico(d, bueno)
+        assert D.bloquea_arranque(d, IDENT)["motivo"] == motivo
+        # …y con `codigo: 2` NO EXISTE, ni siquiera como documento
+        with pytest.raises(D.DocumentoInvalido, match="para `motivo"):
+            D.validar_diagnostico(D._sellar(
+                dict(bueno, codigo=2, transitorios=1)), motivo)
+
+    # `excepcion` y `traceback` solo donde el diseño los define
+    senal = D.diagnostico(IDENT, D.MOTIVO_SENAL, 1, 10, senal=9)
+    for campo, valor in (("excepcion", "X"), ("traceback", "T")):
+        with pytest.raises(D.DocumentoInvalido, match="no admite"):
+            D.validar_diagnostico(D._sellar(dict(senal, **{campo: valor})))
+
+    # `traceback` exige TEXTO, no listas ni objetos
+    wrap = D.diagnostico(IDENT, D.MOTIVO_WRAPPER, 1, 10)
+    for valor in (["línea"], {"t": 1}, 5, "   "):
+        with pytest.raises(D.DocumentoInvalido, match="traceback"):
+            D.validar_diagnostico(D._sellar(dict(wrap, traceback=valor)))
+
+    # y un fallo cerrado no tiene serie que continuar
+    with pytest.raises(D.DocumentoInvalido, match="no tiene serie"):
+        D.validar_diagnostico(D._sellar(dict(wrap, transitorios=3)))
