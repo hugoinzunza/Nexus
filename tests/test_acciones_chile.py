@@ -1183,7 +1183,7 @@ def test_el_parser_rechaza_lo_ambiguo_en_vez_de_elegir_una_lectura():
     escrituras inequívocas, que es lo que el resto del módulo hace con la
     escala del EPS.
     """
-    ambiguos = ["1.200", "52.125", "0.001", "1000.500", "1,234", "6.180", "0.000"]
+    ambiguos = ["1.200", "52.125", "0.001", "1000.500", "1,234", "6.180"]
     for r, entrada in zip(_parse_monto(ambiguos), ambiguos):
         assert r.get("ambiguo") is True, f"{entrada} debería ser ambiguo, dio {r}"
         assert "valor" not in r, f"{entrada} no puede producir un valor"
@@ -1209,6 +1209,23 @@ def test_las_dos_lecturas_ofrecidas_son_valores_canonicos_listos_para_guardar():
             Decimal(v)   # lo mismo que hará normalize_portfolio
         miles, decimales = (Decimal(v) for v in valores)
         assert miles == decimales * 1000, f"{entrada}: las lecturas deben diferir por mil"
+
+
+def test_un_valor_cuyas_dos_lecturas_coinciden_no_es_ambiguo():
+    """0.000 vale lo mismo leído como miles o como decimales: preguntar era
+    fricción sin ninguna decisión detrás."""
+    for r, entrada in zip(_parse_monto(["0.000", "0,000"]), ["0.000", "0,000"]):
+        assert r.get("ambiguo") is not True, f"{entrada} no debería preguntar"
+        assert float(r["valor"]) == 0.0, entrada
+
+
+def test_el_aviso_de_duplicado_se_recalcula_sobre_la_lista_completa():
+    """Antes se evaluaba sólo contra la fila editada, así que borrar una de las
+    dos dejaba el aviso obsoleto en pantalla."""
+    page = _pagina_chile()
+    assert "function revisarDuplicados" in page
+    assert "filas.splice(idx,1);pintarFilas();revisarDuplicados()" in page
+    assert "avisarTickerDuplicado" not in page
 
 
 def test_el_parser_no_acepta_espacios_dentro_del_numero():

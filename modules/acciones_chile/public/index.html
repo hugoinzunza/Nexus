@@ -250,9 +250,11 @@ function parseMonto(txt){
       // Undecidible: puede ser miles o decimales. No se sugiere otra escritura
       // — la obvia (52,125) cae en esta misma regla — sino que se devuelven
       // las dos lecturas para que quien escribe elija una.
+      const miles=String(Number(partes.join(''))), decimales=partes[0]+'.'+partes[1];
+      // Si ambas lecturas valen lo mismo (0.000) no hay ambigüedad que resolver.
+      if(Number(miles)===Number(decimales))return{valor:decimales,numero:Number(decimales)};
       return{ambiguo:true,error:'¿miles o decimales?',
-             lecturas:[{valor:String(Number(partes.join(''))),etiqueta:'miles'},
-                       {valor:partes[0]+'.'+partes[1],etiqueta:'decimales'}]};
+             lecturas:[{valor:miles,etiqueta:'miles'},{valor:decimales,etiqueta:'decimales'}]};
     }
     if(n>1){
       if(!_grupos(s,sep))return{error:'los miles deben ir de tres en tres'};
@@ -306,7 +308,7 @@ function pintarFilas(){
     emp.append(node('small',f.company_rut?`RUT ${f.company_rut}`:'sin RUT en el catálogo CMF'));
     const quitar=node('button','×','fila-quitar');
     quitar.type='button';quitar.setAttribute('aria-label',`Quitar ${f.company||f.ticker}`);
-    quitar.onclick=()=>{filas.splice(idx,1);pintarFilas()};
+    quitar.onclick=()=>{filas.splice(idx,1);pintarFilas();revisarDuplicados()};
     top.append(emp,quitar);
     const campos=node('div',null,'campos');
     [['ticker','Ticker','text','ENELCHILE'],['quantity','Cantidad','decimal','1000'],
@@ -340,7 +342,7 @@ function pintarFilas(){
         inp.oninput=()=>{
           f[clave]=clave==='ticker'?inp.value.trim().toUpperCase():inp.value.trim();
           if(clave!=='ticker')f.eleccion[clave]=null;   // texto nuevo, elección vieja no vale
-          if(clave==='ticker')avisarTickerDuplicado(f);
+          if(clave==='ticker')revisarDuplicados();
           refrescar();
         };
         refrescar();
@@ -349,15 +351,15 @@ function pintarFilas(){
     fila.append(top,campos);caja.append(fila);
   });
 }
-function avisarTickerDuplicado(fila){
+// Se recalcula sobre la lista completa: el aviso tiene que morir cuando se
+// borra una de las dos filas, no sólo cuando se corrige el texto.
+function revisarDuplicados(){
   const norm=t=>String(t||'').trim().toUpperCase();
-  const otros=filas.filter(f=>f!==fila).map(f=>norm(f.ticker));
+  const vistos=new Set(), repetido=filas.map(f=>norm(f.ticker))
+    .find(t=>t&&(vistos.has(t)||(vistos.add(t),false)));
   const err=$('#portfolio-error');
-  if(fila.ticker&&otros.includes(norm(fila.ticker))){
-    err.textContent=`${norm(fila.ticker)} está repetido en dos posiciones.`;
-  }else if(err.textContent.includes('está repetido')){
-    err.textContent='';
-  }
+  if(repetido)err.textContent=`${repetido} está repetido en dos posiciones.`;
+  else if(err.textContent.includes('está repetido'))err.textContent='';
 }
 function agregarFila(datos){
   // El ticker se resuelve antes de comparar: si viene del buscador llega vacío
