@@ -1,10 +1,14 @@
-# Bot3.v13 — Observador operativo · DISEÑO rev.32
+# Bot3.v13 — Observador operativo · DISEÑO rev.33
 
-**Estado: DISEÑO rev.32 — §20 acotada: el barrido diferido CONSUME el sidecar
-y arbitra contra un diagnóstico previo. §1–§19 y §13 no se reabren. No
-desplegado. Cohorte no iniciada.**
+**Estado: DISEÑO rev.33 — §20 acotada: la incidencia de interrupción es un
+sidecar registral. §1–§19 y §13 no se reabren. No desplegado. Cohorte no
+iniciada.**
 Contrato del motor: `bf92024708470cc1189b468a8f677cb64d5bb1829bfc7c6dd1b3863f47802c3d` (congelado, no se toca).
 
+rev.33 le da tratamiento registral a la «incidencia separada» que rev.32
+introdujo: en dos de las cuatro filas del arbitraje es lo ÚNICO que acredita la
+interrupción del supervisor, y estaba sin schema, sin ruta determinista, sin
+publicación durable y sin orden respecto del retiro del sidecar.
 rev.32 cierra un DEADLOCK de rev.31: el barrido diferido escribía
 `supervisor_interrumpido` y bloqueaba, pero no retiraba `supervision.json`, así
 que tras acreditar el diagnóstico el wrapper siguiente lo encontraba otra vez,
@@ -2152,13 +2156,14 @@ peor que el huérfano que el barrido evita.
 
 ```
 1. barrer, y COMPROBAR que el grupo desapareció
-2. publicar el diagnóstico durablemente        (§20.4.2.2 arbitra qué se publica)
+2. publicar durablemente lo que el arbitraje decida  (§20.4.2.2):
+   el diagnóstico, la incidencia de interrupción (§20.4.2.3), o ambos
 3. retirar supervision.json + fsync del directorio
 4. salir sin lanzar ningún daemon
 ```
 
-El diagnóstico va ANTES de retirar el sidecar, y no al revés: entre 3 y 2 se
-abriría una ventana en la que no hay sidecar ni diagnóstico, y un wrapper que
+El paso 2 va ANTES del 3, y no al revés: invertidos se abriría una ventana en
+la que no hay sidecar ni registro alguno de la interrupción, y un wrapper que
 entrara ahí arrancaría un daemon como si nada hubiera pasado — el reinicio
 automático que §20.4.2.1 prohíbe.
 
@@ -2190,6 +2195,61 @@ Ninguna fila sobrescribe en silencio: la primera conserva, la segunda archiva
 antes de publicar, y la tercera no toca nada. Conservar el `codigo: 1` del
 daemon por sobre el del wrapper es deliberado — el daemon sabe POR QUÉ falló, y
 la interrupción del supervisor es una consecuencia, no la causa.
+
+En las filas donde el diagnóstico se conserva o no se toca, **la incidencia es
+lo único que acredita la interrupción**, así que tiene el mismo tratamiento
+registral que los demás sidecars.
+
+##### 20.4.2.3 La incidencia de interrupción es un sidecar registral *(rev.33)*
+
+| campo | qué es |
+|---|---|
+| `schema_version` | cerrada y versionada |
+| `cohorte`, `contrato`, `commit` | identidad tomada de **`supervision.json`** |
+| `supervision_checksum` | el sidecar de supervisión que motivó el barrido |
+| `diagnostico_sha256` | SHA-256 de los **bytes crudos** del diagnóstico previo |
+| `clasificacion` | registro CERRADO: `codigo_1_preservado`, `corrupto`, `identidad_ajena` |
+| `ocurrido_en` | instante entero |
+| `checksum` | del propio documento |
+
+**La identidad sale de `supervision.json`, no del diagnóstico previo.** En la
+fila `corrupto` y en la `identidad_ajena` no se puede confiar en los campos
+internos del documento: por definición no valida, o dice pertenecer a otra
+cohorte. `supervision.json` sí validó antes del barrido (§20.4.3), así que es
+la única fuente de identidad disponible.
+
+**Y por eso el documento previo se identifica por el SHA-256 de sus BYTES
+CRUDOS**, no por su campo `checksum`: un documento corrupto puede tener ese
+campo roto, ausente o mentiroso, y aun así hay que poder decir sin ambigüedad
+cuál era.
+
+**Ruta DETERMINISTA derivada de los dos hashes**:
+
+```
+diagnosticos/incidencia.<sha8 supervision_checksum>.<sha8 diagnostico_sha256>.json
+```
+
+Determinista es lo que hace la reanudación idempotente sin llevar estado: el
+wrapper que retoma tras una caída recalcula exactamente el mismo nombre. Si el
+diagnóstico previo no existía, el segundo hash es el de la cadena vacía.
+
+**Publicación durable**, con la misma primitiva de §20.6.4:
+
+```
+escribir …json.tmp (atómico) → fsync del archivo
+link(tmp, definitivo)      EEXIST → comparar CONTENIDO
+fsync del directorio → unlink(tmp) → fsync del directorio
+```
+
+Ante `EEXIST`: contenido **idéntico** es éxito idempotente —la caída ocurrió
+después de publicar—, y contenido **distinto** es fallo cerrado. Dos
+incidencias distintas con la misma ruta significan que los dos hashes que la
+nombran no describen lo que hay.
+
+**La incidencia es durable ANTES de retirar `supervision.json`**, por lo mismo
+que el diagnóstico (§20.4.2.1): al revés queda una ventana sin sidecar y sin
+ningún registro de la interrupción, y el wrapper siguiente arranca un daemon
+como si no hubiera pasado nada.
 
 Cómo se distingue de una salida limpia, sin heurística: un wrapper que termina
 ordenadamente **borra `supervision.json`** (§20.4.3). Encontrarlo presente tras
@@ -2839,9 +2899,11 @@ Numerados a continuación de §17, que termina en 44:
       | caída DESPUÉS del barrido, antes del diagnóstico | el siguiente ve el grupo ya muerto, diagnostica y retira el sidecar |
       | caída DESPUÉS del diagnóstico, antes de retirar el sidecar | el siguiente reconoce el `supervisor_interrumpido` que cita ESE `supervision.json`, **no rediagnostica**, y solo completa el retiro |
       | acreditación seguida de arranque REAL | tras acreditar, el wrapper siguiente **arranca un daemon de verdad** — no vuelve a diagnosticar la misma interrupción. Es el deadlock de rev.31 |
-      | diagnóstico previo `codigo: 1` | se CONSERVA sin sobrescribir y la interrupción va como incidencia separada; el motivo original sigue siendo legible |
+      | diagnóstico previo `codigo: 1` | se CONSERVA sin sobrescribir y la interrupción va como incidencia separada (§20.4.2.3), con `clasificacion: codigo_1_preservado`; el motivo original sigue siendo legible |
       | diagnóstico previo `codigo: 2` | se ARCHIVA con el enlace exclusivo —la serie transitoria queda en `diagnosticos/`— y se publica `supervisor_interrumpido` con `codigo: 1` |
-      | diagnóstico previo corrupto o de otra identidad | no se toca; se registra la incidencia; el arranque queda bloqueado por él |
+      | diagnóstico previo corrupto o de otra identidad | no se toca; se registra la incidencia con `clasificacion: corrupto` o `identidad_ajena`; el arranque queda bloqueado por él |
+      | *(rev.33)* incidencia como ARTEFACTO | interrupción DESPUÉS de publicar la incidencia y ANTES de retirar `supervision.json`: el wrapper siguiente recalcula la MISMA ruta determinista, encuentra contenido idéntico, **no duplica** y solo completa el retiro; una incidencia con la misma ruta y contenido DISTINTO falla cerrado; un `.tmp` huérfano de una caída a mitad de la escritura se descarta |
+      | *(rev.33)* diagnóstico ILEGIBLE | con un diagnóstico previo cuyos campos internos NO se pueden leer —JSON roto, `checksum` ausente—, la incidencia se publica igual: identidad tomada de `supervision.json` y documento identificado por el SHA-256 de sus BYTES CRUDOS |
 
 48sexies. **enum de errores y política de reintento** *(rev.27)*: cada valor
     de la tabla de §20.4 produce lo que declara —`dns`, `conexion`, `tls`,
