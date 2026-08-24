@@ -1,4 +1,6 @@
 import json
+import os
+import re
 import ast
 import urllib.error
 from decimal import Decimal
@@ -339,9 +341,14 @@ def test_portfolio_is_normalized_and_read_only():
 
 
 def test_portfolio_rejects_negative_positions():
-    with pytest.raises(ValueError, match="negativos"):
+    # El mensaje nombra el campo: "cantidad", no un genérico "valores negativos".
+    with pytest.raises(ValueError, match="cantidad no puede ser negativo"):
         normalize_portfolio({"holdings": [{
             "ticker": "TEST", "quantity": Decimal("-1"), "average_cost": "1",
+        }]})
+    with pytest.raises(ValueError, match="costo promedio no puede ser negativo"):
+        normalize_portfolio({"holdings": [{
+            "ticker": "TEST", "quantity": "1", "average_cost": "-1",
         }]})
 
 
@@ -1087,3 +1094,345 @@ def test_la_tarjeta_ofrece_un_control_enfocable_para_abrir_la_ficha():
     assert "node('button',h.ticker,'pos-tk pos-open')" in page
     assert "tk.setAttribute('aria-label'" in page
     assert ".pos-open:focus-visible" in page
+
+
+def test_la_guia_explica_como_leer_sin_convertirse_en_asesoria():
+    """La guía enseña a leer y a actuar sobre el proceso, nunca sobre qué comprar."""
+    page = _pagina_chile()
+    assert 'id="guia"' in page
+    for titulo in ("Cómo se lee una posición", "Qué significan las tres lecturas",
+                   "Qué dice y qué no dice el múltiplo",
+                   "Por qué no te digo si comprar o vender",
+                   "Qué haces tú con esto", "De dónde sale cada número"):
+        assert titulo in page, titulo
+    # El encabezado deja el rol claro antes de cualquier explicación.
+    assert "investigación, no asesoría" in page
+    assert "no te dice qué comprar ni vender" in page
+    # Desarma las dos lecturas erróneas más probables de las etiquetas.
+    assert "una empresa sólida puede estar carísima" in page
+    assert "es un aviso de que mires con calma qué cambió" in page
+    # Repite el límite del múltiplo que corrigió la auditoría externa.
+    assert "No significa</b> que recuperes tu inversión" in page
+    # La sección de acción habla de proceso, no de instrucciones de compra.
+    assert "La lectura y la decisión siguen siendo tuyas" in page
+    assert "no puede decirte si el precio es razonable" in page
+
+
+# --- El parser de montos vive en el HTML; se extrae y se ejecuta con node para
+# --- probar comportamiento, no la presencia de una cadena.
+def _parse_monto(valores):
+    page = _pagina_chile()
+    ini = page.index("function _grupos")   # el parser usa este helper
+    fin = page.index("const fmtCL", ini)
+    guion = (page[ini:fin] + "\nconst casos=" + json.dumps(valores) +
+             ";console.log(JSON.stringify(casos.map(parseMonto)));")
+    return _correr_node(guion)
+
+
+def _logica_formulario(guion_cuerpo):
+    """Ejecuta las funciones puras del formulario: resolverCampo y
+    eleccionSegunConvencion salieron del DOM justamente para poder probarlas."""
+    page = _pagina_chile()
+    ini = page.index("function _grupos")
+    fin = page.index("const fmtCL", ini)
+    return _correr_node(page[ini:fin] + "\n" + guion_cuerpo)
+
+
+def _correr_node(guion):
+    import subprocess, shutil
+    node = shutil.which("node")
+    if node is None:
+        if os.environ.get("CI"):
+            pytest.fail("node es obligatorio en CI: la lógica de montos no puede quedar sin cubrir")
+        pytest.skip("node no disponible")
+    salida = subprocess.run([node, "-e", guion], capture_output=True, text=True, timeout=30)
+    assert salida.returncode == 0, salida.stderr
+    return json.loads(salida.stdout)
+
+
+def test_el_parser_de_montos_no_corrompe_ninguno_de_los_dos_formatos():
+    """Regresión: el normalizador anterior multiplicaba por 100 los decimales
+    con punto, incluidos los del propio ejemplo del formulario (52.40 -> 5240)."""
+    esperado = {
+        "6.180,50": "6180.50",   # chileno con miles y decimales
+        "6180.50": "6180.50",    # internacional, el caso que se corrompía
+        "52.40": "52.40",        # el ejemplo del propio placeholder
+        "1.234.567": "1234567",  # miles inequívocos: más de un separador
+        "1,234,567": "1234567",
+        "1.234.567,89": "1234567.89",
+        "1,234.56": "1234.56",   # inglés con miles
+        "0,5": "0.5",
+        "1000": "1000",
+    }
+    obtenido = _parse_monto(list(esperado))
+    for (entrada, salida), r in zip(esperado.items(), obtenido):
+        assert r.get("valor") == salida, f"{entrada} -> {r}"
+
+
+def test_el_parser_rechaza_lo_que_no_puede_interpretar_sin_adivinar():
+    malas = ["abc", "1..2", "-5", "1e9", "1.23.456", "1.23,456", "1,23.456", "12,34,56"]
+    for r, entrada in zip(_parse_monto(malas), malas):
+        assert "error" in r, f"{entrada} debería rechazarse, dio {r}"
+
+
+def test_el_parser_rechaza_lo_ambiguo_en_vez_de_elegir_una_lectura():
+    """Un separador con tres dígitos detrás puede ser miles o decimales.
+
+    La versión anterior adivinaba miles y convertía 0.001 en 1: un error de
+    mil veces en un campo de dinero. Ahora se rechaza y se ofrecen las dos
+    escrituras inequívocas, que es lo que el resto del módulo hace con la
+    escala del EPS.
+    """
+    ambiguos = ["1.200", "52.125", "0.001", "1000.500", "1,234", "6.180"]
+    for r, entrada in zip(_parse_monto(ambiguos), ambiguos):
+        assert r.get("ambiguo") is True, f"{entrada} debería ser ambiguo, dio {r}"
+        assert "valor" not in r, f"{entrada} no puede producir un valor"
+        # Debe ofrecer las dos lecturas como valores, no una cadena que reescribir.
+        lecturas = r.get("lecturas") or []
+        assert [l["etiqueta"] for l in lecturas] == ["miles", "decimales"], entrada
+
+
+def test_las_dos_lecturas_ofrecidas_son_valores_canonicos_listos_para_guardar():
+    """El error anterior sugería escribir 52,125, que caía en la misma regla y
+    volvía a rechazarse: un callejón sin salida.
+
+    Ahora la ambigüedad devuelve los dos valores ya resueltos. El botón los
+    escribe directamente en el modelo de la fila sin volver a parsearlos, así
+    que lo que importa es que sean canónicos —lo que Decimal() acepta— y que
+    difieran por el factor mil que provocaba el error de escala.
+    """
+    for entrada, r in zip(["1.200", "52.125", "0.001", "1,234"],
+                          _parse_monto(["1.200", "52.125", "0.001", "1,234"])):
+        valores = [l["valor"] for l in r["lecturas"]]
+        for v in valores:
+            assert re.fullmatch(r"\d+(\.\d+)?", v), f"{entrada}: {v} no es canónico"
+            Decimal(v)   # lo mismo que hará normalize_portfolio
+        miles, decimales = (Decimal(v) for v in valores)
+        assert miles == decimales * 1000, f"{entrada}: las lecturas deben diferir por mil"
+
+
+def test_un_valor_cuyas_dos_lecturas_coinciden_no_es_ambiguo():
+    """0.000 vale lo mismo leído como miles o como decimales: preguntar era
+    fricción sin ninguna decisión detrás."""
+    for r, entrada in zip(_parse_monto(["0.000", "0,000"]), ["0.000", "0,000"]):
+        assert r.get("ambiguo") is not True, f"{entrada} no debería preguntar"
+        assert float(r["valor"]) == 0.0, entrada
+
+
+def test_el_aviso_de_duplicado_se_recalcula_sobre_la_lista_completa():
+    """Antes se evaluaba sólo contra la fila editada, así que borrar una de las
+    dos dejaba el aviso obsoleto en pantalla."""
+    page = _pagina_chile()
+    assert "function revisarDuplicados" in page
+    assert "filas.splice(idx,1);pintarFilas();revisarDuplicados()" in page
+    assert "avisarTickerDuplicado" not in page
+
+
+def test_el_parser_no_acepta_espacios_dentro_del_numero():
+    """Antes se borraba todo espacio: '5 2.40' pasaba silenciosamente a 52.40."""
+    con_espacios = ["5 2.40", "1 200", "5 2 . 4 0", "52 .40"]
+    for r, entrada in zip(_parse_monto(con_espacios), con_espacios):
+        assert "error" in r, f"{entrada} debería rechazarse, dio {r}"
+        assert "espacios" in r["error"], entrada
+
+
+def test_la_cartera_rechaza_numeros_no_finitos_y_duplicados():
+    """Antes: Infinity entraba como cantidad y NaN provocaba un 500."""
+    for valor in ("Infinity", "NaN", "1e999999", "-1"):
+        with pytest.raises(ValueError):
+            normalize_portfolio({"holdings": [
+                {"ticker": "X", "quantity": valor, "average_cost": "1"}]})
+    # Dos series del mismo emisor son instrumentos distintos y deben aceptarse:
+    # SQM-A y SQM-B comparten RUT y estados financieros pero no posición.
+    series = normalize_portfolio({"holdings": [
+        {"ticker": "SQM-A", "company_rut": "93007000", "quantity": "1", "average_cost": "1"},
+        {"ticker": "SQM-B", "company_rut": "93007000", "quantity": "1", "average_cost": "1"}]})
+    assert [h["ticker"] for h in series["holdings"]] == ["SQM-A", "SQM-B"]
+    with pytest.raises(ValueError, match="mismo ticker"):
+        normalize_portfolio({"holdings": [
+            {"ticker": "A", "quantity": "1", "average_cost": "1"},
+            {"ticker": "A", "quantity": "1", "average_cost": "1"}]})
+    ok = normalize_portfolio({"holdings": [
+        {"ticker": "COPEC", "company_rut": "90690000", "quantity": "900",
+         "average_cost": "6180.50", "market_price": "6601.57"}]})
+    assert ok["holdings"][0]["average_cost"] == "6180.50"
+
+
+def test_la_guia_no_afirma_estados_que_el_backend_calcula_por_posicion():
+    """La guía describe el sistema; si generaliza, miente.
+
+    Cada aserción de aquí corresponde a un estado que se verificó ejecutando
+    el backend, no leyendo el texto.
+    """
+    page = _pagina_chile()
+    # evaluate_decision_evidence da 0/6, 1/6 o 4/6 según la posición.
+    assert "Hoy hay cuatro" not in page
+    assert "pueden</em> estar listos, posición por posición" in page
+    # FUNDAMENTOS FUERTES admite advertencias: score>=78, >=5 datos, cero críticos.
+    assert "no hay deterioros" not in page
+    assert "Puede convivir con alguna advertencia suelta" in page
+    # El gate real también exige >=5 métricas medidas: score 86 con 4 datos da
+    # EN OBSERVACIÓN, no FUNDAMENTOS FUERTES.
+    assert "se midieron al menos cinco cosas" in page
+    # fraseNegocio toma warnings[0], sin ranking.
+    assert "la advertencia más relevante" not in page
+    # available_at es la hora del mensaje del bot, no la publicación del emisor.
+    assert "cuándo cada empresa publicó" not in page
+    assert "estuvo disponible cada publicación" not in page
+    assert "hora del mensaje del bot en el export que tengo cargado" in page
+    # La doble descarga sólo ocurre cuando falta Content-Length.
+    assert "se verifica bajando el archivo dos veces" not in page
+    assert "cuando ese dato falta se baja dos veces" in page
+    # La sección de acción no puede prescribir ni acción ni inacción.
+    assert "no hagas nada" not in page
+    assert "Qué hacer con ella es cosa tuya y de tu plan" in page
+
+
+def test_la_guia_describe_los_estados_reales_de_la_linea_precio():
+    page = _pagina_chile()
+    assert "esa misma línea te dice por qué" in page
+    # Los seis estados de MOTIVO_PRECIO, más el emisor sin mapeo.
+    for motivo in ("falta el precio", "falta validar la unidad del EPS contra el PDF",
+                   "falta el dólar del Banco Central", "no reporta utilidad por acción",
+                   "tuvo pérdidas", "moneda que todavía no sé convertir",
+                   "no está mapeado en la CMF"):
+        assert motivo in page, motivo
+    # La evidencia es condicional, no un set fijo.
+    assert "los números crudos que existan para esa posición" in page
+
+
+def test_el_buscador_de_empresas_es_un_combobox_operable_con_teclado():
+    page = _pagina_chile()
+    for atributo in ('role="combobox"', 'aria-expanded', 'aria-controls="busca-resultados"',
+                     'aria-autocomplete="list"', 'role="listbox"', 'aria-live="polite"'):
+        assert atributo in page, atributo
+    for tecla in ("ArrowDown", "ArrowUp", "Enter", "Escape"):
+        assert f"'{tecla}'" in page, tecla
+    assert "aria-activedescendant" in page
+
+
+def test_el_eco_del_campo_es_el_valor_que_viaja_al_backend():
+    """El eco mostraba el número reformateado en es-CL, así que 52.125
+    corrupto a 52125 se veía idéntico a la entrada y ocultaba el error.
+    Ahora imprime el string canónico, el mismo que se envía."""
+    page = _pagina_chile()
+    assert "se guarda como ${r.valor}" in page
+    assert "fmtCL(r.numero)" not in page   # el formateo que escondía la corrupción
+    # Guardar toma el valor del mismo parser, no de una segunda normalización.
+    assert "val[clave]=r.valor" in page
+
+
+def test_un_saldo_disponible_invalido_bloquea_el_guardado():
+    """Antes devolvía null tanto para vacío como para basura, y la cartera
+    se guardaba sin saldo sin avisar."""
+    page = _pagina_chile()
+    assert "Disponible para invertir: ${rs.error}" in page
+    assert "const saldo=rs.valor||null" in page
+
+
+def test_el_mensaje_sin_coincidencias_no_es_una_opcion_navegable():
+    """Con role=option, las flechas lo marcaban y Enter hacía clic sobre un
+    elemento inerte."""
+    page = _pagina_chile()
+    assert "'sin-opciones'" in page
+    i = page.index("Ninguna sociedad de la CMF coincide")
+    contexto = page[i - 200:i]
+    assert "'sug'" not in contexto, "el mensaje vacío no puede usar la clase de las opciones"
+
+
+def test_el_pegado_no_parte_los_decimales_con_coma():
+    """La coma era delimitador y separador decimal a la vez: '305,50' se partía
+    en dos columnas y el precio terminaba desplazado."""
+    page = _pagina_chile()
+    assert "linea.split(/[;,\\t]/)" not in page   # el split que rompía los decimales
+    assert "linea.includes(';')?';'" in page
+    # El ejemplo que se muestra usa el separador que no colisiona.
+    assert "ENELCHILE; 76536353; 1000; 52,40; 55,10" in page
+
+
+def test_el_duplicado_se_detecta_con_el_ticker_ya_resuelto():
+    """El buscador entrega ticker vacío y lo completa el universo, así que
+    comparar antes de resolverlo dejaba pasar dos filas COPEC."""
+    page = _pagina_chile()
+    i = page.index("function agregarFila")
+    cuerpo = page[i:i + 900]
+    # La resolución ocurre antes que cualquier comparación.
+    assert cuerpo.index("const resuelto=norm(") < cuerpo.index("filas.some(")
+    assert "norm(f.ticker)===resuelto" in cuerpo
+
+
+def test_escribir_digito_a_digito_no_congela_el_primer_valor():
+    """Regresión P0: el valor canónico se guardaba junto al texto y un guard
+    lo conservaba al divergir, así que teclear 1, 0, 0 enviaba 1 con "100"
+    a la vista. Ahora el valor se deriva y no existe estado paralelo."""
+    guion = """
+    const tecleo=['1','10','100','100.5','1000'];
+    console.log(JSON.stringify(tecleo.map(t=>resolverCampo(t,null).valor)));
+    """
+    assert _logica_formulario(guion) == ["1", "10", "100", "100.5", "1000"]
+
+
+def test_una_eleccion_vieja_no_sobrevive_a_un_texto_que_ya_no_es_ambiguo():
+    guion = """
+    console.log(JSON.stringify({
+      ambiguo_con_eleccion: resolverCampo('52.125','decimales').valor,
+      ambiguo_otra_eleccion: resolverCampo('52.125','miles').valor,
+      ambiguo_sin_eleccion: resolverCampo('52.125',null).valor||null,
+      ya_no_ambiguo: resolverCampo('52.40','miles').valor,
+      vacio: resolverCampo('','miles').valor||null,
+      error: resolverCampo('abc','miles').valor||null
+    }));
+    """
+    r = _logica_formulario(guion)
+    assert r["ambiguo_con_eleccion"] == "52.125"
+    assert r["ambiguo_otra_eleccion"] == "52125"
+    assert r["ambiguo_sin_eleccion"] is None      # sin elegir no se puede guardar
+    assert r["ya_no_ambiguo"] == "52.40"          # la elección se ignora sola
+    assert r["vacio"] is None and r["error"] is None
+
+
+def test_la_convencion_del_lote_mapea_separador_a_significado():
+    """Regresión P0: elegir "Renta 4 Chile" aplicaba la lectura 'miles' a
+    todas las celdas, así que 52,125 se convertía en 52125. En Chile el punto
+    son miles Y la coma decimales; internacional es al revés."""
+    guion = """
+    const celdas=['1.234','52,125','2.000','10,500'];
+    const conv=p=>celdas.map(c=>resolverCampo(c,eleccionSegunConvencion(c,p)).valor);
+    console.log(JSON.stringify({chile:conv(true),internacional:conv(false)}));
+    """
+    r = _logica_formulario(guion)
+    # Chile: el punto separa miles, la coma es decimal.
+    assert r["chile"] == ["1234", "52.125", "2000", "10.500"]
+    # Internacional: exactamente al revés.
+    assert r["internacional"] == ["1.234", "52125", "2.000", "10500"]
+
+
+def test_la_convencion_no_toca_celdas_que_no_eran_ambiguas():
+    guion = """
+    const claras=['52.40','6.180,50','1000','0,5','1.234.567'];
+    console.log(JSON.stringify(claras.map(c=>({
+      eleccion: eleccionSegunConvencion(c,true),
+      valor: resolverCampo(c,eleccionSegunConvencion(c,true)).valor
+    }))));
+    """
+    for fila, entrada in zip(_logica_formulario(guion),
+                             ["52.40", "6.180,50", "1000", "0,5", "1.234.567"]):
+        assert fila["eleccion"] is None, f"{entrada} no es ambiguo"
+    valores = [f["valor"] for f in _logica_formulario(guion)]
+    assert valores == ["52.40", "6180.50", "1000", "0.5", "1234567"]
+
+
+def test_el_saldo_disponible_tiene_el_mismo_mecanismo_que_las_filas():
+    """P1: available_cash quedaba bloqueado sin botones para responder."""
+    page = _pagina_chile()
+    assert 'id="saldo-eco"' in page
+    assert "let eleccionSaldo=null" in page
+    assert "resolverCampo($('#available-cash').value,eleccionSaldo)" in page
+    assert "eleccionSaldo=l.etiqueta" in page
+
+
+def test_el_pegado_rechaza_comillas_y_columnas_sobrantes():
+    """P2: 'ABC,DEF',11111111,10,20 desplazaba las columnas en silencio."""
+    page = _pagina_chile()
+    assert "no manejo comillas" in page
+    assert "sobran columnas" in page
