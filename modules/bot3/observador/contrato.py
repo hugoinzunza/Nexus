@@ -76,6 +76,10 @@ ARCHIVO_SUPERVISION = "supervision.json"
 # Cota de la serie transitoria (§20.6.1): un `EBUSY` que no se despeja en cinco
 # intentos ya no es transitorio, sea lo que sea.
 MAX_TRANSITORIOS = 5
+# §20.4.1, nivel 1: plazo del cierre cooperativo del trabajador. Corto a
+# propósito — no tiene nada durable que cerrar, así que uno largo solo
+# retrasaría la salida del padre y comería el `ExitTimeOut`.
+CIERRE_COOPERATIVO_MS = 2_000
 CARPETA_ALMACENES = "almacenes"
 CARPETA_STAGING = "almacenes.new"
 ARCHIVO_COMPLETADO = "completed.json"
@@ -129,7 +133,7 @@ PARAMS = (
     "RAIZ", "SUBRUTA_ESTADO", "SUBRUTA_LIBRO", "ARCHIVO_LOCK",
     "ARCHIVO_LOCK_SUPERVISOR", "ARCHIVO_LOCK_ACREDITACION",
     "ARCHIVO_LOCK_ACTIVACION", "ARCHIVO_FALLO_CERRADO", "ARCHIVO_SUPERVISION",
-    "MAX_TRANSITORIOS",
+    "MAX_TRANSITORIOS", "CIERRE_COOPERATIVO_MS",
     "CARPETA_ALMACENES", "CARPETA_STAGING", "ARCHIVO_COMPLETADO",
     "ARCHIVO_BLOQUEADO", "ARCHIVO_SILENCIO", "ARCHIVO_VERIFICACION",
     "ARCHIVO_SOLICITUD_TERMINAL", "ARCHIVO_PEDIDO_VERIFICACION",
