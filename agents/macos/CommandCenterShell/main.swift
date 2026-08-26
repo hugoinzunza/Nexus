@@ -12,6 +12,9 @@ final class CommandCenterDelegate: NSObject, NSApplicationDelegate, WKNavigation
     private var tvWebView: WKWebView?
     private var streamingProcesses: [String: Process] = [:]
     private var eventMonitor: Any?
+    private var screenObserver: NSObjectProtocol?
+    private var screenRetry: DispatchWorkItem?
+    private var screenRetriesRemaining = 60
     private let calendarStore = EKEventStore()
 
     private var streamingProfileRoot: URL {
@@ -36,6 +39,59 @@ final class CommandCenterDelegate: NSObject, NSApplicationDelegate, WKNavigation
         webView.uiDelegate = self
     }
 
+    private func arzopaScreen() -> NSScreen? {
+        NSScreen.screens.first(where: {
+            $0.localizedName.uppercased().contains("ARZOPA")
+        })
+    }
+
+    private func initialScreen() -> NSScreen? {
+        arzopaScreen() ?? NSScreen.screens.first(where: {
+            Int($0.frame.width) == 1920 && Int($0.frame.height) == 1080
+        }) ?? NSScreen.screens.first(where: { $0 != NSScreen.main }) ?? NSScreen.main
+    }
+
+    private func displayID(_ screen: NSScreen?) -> NSNumber? {
+        screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+    }
+
+    private func moveWindowToArzopaWhenAvailable() {
+        guard let window else { return }
+        if let screen = arzopaScreen() {
+            screenRetry?.cancel()
+            screenRetry = nil
+            screenRetriesRemaining = 0
+            if displayID(window.screen) != displayID(screen) || window.frame != screen.frame {
+                window.setFrame(screen.frame, display: true, animate: false)
+                window.makeKeyAndOrderFront(nil)
+                window.orderFrontRegardless()
+            }
+            return
+        }
+        guard screenRetriesRemaining > 0, screenRetry == nil else { return }
+        screenRetriesRemaining -= 1
+        let retry = DispatchWorkItem { [weak self] in
+            self?.screenRetry = nil
+            self?.moveWindowToArzopaWhenAvailable()
+        }
+        screenRetry = retry
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: retry)
+    }
+
+    private func monitorScreenConfiguration() {
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.screenRetriesRemaining = 60
+            self?.screenRetry?.cancel()
+            self?.screenRetry = nil
+            self?.moveWindowToArzopaWhenAvailable()
+        }
+        moveWindowToArzopaWhenAvailable()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         stopOrphanedStreamingProcesses()
         let configuration = WKWebViewConfiguration()
@@ -53,11 +109,7 @@ final class CommandCenterDelegate: NSObject, NSApplicationDelegate, WKNavigation
         let webView = WKWebView(frame: .zero, configuration: configuration)
         configure(webView)
 
-        let targetScreen = NSScreen.screens.first(where: {
-            $0.localizedName.uppercased().contains("ARZOPA")
-        }) ?? NSScreen.screens.first(where: {
-            Int($0.frame.width) == 1920 && Int($0.frame.height) == 1080
-        }) ?? NSScreen.screens.first(where: { $0 != NSScreen.main }) ?? NSScreen.main
+        let targetScreen = initialScreen()
         guard let screen = targetScreen else {
             NSApp.terminate(nil)
             return
@@ -80,6 +132,7 @@ final class CommandCenterDelegate: NSObject, NSApplicationDelegate, WKNavigation
         window.makeFirstResponder(webView)
         window.orderFrontRegardless()
         self.window = window
+        monitorScreenConfiguration()
 
         let rawURL = CommandLine.arguments.dropFirst().first
             ?? "http://127.0.0.1:8812/m/command-center/"
@@ -105,6 +158,10 @@ final class CommandCenterDelegate: NSObject, NSApplicationDelegate, WKNavigation
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        screenRetry?.cancel()
+        if let screenObserver {
+            NotificationCenter.default.removeObserver(screenObserver)
+        }
         if let eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
         }

@@ -133,3 +133,7 @@ def test_lanzador_kiosco_no_abre_fixture():
     assert ".hideMenuBar" in native
     assert "customUserAgent" in native
     assert 'localizedName.uppercased().contains("ARZOPA")' in native
+    assert "NSApplication.didChangeScreenParametersNotification" in native
+    assert "moveWindowToArzopaWhenAvailable" in native
+    assert "screenRetriesRemaining = 60" in native
+    assert "displayID(window.screen) != displayID(screen)" in native
