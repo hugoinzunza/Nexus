@@ -354,12 +354,27 @@ def validar_diagnostico(cuerpo, ruta: str = "") -> dict:
     _exigir_entero(cuerpo.get("transitorios"), f"`transitorios`{donde}")
     _exigir(cuerpo["transitorios"] >= 0,
             f"`transitorios`{donde} negativo: {cuerpo['transitorios']}")
-    # Solo `codigo: 2` lleva serie: un fallo cerrado no se reintenta, así que
-    # un contador ahí no significaría nada y podría leerse como que sí.
-    if cuerpo["codigo"] == 1:
+    # La serie se valida POR MOTIVO, no por código. «`codigo: 1` ⇒ contador
+    # cero» hacía INEXPRESABLE el único estado que §20.6.4 congela con
+    # contador: `transitorios_agotados` se publica con `codigo: 1` y
+    # `transitorios == MAX_TRANSITORIOS`, que es su evidencia de agotamiento.
+    if motivo == MOTIVO_TRANSITORIOS:
+        _exigir(cuerpo["transitorios"] >= C.MAX_TRANSITORIOS,
+                f"`transitorios`{donde} no acredita el agotamiento: "
+                f"{cuerpo['transitorios']} < {C.MAX_TRANSITORIOS}")
+    elif cuerpo["codigo"] == 1:
+        # Cualquier OTRO fallo cerrado no se reintenta, así que un contador ahí
+        # no significaría nada y podría leerse como que sí.
         _exigir(cuerpo["transitorios"] == 0,
-                f"`transitorios`{donde} no nulo con `codigo: 1`: un fallo "
-                f"cerrado no tiene serie que continuar")
+                f"`transitorios`{donde} no nulo con `codigo: 1` y "
+                f"`motivo: {motivo}`: ese fallo cerrado no tiene serie")
+    else:
+        # Un transitorio nace en 1: el daemon lee el diagnóstico vigente y
+        # escribe `transitorios + 1` antes de salir `2`. Empezar en cero
+        # significaría una salida `2` que no cuenta para la cota.
+        _exigir(cuerpo["transitorios"] >= 1,
+                f"`transitorios`{donde} en cero con `codigo: 2`: una salida "
+                f"transitoria que no cuenta para la cota no la acota")
     faltan = sorted(c for c in regla["exige"] if c not in cuerpo)
     _exigir(not faltan,
             f"`motivo: {motivo}`{donde} exige {faltan}")

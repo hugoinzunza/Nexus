@@ -415,13 +415,17 @@ def test_la_tabla_motivo_codigo_esta_CONGELADA(tmp_path):
     CONTINUAR — un `SIGKILL` reiniciándose como transitorio, que es
     exactamente lo que §20.6.3 prohíbe."""
     d = estado(tmp_path)
-    extras = {D.MOTIVO_SENAL: {"senal": 9},
-              D.MOTIVO_WRAPPER: {},
-              D.MOTIVO_SUPERVISOR: {"supervision_checksum": "a" * 64},
-              D.MOTIVO_TRANSITORIOS: {"excepcion": "EBUSY"}}
-    for motivo, extra in extras.items():
+    # cada motivo con su serie REAL: `transitorios_agotados` se publica con el
+    # contador que acredita el agotamiento, no con cero
+    extras = {D.MOTIVO_SENAL: ({"senal": 9}, 0),
+              D.MOTIVO_WRAPPER: ({}, 0),
+              D.MOTIVO_SUPERVISOR: ({"supervision_checksum": "a" * 64}, 0),
+              D.MOTIVO_TRANSITORIOS: ({"excepcion": "EBUSY"},
+                                      C.MAX_TRANSITORIOS)}
+    for motivo, (extra, serie) in extras.items():
         # con `codigo: 1` es legítimo…
-        bueno = D.diagnostico(IDENT, motivo, 1, 10, **extra)
+        bueno = D.diagnostico(IDENT, motivo, 1, 10, transitorios=serie,
+                              **extra)
         D.publicar_diagnostico(d, bueno)
         assert D.bloquea_arranque(d, IDENT)["motivo"] == motivo
         # …y con `codigo: 2` NO EXISTE, ni siquiera como documento
@@ -441,6 +445,32 @@ def test_la_tabla_motivo_codigo_esta_CONGELADA(tmp_path):
         with pytest.raises(D.DocumentoInvalido, match="traceback"):
             D.validar_diagnostico(D._sellar(dict(wrap, traceback=valor)))
 
-    # y un fallo cerrado no tiene serie que continuar
+    # la serie se valida POR MOTIVO, no por código
     with pytest.raises(D.DocumentoInvalido, match="no tiene serie"):
         D.validar_diagnostico(D._sellar(dict(wrap, transitorios=3)))
+
+
+def test_la_serie_transitoria_se_valida_por_MOTIVO(tmp_path):
+    """«`codigo: 1` ⇒ contador cero» hacía INEXPRESABLE el único estado que
+    §20.6.4 congela con contador: `transitorios_agotados` se publica con
+    `codigo: 1` y `transitorios == MAX_TRANSITORIOS`, que es su evidencia."""
+    # el estado que la regla anterior volvía imposible
+    agotado = D.diagnostico(IDENT, D.MOTIVO_TRANSITORIOS, 1, 10,
+                            transitorios=C.MAX_TRANSITORIOS, excepcion="EBUSY")
+    assert D.validar_diagnostico(agotado)
+    d = estado(tmp_path)
+    D.publicar_diagnostico(d, agotado)
+    assert D.bloquea_arranque(d, IDENT)["transitorios"] == C.MAX_TRANSITORIOS
+
+    # y un agotamiento que NO acredita el agotamiento no existe
+    for n in (0, 1, C.MAX_TRANSITORIOS - 1):
+        with pytest.raises(D.DocumentoInvalido, match="no acredita"):
+            D.diagnostico(IDENT, D.MOTIVO_TRANSITORIOS, 1, 10,
+                          transitorios=n, excepcion="EBUSY")
+
+    # un transitorio NACE en 1: una salida `2` que no cuenta no acota nada
+    with pytest.raises(D.DocumentoInvalido, match="no la acota"):
+        D.diagnostico(IDENT, D.MOTIVO_EXCEPCION, 2, 10, transitorios=0,
+                      excepcion="EBUSY")
+    assert D.diagnostico(IDENT, D.MOTIVO_EXCEPCION, 2, 10, transitorios=1,
+                         excepcion="EBUSY")
