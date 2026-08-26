@@ -23,6 +23,7 @@ sin un supervisor nuevo.
 """
 from __future__ import annotations
 
+import errno
 import fcntl
 import json
 import os
@@ -56,7 +57,8 @@ def _exigir(cond, mensaje: str) -> None:
         raise SupervisionInvalida(mensaje)
 
 
-def _validar_rama(rama, que: str, opcional: bool = False) -> None:
+def _validar_rama(rama, que: str, opcional: bool = False,
+                  exige_generacion: bool = False) -> None:
     if rama is None:
         _exigir(opcional, f"{que} ausente")
         return
@@ -72,9 +74,45 @@ def _validar_rama(rama, que: str, opcional: bool = False) -> None:
             and rama["ejecutable"].startswith("/"),
             f"{que}.ejecutable no es una ruta absoluta: "
             f"{rama['ejecutable']!r}")
+    if exige_generacion:
+        # Un trabajador SIEMPRE nace con generación: es lo que correlaciona sus
+        # sobres (§20.4.1) y lo que distingue una generación viva de la muerta.
+        _exigir("generacion" in rama, f"{que} sin `generacion`")
     if "generacion" in rama:
         _exigir(type(rama["generacion"]) is int and rama["generacion"] >= 0,
                 f"{que}.generacion inválida: {rama['generacion']!r}")
+
+
+def _validar_topologia(cuerpo: dict, donde: str) -> None:
+    """Las RELACIONES entre ramas, no solo sus campos (§20.4.1).
+
+    Validar cada rama por separado dejaba pasar árboles imposibles cuyo barrido
+    hace exactamente lo contrario de lo que debe: si el wrapper compartiera
+    grupo con el daemon, el `killpg` lo mataría a él; si el trabajador
+    estuviera en otro grupo, el barrido no lo alcanzaría nunca."""
+    wrapper, daemon = cuerpo["wrapper"], cuerpo["daemon"]
+    trabajador = cuerpo["trabajador"]
+    # El daemon LIDERA su propio grupo: `setpgid(0, 0)` hace `PGID == PID`.
+    _exigir(daemon["pgid"] == daemon["pid"],
+            f"`daemon`{donde} no lidera su grupo: pgid={daemon['pgid']} "
+            f"!= pid={daemon['pid']}")
+    # El wrapper queda FUERA, que es lo que le permite barrer sin matarse.
+    _exigir(wrapper["pgid"] != daemon["pgid"],
+            f"`wrapper`{donde} comparte grupo con el daemon: el `killpg` del "
+            f"barrido lo mataría a él")
+    _exigir(wrapper["pid"] != daemon["pid"],
+            f"`wrapper`{donde} y `daemon` son el mismo proceso")
+    if trabajador is not None:
+        # El trabajador HEREDA el grupo del daemon: si no, el barrido no lo
+        # alcanza y queda hablando con el exchange sin nadie que lo lea.
+        _exigir(trabajador["pgid"] == daemon["pgid"],
+                f"`trabajador`{donde} en otro grupo ({trabajador['pgid']}) "
+                f"que el daemon ({daemon['pgid']}): el barrido no lo "
+                f"alcanzaría")
+        _exigir(trabajador["pid"] != daemon["pid"],
+                f"`trabajador`{donde} y `daemon` son el mismo proceso")
+        _exigir(trabajador["pid"] != wrapper["pid"],
+                f"`trabajador`{donde} y `wrapper` son el mismo proceso")
 
 
 def validar_supervision(cuerpo, ruta: str = "") -> dict:
@@ -97,7 +135,9 @@ def validar_supervision(cuerpo, ruta: str = "") -> dict:
     _validar_rama(cuerpo["wrapper"], f"`wrapper`{donde}")
     _validar_rama(cuerpo["daemon"], f"`daemon`{donde}")
     # El trabajador puede no existir todavía: se registra al primer spawn.
-    _validar_rama(cuerpo["trabajador"], f"`trabajador`{donde}", opcional=True)
+    _validar_rama(cuerpo["trabajador"], f"`trabajador`{donde}", opcional=True,
+                  exige_generacion=True)
+    _validar_topologia(cuerpo, donde)
     _exigir(type(cuerpo["publicado_en"]) is int,
             f"`publicado_en` no es entero{donde}")
     esperado = cuerpo["checksum"]
@@ -195,10 +235,16 @@ class Lock:
         self.fd = os.open(self.ruta, os.O_RDWR | os.O_CREAT, 0o600)
         try:
             fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
+        except OSError as exc:
             os.close(self.fd)
             self.fd = None
-            raise LockOcupado(f"{self.ruta} lo tiene otro proceso")
+            # SOLO `EAGAIN`/`EWOULDBLOCK` significa «lo tiene otro». Tragarse
+            # todo `OSError` hacía que un `EIO` del filesystem se leyera como
+            # «hay un supervisor sano», y este proceso salía `0` sin barrer
+            # nada mientras el disco estaba roto.
+            if exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+                raise LockOcupado(f"{self.ruta} lo tiene otro proceso")
+            raise
         os.ftruncate(self.fd, 0)
         os.write(self.fd, f"{os.getpid()}\n".encode())
         os.fsync(self.fd)
@@ -362,14 +408,33 @@ def barrer_grupo(supervision: dict, plazo_s: float = 5.0,
     No se recolecta al trabajador: es NIETO del wrapper, así que al morir el
     daemon queda huérfano y lo recolecta `init`."""
     rama = supervision["daemon"]
-    parte = {"pgid": rama["pgid"], "señalado": False, "vivia": False}
+    parte = {"pgid": rama["pgid"], "señalado": False, "vivia": False,
+             "ancla": None}
+    # Se exige un ANCLA: al menos una identidad registrada que siga viva Y
+    # coincida dentro de este grupo. Sin ella, un `pgid` vivo no acredita
+    # NADA: puede ser un grupo reutilizado por procesos ajenos, y el `killpg`
+    # los mataría a todos. Que el daemon registrado ya no exista no autoriza a
+    # señalar su número de grupo.
     if P.exigir_coincidencia(rama, "daemon"):
         parte["vivia"] = True
+        parte["ancla"] = "daemon"
     trab = supervision.get("trabajador")
     if trab is not None:
         # Si el PID del trabajador fue reciclado, se falla cerrado igual: el
         # `killpg` alcanzaría a su grupo, y no sabemos cuál es.
-        P.exigir_coincidencia(trab, "trabajador")
+        if P.exigir_coincidencia(trab, "trabajador") and parte["ancla"] is None:
+            # El trabajador acredita el grupo solo si SIGUE en él: uno
+            # reparentado o movido no dice nada sobre este `pgid`.
+            if P.pgid_de(trab["pid"]) == rama["pgid"]:
+                parte["ancla"] = "trabajador"
+    if parte["ancla"] is None:
+        if P.grupo_vivo(rama["pgid"]):
+            raise P.ProcesoInvalido(
+                f"el grupo {rama['pgid']} vive pero NINGUNA identidad "
+                f"registrada sigue en él: el PGID fue reutilizado y el "
+                f"`killpg` mataría procesos ajenos")
+        parte["quedo_vivo"] = False
+        return parte                            # nada que barrer
     if P.grupo_vivo(rama["pgid"]):
         P.matar_grupo(rama["pgid"], signal.SIGKILL)
         parte["señalado"] = True

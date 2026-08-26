@@ -47,6 +47,16 @@ def dormilon(segundos=30):
     return arrancar
 
 
+def arbol_sintetico():
+    """Topología VÁLIDA (§20.4.1): el daemon lidera su grupo, el wrapper queda
+    fuera, y el trabajador hereda el grupo del daemon."""
+    mio = P.identidad_de(os.getpid())
+    wrapper = dict(mio, pid=1001, pgid=1001)
+    daemon = dict(mio, pid=2002, pgid=2002)
+    trabajador = dict(mio, pid=3003, pgid=2002, generacion=1)
+    return wrapper, daemon, trabajador
+
+
 def esperar_muerte(pid, plazo=5.0):
     fin = time.monotonic() + plazo
     while time.monotonic() < fin:
@@ -437,9 +447,9 @@ def test_un_diagnostico_CORRUPTO_o_AJENO_no_se_toca(tmp_path):
 # ==================== el sidecar como artefacto ====================
 def test_el_sidecar_de_supervision_se_valida_entero(tmp_path):
     d = estado(tmp_path)
-    mio = P.identidad_de(os.getpid())
-    bueno = S.publicar_supervision(d, IDENT, mio, dict(mio, pid=mio["pid"]),
-                                   AHORA)
+    wrapper, daemon, trabajador = arbol_sintetico()
+    bueno = S.publicar_supervision(d, IDENT, wrapper, daemon, AHORA,
+                                   trabajador)
     assert S.leer_supervision(d) == bueno
 
     for nombre, roto in {
@@ -448,6 +458,20 @@ def test_el_sidecar_de_supervision_se_valida_entero(tmp_path):
         "daemon_sin_pgid": dict(bueno, daemon={k: v for k, v in
                                                bueno["daemon"].items()
                                                if k != "pgid"}),
+        # TOPOLOGÍA: relaciones entre ramas, no solo campos
+        "daemon_no_lidera": dict(bueno, daemon=dict(bueno["daemon"],
+                                                    pgid=999)),
+        "wrapper_en_el_grupo": dict(bueno, wrapper=dict(
+            bueno["wrapper"], pgid=bueno["daemon"]["pgid"])),
+        "wrapper_es_el_daemon": dict(bueno, wrapper=dict(
+            bueno["wrapper"], pid=bueno["daemon"]["pid"])),
+        "trabajador_en_otro_grupo": dict(bueno, trabajador=dict(
+            bueno["trabajador"], pgid=4004)),
+        "trabajador_sin_generacion": dict(bueno, trabajador={
+            k: v for k, v in bueno["trabajador"].items()
+            if k != "generacion"}),
+        "trabajador_es_el_daemon": dict(bueno, trabajador=dict(
+            bueno["trabajador"], pid=bueno["daemon"]["pid"])),
         "pid_bool": dict(bueno, daemon=dict(bueno["daemon"], pid=True)),
         "pid_cero": dict(bueno, daemon=dict(bueno["daemon"], pid=0)),
         "ejecutable_relativo": dict(bueno, daemon=dict(bueno["daemon"],
@@ -469,10 +493,102 @@ def test_el_trabajador_se_actualiza_en_cada_respawn(tmp_path):
     """Sin esto el sidecar apuntaría a la generación muerta y el barrido
     diferido dejaría vivo justamente al trabajador colgado."""
     d = estado(tmp_path)
-    mio = P.identidad_de(os.getpid())
-    S.publicar_supervision(d, IDENT, mio, mio, AHORA)
+    wrapper, daemon, trabajador = arbol_sintetico()
+    S.publicar_supervision(d, IDENT, wrapper, daemon, AHORA)
     assert S.leer_supervision(d)["trabajador"] is None
     for generacion in (1, 2):
-        cuerpo = S.actualizar_trabajador(d, dict(mio, generacion=generacion))
+        cuerpo = S.actualizar_trabajador(d, dict(trabajador,
+                                                 generacion=generacion))
         assert S.leer_supervision(d)["trabajador"]["generacion"] == generacion
         assert cuerpo["checksum"] == S.leer_supervision(d)["checksum"]
+
+
+# ==================== el ancla del barrido (§20.4.1, nivel 2/3) ============
+def test_un_grupo_reutilizado_SIN_ancla_no_se_barre(tmp_path):
+    """Que el daemon registrado ya no exista NO autoriza a señalar su número
+    de grupo: un `pgid` vivo sin ninguna identidad registrada adentro es un
+    grupo reutilizado, y el `killpg` mataría procesos ajenos."""
+    d = estado(tmp_path)
+    wrapper, daemon, trabajador = arbol_sintetico()
+    # el daemon registrado NO existe (PIDs sintéticos altos), pero su `pgid`
+    # aparece vivo porque otro proceso lo ocupa ahora
+    sup = S.publicar_supervision(d, IDENT, wrapper, daemon, AHORA)
+    matados = []
+    real_matar = P.matar_grupo
+    P.matar_grupo = lambda pgid, senal: matados.append((pgid, senal))
+    P.grupo_vivo_real = P.grupo_vivo
+    P.grupo_vivo = lambda pgid: True                  # el grupo «vive»
+    try:
+        with pytest.raises(P.ProcesoInvalido, match="NINGUNA identidad"):
+            S.barrer_grupo(sup)
+        assert matados == [], "no se envió ninguna señal"
+    finally:
+        P.matar_grupo = real_matar
+        P.grupo_vivo = P.grupo_vivo_real
+
+    # y si el grupo tampoco vive, no hay nada que barrer y no es error
+    P.grupo_vivo = lambda pgid: False
+    try:
+        parte = S.barrer_grupo(sup)
+        assert parte["ancla"] is None and parte["señalado"] is False
+    finally:
+        P.grupo_vivo = P.grupo_vivo_real
+
+
+def test_el_TRABAJADOR_vivo_alcanza_como_ancla(tmp_path):
+    """Si el daemon ya murió pero su trabajador sigue en el grupo, ese
+    trabajador SÍ acredita que el `pgid` es el nuestro."""
+    d = estado(tmp_path)
+    listo = str(tmp_path / "nieto.pid")
+
+    def arrancar():
+        nieto = os.fork()
+        if nieto == 0:
+            time.sleep(60)
+            os._exit(0)
+        with open(listo, "w") as fh:
+            fh.write(str(nieto))
+        time.sleep(60)
+        return 0
+
+    sup = S.lanzar_daemon(d, IDENT, arrancar, AHORA)
+    fin = time.monotonic() + 5
+    while time.monotonic() < fin and not os.path.exists(listo):
+        time.sleep(0.01)
+    nieto = int(open(listo).read())
+    sup = S.actualizar_trabajador(d, dict(P.identidad_de(nieto),
+                                          generacion=1))
+    # muere SOLO el daemon; el nieto queda huérfano pero en el mismo grupo
+    os.kill(sup["daemon"]["pid"], signal.SIGKILL)
+    P.recolectar(sup["daemon"]["pid"])
+    assert P.vivo(nieto) and os.getpgid(nieto) == sup["daemon"]["pgid"]
+
+    parte = S.barrer_grupo(sup)
+    assert parte["ancla"] == "trabajador" and parte["señalado"] is True
+    assert esperar_muerte(nieto)
+
+
+# ==================== el lock distingue EAGAIN de un fallo de I/O =========
+def test_solo_EAGAIN_significa_otro_supervisor(tmp_path):
+    """Tragarse todo `OSError` hacía que un `EIO` del filesystem se leyera como
+    «hay un supervisor sano»: el proceso salía `0` sin barrer nada mientras el
+    disco estaba roto."""
+    import fcntl
+    ruta = str(tmp_path / C.ARCHIVO_LOCK_SUPERVISOR)
+    real = fcntl.flock
+
+    fcntl.flock = lambda fd, op: (_ for _ in ()).throw(OSError(5, "EIO"))
+    try:
+        with pytest.raises(OSError) as exc:
+            with S.Lock(ruta):
+                pytest.fail("no debería entrar")
+        assert not isinstance(exc.value, S.LockOcupado)
+        assert exc.value.errno == 5
+    finally:
+        fcntl.flock = real
+
+    # y un lock REALMENTE ocupado sí es `LockOcupado`
+    with S.Lock(ruta):
+        with pytest.raises(S.LockOcupado):
+            with S.Lock(ruta):
+                pytest.fail("no debería entrar")
