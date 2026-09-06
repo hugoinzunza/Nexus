@@ -256,7 +256,7 @@ def test_un_trabajador_COLGADO_solo_lo_alcanza_el_killpg(tmp_path):
     assert P.vivo(nieto)
     assert os.getpgid(nieto) == sup["daemon"]["pgid"], "el nieto hereda el grupo"
 
-    parte = S.barrer_grupo(sup)
+    parte = S.barrer_grupo(sup, IDENT)
     assert parte["señalado"] is True
     assert esperar_muerte(sup["daemon"]["pid"]) and esperar_muerte(nieto)
     P.recolectar(sup["daemon"]["pid"])
@@ -267,7 +267,7 @@ def test_un_trabajador_COLGADO_solo_lo_alcanza_el_killpg(tmp_path):
 def test_el_wrapper_no_se_mata_a_si_mismo_con_su_killpg(tmp_path):
     d = estado(tmp_path)
     sup = S.lanzar_daemon(d, IDENT, dormilon(), AHORA)
-    S.barrer_grupo(sup)
+    S.barrer_grupo(sup, IDENT)
     esperar_muerte(sup["daemon"]["pid"])
     P.recolectar(sup["daemon"]["pid"])
     assert P.vivo(os.getpid())                        # seguimos acá
@@ -281,7 +281,7 @@ def test_el_barrido_de_un_grupo_AJENO_falla_cerrado_sin_señal(tmp_path):
         falso = dict(sup, daemon=dict(sup["daemon"],
                                       inicio=sup["daemon"]["inicio"] + 1))
         with pytest.raises(P.ProcesoInvalido, match="NO es el registrado"):
-            S.barrer_grupo(falso)
+            S.barrer_grupo(falso, IDENT)
         assert P.vivo(pid), "el proceso ajeno debe sobrevivir"
     finally:
         os.kill(pid, signal.SIGKILL)
@@ -314,7 +314,7 @@ def test_una_salida_limpia_no_deja_sidecar_y_no_hay_barrido(tmp_path):
     os.kill(sup["daemon"]["pid"], signal.SIGKILL)
     P.recolectar(sup["daemon"]["pid"])
     S.retirar_supervision(d)                           # salida ORDENADA
-    parte = S.barrido_diferido(d, AHORA)
+    parte = S.barrido_diferido(d, IDENT, AHORA)
     assert parte["barrido"] is False
     assert G.leer_diagnostico(d) is None               # no se diagnostica nada
 
@@ -325,7 +325,7 @@ def test_matar_al_wrapper_deja_supervisor_interrumpido_y_BLOQUEA(tmp_path):
     sup = S.lanzar_daemon(d, IDENT, dormilon(), AHORA)
     pid = sup["daemon"]["pid"]
     # el wrapper muere sin clausurar: el sidecar QUEDA
-    parte = S.barrido_diferido(d, AHORA)
+    parte = S.barrido_diferido(d, IDENT, AHORA)
     assert parte["barrido"] is True
     assert esperar_muerte(pid)
     P.recolectar(pid)
@@ -344,7 +344,7 @@ def test_el_ciclo_se_cierra_tras_ACREDITAR(tmp_path):
     devolvía al mismo diagnóstico."""
     d = estado(tmp_path)
     sup = S.lanzar_daemon(d, IDENT, dormilon(), AHORA)
-    S.barrido_diferido(d, AHORA)
+    S.barrido_diferido(d, IDENT, AHORA)
     esperar_muerte(sup["daemon"]["pid"])
     P.recolectar(sup["daemon"]["pid"])
 
@@ -356,7 +356,7 @@ def test_el_ciclo_se_cierra_tras_ACREDITAR(tmp_path):
     G.archivar_diagnostico(d, diag)
     # el arranque ya NO bloquea, y no hay nada que rediagnosticar
     assert G.bloquea_arranque(d, IDENT) is None
-    assert S.barrido_diferido(d, AHORA + 2)["barrido"] is False
+    assert S.barrido_diferido(d, IDENT, AHORA + 2)["barrido"] is False
 
 
 def test_una_caida_tras_diagnosticar_no_REdiagnostica(tmp_path):
@@ -367,14 +367,14 @@ def test_una_caida_tras_diagnosticar_no_REdiagnostica(tmp_path):
     sup = S.lanzar_daemon(d, IDENT, dormilon(), AHORA)
     pid = sup["daemon"]["pid"]
     # CAÍDA entre el paso 2 y el 3: se diagnostica y no se retira el sidecar
-    S.barrer_grupo(sup)
+    S.barrer_grupo(sup, IDENT)
     esperar_muerte(pid)
     P.recolectar(pid)
-    S.arbitrar(d, sup, AHORA)
+    S.arbitrar(d, sup, AHORA, IDENT)
     primero = G.leer_diagnostico(d)
     assert S.leer_supervision(d) is not None           # el sidecar sigue
 
-    parte = S.barrido_diferido(d, AHORA + 99)          # otro reloj
+    parte = S.barrido_diferido(d, IDENT, AHORA + 99)          # otro reloj
     assert parte["arbitraje"]["ya_diagnosticado"] is True
     assert G.leer_diagnostico(d) == primero            # NO se rediagnosticó
     assert S.leer_supervision(d) is None               # y ahora sí se retiró
@@ -386,14 +386,14 @@ def test_un_diagnostico_codigo_1_previo_se_CONSERVA(tmp_path):
     supervisor es consecuencia."""
     d = estado(tmp_path)
     sup = S.lanzar_daemon(d, IDENT, dormilon(), AHORA)
-    S.barrer_grupo(sup)
+    S.barrer_grupo(sup, IDENT)
     esperar_muerte(sup["daemon"]["pid"])
     P.recolectar(sup["daemon"]["pid"])
 
     raiz = G.diagnostico(IDENT, G.MOTIVO_SENAL, 1, AHORA - 5, senal=9,
                          estado_crudo=137)
     G.publicar_diagnostico(d, raiz)
-    parte = S.arbitrar(d, sup, AHORA)
+    parte = S.arbitrar(d, sup, AHORA, IDENT)
     assert parte["clasificacion"] == G.CLAS_PRESERVADO
     assert G.leer_diagnostico(d) == raiz                # intacto
     inc = json.load(open(parte["incidencia"]))
@@ -405,14 +405,14 @@ def test_un_diagnostico_codigo_2_previo_se_ARCHIVA_y_escala(tmp_path):
     """La serie transitoria no se pierde, y la severidad no baja."""
     d = estado(tmp_path)
     sup = S.lanzar_daemon(d, IDENT, dormilon(), AHORA)
-    S.barrer_grupo(sup)
+    S.barrer_grupo(sup, IDENT)
     esperar_muerte(sup["daemon"]["pid"])
     P.recolectar(sup["daemon"]["pid"])
 
     transitorio = G.diagnostico(IDENT, G.MOTIVO_EXCEPCION, 2, AHORA - 5,
                                 transitorios=2, excepcion="BlockingIOError")
     G.publicar_diagnostico(d, transitorio)
-    parte = S.arbitrar(d, sup, AHORA)
+    parte = S.arbitrar(d, sup, AHORA, IDENT)
     assert parte["archivado"] and os.path.exists(parte["archivado"])
     assert json.load(open(parte["archivado"])) == transitorio
     assert G.leer_diagnostico(d)["motivo"] == G.MOTIVO_SUPERVISOR
@@ -430,13 +430,13 @@ def test_un_diagnostico_CORRUPTO_o_AJENO_no_se_toca(tmp_path):
     ):
         sub = estado(tmp_path, nombre)
         sup = S.lanzar_daemon(sub, IDENT, dormilon(), AHORA)
-        S.barrer_grupo(sup)
+        S.barrer_grupo(sup, IDENT)
         esperar_muerte(sup["daemon"]["pid"])
         P.recolectar(sup["daemon"]["pid"])
         ruta = os.path.join(sub, C.ARCHIVO_FALLO_CERRADO)
         escribir(ruta)
         antes = open(ruta, "rb").read()
-        parte = S.arbitrar(sub, sup, AHORA)
+        parte = S.arbitrar(sub, sup, AHORA, IDENT)
         assert parte["clasificacion"] == clas
         assert open(ruta, "rb").read() == antes, "el documento no se toca"
         inc = json.load(open(parte["incidencia"]))
@@ -520,7 +520,7 @@ def test_un_grupo_reutilizado_SIN_ancla_no_se_barre(tmp_path):
     P.grupo_vivo = lambda pgid: True                  # el grupo «vive»
     try:
         with pytest.raises(P.ProcesoInvalido, match="NINGUNA identidad"):
-            S.barrer_grupo(sup)
+            S.barrer_grupo(sup, IDENT)
         assert matados == [], "no se envió ninguna señal"
     finally:
         P.matar_grupo = real_matar
@@ -529,7 +529,7 @@ def test_un_grupo_reutilizado_SIN_ancla_no_se_barre(tmp_path):
     # y si el grupo tampoco vive, no hay nada que barrer y no es error
     P.grupo_vivo = lambda pgid: False
     try:
-        parte = S.barrer_grupo(sup)
+        parte = S.barrer_grupo(sup, IDENT)
         assert parte["ancla"] is None and parte["señalado"] is False
     finally:
         P.grupo_vivo = P.grupo_vivo_real
@@ -563,7 +563,7 @@ def test_el_TRABAJADOR_vivo_alcanza_como_ancla(tmp_path):
     P.recolectar(sup["daemon"]["pid"])
     assert P.vivo(nieto) and os.getpgid(nieto) == sup["daemon"]["pgid"]
 
-    parte = S.barrer_grupo(sup)
+    parte = S.barrer_grupo(sup, IDENT)
     assert parte["ancla"] == "trabajador" and parte["señalado"] is True
     assert esperar_muerte(nieto)
 
@@ -592,3 +592,110 @@ def test_solo_EAGAIN_significa_otro_supervisor(tmp_path):
         with pytest.raises(S.LockOcupado):
             with S.Lock(ruta):
                 pytest.fail("no debería entrar")
+
+
+# ============ los tres hallazgos que la primera pasada no cubría ===========
+def test_el_daemon_NO_hereda_el_lock_del_supervisor(tmp_path):
+    """Con un WRAPPER REAL que se mata de verdad. El gate anterior no mataba
+    al wrapper —era el propio proceso de test—, así que no podía ver que el
+    `fork` conserva el descriptor y que el `flock` del daemon huérfano dejaba
+    al supervisor siguiente sin poder recuperar nada."""
+    d = estado(tmp_path)
+    lock = str(tmp_path / C.ARCHIVO_LOCK_SUPERVISOR)
+    aviso = str(tmp_path / "daemon.pid")
+
+    wrapper = os.fork()
+    if wrapper == 0:                                   # ---- WRAPPER REAL ----
+        codigo = 1
+        try:
+            with S.Lock(lock):
+                sup = S.lanzar_daemon(d, IDENT, dormilon(60), AHORA)
+                with open(aviso, "w") as fh:
+                    fh.write(str(sup["daemon"]["pid"]))
+                time.sleep(60)                         # lo matan acá
+            codigo = 0
+        except BaseException:
+            codigo = 1
+        finally:
+            os._exit(codigo)
+
+    fin = time.monotonic() + 10
+    while time.monotonic() < fin and not os.path.exists(aviso):
+        time.sleep(0.01)
+    assert os.path.exists(aviso), "el wrapper no llegó a lanzar el daemon"
+    daemon_pid = int(open(aviso).read())
+
+    # SIGKILL al WRAPPER. El daemon queda huérfano y vivo.
+    os.kill(wrapper, signal.SIGKILL)
+    P.recolectar(wrapper)
+    assert esperar_muerte(wrapper)
+    assert P.vivo(daemon_pid), "el daemon debe sobrevivir al wrapper"
+
+    try:
+        # el supervisor SIGUIENTE tiene que poder adquirir el lock
+        with S.Lock(lock):
+            parte = S.barrido_diferido(d, IDENT, AHORA)
+            assert parte["barrido"] is True
+            assert esperar_muerte(daemon_pid)
+            assert G.leer_diagnostico(d)["motivo"] == G.MOTIVO_SUPERVISOR
+    finally:
+        if P.vivo(daemon_pid):
+            os.kill(daemon_pid, signal.SIGKILL)
+
+
+def test_un_supervision_json_de_OTRA_identidad_no_se_barre(tmp_path):
+    """Validar el documento no alcanza: uno de otra cohorte con el checksum
+    recalculado describe un árbol coherente que NO es el nuestro."""
+    d = estado(tmp_path)
+    sup = S.lanzar_daemon(d, IDENT, dormilon(), AHORA)
+    pid = sup["daemon"]["pid"]
+    try:
+        ajeno = S._sellar(dict(sup, cohorte="OTRA-COHORTE"))
+        S.validar_supervision(ajeno)                   # el documento es válido
+        matados = []
+        real = P.matar_grupo
+        P.matar_grupo = lambda pgid, senal: matados.append((pgid, senal))
+        try:
+            with pytest.raises(S.SupervisionInvalida, match="otra identidad"):
+                S.barrer_grupo(ajeno, IDENT)
+            assert matados == [] and P.vivo(pid)
+        finally:
+            P.matar_grupo = real
+
+        # y por la ruta del barrido diferido, igual
+        escribir_atomico(S.ruta_supervision(d), canon(ajeno))
+        with pytest.raises(S.SupervisionInvalida, match="otra identidad"):
+            S.barrido_diferido(d, IDENT, AHORA)
+        assert P.vivo(pid)
+    finally:
+        os.kill(pid, signal.SIGKILL)
+        P.recolectar(pid)
+
+
+def test_una_consulta_FALLIDA_no_es_un_proceso_ausente(tmp_path):
+    """Devolver `None` ante cualquier error hacía que un `EIO` se leyera como
+    «este proceso ya murió»: el barrido daba por limpio un árbol vivo."""
+    mio = P.identidad_de(os.getpid())
+
+    real = P._lib.sysctl
+    P._lib.sysctl = lambda *a: (_ctypes_errno(5), -1)[1]
+    try:
+        with pytest.raises(P.ConsultaFallida, match="no es verificable"):
+            P.identidad_de(os.getpid())
+        with pytest.raises(P.ConsultaFallida):
+            P.exigir_coincidencia(mio)
+    finally:
+        P._lib.sysctl = real
+
+    # ausencia CONFIRMADA sigue siendo `None`, no excepción
+    pid = os.fork()
+    if pid == 0:
+        os._exit(0)
+    P.recolectar(pid)
+    assert P.identidad_de(pid) is None
+
+
+def _ctypes_errno(valor):
+    import ctypes
+    ctypes.set_errno(valor)
+    return valor

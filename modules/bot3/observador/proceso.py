@@ -51,16 +51,45 @@ class ProcesoInvalido(ValueError):
     NO se envía ninguna señal."""
 
 
+class ConsultaFallida(RuntimeError):
+    """No se pudo CONSULTAR la identidad. Distinto de «el proceso no existe»:
+    ausencia confirmada significa que no hay nada que barrer, mientras que una
+    identidad no verificable tiene que ABORTAR el barrido — tratarla como
+    ausencia dejaría vivo al proceso que había que matar, y tratarla como
+    presencia mataría a ciegas."""
+
+
+# Un `errno` que significa AUSENCIA confirmada. Cualquier otro es una consulta
+# que no se pudo hacer, y eso no es lo mismo.
+_AUSENTE = (errno.ESRCH, errno.ENOENT)
+
+
 def _sysctl_kinfo(pid: int) -> bytes | None:
+    """Bytes del `kinfo_proc`, o `None` si el proceso NO EXISTE.
+
+    Levanta `ConsultaFallida` si el kernel devolvió un error que no significa
+    ausencia: devolver `None` ahí hacía que un `EIO` se leyera como «este
+    proceso ya murió», y el barrido daba por limpio un árbol que seguía vivo.
+    """
     mib = (ctypes.c_int * 4)(CTL_KERN, KERN_PROC, KERN_PROC_PID, int(pid))
     tam = ctypes.c_size_t(0)
-    if _lib.sysctl(mib, 4, None, ctypes.byref(tam), None, 0) != 0:
-        return None
-    if tam.value == 0:
-        return None
-    buf = ctypes.create_string_buffer(tam.value)
-    if _lib.sysctl(mib, 4, buf, ctypes.byref(tam), None, 0) != 0:
-        return None
+    for intento in (1, 2):
+        ctypes.set_errno(0)
+        if intento == 1:
+            r = _lib.sysctl(mib, 4, None, ctypes.byref(tam), None, 0)
+            buf = None
+        else:
+            buf = ctypes.create_string_buffer(tam.value)
+            r = _lib.sysctl(mib, 4, buf, ctypes.byref(tam), None, 0)
+        if r != 0:
+            err = ctypes.get_errno()
+            if err in _AUSENTE:
+                return None
+            raise ConsultaFallida(
+                f"sysctl(KERN_PROC_PID, {pid}) falló con errno {err} "
+                f"({os.strerror(err)}): la identidad no es verificable")
+        if intento == 1 and tam.value == 0:
+            return None
     # Un PID que ya no existe devuelve 0 bytes ÚTILES aunque el dimensionado
     # haya reservado espacio: `sysctl` no falla, simplemente no escribe nada.
     if tam.value < struct.calcsize(_TIMEVAL):
@@ -83,9 +112,15 @@ def inicio_de(pid: int) -> int | None:
 def ejecutable_de(pid: int) -> str | None:
     """Ruta absoluta y CANÓNICA del ejecutable, o `None` si no existe."""
     buf = ctypes.create_string_buffer(_MAX_RUTA)
+    ctypes.set_errno(0)
     n = _lib.proc_pidpath(int(pid), buf, _MAX_RUTA)
     if n <= 0:
-        return None
+        err = ctypes.get_errno()
+        if err in _AUSENTE or err == 0:
+            return None
+        raise ConsultaFallida(
+            f"proc_pidpath({pid}) falló con errno {err} "
+            f"({os.strerror(err)}): la identidad no es verificable")
     return os.path.realpath(buf.value.decode("utf-8", "replace"))
 
 
@@ -94,9 +129,12 @@ def pgid_de(pid: int) -> int | None:
         return os.getpgid(int(pid))
     except ProcessLookupError:
         return None
-    except PermissionError:
-        # Existe pero es de otro usuario: no es nuestro, y no se toca.
-        return None
+    except PermissionError as exc:
+        # Existe pero es de otro usuario. NO es ausencia: es un proceso vivo
+        # que no podemos acreditar, y darlo por muerto dejaría el barrido
+        # incompleto.
+        raise ConsultaFallida(
+            f"getpgid({pid}): existe pero es de otro usuario") from exc
 
 
 def identidad_de(pid: int) -> dict | None:
@@ -112,6 +150,8 @@ def identidad_de(pid: int) -> dict | None:
     ejecutable = ejecutable_de(pid)
     pgid = pgid_de(pid)
     if ejecutable is None or pgid is None:
+        # El proceso existía al leer el `inicio` y desapareció en el camino:
+        # ausencia confirmada, no consulta fallida.
         return None
     return {"pid": int(pid), "pgid": int(pgid), "inicio": inicio,
             "ejecutable": ejecutable}
@@ -165,6 +205,9 @@ def vivo(pid: int) -> bool:
         return False
     except PermissionError:
         return True                             # existe, aunque sea ajeno
+    except OSError as exc:
+        raise ConsultaFallida(
+            f"kill({pid}, 0) falló con errno {exc.errno}") from exc
 
 
 def grupo_vivo(pgid: int) -> bool:

@@ -219,6 +219,28 @@ class LockOcupado(RuntimeError):
     supervisor VIVO, y este proceso no tiene nada que hacer."""
 
 
+# Descriptores de lock abiertos en ESTE proceso. Un `fork` los duplica, y la
+# copia del hijo mantiene vivo el `flock` aunque el padre muera: el supervisor
+# siguiente recibía `LockOcupado` de un daemon huérfano y la recuperación era
+# imposible. Cerrar la copia del hijo NO libera la del padre — el `flock` vive
+# en la descripción de archivo abierta, y solo se suelta cuando se cierran
+# TODOS los descriptores que la referencian.
+_LOCKS_ABIERTOS: set[int] = set()
+
+
+def cerrar_locks_heredados() -> int:
+    """Se llama en el HIJO, inmediatamente tras el `fork`."""
+    cerrados = 0
+    for fd in sorted(_LOCKS_ABIERTOS):
+        try:
+            os.close(fd)
+            cerrados += 1
+        except OSError:
+            pass
+    _LOCKS_ABIERTOS.clear()
+    return cerrados
+
+
 class Lock:
     """`flock` exclusivo no bloqueante, de vida completa.
 
@@ -248,10 +270,12 @@ class Lock:
         os.ftruncate(self.fd, 0)
         os.write(self.fd, f"{os.getpid()}\n".encode())
         os.fsync(self.fd)
+        _LOCKS_ABIERTOS.add(self.fd)
         return self
 
     def __exit__(self, *_):
         if self.fd is not None:
+            _LOCKS_ABIERTOS.discard(self.fd)
             os.close(self.fd)               # el `flock` se libera al cerrar
             self.fd = None
         return False
@@ -284,6 +308,11 @@ def lanzar_daemon(estado_dir: str, identidad: dict, arrancar, ahora: int,
         try:
             os.close(confirma_r)
             os.close(libera_w)
+            # ANTES de nada: el daemon no es el supervisor y no debe sostener
+            # su lock. Heredarlo hacía que, muerto el wrapper, el supervisor
+            # siguiente encontrara `supervisor.lock` ocupado por un daemon
+            # huérfano y la recuperación fuera imposible.
+            cerrar_locks_heredados()
             os.setpgid(0, 0)                            # grupo PROPIO
             os.write(confirma_w, canon({"pid": os.getpid(),
                                         "pgid": os.getpgid(0)}).encode())
@@ -397,7 +426,21 @@ def clausurar_hijo(pid: int, cerrar_entrada, plazo_s: float | None = None,
 # --------------------------------------------------------------------------
 # §20.4.2 — barrido diferido bajo `supervisor.lock`
 # --------------------------------------------------------------------------
-def barrer_grupo(supervision: dict, plazo_s: float = 5.0,
+def exigir_identidad(supervision: dict, identidad: dict) -> None:
+    """§20.4.3: el sidecar tiene que ser de ESTA cohorte.
+
+    Validar el documento no alcanza: un `supervision.json` de otra identidad
+    con el checksum recalculado describe un árbol perfectamente coherente que
+    no es el nuestro, y barrerlo es matar procesos de otra corrida."""
+    difs = [c for c in ("cohorte", "contrato", "commit")
+            if supervision.get(c) != identidad.get(c)]
+    if difs:
+        raise SupervisionInvalida(
+            f"{C.ARCHIVO_SUPERVISION} es de otra identidad: difieren "
+            f"{sorted(difs)}. Barrerlo mataría procesos de otra corrida")
+
+
+def barrer_grupo(supervision: dict, identidad: dict, plazo_s: float = 5.0,
                  dormir=time.sleep) -> dict:
     """Nivel 2/3: mata el grupo del daemon registrado, tras REVALIDAR.
 
@@ -407,6 +450,7 @@ def barrer_grupo(supervision: dict, plazo_s: float = 5.0,
 
     No se recolecta al trabajador: es NIETO del wrapper, así que al morir el
     daemon queda huérfano y lo recolecta `init`."""
+    exigir_identidad(supervision, identidad)        # ANTES de cualquier señal
     rama = supervision["daemon"]
     parte = {"pgid": rama["pgid"], "señalado": False, "vivia": False,
              "ancla": None}
@@ -452,11 +496,14 @@ def barrer_grupo(supervision: dict, plazo_s: float = 5.0,
     return parte
 
 
-def arbitrar(estado_dir: str, supervision: dict, ahora: int) -> dict:
+def arbitrar(estado_dir: str, supervision: dict, ahora: int,
+             identidad: dict | None = None) -> dict:
     """§20.4.2.2: qué se publica cuando ya hay un diagnóstico del daemon.
 
     Ninguna rama sobrescribe en silencio: la primera conserva, la segunda
     archiva antes de publicar, y la tercera no toca nada."""
+    if identidad is not None:
+        exigir_identidad(supervision, identidad)
     ruta = os.path.join(estado_dir, C.ARCHIVO_FALLO_CERRADO)
     identidad = {k: supervision[k] for k in ("cohorte", "contrato", "commit")}
     sha_previo = G.sha_de_bytes(ruta)
@@ -495,7 +542,7 @@ def arbitrar(estado_dir: str, supervision: dict, ahora: int) -> dict:
     return parte
 
 
-def barrido_diferido(estado_dir: str, ahora: int) -> dict:
+def barrido_diferido(estado_dir: str, identidad: dict, ahora: int) -> dict:
     """§20.4.2.1, orden CONGELADO y recuperable:
 
     ```
@@ -515,7 +562,9 @@ def barrido_diferido(estado_dir: str, ahora: int) -> dict:
     supervision = leer_supervision(estado_dir)
     if supervision is None:
         return {"barrido": False, "motivo": "salida limpia anterior"}
-    parte = {"barrido": True, "grupo": barrer_grupo(supervision)}
+    exigir_identidad(supervision, identidad)        # ANTES de cualquier señal
+    parte = {"barrido": True,
+             "grupo": barrer_grupo(supervision, identidad)}
     if parte["grupo"]["quedo_vivo"]:
         raise SupervisionInvalida(
             f"el grupo {parte['grupo']['pgid']} sigue vivo tras el SIGKILL: "
@@ -535,6 +584,7 @@ def barrido_diferido(estado_dir: str, ahora: int) -> dict:
     if ya:
         parte["arbitraje"] = {"clasificacion": None, "ya_diagnosticado": True}
     else:
-        parte["arbitraje"] = arbitrar(estado_dir, supervision, ahora)
+        parte["arbitraje"] = arbitrar(estado_dir, supervision, ahora,
+                                      identidad)
     retirar_supervision(estado_dir)
     return parte
