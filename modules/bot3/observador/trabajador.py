@@ -14,9 +14,12 @@ respaldo para cuando está colgado y no mira la tubería.
 """
 from __future__ import annotations
 
+import errno
+import fcntl
 import http.client
 import json
 import os
+import select
 import socket
 import ssl
 import urllib.error
@@ -25,6 +28,16 @@ import urllib.request
 
 from . import contrato as C
 from . import transporte as T
+
+
+# Registro CERRADO de `errno` que sí son de red. Todo lo demás —`EMFILE`,
+# `ENFILE`, `ENOMEM`, `EBADF`— es una falla del trabajador, no del exchange.
+ERRNOS_DE_RED = frozenset({
+    errno.ECONNREFUSED, errno.ECONNRESET, errno.ECONNABORTED,
+    errno.EHOSTUNREACH, errno.EHOSTDOWN, errno.ENETUNREACH, errno.ENETDOWN,
+    errno.ENETRESET, errno.ETIMEDOUT, errno.EPIPE, errno.ENOTCONN,
+    errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT,
+})
 
 
 def clasificar(exc: BaseException) -> tuple[str, int | None, object]:
@@ -60,7 +73,13 @@ def clasificar(exc: BaseException) -> tuple[str, int | None, object]:
     if isinstance(exc, (ConnectionError, http.client.HTTPException)):
         return T.ERR_CONEXION, None, None
     if isinstance(exc, OSError):
-        return T.ERR_CONEXION, None, None
+        # Un `OSError` NO es de red por defecto: `EMFILE` —descriptores
+        # agotados— es una falla LOCAL del trabajador, y clasificarla como
+        # `conexion` la hacía reintentable, así que el observador reintentaba
+        # cinco veces un problema suyo y seguía como si nada.
+        if exc.errno in ERRNOS_DE_RED:
+            return T.ERR_CONEXION, None, None
+        return T.ERR_INTERNO, None, None
     # Cualquier otra cosa es una falla NUESTRA, no de la red: `interno` falla
     # cerrado y no consume intento.
     return T.ERR_INTERNO, None, None
@@ -70,17 +89,34 @@ def obtener(url: str, params: dict, connect_timeout: float,
             read_timeout: float, abrir=None) -> tuple[int, object]:
     """GET público, sin credenciales. La falla máxima posible es no obtener
     datos."""
+    if abrir is not None:
+        return abrir(url, params, connect_timeout, read_timeout)
+    partes = urllib.parse.urlsplit(url)
     consulta = urllib.parse.urlencode(params or {})
-    completa = f"{url}?{consulta}" if consulta else url
-    abrir = abrir or urllib.request.urlopen
-    # `urllib` toma un solo timeout para conexión y lectura; se usa el mayor y
-    # la cota real la pone el `REQUEST_DEADLINE` del padre (§20.4).
-    respuesta = abrir(completa, timeout=max(connect_timeout, read_timeout))
-    with respuesta:
+    camino = partes.path + (f"?{consulta}" if consulta else "")
+    # `urllib.request.urlopen` toma UN solo timeout para conexión y lectura, y
+    # §15 congela dos valores distintos. Se abre la conexión con
+    # `CONNECT_TIMEOUT` y se cambia el socket a `READ_TIMEOUT` recién después
+    # del `connect`, que es lo único que aplica los dos de verdad.
+    clase = (http.client.HTTPSConnection if partes.scheme == "https"
+             else http.client.HTTPConnection)
+    conexion = clase(partes.netloc, timeout=connect_timeout)
+    try:
+        conexion.connect()
+        if conexion.sock is not None:
+            conexion.sock.settimeout(read_timeout)
+        conexion.request("GET", camino or "/")
+        respuesta = conexion.getresponse()
         crudo = respuesta.read(C.MAX_SOBRE + 1)
         if len(crudo) > C.MAX_SOBRE:
             raise ValueError(f"respuesta sobre el techo {C.MAX_SOBRE}")
+        if respuesta.status >= 400:
+            raise urllib.error.HTTPError(
+                url, respuesta.status, respuesta.reason, respuesta.headers,
+                None)
         return respuesta.status, json.loads(crudo.decode("utf-8"))
+    finally:
+        conexion.close()
 
 
 def atender(pedido: dict, hacer=obtener) -> dict:
@@ -99,13 +135,42 @@ def atender(pedido: dict, hacer=obtener) -> dict:
                 error=None)
 
 
+def _escribir_todo(fd: int, datos: bytes) -> None:
+    """Bucle PARCIAL, igual que en el padre.
+
+    Un solo `os.write` ignorando lo que efectivamente escribió dejaba la
+    respuesta a medias: el padre se quedaba esperando la trama, vencía el
+    deadline, y una falla del TRANSPORTE se convertía en un reintento."""
+    puesto = 0
+    while puesto < len(datos):
+        listos = select.select([], [fd], [])[1]
+        if not listos:
+            continue
+        try:
+            puesto += os.write(fd, datos[puesto:])
+        except OSError as exc:
+            if exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR):
+                continue
+            raise
+
+
 def servir(leer_fd: int, escribir_fd: int, hacer=obtener) -> int:
     """Bucle del trabajador. Sale `0` por EOF, que es el camino normal."""
+    # Los DOS descriptores en no bloqueante, igual que en el padre: `select`
+    # marca escribible cuando cabe al menos un byte, no el bloque entero.
+    for fd in (leer_fd, escribir_fd):
+        fcntl.fcntl(fd, fcntl.F_SETFL,
+                    fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK)
     buf = bytearray()
     while True:
         try:
+            listos = select.select([leer_fd], [], [])[0]
+            if not listos:
+                continue
             trozo = os.read(leer_fd, 65536)
-        except OSError:
+        except OSError as exc:
+            if exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR):
+                continue
             return 1
         if not trozo:
             return 0                                    # EOF: salida limpia
@@ -122,6 +187,6 @@ def servir(leer_fd: int, escribir_fd: int, hacer=obtener) -> int:
                 return 1
             respuesta = atender(sobre, hacer)
             try:
-                os.write(escribir_fd, T.enmarcar(respuesta))
+                _escribir_todo(escribir_fd, T.enmarcar(respuesta))
             except OSError:
                 return 1

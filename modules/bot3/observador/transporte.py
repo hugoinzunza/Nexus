@@ -40,7 +40,6 @@ observador, y reintentarlo cinco veces lo taparía.
 from __future__ import annotations
 
 import errno
-import hashlib
 import json
 import os
 import random
@@ -48,6 +47,8 @@ import select
 import signal
 import time
 
+from ..v9 import marco as M
+from ..v9.contract import sha256_hex
 from . import contrato as C
 from . import proceso as P
 from .estado import canon
@@ -94,9 +95,13 @@ class FalloDeRed(RuntimeError):
 # sobres: enmarcado de §5 sobre la tubería
 # --------------------------------------------------------------------------
 def enmarcar(cuerpo: dict) -> bytes:
-    payload = canon(cuerpo).encode("utf-8")
-    cabeza = f"{len(payload)}\t{hashlib.sha256(payload).hexdigest()}\t"
-    return cabeza.encode("ascii") + payload + b"\n"
+    """Reusa `marco.enmarcar` de §5, no una copia.
+
+    La copia divergía: `int(b"+5")` y `int(b" 5 ")` valen 5 en Python, así que
+    aceptaba longitudes que el lector canónico —cuya gramática es
+    `[0-9]{1,9}`— rechaza. Dos gramáticas para el mismo formato es exactamente
+    la clase de diferencia que nadie ve hasta que importa."""
+    return M.enmarcar(canon(cuerpo))
 
 
 def desenmarcar(crudo: bytes) -> dict:
@@ -108,23 +113,28 @@ def desenmarcar(crudo: bytes) -> dict:
     if not crudo.endswith(b"\n"):
         raise TransporteCerrado(
             "sobre TRUNCADO: el trabajador murió a mitad de la escritura")
-    cuerpo = crudo[:-1]
-    try:
-        largo_txt, sha_txt, payload = cuerpo.split(b"\t", 2)
-        largo = int(largo_txt)
-    except ValueError as exc:
-        raise TransporteCerrado(f"encabezado de sobre ilegible: {exc}")
+    # La MISMA gramática de §5: `[0-9]{1,9}\t[0-9a-f]{64}\t`. Nada de `int()`
+    # sobre el campo de longitud, que aceptaría `+5` y `  5  `.
+    m = M.CABECERA.match(crudo, 0)
+    if m is None:
+        raise TransporteCerrado("encabezado de sobre fuera de gramática")
+    largo = int(m.group(1))
     if largo > C.MAX_SOBRE:
         raise TransporteCerrado(
             f"sobre de {largo} bytes sobre el techo {C.MAX_SOBRE}: no se "
             f"reserva memoria por un campo de longitud que ya no es confiable")
-    if len(payload) != largo:
+    ini, fin = m.end(), m.end() + largo
+    if fin != len(crudo) - 1 or crudo[fin:fin + 1] != b"\n":
         raise TransporteCerrado(
-            f"longitud declarada {largo} != {len(payload)} reales")
-    if hashlib.sha256(payload).hexdigest() != sha_txt.decode("ascii", "replace"):
+            f"la longitud declarada ({largo}) no cierra en `\\n`")
+    try:
+        payload = crudo[ini:fin].decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise TransporteCerrado(f"payload del sobre no es UTF-8: {exc}")
+    if sha256_hex(payload) != m.group(2).decode("ascii"):
         raise TransporteCerrado("checksum del sobre no cuadra: canal corrupto")
     try:
-        return json.loads(payload.decode("utf-8"))
+        return json.loads(payload)
     except ValueError as exc:
         raise TransporteCerrado(f"payload del sobre no es JSON: {exc}")
 
@@ -142,21 +152,45 @@ def validar_respuesta(cuerpo, generacion: int, pedido: int) -> dict:
     # protocolo corrupto. Descartarlo lo convertía en una espera que terminaba
     # venciendo el deadline —que sí es reintentable—, así que una corrupción
     # del observador se habría reintentado cinco veces y seguido como si nada.
+    # TIPOS estrictos: `type(...) is int` excluye `bool`, y `True == 1` hacía
+    # que un `generacion: true` correlacionara con la generación 1.
+    for campo in ("generacion", "pedido"):
+        if type(cuerpo[campo]) is not int:
+            raise TransporteCerrado(
+                f"`{campo}` no es entero: {cuerpo[campo]!r} "
+                f"({type(cuerpo[campo]).__name__})")
     if (cuerpo["generacion"], cuerpo["pedido"]) != (generacion, pedido):
         raise TransporteCerrado(
             f"respuesta ajena: esperaba ({generacion}, {pedido}) y llegó "
             f"({cuerpo['generacion']!r}, {cuerpo['pedido']!r})")
-    if cuerpo["ok"] is True:
+    # `ok` tiene que ser BOOLEANO. Con `ok: "false"` la cadena es verdadera en
+    # Python y `pedir()` devolvía éxito sobre una respuesta que declaraba un
+    # error.
+    if type(cuerpo["ok"]) is not bool:
+        raise TransporteCerrado(f"`ok` no es booleano: {cuerpo['ok']!r}")
+    if cuerpo["ok"]:
         if cuerpo["error"] is not None:
             raise TransporteCerrado("respuesta `ok` con `error` presente")
         if type(cuerpo["status"]) is not int:
             raise TransporteCerrado(f"`status` no entero: {cuerpo['status']!r}")
+        # COHERENCIA: un `ok` con `503` es un sobre que se contradice a sí
+        # mismo. El trabajador solo marca `ok` cuando no hubo excepción, y
+        # `urllib` levanta para 4xx y 5xx, así que ese sobre no puede existir.
+        if not 200 <= cuerpo["status"] <= 299:
+            raise TransporteCerrado(
+                f"`ok` con status {cuerpo['status']}: el sobre se contradice")
+        if cuerpo["retry_after"] is not None:
+            raise TransporteCerrado("`ok` con `retry_after` presente")
     else:
         if cuerpo["error"] not in ERRORES:
             # Un valor desconocido no describe nada, así que no puede decidir
             # si se reintenta.
             raise TransporteCerrado(
                 f"`error` fuera del enum cerrado: {cuerpo['error']!r}")
+        if cuerpo["body"] is not None:
+            raise TransporteCerrado("respuesta de error con `body` presente")
+        if cuerpo["status"] is not None and type(cuerpo["status"]) is not int:
+            raise TransporteCerrado(f"`status` no entero: {cuerpo['status']!r}")
     return cuerpo
 
 
@@ -320,6 +354,16 @@ def lanzar_trabajador(generacion: int, servir) -> Trabajador:
     return Trabajador(generacion, pid, pedido_w, resp_r)
 
 
+def _clausurar(trabajador: "Trabajador") -> None:
+    """Mata y recolecta una generación que no llegó a publicarse."""
+    try:
+        os.kill(trabajador.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    P.recolectar(trabajador.pid)
+    trabajador.cerrar_canal()
+
+
 class Canal:
     """El lado PADRE: una petición en vuelo a la vez, deadline por petición."""
 
@@ -334,15 +378,26 @@ class Canal:
 
     # -- ciclo de generación -------------------------------------------------
     def asegurar(self) -> Trabajador:
-        if self.trabajador is None:
-            self.generacion += 1
-            self.trabajador = lanzar_trabajador(self.generacion, self.servir)
-            if self.al_respawnear is not None:
-                # DURABLE antes del primer pedido a la generación nueva: si no,
-                # el sidecar apuntaría a la generación muerta y el barrido
-                # diferido dejaría vivo justamente al trabajador colgado.
-                self.al_respawnear(self.trabajador)
-        return self.trabajador
+        if self.trabajador is not None:
+            return self.trabajador
+        self.generacion += 1
+        nuevo = lanzar_trabajador(self.generacion, self.servir)
+        if self.al_respawnear is not None:
+            # DURABLE antes del primer pedido a la generación nueva: si no, el
+            # sidecar apuntaría a la generación muerta y el barrido diferido
+            # dejaría vivo justamente al trabajador colgado.
+            #
+            # Y se registra ANTES de publicarlo en `self.trabajador`: asignarlo
+            # primero dejaba usable una generación cuyo registro había fallado,
+            # así que el barrido no la conocía y el pedido siguiente devolvía
+            # éxito sobre un trabajador invisible.
+            try:
+                self.al_respawnear(nuevo)
+            except BaseException:
+                _clausurar(nuevo)
+                raise
+        self.trabajador = nuevo
+        return nuevo
 
     def respawnear(self) -> None:
         """`kill → waitpid → cerrar extremos viejos → crear canal nuevo`."""
@@ -394,6 +449,12 @@ class Canal:
         try:
             escribir_todo(trabajador.escribir_fd, enmarcar(sobre), deadline)
             crudo = leer_sobre(trabajador.leer_fd, deadline)
+            # La validación va DENTRO del bloque: afuera, una respuesta con ID
+            # ajeno dejaba al trabajador vivo y a la generación en uso, con el
+            # canal ya demostrado corrupto.
+            cuerpo = validar_respuesta(desenmarcar(crudo),
+                                       trabajador.generacion,
+                                       trabajador.pedido)
         except DeadlineVencido:
             # Matar cubre DNS, TLS y cuerpo por igual, porque no depende de que
             # la operación colgada sea cancelable.
@@ -405,8 +466,6 @@ class Canal:
             # reintenta.
             self.respawnear()
             raise
-        cuerpo = validar_respuesta(desenmarcar(crudo), trabajador.generacion,
-                                   trabajador.pedido)
         if cuerpo["ok"]:
             return cuerpo
         clase = cuerpo["error"]
@@ -474,16 +533,19 @@ def con_reintentos(hacer, dormir=None, azar=random.uniform,
     Dormir tras el último sería retrasar el fracaso sin cambiarlo, y la espera
     se la comería el `ExitTimeOut` de §20.6."""
     total = C.BACKOFF_INTENTOS if intentos is None else intentos
+    if dormir is None:
+        # `dormir=None` omitía TODA espera: cinco intentos en microsegundos
+        # contra el mismo endpoint, que es lo contrario de un backoff. El
+        # default es la espera interruptible, no la ausencia de espera.
+        dormir = SuenoInterrumpible()
     for intento in range(1, total + 1):
         try:
             return hacer()
         except FalloDeRed as exc:
             if intento >= total:
                 raise
-            espera = espera_de(intento, interpretar_retry_after(
-                exc.retry_after), azar)
-            if dormir is not None:
-                dormir(espera)
+            dormir(espera_de(intento, interpretar_retry_after(exc.retry_after),
+                             azar))
     raise AssertionError("inalcanzable")
 
 

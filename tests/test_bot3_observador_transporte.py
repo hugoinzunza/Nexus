@@ -90,10 +90,15 @@ def test_una_respuesta_con_ID_AJENO_falla_cerrado(tmp_path):
     base = {"generacion": 1, "pedido": 1, "ok": True, "status": 200,
             "retry_after": None, "body": {}, "error": None}
     assert T.validar_respuesta(dict(base), 1, 1)
-    for ajeno in (dict(base, pedido=2), dict(base, generacion=2),
-                  dict(base, pedido="1")):
+    for ajeno in (dict(base, pedido=2), dict(base, generacion=2)):
         with pytest.raises(T.TransporteCerrado, match="respuesta ajena"):
             T.validar_respuesta(ajeno, 1, 1)
+    # TIPOS estrictos antes de correlacionar: `True == 1`, así que un
+    # `generacion: true` correlacionaba con la generación 1
+    for tipado in (dict(base, pedido="1"), dict(base, generacion=True),
+                   dict(base, pedido=True), dict(base, generacion=1.0)):
+        with pytest.raises(T.TransporteCerrado, match="no es entero"):
+            T.validar_respuesta(tipado, 1, 1)
 
 
 def test_el_schema_de_la_respuesta_es_cerrado(tmp_path):
@@ -105,6 +110,18 @@ def test_el_schema_de_la_respuesta_es_cerrado(tmp_path):
         "ok_con_error": dict(base, error=T.ERR_DNS),
         "status_no_entero": dict(base, status="200"),
         "error_desconocido": dict(base, ok=False, error="lo_que_sea"),
+        # `ok` tiene que ser BOOLEANO: con `"false"` la cadena es verdadera en
+        # Python y `pedir()` devolvía éxito sobre una respuesta que declaraba
+        # un error
+        "ok_cadena_false": dict(base, ok="false", error=T.ERR_DNS),
+        "ok_cadena_true": dict(base, ok="true"),
+        "ok_entero": dict(base, ok=1),
+        # COHERENCIA entre campos: un `ok` con 503 se contradice a sí mismo
+        "ok_con_5xx": dict(base, status=503),
+        "ok_con_4xx": dict(base, status=404),
+        "ok_con_retry_after": dict(base, retry_after="7"),
+        "error_con_body": dict(base, ok=False, error=T.ERR_DNS,
+                               body={"algo": 1}),
     }.items():
         with pytest.raises(T.TransporteCerrado):
             T.validar_respuesta(roto, 1, 1)
@@ -471,3 +488,193 @@ def test_cada_respawn_registra_la_generacion_VIVA(tmp_path):
         assert registrados[-1][1] == c.trabajador.pid
     finally:
         c.cerrar(plazo_s=2)
+
+
+# ============ los hallazgos que la primera pasada no cubría ==============
+def test_el_trabajador_completa_ESCRITURAS_PARCIALES(tmp_path):
+    """Un solo `os.write` ignorando lo que efectivamente escribió dejaba la
+    respuesta a medias: el padre esperaba la trama, vencía el deadline, y una
+    falla del TRANSPORTE se convertía en reintento."""
+    grande = {"velas": ["y" * 400 for _ in range(3000)]}      # ~1,2 MB
+    c = canal_con(eco(200, grande), deadline_ms=15_000)
+    try:
+        r = c.pedir("https://x/k", {})
+        assert r["ok"] and len(r["body"]["velas"]) == 3000
+        # y varias seguidas por el MISMO trabajador: el buffer se llena y se
+        # vacía muchas veces
+        for _ in range(3):
+            assert c.pedir("https://x/k", {})["ok"]
+        assert c.generacion == 1, "no debería haber respawneado"
+    finally:
+        c.cerrar(plazo_s=3)
+
+
+def test_los_descriptores_del_trabajador_son_NO_BLOQUEANTES(tmp_path):
+    """`select` marca escribible cuando cabe AL MENOS UN BYTE, no el bloque."""
+    import fcntl
+    visto = str(tmp_path / "flags")
+
+    def espia(url, p, ct, rt):
+        # se ejecuta DENTRO del trabajador; sus dos tuberías son los únicos
+        # descriptores abiertos además de 0/1/2
+        estados = {}
+        for fd in range(3, 256):
+            try:
+                estados[fd] = bool(fcntl.fcntl(fd, fcntl.F_GETFL)
+                                   & os.O_NONBLOCK)
+            except OSError:
+                pass
+        with open(visto, "w") as fh:
+            fh.write(repr(estados))
+        return (200, {})
+
+    c = canal_con(espia)
+    try:
+        c.pedir("https://x/k", {})
+        estados = eval(open(visto).read())
+        assert len(estados) >= 2, (
+            f"el trabajador debería conservar sus DOS tuberías: {estados}")
+        assert all(estados.values()), (
+            f"descriptores BLOQUEANTES en el trabajador: {estados}")
+    finally:
+        c.cerrar(plazo_s=2)
+
+
+def test_una_generacion_cuyo_REGISTRO_fallo_no_queda_utilizable(tmp_path):
+    """Asignar el trabajador antes de registrarlo dejaba viva una generación
+    que el barrido no conocía, y el pedido siguiente devolvía éxito sobre un
+    trabajador invisible."""
+    vivos = []
+
+    def registro_roto(t):
+        vivos.append(t.pid)
+        raise OSError(5, "EIO simulado")
+
+    c = canal_con(eco(), al_respawnear=registro_roto)
+    try:
+        with pytest.raises(OSError):
+            c.pedir("https://x/k", {})
+        assert c.trabajador is None, "la generación NO puede quedar en uso"
+        assert vivos and not P.vivo(vivos[0]), "y su proceso debe estar muerto"
+    finally:
+        c.cerrar(plazo_s=2)
+
+
+def test_una_respuesta_de_ID_AJENO_no_deja_al_trabajador_vivo(tmp_path):
+    """La validación tiene que estar DENTRO del bloque que limpia: el canal ya
+    quedó demostrado corrupto."""
+    def mentir(url, p, ct, rt):
+        return (200, {"ok": True})
+
+    c = canal_con(mentir)
+    try:
+        c.asegurar()
+        pid = c.trabajador.pid
+        real = T.validar_respuesta
+        T.validar_respuesta = lambda *a: (_ for _ in ()).throw(
+            T.TransporteCerrado("respuesta ajena simulada"))
+        try:
+            with pytest.raises(T.TransporteCerrado):
+                c.pedir("https://x/k", {})
+        finally:
+            T.validar_respuesta = real
+        assert c.trabajador is None and not P.vivo(pid)
+    finally:
+        c.cerrar(plazo_s=2)
+
+
+def test_el_backoff_por_DEFECTO_espera_de_verdad(tmp_path):
+    """`dormir=None` omitía TODA espera: cinco intentos en microsegundos contra
+    el mismo endpoint, que es lo contrario de un backoff."""
+    def siempre_falla():
+        raise T.FalloDeRed(T.ERR_CONEXION)
+
+    t0 = time.monotonic()
+    with pytest.raises(T.FalloDeRed):
+        # sin `dormir`: el default tiene que ser la espera interruptible
+        T.con_reintentos(siempre_falla, azar=lambda a, b: 0.05, intentos=3)
+    transcurrido = time.monotonic() - t0
+    assert transcurrido >= 0.09, f"no esperó: {transcurrido:.4f}s"
+
+
+def test_un_EMFILE_es_INTERNO_y_no_de_red(tmp_path):
+    """`EMFILE` —descriptores agotados— es una falla LOCAL del trabajador.
+    Clasificarla como `conexion` la hacía reintentable, así que el observador
+    reintentaba cinco veces un problema suyo y seguía como si nada."""
+    for numero, esperado in ((errno.EMFILE, T.ERR_INTERNO),
+                             (errno.ENFILE, T.ERR_INTERNO),
+                             (errno.ENOMEM, T.ERR_INTERNO),
+                             (errno.EBADF, T.ERR_INTERNO),
+                             (errno.ECONNREFUSED, T.ERR_CONEXION),
+                             (errno.ETIMEDOUT, T.ERR_CONEXION),
+                             (errno.EHOSTUNREACH, T.ERR_CONEXION)):
+        assert W.clasificar(OSError(numero, os.strerror(numero)))[0] == \
+            esperado, numero
+
+
+def test_se_aplican_los_DOS_timeouts_congelados(tmp_path):
+    """§15 congela `CONNECT_TIMEOUT` = 5 s y `READ_TIMEOUT` = 20 s, y usar el
+    mayor para ambos deja la conexión sin su cota propia."""
+    vistos = {}
+
+    class ConexionEspia:
+        def __init__(self, netloc, timeout=None):
+            vistos["connect"] = timeout
+            self.sock = self
+
+        def settimeout(self, valor):
+            vistos["read"] = valor
+
+        def connect(self):
+            pass
+
+        def request(self, metodo, camino):
+            vistos["camino"] = camino
+
+        def getresponse(self):
+            class R:
+                status, reason, headers = 200, "OK", None
+
+                def read(self, n):
+                    return b"{}"
+            return R()
+
+        def close(self):
+            pass
+
+    real = W.http.client.HTTPSConnection
+    W.http.client.HTTPSConnection = ConexionEspia
+    try:
+        W.obtener("https://host/fapi/v1/klines", {"symbol": "BTCUSDT"},
+                  C.CONNECT_TIMEOUT_MS / 1000.0, C.READ_TIMEOUT_MS / 1000.0)
+    finally:
+        W.http.client.HTTPSConnection = real
+    assert vistos["connect"] == C.CONNECT_TIMEOUT_MS / 1000.0
+    assert vistos["read"] == C.READ_TIMEOUT_MS / 1000.0
+    assert vistos["read"] != vistos["connect"], "no se aplicó el de conexión"
+    assert "symbol=BTCUSDT" in vistos["camino"]
+
+
+def test_el_encuadre_comparte_la_GRAMATICA_de_seccion_5(tmp_path):
+    """Duplicarla divergía: `int(b"+5")` y `int(b"  5  ")` valen 5 en Python,
+    así que la copia aceptaba longitudes que el lector canónico rechaza."""
+    from modules.bot3.v9 import marco as M
+    from modules.bot3.observador.estado import canon
+
+    cuerpo = {"generacion": 1, "pedido": 1}
+    assert T.enmarcar(cuerpo) == M.enmarcar(canon(cuerpo))
+
+    payload = canon(cuerpo).encode()
+    import hashlib
+    h = hashlib.sha256(payload).hexdigest().encode()
+    for cabeza in (b"+" + str(len(payload)).encode(),
+                   b"  " + str(len(payload)).encode() + b"  ",
+                   str(len(payload)).encode() + b"\n",
+                   b"0" * 10 + str(len(payload)).encode()):
+        with pytest.raises(T.TransporteCerrado, match="gramática|no cierra"):
+            T.desenmarcar(cabeza + b"\t" + h + b"\t" + payload + b"\n")
+
+    # y el hash en MAYÚSCULAS tampoco: la gramática exige `[0-9a-f]{64}`
+    with pytest.raises(T.TransporteCerrado, match="gramática"):
+        T.desenmarcar(str(len(payload)).encode() + b"\t" + h.upper()
+                      + b"\t" + payload + b"\n")
