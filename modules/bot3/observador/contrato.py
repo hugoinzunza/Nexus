@@ -80,6 +80,19 @@ MAX_TRANSITORIOS = 5
 # propósito — no tiene nada durable que cerrar, así que uno largo solo
 # retrasaría la salida del padre y comería el `ExitTimeOut`.
 CIERRE_COOPERATIVO_MS = 2_000
+
+# §20.4 — transporte. `CONNECT_TIMEOUT` y `READ_TIMEOUT` detectan antes el caso
+# común, pero NO acotan una petición: `READ_TIMEOUT` limita la inactividad
+# entre lecturas, así que un servidor que entrega un byte cada 19 s la sostiene
+# indefinidamente. La cota real es `REQUEST_DEADLINE`, absoluto, que arranca
+# ANTES del primer byte del pedido y cubre DNS, conexión, TLS y cuerpo.
+CONNECT_TIMEOUT_MS = 5_000
+READ_TIMEOUT_MS = 20_000
+REQUEST_DEADLINE_MS = 30_000
+# Techo de PROTOCOLO, no expectativa de datos: una página de `LIMITE_PAGINA`
+# velas ronda las centenas de kB. Existe para no reservar memoria según un
+# campo de longitud que ya no es confiable.
+MAX_SOBRE = 4 * 1024 * 1024
 CARPETA_ALMACENES = "almacenes"
 CARPETA_STAGING = "almacenes.new"
 ARCHIVO_COMPLETADO = "completed.json"
@@ -133,7 +146,8 @@ PARAMS = (
     "RAIZ", "SUBRUTA_ESTADO", "SUBRUTA_LIBRO", "ARCHIVO_LOCK",
     "ARCHIVO_LOCK_SUPERVISOR", "ARCHIVO_LOCK_ACREDITACION",
     "ARCHIVO_LOCK_ACTIVACION", "ARCHIVO_FALLO_CERRADO", "ARCHIVO_SUPERVISION",
-    "MAX_TRANSITORIOS", "CIERRE_COOPERATIVO_MS",
+    "MAX_TRANSITORIOS", "CIERRE_COOPERATIVO_MS", "CONNECT_TIMEOUT_MS",
+    "READ_TIMEOUT_MS", "REQUEST_DEADLINE_MS", "MAX_SOBRE",
     "CARPETA_ALMACENES", "CARPETA_STAGING", "ARCHIVO_COMPLETADO",
     "ARCHIVO_BLOQUEADO", "ARCHIVO_SILENCIO", "ARCHIVO_VERIFICACION",
     "ARCHIVO_SOLICITUD_TERMINAL", "ARCHIVO_PEDIDO_VERIFICACION",
