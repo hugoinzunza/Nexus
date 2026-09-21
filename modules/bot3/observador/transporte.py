@@ -189,9 +189,42 @@ def validar_respuesta(cuerpo, generacion: int, pedido: int) -> dict:
                 f"`error` fuera del enum cerrado: {cuerpo['error']!r}")
         if cuerpo["body"] is not None:
             raise TransporteCerrado("respuesta de error con `body` presente")
-        if cuerpo["status"] is not None and type(cuerpo["status"]) is not int:
-            raise TransporteCerrado(f"`status` no entero: {cuerpo['status']!r}")
+        _exigir_coherencia_de_error(cuerpo)
     return cuerpo
+
+
+# §20.4: qué estado HTTP corresponde a cada clase de error. Validar la clase
+# SOLA dejaba pasar `ok=False, status=403, error=http_5xx`: un bloqueo que no se
+# arregla reintentando llegaba como `FalloDeRed` y se reintentaba cinco veces.
+_ESTADO_DE_ERROR = {
+    ERR_429: lambda s: s == 429,
+    ERR_5XX: lambda s: s is not None and 500 <= s <= 599,
+    ERR_4XX: lambda s: s is not None and 400 <= s <= 499 and s != 429,
+    # Las fallas de red ocurren ANTES de que haya respuesta: no hay status.
+    ERR_DNS: lambda s: s is None,
+    ERR_CONEXION: lambda s: s is None,
+    ERR_TLS: lambda s: s is None,
+    ERR_LECTURA: lambda s: s is None,
+    # Un estado fuera de 4xx/5xx que el trabajador no supo clasificar, o una
+    # falla suya sin respuesta de por medio.
+    ERR_INTERNO: lambda s: s is None or not 400 <= s <= 599,
+}
+# Solo el límite de tasa y el error del servidor traen una espera sugerida.
+_ADMITE_RETRY_AFTER = (ERR_429, ERR_5XX)
+
+
+def _exigir_coherencia_de_error(cuerpo: dict) -> None:
+    status, clase = cuerpo["status"], cuerpo["error"]
+    if status is not None and type(status) is not int:
+        raise TransporteCerrado(f"`status` no entero: {status!r}")
+    if not _ESTADO_DE_ERROR[clase](status):
+        raise TransporteCerrado(
+            f"sobre incoherente: `error={clase}` con `status={status}`. Un "
+            f"4xx con clase de 5xx convertiría un bloqueo en reintento")
+    if cuerpo["retry_after"] is not None and clase not in _ADMITE_RETRY_AFTER:
+        raise TransporteCerrado(
+            f"`retry_after` con `error={clase}`: solo lo admiten "
+            f"{list(_ADMITE_RETRY_AFTER)}")
 
 
 # --------------------------------------------------------------------------

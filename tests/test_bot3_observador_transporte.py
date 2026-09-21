@@ -635,6 +635,9 @@ def test_se_aplican_los_DOS_timeouts_congelados(tmp_path):
             class R:
                 status, reason, headers = 200, "OK", None
 
+                def getheader(self, nombre, defecto=None):
+                    return {"Content-Length": "2"}.get(nombre, defecto)
+
                 def read(self, n):
                     return b"{}"
             return R()
@@ -678,3 +681,178 @@ def test_el_encuadre_comparte_la_GRAMATICA_de_seccion_5(tmp_path):
     with pytest.raises(T.TransporteCerrado, match="gramática"):
         T.desenmarcar(str(len(payload)).encode() + b"\t" + h.upper()
                       + b"\t" + payload + b"\n")
+
+
+# ============ rutas REALES: servidor HTTP local y sobre por tubería ========
+import socket as _socket
+import threading as _threading
+
+
+class ServidorCrudo:
+    """Servidor TCP local que responde bytes EXACTOS, sin framework HTTP.
+
+    Hace falta control a nivel de bytes: un framework completaría el cuerpo o
+    corregiría el `Content-Length`, que es justo lo que el gate necesita
+    romper."""
+
+    def __init__(self, cabeceras: bytes, cuerpo: bytes = b"",
+                 demora_cuerpo: float = 0.0, cortar: bool = True):
+        self.cabeceras, self.cuerpo = cabeceras, cuerpo
+        self.demora, self.cortar = demora_cuerpo, cortar
+        self.sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        self.sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(4)
+        self.puerto = self.sock.getsockname()[1]
+        self.hilo = _threading.Thread(target=self._servir, daemon=True)
+        self.hilo.start()
+
+    @property
+    def url(self):
+        return f"http://127.0.0.1:{self.puerto}/fapi/v1/klines"
+
+    def _servir(self):
+        try:
+            conn, _ = self.sock.accept()
+        except OSError:
+            return
+        with conn:
+            conn.recv(65536)                           # el pedido
+            conn.sendall(self.cabeceras)
+            if self.demora:
+                time.sleep(self.demora)
+            if self.cuerpo:
+                try:
+                    conn.sendall(self.cuerpo)
+                except OSError:
+                    pass
+            # `cortar`: cerrar la conexión SIN completar lo declarado
+
+    def cerrar(self):
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+def test_un_200_TRUNCADO_no_es_una_pagina_vacia_completa(tmp_path):
+    """Un `200` con `Content-Length: 100` que entrega `[]` y corta llegaba como
+    `ok=True, body=[]`. Una página vacía completa es EXACTAMENTE lo que la
+    máquina de silencio toma por evidencia de que el mercado enmudeció: la
+    truncación tiene que ser una falla de red, nunca un dato."""
+    srv = ServidorCrudo(b"HTTP/1.1 200 OK\r\nContent-Type: application/json"
+                        b"\r\nContent-Length: 100\r\n\r\n", b"[]")
+    try:
+        with pytest.raises(Exception) as exc:
+            W.obtener(srv.url, {"symbol": "BTCUSDT"}, 2.0, 2.0)
+        clase, status, _ = W.clasificar(exc.value)
+        assert clase == T.ERR_LECTURA and status is None
+    finally:
+        srv.cerrar()
+
+    # y por el canal COMPLETO, el padre no recibe un éxito
+    srv = ServidorCrudo(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n",
+                        b"[]")
+    c = canal_con(W.obtener, deadline_ms=10_000)
+    try:
+        with pytest.raises(T.FalloDeRed) as exc:
+            c.pedir(srv.url, {})
+        assert exc.value.clase == T.ERR_LECTURA
+    finally:
+        c.cerrar(plazo_s=2)
+        srv.cerrar()
+
+
+def test_un_200_COMPLETO_se_acepta_y_uno_sin_largo_ni_chunked_no(tmp_path):
+    srv = ServidorCrudo(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n",
+                        b"[]")
+    try:
+        assert W.obtener(srv.url, {}, 2.0, 2.0) == (200, [])
+    finally:
+        srv.cerrar()
+
+    # sin Content-Length ni chunked, el fin del cuerpo es el cierre de la
+    # conexión: una truncación es INDISTINGUIBLE de un cuerpo completo
+    srv = ServidorCrudo(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n",
+                        b"[]")
+    try:
+        with pytest.raises(Exception) as exc:
+            W.obtener(srv.url, {}, 2.0, 2.0)
+        assert "indistinguible" in str(exc.value)
+    finally:
+        srv.cerrar()
+
+
+def test_un_403_con_cuerpo_DEMORADO_se_clasifica_por_las_cabeceras(tmp_path):
+    """Leer el cuerpo antes de clasificar hacía que un `403` cuyo cuerpo se
+    demora terminara como `lectura` sin status — reintentable —, cuando es un
+    bloqueo que no se arregla pidiendo de nuevo."""
+    srv = ServidorCrudo(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 50"
+                        b"\r\n\r\n", b'{"code":-2015}', demora_cuerpo=5.0)
+    try:
+        t0 = time.monotonic()
+        with pytest.raises(Exception) as exc:
+            W.obtener(srv.url, {}, 2.0, 1.0)       # read_timeout < demora
+        clase, status, _ = W.clasificar(exc.value)
+        assert (clase, status) == (T.ERR_4XX, 403)
+        assert time.monotonic() - t0 < 3, "esperó el cuerpo de error"
+    finally:
+        srv.cerrar()
+
+
+def test_un_sobre_INCOHERENTE_por_la_tuberia_falla_cerrado(tmp_path):
+    """Por la ruta REAL: el trabajador escribe un sobre enmarcado cuyo status y
+    clase de error se contradicen, y el padre lo recibe por la tubería.
+    `ok=False, status=403, error=http_5xx` producía `FalloDeRed` reintentable:
+    un bloqueo se reintentaba cinco veces."""
+    casos = {
+        "4xx_como_5xx": (403, T.ERR_5XX, None),
+        "5xx_como_4xx": (503, T.ERR_4XX, None),
+        "429_como_4xx": (429, T.ERR_4XX, None),
+        "4xx_como_429": (403, T.ERR_429, None),
+        "red_con_status": (200, T.ERR_DNS, None),
+        "lectura_con_status": (500, T.ERR_LECTURA, None),
+        "5xx_sin_status": (None, T.ERR_5XX, None),
+        "retry_after_en_4xx": (403, T.ERR_4XX, "7"),
+        "retry_after_en_dns": (None, T.ERR_DNS, "7"),
+        "interno_con_5xx": (503, T.ERR_INTERNO, None),
+    }
+    for nombre, (status, clase, retry) in casos.items():
+        def servir(r, w, _s=status, _c=clase, _r=retry):
+            # recibe el pedido y contesta un sobre enmarcado INCOHERENTE
+            T._no_bloqueante(r)
+            buf = b""
+            while not buf.endswith(b"\n"):
+                select_r = __import__("select").select([r], [], [], 5)[0]
+                if not select_r:
+                    return 1
+                trozo = os.read(r, 65536)
+                if not trozo:
+                    return 0
+                buf += trozo
+            pedido = T.desenmarcar(buf)
+            os.write(w, T.enmarcar({
+                "generacion": pedido["generacion"],
+                "pedido": pedido["pedido"], "ok": False, "status": _s,
+                "retry_after": _r, "body": None, "error": _c}))
+            time.sleep(5)
+            return 0
+
+        c = T.Canal(servir, deadline_ms=5_000)
+        try:
+            with pytest.raises(T.TransporteCerrado, match="incoherente|"
+                               "retry_after"):
+                c.pedir("https://x/k", {})
+            assert c.trabajador is None, f"{nombre}: el canal quedó en uso"
+        finally:
+            c.cerrar(plazo_s=1)
+
+    # y los COHERENTES sí pasan, con la clase que les corresponde
+    for status, clase, retry, esperado in (
+            (429, T.ERR_429, "7", T.FalloDeRed),
+            (503, T.ERR_5XX, None, T.FalloDeRed),
+            (None, T.ERR_DNS, None, T.FalloDeRed),
+            (403, T.ERR_4XX, None, T.TransporteCerrado)):
+        cuerpo = {"generacion": 1, "pedido": 1, "ok": False, "status": status,
+                  "retry_after": retry, "body": None, "error": clase}
+        assert T.validar_respuesta(cuerpo, 1, 1)

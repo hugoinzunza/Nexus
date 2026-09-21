@@ -55,6 +55,10 @@ def clasificar(exc: BaseException) -> tuple[str, int | None, object]:
             # `403`/`418` que estamos bloqueados.
             return T.ERR_4XX, status, None
         return T.ERR_INTERNO, status, None
+    if isinstance(exc, http.client.IncompleteRead):
+        # El cuerpo llegó TRUNCADO: falla de lectura, reintentable. Nunca un
+        # `ok` con la parte que alcanzó a llegar.
+        return T.ERR_LECTURA, None, None
     if isinstance(exc, ssl.SSLError):
         return T.ERR_TLS, None, None
     if isinstance(exc, socket.timeout):
@@ -107,16 +111,63 @@ def obtener(url: str, params: dict, connect_timeout: float,
             conexion.sock.settimeout(read_timeout)
         conexion.request("GET", camino or "/")
         respuesta = conexion.getresponse()
-        crudo = respuesta.read(C.MAX_SOBRE + 1)
-        if len(crudo) > C.MAX_SOBRE:
-            raise ValueError(f"respuesta sobre el techo {C.MAX_SOBRE}")
+        # La clasificación HTTP sale de las CABECERAS, antes de tocar el
+        # cuerpo. Leer primero hacía que un `403` cuyo cuerpo se demora
+        # terminara como `lectura` sin status —reintentable—, cuando es un
+        # bloqueo que no se arregla pidiendo de nuevo.
         if respuesta.status >= 400:
             raise urllib.error.HTTPError(
                 url, respuesta.status, respuesta.reason, respuesta.headers,
                 None)
+        crudo = leer_cuerpo_integro(respuesta)
         return respuesta.status, json.loads(crudo.decode("utf-8"))
     finally:
         conexion.close()
+
+
+class CuerpoIncompleto(http.client.IncompleteRead):
+    """El servidor cerró antes de entregar el cuerpo DECLARADO."""
+
+
+def leer_cuerpo_integro(respuesta) -> bytes:
+    """El cuerpo COMPLETO que las cabeceras declaran, o una excepción.
+
+    `HTTPResponse.read(n)` devuelve en silencio MENOS bytes si el servidor
+    cierra antes de tiempo: un `200` con `Content-Length: 100` que entrega `[]`
+    y corta llegaba como `ok=True, body=[]`. Y una página vacía completa es
+    exactamente lo que la máquina de silencio toma por evidencia de que el
+    mercado enmudeció. Una truncación es una falla de RED, no un dato.
+
+    - con `Content-Length`: se exige que lo leído sea exactamente eso, y se
+      rechaza ANTES de leer si declara más que el techo;
+    - con `chunked`: `http.client` levanta `IncompleteRead` si falta el chunk
+      terminal, así que la truncación ya es una excepción;
+    - sin ninguna de las dos, el fin del cuerpo es el cierre de la conexión y
+      una truncación es INDISTINGUIBLE de una respuesta completa: se rechaza.
+    """
+    declarado = respuesta.getheader("Content-Length")
+    chunked = (respuesta.getheader("Transfer-Encoding") or "").lower()
+    if declarado is not None:
+        texto = declarado.strip()
+        if not texto.isdigit():
+            raise http.client.HTTPException(
+                f"Content-Length fuera de gramática: {declarado!r}")
+        largo = int(texto)
+        if largo > C.MAX_SOBRE:
+            raise ValueError(
+                f"Content-Length {largo} sobre el techo {C.MAX_SOBRE}")
+        crudo = respuesta.read(largo)
+        if len(crudo) != largo:
+            raise CuerpoIncompleto(crudo, largo - len(crudo))
+        return crudo
+    if "chunked" in chunked:
+        crudo = respuesta.read(C.MAX_SOBRE + 1)
+        if len(crudo) > C.MAX_SOBRE:
+            raise ValueError(f"respuesta sobre el techo {C.MAX_SOBRE}")
+        return crudo
+    raise http.client.HTTPException(
+        "respuesta sin Content-Length ni chunked: una truncación sería "
+        "indistinguible de un cuerpo completo")
 
 
 def atender(pedido: dict, hacer=obtener) -> dict:
